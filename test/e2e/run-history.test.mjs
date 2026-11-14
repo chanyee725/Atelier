@@ -103,6 +103,21 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.goto(`${BASE}/#file=run`);
 
+  // #411: with blockers, 시작하기 is aria-disabled (Tab reaches it, click does nothing) and the full list sits outside the live region.
+  const planStrip = page.getByTestId('plan-strip');
+  await planStrip.waitFor({ timeout: 30000 });
+  const start = planStrip.getByRole('button', { name: '시작하기' });
+  assert.equal(await start.getAttribute('aria-disabled'), 'true');
+  assert.equal(await start.evaluate((el) => el.disabled), false, 'aria-disabled, not disabled');
+  const descId = await start.getAttribute('aria-describedby');
+  assert.ok(descId, 'described by the blocker list');
+  assert.equal(await planStrip.locator(`[id="${descId}"]`).count(), 0, 'blocker list is not inside the status region');
+  assert.ok((await page.locator(`[id="${descId}"]`).textContent()).length > 0);
+  await start.focus();
+  assert.ok(await start.evaluate((el) => el === document.activeElement), 'focusable');
+  await start.dispatchEvent('click');
+  assert.equal(await page.locator('dialog[open]').count(), 0, 'click does not open the confirm');
+
   // 버전 기록: labels in run order.
   await page.getByRole('button', { name: '더 보기' }).click();
   await page.getByRole('menuitem', { name: '버전 기록' }).click();
