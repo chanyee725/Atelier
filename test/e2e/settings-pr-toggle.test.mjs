@@ -142,5 +142,25 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
   await sw().focus();
   await page.keyboard.press('Space');
   await dialog.getByRole('status').filter({ hasText: STILL }).waitFor();
+
+  // 4. A number-field save right after a toggle retry wins: the toggle's delayed "아직 읽을 수 없어요." must not
+  // overwrite the save's text (#416). Same dialog, file still broken, so the retry says STILL after 120ms.
+  writeFileSync(settingsFile, JSON.stringify({ prStatus: true, guard: { five: 0.5 } }));
+  await page.keyboard.press('Space'); // re-reads the file: recovers, switch is healthy again
+  await dialog.getByText('켜짐', { exact: true }).waitFor();
+  writeFileSync(settingsFile, '{ not json');
+  await page.keyboard.press('Space'); // 409 -> broken, no status line yet
+  await dialog.getByText(BROKEN).waitFor();
+  const field = dialog.getByLabel('5시간 한도 (%)');
+  await field.fill('77');
+  // In one tick: the switch retry (STILL queued behind the 120ms timer), then the focused field blurs and saves.
+  await sw().evaluate((el) => {
+    el.click();
+    document.activeElement.blur();
+  });
+  await page.waitForTimeout(500);
+  const finalNote = await dialog.getByRole('status').first().textContent();
+  assert.notEqual(finalNote, STILL, 'the delayed toggle note must not overwrite the number-field save text');
+  assert.ok(finalNote && finalNote.length > 0, 'the save text stays in the status line');
   assert.deepEqual(errors, []);
 });

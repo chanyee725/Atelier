@@ -297,18 +297,23 @@ function RunPanel() {
     };
   }, []);
 
+  // A number-field save is newer than any PR-toggle note still waiting on its 120ms timer; cancelling the timer
+  // drops that note (its `cleared` promise never resolves) so the save's text is not overwritten (#416).
+  const noteTimer = useRef<number | undefined>(undefined);
+  const cancelPendingNote = () => window.clearTimeout(noteTimer.current);
   const save = async (patch: Parameters<typeof api.saveDispatchSettings>[0]) => {
     try {
       const next = await api.saveDispatchSettings(patch);
       setSettings({ kind: 'ok', value: next });
+      cancelPendingNote();
       setNote('저장했어요.');
     } catch (e) {
+      cancelPendingNote();
       setNote(e instanceof Error ? e.message : '저장하지 못했어요.');
     }
   };
   const prErrId = useId();
-  // Timer for the delayed status write below; cleared on unmount so nothing is written afterwards.
-  const noteTimer = useRef<number | undefined>(undefined);
+  // noteTimer (above) times the delayed status write below; cleared on unmount so nothing is written afterwards.
   useEffect(() => () => window.clearTimeout(noteTimer.current), []);
   const prBroken = typeof pr === 'object' && pr !== null;
   // A 409 (unreadable settings file) shows its cause once, in the red line the switch points at, and leaves the
