@@ -109,6 +109,16 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     const done = board.locator('[data-stage="done"]');
     await done.getByRole('button', { name: '2개 더 보기' }).waitFor();
     assert.equal(await done.locator('[data-task]').count(), 10);
+    const toggle = done.getByRole('button', { name: '2개 더 보기' });
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    await toggle.click();
+    assert.equal(await done.locator('[data-task]').count(), 12);
+    // #411: the same button stays mounted, keeps focus and flips to 접기.
+    const fold = done.getByRole('button', { name: '접기' });
+    assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+    assert.ok(await fold.evaluate((el) => el === document.activeElement), 'focus stays on the toggle');
+    await fold.click();
+    assert.equal(await done.locator('[data-task]').count(), 10);
     await done.getByRole('button', { name: '2개 더 보기' }).click();
     assert.equal(await done.locator('[data-task]').count(), 12);
 

@@ -48,12 +48,12 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
 
 function Board({ tasks }: { tasks: BoardTask[] }) {
   const now = useNow(20_000);
-  const [allDone, setAllDone] = useState(false);
+  const [doneExpanded, setDoneExpanded] = useState(false);
   const groups = groupByStage(tasks);
   return (
     <div data-board className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 pt-0">
       {STAGES.map(s => {
-        const { shown, more } = visibleTasks(s.id, groups[s.id], allDone);
+        const { shown, more } = visibleTasks(s.id, groups[s.id], doneExpanded);
         return (
         <section key={s.id} aria-label={s.label} data-stage={s.id} className="flex w-56 shrink-0 flex-col gap-2 rounded-lg bg-muted/40 p-2">
           <header className="flex items-center gap-2 px-1 text-sm font-semibold">
@@ -63,8 +63,11 @@ function Board({ tasks }: { tasks: BoardTask[] }) {
           <ul className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain">
             {shown.map(t => <TaskCard key={t.id} t={t} now={now} />)}
           </ul>
-          {more > 0 && <Button variant="ghost" size="sm" data-done-more onClick={() => setAllDone(true)}>{more}개 더 보기</Button>}
-          {allDone && s.id === 'done' && groups.done.length > DONE_LIMIT && <Button variant="ghost" size="sm" onClick={() => setAllDone(false)}>접기</Button>}
+          {s.id === 'done' && groups.done.length > DONE_LIMIT && (
+            <Button variant="ghost" size="sm" aria-expanded={doneExpanded} onClick={() => setDoneExpanded(v => !v)}>
+              {doneExpanded ? '접기' : `${more}개 더 보기`}
+            </Button>
+          )}
           {groups[s.id].length === 0 && tasks.length > 0 && <p className="px-1 py-3 text-xs text-muted-foreground">비어 있어요</p>}
         </section>
         );

@@ -118,6 +118,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
   };
 
   return (
+    <>
     <Alert role="status" className="bg-muted" data-testid="plan-strip">
       <span aria-hidden="true">◐</span>
       <span className="mr-auto">
@@ -130,19 +131,22 @@ export function PlanStrip({ session }: { session: FileSession }) {
         )}
       </span>
       <span className="text-muted-foreground">예상 {status.sessions}세션</span>
-      {/* A disabled button gets no pointer events, so the tooltip with every blocker sits on the wrapper. */}
+      {/* An aria-disabled button gets no pointer events (and stays focusable, so the description is reachable by Tab), so the tooltip with every blocker sits on the wrapper. */}
       <span title={blocked ? status.blockers.join('\n') : undefined} data-testid="start-wrap" className="inline-flex">
         <Button
           size="sm"
-          disabled={blocked || busy}
+          disabled={busy}
+          aria-disabled={blocked || undefined}
           aria-describedby={blocked ? blockersId : undefined}
           className="px-3 text-sm hover:bg-primary"
-          onClick={() => void open()}
+          onClick={() => {
+            if (blocked) return;
+            void open();
+          }}
         >
           시작하기
         </Button>
       </span>
-      {blocked && <span id={blockersId} className="sr-only">{status.blockers.join(', ')}</span>}
       <dialog
         ref={dialog}
         aria-labelledby={titleId}
@@ -179,5 +183,8 @@ export function PlanStrip({ session }: { session: FileSession }) {
         </form>
       </dialog>
     </Alert>
+    {/* Outside the live region, so a status refresh does not read the whole list again. */}
+    {blocked && <span id={blockersId} className="sr-only">{status.blockers.join(', ')}</span>}
+    </>
   );
 }
