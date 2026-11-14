@@ -307,25 +307,39 @@ function RunPanel() {
     }
   };
   const prErrId = useId();
+  // Timer for the delayed status write below; cleared on unmount so nothing is written afterwards.
+  const noteTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
   const prBroken = typeof pr === 'object' && pr !== null;
   // A 409 (unreadable settings file) shows its cause once, in the red line the switch points at, and leaves the
   // switch enabled so focus stays put; pressing it again re-reads the file, so fixing it recovers without reopening.
   // A retry that still fails says so in the status line; clearing it first lets the same words be announced again.
+  // The new text is written ~120ms after the clear so a live region sees an empty state in between (screen readers
+  // skip a same-text rewrite that lands in the same tick).
   const togglePr = async (on: boolean) => {
+    window.clearTimeout(noteTimer.current);
     setNote(null);
+    const cleared = new Promise<void>((resolve) => {
+      noteTimer.current = window.setTimeout(resolve, 120);
+    });
+    const say = async (text: string) => {
+      await cleared;
+      // Unmounted while waiting: the cleanup cleared the timer, so `cleared` never resolves and nothing is written.
+      setNote(text);
+    };
     try {
       if (prBroken) {
         setPr((await api.prTracking()).on);
-        setNote('다시 불러왔어요.');
+        await say('다시 불러왔어요.');
         return;
       }
       setPr((await api.setPrTracking(on)).on);
-      setNote('저장했어요.');
+      await say('저장했어요.');
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setPr({ broken: e.message });
-        if (prBroken) setNote('아직 읽을 수 없어요.');
-      } else setNote(e instanceof Error ? e.message : '저장하지 못했어요.');
+        if (prBroken) await say('아직 읽을 수 없어요.');
+      } else await say(e instanceof Error ? e.message : '저장하지 못했어요.');
     }
   };
 
