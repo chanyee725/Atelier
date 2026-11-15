@@ -160,7 +160,32 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
   });
   await page.waitForTimeout(500);
   const finalNote = await dialog.getByRole('status').first().textContent();
-  assert.notEqual(finalNote, STILL, 'the delayed toggle note must not overwrite the number-field save text');
-  assert.ok(finalNote && finalNote.length > 0, 'the save text stays in the status line');
+  assert.equal(finalNote, '저장했어요.', 'the number-field save text wins over the delayed toggle note, exactly');
+
+  // 5. Two toggles 120ms apart (#419 items 2/3/5/7): the first POST answers late ({on:false}, 500ms), the second
+  // answers at once ({on:true}). The late response must not overwrite the newer switch state or status text.
+  writeFileSync(settingsFile, JSON.stringify({ prStatus: true }));
+  await open();
+  await dialog.getByText('켜짐', { exact: true }).waitFor();
+  let posts = 0;
+  await page.route('**/api/workspace/pr-tracking', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    const n = ++posts;
+    const json = (on) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ on }) });
+    if (n === 1) {
+      await new Promise((r) => setTimeout(r, 500));
+      return json(false);
+    }
+    return json(true);
+  });
+  await sw().evaluate((el) => el.click());
+  await page.waitForTimeout(120);
+  await sw().evaluate((el) => el.click());
+  await page.waitForTimeout(900);
+  assert.equal(posts, 2);
+  assert.equal(await sw().getAttribute('aria-checked'), 'true', 'the late first response does not overwrite the newer switch state');
+  assert.equal(await dialog.getByRole('status').first().textContent(), '저장했어요.');
+  await page.unroute('**/api/workspace/pr-tracking');
+
   assert.deepEqual(errors, []);
 });

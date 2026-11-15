@@ -297,54 +297,81 @@ function RunPanel() {
     };
   }, []);
 
-  // A number-field save is newer than any PR-toggle note still waiting on its 120ms timer; cancelling the timer
-  // drops that note (its `cleared` promise never resolves) so the save's text is not overwritten (#416).
+  // One status line, one writer. announce() clears the line, then writes the text ~120ms later so a live region
+  // sees an empty state in between (screen readers skip a same-text rewrite that lands in the same tick), which
+  // also makes a repeated message get read again (#419 item 1). The newest action *started* owns the line: each
+  // action takes a ticket with begin(), and a response that arrives under an older ticket is dropped, however late
+  // it is (#416, #419 items 3/5). A dropped *error* is not lost: it is carried and appended to the next text that
+  // is written (#419 item 6).
   const noteTimer = useRef<number | undefined>(undefined);
-  const cancelPendingNote = () => window.clearTimeout(noteTimer.current);
+  const noteSeq = useRef(0);
+  const pendingError = useRef<string | null>(null);
+  const carriedError = useRef<string | null>(null);
+  const begin = () => {
+    window.clearTimeout(noteTimer.current);
+    if (pendingError.current) carriedError.current = pendingError.current;
+    pendingError.current = null;
+    setNote(null);
+    return ++noteSeq.current;
+  };
+  const announce = (ticket: number, text: string, isError = false) => {
+    if (ticket !== noteSeq.current) {
+      if (isError) carriedError.current = text;
+      return;
+    }
+    window.clearTimeout(noteTimer.current);
+    pendingError.current = isError ? text : null;
+    noteTimer.current = window.setTimeout(() => {
+      if (ticket !== noteSeq.current) return;
+      const extra = carriedError.current && carriedError.current !== text ? carriedError.current : null;
+      carriedError.current = null;
+      pendingError.current = null;
+      setNote(extra ? `${text} ${extra}` : text);
+    }, 120);
+  };
+  // Unmounted while waiting: nothing is written afterwards.
+  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
   const save = async (patch: Parameters<typeof api.saveDispatchSettings>[0]) => {
+    const ticket = begin();
     try {
       const next = await api.saveDispatchSettings(patch);
       setSettings({ kind: 'ok', value: next });
-      cancelPendingNote();
-      setNote('저장했어요.');
+      announce(ticket, '저장했어요.');
     } catch (e) {
-      cancelPendingNote();
-      setNote(e instanceof Error ? e.message : '저장하지 못했어요.');
+      announce(ticket, e instanceof Error ? e.message : '저장하지 못했어요.', true);
     }
   };
   const prErrId = useId();
-  // noteTimer (above) times the delayed status write below; cleared on unmount so nothing is written afterwards.
-  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
   const prBroken = typeof pr === 'object' && pr !== null;
   // A 409 (unreadable settings file) shows its cause once, in the red line the switch points at, and leaves the
   // switch enabled so focus stays put; pressing it again re-reads the file, so fixing it recovers without reopening.
-  // A retry that still fails says so in the status line; clearing it first lets the same words be announced again.
-  // The new text is written ~120ms after the clear so a live region sees an empty state in between (screen readers
-  // skip a same-text rewrite that lands in the same tick).
+  // A retry that still fails says so in the status line. Responses can arrive out of order: only the newest
+  // toggle may touch `pr` or the status line (#419 items 3/5); a superseded toggle's non-409 error is carried.
+  const toggleSeq = useRef(0);
   const togglePr = async (on: boolean) => {
-    window.clearTimeout(noteTimer.current);
-    setNote(null);
-    const cleared = new Promise<void>((resolve) => {
-      noteTimer.current = window.setTimeout(resolve, 120);
-    });
-    const say = async (text: string) => {
-      await cleared;
-      // Unmounted while waiting: the cleanup cleared the timer, so `cleared` never resolves and nothing is written.
-      setNote(text);
-    };
+    const seq = ++toggleSeq.current;
+    const wasBroken = prBroken;
+    const ticket = begin();
+    const stale = () => seq !== toggleSeq.current;
     try {
-      if (prBroken) {
-        setPr((await api.prTracking()).on);
-        await say('다시 불러왔어요.');
+      if (wasBroken) {
+        const r = await api.prTracking();
+        if (stale()) return;
+        setPr(r.on);
+        announce(ticket, '다시 불러왔어요.');
         return;
       }
-      setPr((await api.setPrTracking(on)).on);
-      await say('저장했어요.');
+      const r = await api.setPrTracking(on);
+      if (stale()) return;
+      setPr(r.on);
+      announce(ticket, '저장했어요.');
     } catch (e) {
+      const text = e instanceof Error ? e.message : '저장하지 못했어요.';
       if (e instanceof ApiError && e.status === 409) {
+        if (stale()) return;
         setPr({ broken: e.message });
-        if (prBroken) await say('아직 읽을 수 없어요.');
-      } else await say(e instanceof Error ? e.message : '저장하지 못했어요.');
+        if (wasBroken) announce(ticket, '아직 읽을 수 없어요.');
+      } else announce(ticket, text, true);
     }
   };
 
