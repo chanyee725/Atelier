@@ -193,10 +193,13 @@ test("SharedLimits: two updates in the same millisecond both land, the later one
 test("Hub guards: guardCheck and limitHit both check five, seven and the Fable weekly window, with the fable ticket key", async t => {
   const { Hub } = await import("../../server/dispatch/hub.js");
   const file = await tmpFile(t);
+  // Strictly increasing stamps: a random offset can tie or go backwards inside one millisecond, and
+  // mergeLimits keeps the newer section, so an older-stamped write would lose to the previous hub's.
+  let stamp = Date.now();
   const mk = async limits => {
     const shared = new SharedLimits(file);
     await shared.load();
-    await shared.setClaude({ ...claude(0.1, Date.now()), seven: 0.1, ...limits, updatedAt: Date.now() + Math.random() });
+    await shared.setClaude({ ...claude(0.1, Date.now()), seven: 0.1, ...limits, updatedAt: ++stamp });
     const store = { data: { sessions: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 } } }, save() {} };
     return new Hub({ root: path.dirname(file), store, models: [], roles: [], port: 0, limits: shared });
   };
