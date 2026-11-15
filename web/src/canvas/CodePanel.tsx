@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ApiError, api, type CodeWindow } from '../api';
 import { Button } from '../components/ui/button';
-import { codeError, refText, splitPath, type NodeCode } from './codeLinks';
+import { codeError, previewScrollTop, refText, splitPath, type NodeCode } from './codeLinks';
 
 type Props = {
   /** Feature name shown as the title (the node or shape label). */
@@ -41,7 +41,7 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
     return () => ctl.abort();
   }, [ref?.path, ref?.start, end]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The highlighted range is scrolled into view inside the preview only (never the page), centred when it fits.
+  // The highlighted range is scrolled into view inside the preview only (never the page), centred when it fits, else starting at its first line.
   const box = useRef<HTMLDivElement>(null);
   const first = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -49,7 +49,7 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
     const f = first.current;
     if (!b || !f || preview.state !== 'ok') return;
     const span = (Math.min(end, preview.win.end) - ref!.start + 1) * f.offsetHeight;
-    b.scrollTop = Math.max(0, f.offsetTop - Math.max(0, (b.clientHeight - span) / 2));
+    b.scrollTop = previewScrollTop({ firstTop: f.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop, span, boxHeight: b.clientHeight });
   }, [preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

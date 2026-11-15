@@ -30,7 +30,7 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { stdio: 'ignore' });
   git('init', '-q');
   mkdirSync(join(repo, 'src'));
-  writeFileSync(join(repo, 'src', 'app.py'), Array.from({ length: 80 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n');
+  writeFileSync(join(repo, 'src', 'app.py'), Array.from({ length: 200 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n');
   git('add', 'src/app.py');
   git('commit', '-q', '-m', 'init');
   const ws = join(repo, 'docs');
@@ -58,7 +58,7 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   await call('PUT', '/api/file?path=code', {
     ...f,
     version: 2,
-    blocks: [{ id: 'b1', type: 'architecture', code: 'Web [icon: user, code: "src/app.py:40-44#run"]\nApi\nWeb > Api', x: 0, y: 0, w: 0, h: 0 }],
+    blocks: [{ id: 'b1', type: 'architecture', code: 'Web [icon: user, code: "src/app.py:40-44#run"]\nApi [code: "src/app.py:100-160#long"]\nWeb > Api', x: 0, y: 0, w: 0, h: 0 }],
     document: { type: 'doc', content: [{ type: 'diagram', attrs: { blockId: 'b1' } }] },
   });
 
@@ -77,7 +77,7 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   // Only the node with code has a badge.
   const badge = page.locator('[data-code-badge="Web"]');
   await badge.waitFor({ timeout: 15000 });
-  assert.equal(await page.locator('[data-code-badge]').count(), 1);
+  assert.equal(await page.locator('[data-code-badge]').count(), 2);
 
   const panel = page.getByRole('complementary', { name: '기능 코드' });
   assert.equal(await panel.count(), 0);
@@ -111,6 +111,24 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   await panel.waitFor();
   assert.equal(await style.isVisible(), false, 'style panel hidden again on reopen');
 
+  // #526: a long range (100-160) opens with its FIRST line visible near the top of the preview, not the middle.
+  await panel.getByRole('button', { name: '닫기', exact: true }).click();
+  await panel.waitFor({ state: 'detached' });
+  await page.locator('[data-code-badge="Api"]').click();
+  await panel.waitFor();
+  await panel.getByRole('heading', { name: 'Api' }).waitFor();
+  await panel.locator('[data-code-ref="src/app.py:100-160"]').waitFor();
+  const longHl = panel.locator('[data-hl]');
+  await longHl.first().waitFor();
+  assert.equal(await longHl.count(), 61);
+  const pBox = await preview.boundingBox();
+  const l1 = await longHl.first().boundingBox();
+  assert.ok(l1.y >= pBox.y && l1.y - pBox.y <= 40, `first highlighted line near the top of the preview (offset ${l1.y - pBox.y})`);
+  await panel.getByRole('button', { name: '닫기', exact: true }).click();
+  await panel.waitFor({ state: 'detached' });
+  await badge.click();
+  await panel.getByRole('heading', { name: 'Web' }).waitFor();
+
   // An open menu owns Esc: the first press closes only the menu, the second closes the panel.
   await page.locator('[data-testid="main-menu-trigger"]').click();
   await page.locator('.excalidraw .dropdown-menu, .excalidraw [role="menu"]').first().waitFor({ timeout: 5000 });
@@ -130,7 +148,7 @@ test('a code-linked free-form shape opens the panel and keeps the style panel vi
   const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { stdio: 'ignore' });
   git('init', '-q');
   mkdirSync(join(repo, 'src'));
-  writeFileSync(join(repo, 'src', 'app.py'), Array.from({ length: 80 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n');
+  writeFileSync(join(repo, 'src', 'app.py'), Array.from({ length: 200 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n');
   git('add', 'src/app.py');
   git('commit', '-q', '-m', 'init');
   const ws = join(repo, 'docs');
