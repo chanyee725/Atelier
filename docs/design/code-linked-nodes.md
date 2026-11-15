@@ -32,7 +32,7 @@ A block may carry `codeRefs` (`code` is already the block's DSL source string), 
 "codeRefs": { "v": 1, "nodes": { "로봇 데이터 녹화": { "summary": "...", "refs": [ { "path": "...", "start": 42, "end": 118 } ] } } }
 ```
 
-Validated like `layout` (docs/workspace-api.md "Block `layout`"): bad `codeRefs` on PUT → 400; a bad stored `code` is
+Validated like `layout` (docs/workspace-api.md "Block `layout`"): bad `codeRefs` on PUT → 400; a bad stored `codeRefs` is
 dropped on read; unknown `v` kept verbatim; at most 2000 nodes. Adding it bumps the file format `version` (v4) with
 the same old-server read-only rule as v3.
 
