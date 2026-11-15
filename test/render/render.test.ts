@@ -296,8 +296,13 @@ test('the embedded clean font is the bundled OFL subset under its own name', asy
   // "Pretendard" is a reserved font name: the subset must not be offered under it.
   assert.match(license, /Reserved Font Name Pretendard/);
   assert.doesNotMatch(FONT_FAMILY.clean.split(',')[0], /Pretendard/);
-  // The page's Pretendard webfont must not reach an inline diagram SVG, or it differs from the canvas image.
-  for (const family of Object.values(FONT_FAMILY)) assert.doesNotMatch(family, /Pretendard/);
+  // Hangul (E504f): an inline diagram SVG takes the page's Pretendard webfont by name, and a picture drawn as an
+  // <img> embeds Pretendard glyphs under 'Drawing Sans' (web/src/fonts/hangulFace.ts), so both draw Pretendard. The
+  // embedded family comes first in every stack; the page webfont only after it.
+  for (const family of Object.values(FONT_FAMILY)) {
+    const names = family.split(',').map((f) => f.trim());
+    assert.ok(names.indexOf("'Drawing Sans'") >= 0 && names.indexOf("'Drawing Sans'") < names.indexOf("'Pretendard Variable'"), family);
+  }
 });
 
 test('the embedded rough font is the bundled OFL file', async () => {
@@ -485,7 +490,7 @@ test('mono: Hangul is measured at 1em and drawn without the ch-width scaling (E6
   assert.equal(textWidth('문자열', 12, 'mono'), 36);
   assert.equal(textWidth('varchar(이름)', 12, 'mono'), (9 * 0.6 + 2) * 12);
   // Korean families come after `monospace`, so they only ever supply the Hangul.
-  assert.match(FONT_FAMILY.mono, /monospace, 'Noto Sans KR'/);
+  assert.match(FONT_FAMILY.mono, /monospace, 'Drawing Sans', 'Pretendard Variable', Pretendard, 'Noto Sans KR'/);
   const { svg } = await renderDiagram('users {\n  id 문자열 pk\n  name varchar(이름)\n  email string\n}', { type: 'erd' });
   assert.match(svg, /<tspan x="[^"]+" y="[^"]+"><tspan style="font-size-adjust:none">문자열<\/tspan><\/tspan>/);
   assert.match(svg, />varchar\(<tspan style="font-size-adjust:none">이름<\/tspan>\)<\/tspan>/);
