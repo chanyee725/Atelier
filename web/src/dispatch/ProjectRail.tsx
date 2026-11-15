@@ -34,7 +34,7 @@ export function ProjectRail({ projects, state, scope, view, onPick }: {
                 href={hashWith(view, e.value) || location.pathname}
                 aria-current={on ? 'page' : undefined}
                 onClick={ev => { ev.preventDefault(); onPick(e.value); }}
-                className={cn(item, on && 'bg-muted font-semibold text-foreground shadow-[inset_2px_0_0_currentColor] forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:shadow-none')}
+                className={cn(item, on && 'bg-muted font-semibold text-foreground shadow-[inset_2px_0_0_currentColor] forced-colors:shadow-none forced-colors:outline-2 forced-colors:-outline-offset-2 forced-colors:outline-[Highlight]')}
               >
                 <span className="truncate">{e.label}</span>
                 {counted && e.count > 0 && <span title="열린 세션" className="ml-auto text-xs tabular-nums max-md:ml-0">{e.count}</span>}
