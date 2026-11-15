@@ -96,12 +96,21 @@ SOFTWARE.
 
 ## UI font
 
-Bundled by Vite from its npm redistribution; no font is fetched at runtime.
+Pretendard 1.3.9 (`pretendard` npm package, https://github.com/orioncactus/pretendard) is bundled with the app. The app
+itself fetches no font from outside: every font file is a local build asset served by the Drawing server.
 
-- Pretendard (`pretendard`), Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
-  with Reserved Font Name 'Pretendard'. SIL Open Font License, Version 1.1.
-- Canvas text uses a cut-down copy of Pretendard Regular 1.3.9, renamed "Drawing Sans" (modified versions may not use the
-  Reserved Font Name). File `web/fonts/drawing-sans-canvas.woff2`, built by `scripts/subset-canvas-font.py`
-  (fonttools 4.68.0) from the `pretendard` npm package: Basic Latin, Latin-1, common punctuation, Hangul Jamo and the 2,350
-  KS X 1001 syllables. Served in place of Excalidraw's Liberation Sans file (`web/vite.config.ts`, `FONT_OVERRIDES`).
-  The copyright and license records stay inside the file; license text: `shared/render/fonts/drawing-sans-OFL.txt`.
+- Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard), with Reserved Font Name 'Pretendard'.
+  SIL Open Font License, Version 1.1. License text (with the copyright line): `shared/render/fonts/drawing-sans-OFL.txt`.
+- UI text: the page loads Pretendard (Latin and Hangul) through Vite from the npm package (`web/src/index.css`).
+- Block drawings and exported SVG/PNG embed modified subsets that are renamed "Drawing Sans", because modified versions
+  may not use the Reserved Font Name. The copyright and license records stay inside each font file.
+  - Latin: Pretendard Regular and SemiBold, cut down to Basic Latin, Latin-1 and common punctuation by
+    `scripts/subset-clean-font.py` (fonttools 4.68.0). Files `shared/render/fonts/drawing-sans-latin-{400,600}.woff2`,
+    embedded as base64 in `shared/render/font-clean.ts`.
+  - Hangul and other characters outside that Latin set: at runtime the browser fetches the static Pretendard woff
+    dynamic-subset files of the npm package (local build assets, `web/src/fonts/hangulFace.ts`), cuts them down to the
+    glyphs the drawing uses, renames them "Drawing Sans" and embeds them in the block drawing and in exported SVG/PNG.
+- Canvas text uses a cut-down copy of Pretendard Regular 1.3.9, renamed "Drawing Sans". File
+  `web/fonts/drawing-sans-canvas.woff2`, built by `scripts/subset-canvas-font.py` (fonttools 4.68.0) from the
+  `pretendard` npm package: Basic Latin, Latin-1, common punctuation, Hangul Jamo and the 2,350 KS X 1001 syllables.
+  Served in place of Excalidraw's Liberation Sans file (`web/vite.config.ts`, `FONT_OVERRIDES`).
