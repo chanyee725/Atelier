@@ -86,10 +86,10 @@ Web PRs: full headless e2e (0 skipped) before merge; `npm run build` whenever `w
 - `CLAUDE.md`: "the user's own CLIs (claude, codex, agy)" becomes "the user's own Claude CLI (`claude`)", and child processes are limited to `claude`, `git` and `gh`. Done in E505a.
 - `docs/design/dispatch-integration*.md` and `6-app-shell-projects.md`: mark the Codex/Gemini parts as superseded by this file (one line each), done in E505a/E505b.
 
-### Proposal: manual real-CLI run rule (needs the main session's decision)
+### Manual real-CLI run rule (approved 2026-11-15, applied to CLAUDE.md in E505a)
 
 Today: "A manual run against a real CLI uses claude-haiku-5-5 at effort low with one-line prompts." After E505 the app can only start `claude-fable-5-2`, so a haiku run no longer exercises the real path.
 
-Proposed text: "A manual run against the real CLI uses claude-fable-5-2 at effort low, one session at a time, with one-line prompts, and only when a ticket needs it (provider connect, spawn or resume changes). npm test keeps using test/fixtures/fake-cli/ and never starts a real claude."
+Rule: "A manual run against the real CLI uses claude-fable-5-2 at effort low, one session at a time, with one-line prompts, and only when a ticket needs it (provider connect, spawn or resume changes). npm test keeps using test/fixtures/fake-cli/ and never starts a real claude."
 
 Fable costs more per token than haiku, hence "one session at a time" and "only when a ticket needs it".
