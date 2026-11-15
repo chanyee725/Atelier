@@ -281,37 +281,6 @@ test('cursor module: a call that left no edit does not take the next one (#390)'
   await m.close();
 });
 
-test('cursor module: Codex shell calls are final, so a silent sed is not closed by the next call\'s result (#401)', async (t) => {
-  let now = 1_000_000;
-  t.mock.method(Date, 'now', () => now);
-  const r = rig();
-  const m = await setup(r.ctx);
-  const rel = 'flow.dpx.json';
-  r.files.set(rel, file([], [block('top', 0, 0)]));
-  r.hub.sessions.c = { id: 'c', name: 'Cora', role: 'impl', status: 'running' };
-  const say = (entry) => r.hub.emit('message', { id: 'c', entry });
-  // Entries as Hub.onCodex pushes them: the tool entry is final, a result (when there is output) follows it.
-  say({ kind: 'tool', name: 'shell', text: `sed -i s/a/b/ ${rel}`, final: true, error: false });
-  now += 100;
-  say({ kind: 'tool', name: 'shell', text: `jq . ${rel}`, final: true, error: false });
-  say({ kind: 'tool_result', text: '{}', error: false, final: true });
-  await r.tick();
-  // A human edits 10s later: both Codex calls are long finished, so there is no cursor.
-  now += 10_000;
-  await r.change(rel, file([], [block('top', 0, 0, 'x > y')]));
-  assert.equal(r.sent.filter((e) => e.event === 'cursor').length, 0);
-  // The sed's own edit arrives right away: the cursor is Cora's.
-  say({ kind: 'tool', name: 'shell', text: `sed -i s/x/z/ ${rel}`, final: true, error: false });
-  await r.change(rel, file([], [block('top', 0, 0, 'z > y')]));
-  assert.deepEqual(r.sent.filter((e) => e.event === 'cursor').map((e) => e.data.sid), ['c']);
-  // A failed shell call is no edit.
-  now += 10_000;
-  say({ kind: 'tool', name: 'shell', text: `sed -i s/q/r/ ${rel}`, final: true, error: true });
-  await r.change(rel, file([], [block('top', 0, 0, 'z > w')]));
-  assert.equal(r.sent.filter((e) => e.event === 'cursor').length, 1);
-  await m.close();
-});
-
 test('cursor module: Claude results are paired by call id, so an older still-running call cannot take the result of a newer call (#401)', async (t) => {
   let now = 1_000_000;
   t.mock.method(Date, 'now', () => now);
@@ -373,15 +342,4 @@ test('cursor module: ids that are common path words still tell two calls apart (
   await r.change(rel, file([], [block('top', 0, 0), block('api', 0, 500, 'x > y')]));
   assert.deepEqual(r.sent.filter((e) => e.event === 'cursor').map((e) => e.data.sid), ['c']);
   await m.close();
-});
-
-test('hub: Codex tool entries are final and carry their outcome; Claude entries carry the call id (#401)', () => {
-  const hub = Object.create(Hub.prototype);
-  const pushed = [];
-  Object.assign(hub, { push: (_s, e) => pushed.push(e), touch() {}, noteCheck() {}, rt: () => ({}) });
-  hub.onCodex({ id: 's' }, { type: 'item.completed', item: { type: 'command_execution', command: 'sed -i s/a/b/ f', aggregated_output: '', exit_code: 1 } });
-  hub.onCodex({ id: 's' }, { type: 'item.completed', item: { type: 'command_execution', command: 'jq . f', aggregated_output: '{}', exit_code: 0 } });
-  hub.onCodex({ id: 's' }, { type: 'item.completed', item: { type: 'file_change', changes: [{ kind: 'update', path: 'f' }] } });
-  assert.deepEqual(pushed.map((e) => [e.kind, e.final === true, !!e.error]), [
-    ['tool', true, true], ['tool', true, false], ['tool_result', true, false], ['tool', true, false]]);
 });

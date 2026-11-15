@@ -1,4 +1,4 @@
-// Review fixes for E11 (#106): modes and efforts are checked on create, agy never runs looser than
+// Review fixes for E11 (#106): modes and efforts are checked on create, no session runs looser than
 // the chosen mode, and limit tickets keep reply clips out of state.json.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
@@ -14,11 +14,9 @@ const dirs = [];
 after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
 const MODELS = [
-  { id: "claude-haiku-5-5", provider: "claude", efforts: ["low", "medium", "high"], contextWindow: 200000 },
-  { id: "gemini-3.8-flash-low", provider: "gemini", efforts: ["low", "high"], contextWindow: 1000000 },
-  { id: "gpt-x", provider: "openai", efforts: ["low", "high"], contextWindow: 200000 },
+  { id: "claude-fable-5-2", provider: "claude", efforts: ["low", "medium", "high"], contextWindow: 200000 },
 ];
-const ROLES = [{ id: "impl", name: "구현자", model: "claude-haiku-5-5", perm: "auto", prompt: "" }];
+const ROLES = [{ id: "impl", name: "구현자", model: "claude-fable-5-2", perm: "auto", prompt: "" }];
 
 async function makeHub() {
   const root = mkdtempSync(path.join(tmpdir(), "drawing-dispatch-guard-"));
@@ -30,15 +28,11 @@ async function makeHub() {
   return { root, store, hub };
 }
 
-test("checkPerm refuses unknown modes and the modes agy cannot honour", () => {
+test("checkPerm accepts the four modes and refuses everything else", () => {
   for (const p of ["manual", "acceptEdits", "auto", "plan"]) assert.equal(checkPerm("claude", p), p);
   for (const bad of ["bypassPermissions", "", undefined, "dontAsk"]) {
     assert.throws(() => checkPerm("claude", bad), e => e.status === 400);
   }
-  assert.equal(checkPerm("gemini", "plan"), "plan");
-  assert.equal(checkPerm("gemini", "auto"), "auto");
-  assert.throws(() => checkPerm("gemini", "manual"), e => e.status === 400);
-  assert.throws(() => checkPerm("gemini", "acceptEdits"), e => e.status === 400);
 });
 
 test("checkEffort only passes the model's own plain effort words", () => {
@@ -57,8 +51,7 @@ test("create refuses a bad perm or effort before making any session", async () =
   const cases = [
     [{ role: "impl", perm: "bypassPermissions" }],
     [{ role: "impl", effort: "ultra" }],
-    [{ role: "impl", model: "gemini-3.8-flash-low", perm: "manual" }],
-    [{ role: "impl", model: "gpt-x", effort: 'high"\nsandbox_mode="danger-full-access' }],
+    [{ role: "impl", effort: 'high"\nsandbox_mode="danger-full-access' }],
     // One good item and one bad one: nothing is made.
     [{ role: "impl" }, { role: "impl", perm: "bypassPermissions" }],
   ];
@@ -69,67 +62,26 @@ test("create refuses a bad perm or effort before making any session", async () =
   assert.equal(store.data.seq, 0);
 });
 
-// A fake `agy` on a PATH that holds nothing else, so no real CLI can start.
-function fakeBin() {
-  const bin = mkdtempSync(path.join(tmpdir(), "drawing-fake-bin-"));
-  dirs.push(bin);
-  const log = path.join(bin, "args.json");
-  const script = `#!${process.execPath}\nrequire("node:fs").writeFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)));\n`;
-  writeFileSync(path.join(bin, "agy"), script);
-  chmodSync(path.join(bin, "agy"), 0o755);
-  writeFileSync(path.join(bin, FAKE_MARKER), ""); // cli.js only starts agent CLIs from a fake folder under npm test
-  return { bin, log };
-}
-
-async function waitFor(file) {
-  for (let i = 0; i < 100 && !existsSync(file); i++) await new Promise(r => setTimeout(r, 20));
-  return JSON.parse(readFileSync(file, "utf8"));
-}
-
-function geminiSession(root, perm) {
+function oldSession(root, provider, model) {
   return {
-    id: `g-${perm}`, n: 1, name: "Gem", role: "impl", provider: "gemini", model: "gemini-3.8-flash-low",
-    effort: null, perm, prompt: "", canSpawn: false, cwd: root, status: "idle", startedAt: 0, updatedAt: 0,
+    id: `old-${provider}`, n: 1, name: "Old", role: "impl", provider, model,
+    effort: null, perm: "manual", prompt: "", canSpawn: false, cwd: root, status: "idle", startedAt: 0, updatedAt: 0,
     last: "", turns: 0, ctx: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, providerSessionId: null,
   };
 }
 
-test("agy gets --mode <perm> and never the skip flag", async () => {
+test("a saved gemini or openai session is stopped by start(), never spawned", async () => {
   const { root, store, hub } = await makeHub();
-  const oldPath = process.env.PATH;
-  try {
-    for (const perm of ["auto", "plan"]) {
-      const { bin, log } = fakeBin();
-      process.env.PATH = bin;
-      const s = geminiSession(root, perm);
-      store.data.sessions[s.id] = s;
-      hub.start(s, "hi");
-      const args = await waitFor(log);
-      assert.equal(args[args.indexOf("--mode") + 1], perm);
-      assert.equal(args.includes("--dangerously-skip-permissions"), false, perm);
-    }
-  } finally {
-    process.env.PATH = oldPath;
-  }
-});
-
-test("a saved gemini session in manual is stopped, not started looser", async () => {
-  const { root, store, hub } = await makeHub();
-  const oldPath = process.env.PATH;
-  const { bin, log } = fakeBin();
-  try {
-    process.env.PATH = bin;
-    const s = geminiSession(root, "manual");
+  let spawned = 0;
+  hub.spawnCli = () => { spawned++; throw new Error("must not spawn"); };
+  for (const [provider, model] of [["gemini", "gemini-3.8-flash-low"], ["openai", "gpt-x"]]) {
+    const s = oldSession(root, provider, model);
     store.data.sessions[s.id] = s;
     hub.start(s, "hi");
-    await new Promise(r => setTimeout(r, 150));
-    assert.equal(existsSync(log), false);
-    assert.equal(s.status, "error");
-  } finally {
-    process.env.PATH = oldPath;
+    assert.equal(s.status, "error", provider);
   }
-  assert.throws(() => hub.setPerm("g-manual", "acceptEdits"), e => e.status === 400);
-  assert.throws(() => hub.setPerm("g-manual", "bypassPermissions"), e => e.status === 400);
+  assert.equal(spawned, 0);
+  assert.throws(() => hub.setPerm("old-gemini", "bypassPermissions"), e => e.status === 400);
 });
 
 test("limit tickets keep leadLast and team[].last in memory only", async () => {

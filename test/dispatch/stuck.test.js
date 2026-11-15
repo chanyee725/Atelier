@@ -163,27 +163,7 @@ test("Claude: three failures of the same e2e flag the session once; a pass clear
   assert.doesNotMatch(JSON.stringify(s), /playwright|secret/);
 });
 
-test("Codex: exit codes drive the same counter", () => {
-  const s = session({ provider: "codex" });
-  const { hub } = fakeHub([s]);
-  const run = code => hub.onCodex(s, { type: "item.completed", item: { type: "command_execution", command: "bash -lc 'npm test'", aggregated_output: "x", exit_code: code } });
-  run(1); run(1); run(1);
-  assert.equal(s.stuck.reason, "repeat-fail");
-  assert.equal(s.stuck.label, "테스트가 3번 연속 실패했어요");
-  run(0);
-  assert.equal(s.stuck, null);
-});
-
 test("a piped check leaves the count alone instead of passing it", () => {
-  const s = session({ provider: "codex" });
-  const { hub } = fakeHub([s]);
-  const run = (command, code) => hub.onCodex(s, { type: "item.completed", item: { type: "command_execution", command, aggregated_output: "x", exit_code: code } });
-  run("npm test", 1); run("npm test", 1);
-  run("npm test 2>&1 | tail -20", 0); // tail's 0, not npm's
-  run("npm test", 1);
-  assert.equal(s.stuck?.reason, "repeat-fail");
-  assert.equal(s.stuck.count, 3);
-  // Claude: the Bash tool result of a piped command is ignored too.
   const c = session({ id: "b" });
   const h2 = fakeHub([c]).hub;
   const bash = (i, command, ok) => {
@@ -197,12 +177,15 @@ test("a piped check leaves the count alone instead of passing it", () => {
 });
 
 test("a pass of the same kind under another command clears the flag", () => {
-  const s = session({ provider: "codex" });
+  const s = session();
   const { hub } = fakeHub([s]);
-  const run = (command, code) => hub.onCodex(s, { type: "item.completed", item: { type: "command_execution", command, aggregated_output: "x", exit_code: code } });
-  run("npm test", 1); run("npm test", 1); run("npm test", 1);
+  const run = (i, command, ok) => {
+    hub.onClaude(s, { type: "assistant", message: { content: [{ type: "tool_use", id: `k${i}`, name: "Bash", input: { command } }] } });
+    hub.onClaude(s, { type: "user", message: { content: [{ type: "tool_result", tool_use_id: `k${i}`, content: "x", is_error: !ok }] } });
+  };
+  run(1, "npm test", false); run(2, "npm test", false); run(3, "npm test", false);
   assert.equal(s.stuck.reason, "repeat-fail");
-  run("npx vitest run src/a.test.ts", 0);
+  run(4, "npx vitest run src/a.test.ts", true);
   assert.equal(s.stuck, null);
 });
 

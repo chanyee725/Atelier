@@ -100,7 +100,7 @@ test('dispatch module: state, one SSE stream with a first snapshot, task events,
     assert.equal(state.project.branch, 'develop');
     assert.equal(state.providers.claude.connected, false);
     assert.equal(state.providers.claude.installed, null, 'not checked before the user connects a provider');
-    assert.ok(state.models.some((m) => m.id === 'claude-haiku-5-5'));
+    assert.ok(state.models.some((m) => m.id === 'claude-fable-5-2'));
 
     // Hub gets the real port through the getter.
     assert.equal(app.ctx.modules.dispatch.hub.port, app.server.address().port);
