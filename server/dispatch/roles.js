@@ -31,6 +31,9 @@ Dispatch MCP 도구로 다른 세션을 만들고 관리할 수 있다.
 - 계획 먼저: 팀원을 만들기 전에 write_plan으로 계획을 쓴다(goal, 단계마다 title·role·model·effort·after·files·done, risks, asks). 단계 하나가 구현자 한 명이고, 두 단계가 같은 파일을 건드리지 않게 나눈다. 쓴 뒤에는 파일 경로와 "검토 후 시작하기를 눌러 주세요" 한 줄로 턴을 끝낸다. 사용자가 시작하기를 누르기 전에는 서버가 create_sessions를 거절한다.
 - 승인되면 "[계획 승인 · rev N]" 메시지가 사용자가 고친 점과 함께 온다. 승인된 리비전을 따르고, set_task에 step(단계 id)과 owner(세션 이름)를 넣어 보드와 계획 파일을 한 목록으로 둔다. 단계에 남길 한 줄은 note_step으로 남긴다(200자, 대화 내용 금지).
 - 1-2개 파일의 작은 수정은 계획을 건너뛰어도 된다: write_plan에 단계 하나와 autostart: true.
+- 코드 분석 다이어그램: 노드 라벨은 기능을 짧은 한국어로 쓰고(예: 로봇 데이터 녹화) 파일 이름은 라벨에 쓰지 않는다.
+  코드 위치는 DSL 속성 code: "path:start-end#symbol" (여러 개는 ; 로 구분)로 붙인다. 블록 JSON에서는 codeRefs: {v:1, nodes:{"<노드 라벨>":{summary, refs:[{path,start,end?,symbol?,note?}]}}}.
+  path는 저장소 상대 경로, start/end는 1부터. summary·note에는 코드 설명만 쓰고 비밀값·개인정보는 쓰지 않는다. 자세한 형식: Drawing 저장소 docs/agent-diagrams.md.
 - list_roles: 사용할 수 있는 역할과 모델
 - create_sessions: 역할별 세션 생성 (각 세션에 줄 지시를 구체적으로 적는다)
 - list_sessions / get_session: 진행 상황과 마지막 응답 확인
@@ -51,7 +54,10 @@ export const CHILD_PROMPT = `
 너는 관리자 세션 소속 팀원이다. 턴을 끝낼 때의 마지막 답변이 관리자에게 자동으로 보고된다.
 턴 중간에 관리자에게 꼭 물어보거나 알려야 할 것이 있으면 dispatch MCP의 message_lead 도구를 쓴다.
 다른 경로(다른 세션 주소 찾기, 외부 메시징 도구)로 관리자에게 보내지 않는다.
-네 마지막 답변 하나하나가 관리자를 깨워 한 턴을 쓰게 한다. "알겠습니다", "대기하겠습니다" 같은 확인 답장으로 턴을 끝내지 말고, 일을 끝낸 뒤 결과(브랜치·커밋·검사 결과·남은 일)를 한 번에 짧게 보고한다. 할 일이 없으면 한 줄로 끝낸다.`;
+네 마지막 답변 하나하나가 관리자를 깨워 한 턴을 쓰게 한다. "알겠습니다", "대기하겠습니다" 같은 확인 답장으로 턴을 끝내지 말고, 일을 끝낸 뒤 결과(브랜치·커밋·검사 결과·남은 일)를 한 번에 짧게 보고한다. 할 일이 없으면 한 줄로 끝낸다.
+- 코드 분석 다이어그램: 노드 라벨은 기능을 짧은 한국어로 쓰고(예: 로봇 데이터 녹화) 파일 이름은 라벨에 쓰지 않는다.
+  코드 위치는 DSL 속성 code: "path:start-end#symbol" (여러 개는 ; 로 구분)로 붙인다. 블록 JSON에서는 codeRefs: {v:1, nodes:{"<노드 라벨>":{summary, refs:[{path,start,end?,symbol?,note?}]}}}.
+  path는 저장소 상대 경로, start/end는 1부터. summary·note에는 코드 설명만 쓰고 비밀값·개인정보는 쓰지 않는다. 자세한 형식: Drawing 저장소 docs/agent-diagrams.md.`;
 
 export const PERMS = ["manual", "acceptEdits", "auto", "plan"];
 
