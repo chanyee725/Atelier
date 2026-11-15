@@ -11,6 +11,7 @@ import { hashOf, viewOf, type View } from './lib/usage.ts';
 import { SessionSheet } from './SessionSheet';
 import { SessionsPage } from './SessionsPage';
 import { SessionTimeline } from './SessionTimeline';
+import { PrTrackingToggle } from './PrTrackingToggle';
 import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
 import { connect, useDispatch } from './store';
@@ -82,15 +83,18 @@ export default function DispatchApp() {
             </a>
           ))}
         </nav>
+        <div className="ml-auto flex shrink-0 items-center gap-3">
+        <PrTrackingToggle />
         <a
           href="#tv"
           onClick={e => { e.preventDefault(); go('tv'); }}
           title="벽 화면처럼 크게 띄워 둬요"
-          className="ml-auto inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <Monitor aria-hidden className="size-3.5" />
           상시 화면
         </a>
+        </div>
       </header>
       {offline}
       <main className="min-h-0 flex-1 overflow-y-auto">

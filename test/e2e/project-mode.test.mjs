@@ -65,5 +65,16 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   await page.waitForURL(/\/dispatch$/);
   await page.getByText('세션', { exact: true }).first().waitFor({ timeout: 10_000 });
   assert.equal(await page.locator('[data-testid="sidebar"], aside').count(), 0, 'no editor sidebar');
+  // E30c: the PR/CI switch is on the run screen and flips through the real route.
+  const sw = page.getByRole('switch', { name: /PR·CI 추적/ });
+  await sw.waitFor({ timeout: 10_000 });
+  assert.equal(await sw.isChecked(), true);
+  await sw.click();
+  await page.waitForFunction(() => document.querySelector('[role=switch]')?.getAttribute('aria-checked') === 'false');
+  const on = async () => (await (await fetch(`http://127.0.0.1:${port}/api/workspace/pr-tracking`)).json()).on;
+  assert.equal(await on(), false);
+  await sw.click();
+  await page.waitForFunction(() => document.querySelector('[role=switch]')?.getAttribute('aria-checked') === 'true');
+  assert.equal(await on(), true);
   assert.deepEqual(errors, []);
 });
