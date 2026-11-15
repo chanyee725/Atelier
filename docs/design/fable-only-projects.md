@@ -22,10 +22,10 @@ What is kept, so old data still opens:
 | Data | Today | After |
 |---|---|---|
 | `Provider` type | `"claude"\|"openai"\|"gemini"` | `"claude"` for new data; readers accept any string |
-| Saved sessions with provider `openai`/`gemini` | resume falls into `startCodex` | shown read-only with their old model label; sending a message or resuming fails with "이 세션은 지원하지 않는 모델이에요" (no spawn) |
+| Saved sessions with provider `openai`/`gemini` | resume falls into `startCodex` | shown read-only with their old model label. On `load` they get `interrupted = false`, `status: "done"`, so auto-resume and `resumeTicket` never retry them. `send` refuses with "이 세션은 지원하지 않는 모델이에요" before anything is pushed to the transcript (no spawn) |
 | `~/.dispatch/limits.json` `gemini` field (shared with other servers) | merged | not read, but kept untouched on write |
 | `team.roleModels` overrides naming removed models | `create` fails | ignored; the role runs Fable 5.2 |
-| Plan step `model` naming another model | 시작하기 blocked ("모델을 몰라요") | plan opens and shows the old name; 시작하기 runs that step on Fable 5.2 and the step shows "Fable 5.2로 실행해요" |
+| Plan step `model` naming another model | 시작하기 blocked ("모델을 몰라요") | plan opens and shows the old name; 시작하기 runs that step on Fable 5.2 and the step shows "Fable 5.2로 실행해요" (see `hub.create` normalisation below) |
 | 복제해서 새 계획 | copies the model | writes `claude-fable-5-2` |
 | Run records | raw model string | unchanged (records are history) |
 
@@ -35,11 +35,11 @@ What is kept, so old data still opens:
 - `roles.js`: every role defaults to `claude-fable-5-2`.
 - `settings.js`: `patchTeam` only accepts `claude-fable-5-2`; `effectiveRoles` drops overrides for other models.
 - `cli.js`: `AGENT_CLIS = ["claude"]`. `auth.js`, `routes.js`: only `claude` login/logout/status.
-- `hub.js`: `checkPerm` loses the Gemini table (modes stay manual, acceptEdits, auto, plan; no bypassPermissions). `start` only starts Claude; any other provider throws the unsupported error before spawning. `startCodex`, `onCodex`, `startGemini`, `onGemini`, `setGeminiQuota` go. `providerLimits()` returns `{ claude, fable }`.
-- `limits.js`: `codexLimits`, `cleanGemini`, `setGemini` go; `load` tolerates and preserves unknown keys. Guards keep their defaults. Since Fable has its own weekly window, the create guard checks the five-hour window and the Fable weekly window (today it checks five and seven; `attention.ts` already uses Fable).
+- `hub.js`: `checkPerm` loses the Gemini table (modes stay manual, acceptEdits, auto, plan; no bypassPermissions). `start` only starts Claude; any other provider throws the unsupported error before spawning (defence in depth; `load`/`send` above stop it earlier). `hub.create` maps any model that is not `claude-fable-5-2` (old plan steps, old role overrides, a lead passing an old id) to `claude-fable-5-2` instead of refusing, and records the requested id nowhere but the plan. `startCodex`, `onCodex`, `startGemini`, `onGemini`, `setGeminiQuota` go. `providerLimits()` returns `{ claude, fable }`.
+- `limits.js`: `codexLimits`, `cleanGemini`, `setGemini` go; `load` tolerates and preserves unknown keys. Guards keep their defaults and get stricter, never looser: `guardCheck` (session create and the pipeline pre-start check) and `limitHit` (pause + ticket, `hub.js` ~771) all check `five`, `seven` and `fable`. `fable` uses the `g.seven` threshold, as `attention.ts:118` already does; its ticket key includes `fable:${fableReset}`.
 - `server/pipeline/index.js`: unknown or old models are no longer a blocker; the step is started with `claude-fable-5-2`. `PROVIDER_NAMES` keeps only Claude. `duplicate` rewrites models.
 - `server/cursor/index.js`: Codex tool-entry parsing goes.
-- `mcp.js`: `list_roles` lists one model; `create_sessions.model` accepts only Fable 5.2 (omitting it is fine).
+- `mcp.js`: `list_roles` lists one model; `create_sessions.model` is optional and any value runs as Fable 5.2 (via `hub.create`). `write_plan` writes `claude-fable-5-2` for every step. `SPAWN_PROMPT` (`roles.js`) and the pipeline approval message (`index.js` ~362) say the model is always `claude-fable-5-2`.
 - `shared/dispatch/types.ts`: `Provider = "claude"`; types that read stored data use `string`.
 - Tests: `test/fixtures/fake-cli/codex.mjs`, `agy.mjs` and the codex/agy scenarios in `fake.mjs` go; unit tests that use haiku/sonnet/opus as the session model switch to `claude-fable-5-2`. New tests: old-provider session refuses without spawning, old plan model runs as Fable, old `roleModels` ignored, `limits.json` with a `gemini` key round-trips.
 
@@ -52,23 +52,26 @@ What is kept, so old data still opens:
 
 ## B. Sessions per project
 
-"Project" means the web app's project: a top-level folder of the workspace (`server/workspace/projects.js`). Files at the root are 미분류.
+"Project" means the web app's project: a top-level folder of the workspace (`server/workspace/projects.js`). Files at the root are 미분류. It is identified by its folder `path`, never by the `.project.json` display `name`.
+
+Server Dispatch already uses "project" for the git project (`/api/projects`, `/api/usage/all`, `clearAll`). To keep the two apart, the new session field and query parameter are called `folder`; the UI still says 프로젝트.
 
 ### Server (E505c)
 
-- Every session gets a `project` field (folder name or `null`), stored in `.dispatch/state.json`:
+- Every session gets a `folder` field (top folder path or `null`), stored in `.dispatch/state.json`:
   - pipeline step sessions and pipeline leads: the top folder of the plan path;
-  - sessions made by another session (MCP `create_sessions`): inherit the parent's project;
-  - MCP `create_sessions` and `POST /api/sessions` accept an optional `project` (must be an existing project folder);
-  - old sessions without the field: derived from `pipelines[path].links` when possible, else `null` (미분류).
+  - sessions made by another session (MCP `create_sessions`): inherit the parent's `folder`;
+  - MCP `create_sessions` and `POST /api/sessions` accept an optional `folder` (must be an existing top folder, else 400);
+  - old sessions without the field: derived from `pipelines[path].links` when the session is still linked (links reset per run, so this is best effort), else `null` (미분류).
+  - renaming or moving a top folder does not rewrite sessions: they show under 미분류 afterwards. Updating them on move is a backlog item.
 - Lead-written plans (`mcp.js` `write_plan` default `pipelines/<title>`) go into the lead's project folder when it has one.
-- `GET /api/runs/list?project=<name>`: run records (metadata only) for files under that folder, newest first, capped (e.g. 50). Records already live at `.drawing/runs/<file path>/`.
-- `GET /api/usage?project=<name>`: cost and tokens of that project's sessions.
+- `GET /api/runs/list?folder=<path>`: run records (metadata only) for files under that folder, newest first, capped (e.g. 50). Records already live at `.drawing/runs/<file path>/`.
+- `GET /api/usage?folder=<path>`: cost and tokens of that project's sessions.
 - Connection and the five-hour/weekly limits are per account, not per project. The API stays global; the UI shows them inside the project view (see below) and never pretends they are per-project.
 
 ### Web (E505d)
 
-- Session board (`/dispatch`): a project list on the left (from `/api/workspace/projects` plus 미분류, each with its running-session count). Picking a project shows only its sessions, timeline and tasks; "전체" stays as the first entry. The selection is in the URL (`#project=<name>`), so links from Home open it.
+- Session board (`/dispatch`): a project list on the left (from `/api/workspace/projects` plus 미분류, each with its running-session count). Picking a project shows only its sessions, timeline and tasks; "전체" stays as the first entry. The selection is in the URL (`#folder=<path>`), so links from Home open it.
 - Project home (`home/Home.tsx` `ProjectHome`): a 세션 block (running and recent sessions, link to the board filtered to this project) and a 실행 기록 block (from `/api/runs/list`).
 - Project usage: the project view shows that project's cost and tokens, and the account-wide connection and limits once, labelled 계정 전체.
 - `ShellHome.tsx` is dead code; delete it in this ticket.
