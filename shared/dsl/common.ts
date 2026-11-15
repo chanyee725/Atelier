@@ -163,7 +163,16 @@ export function parseAttrs(c: Cursor, keys: ReadonlySet<string> = c.keys): Attrs
     }
     c.next();
     const vals: Token[] = [];
-    while (!['comma', 'rbracket', 'newline', 'eof', 'rbrace', 'lbrace'].includes(c.peek().kind)) vals.push(c.next());
+    // Balanced nested `[...]` belongs to the value (e.g. `code: app/[id]/page.tsx`).
+    let depth = 0;
+    for (;;) {
+      const k = c.peek().kind;
+      if (['newline', 'eof', 'rbrace', 'lbrace'].includes(k)) break;
+      if (depth === 0 && (k === 'comma' || k === 'rbracket')) break;
+      if (k === 'lbracket') depth++;
+      else if (k === 'rbracket') depth--;
+      vals.push(c.next());
+    }
     if (vals.length === 0) {
       c.error(key, `Missing value for '${key.text}'`);
       continue;
