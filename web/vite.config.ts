@@ -7,6 +7,7 @@ import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import { FONT_SIZE_STEPS, patchFontSizeSteps } from './src/canvas/sizeSteps.ts';
 import { patchFontBase64 } from './src/canvas/fontBase64.ts';
+import { KO_HINTS, patchKoHints } from './src/canvas/koHints.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const outDir = fileURLToPath(new URL('../public', import.meta.url));
@@ -53,12 +54,14 @@ function patchExcalidraw(code: string, id: string, seen: PatchSeen): string | nu
   if (sized !== null) seen.sizeSteps = true;
   const inlined = patchFontBase64(sized ?? local ?? code);
   if (inlined !== null) seen.fontBase64 = true;
-  return inlined ?? sized ?? local;
+  const hinted = patchKoHints(inlined ?? sized ?? local ?? code);
+  if (hinted !== null) seen.koHints = true;
+  return hinted ?? inlined ?? sized ?? local;
 }
 
 /** Whether one bundling pass met Excalidraw's code, and which rewrites found their target in it. */
-type PatchSeen = { excalidraw: boolean; sizeSteps: boolean; fontBase64: boolean };
-const newSeen = (): PatchSeen => ({ excalidraw: false, sizeSteps: false, fontBase64: false });
+type PatchSeen = { excalidraw: boolean; sizeSteps: boolean; fontBase64: boolean; koHints: boolean };
+const newSeen = (): PatchSeen => ({ excalidraw: false, sizeSteps: false, fontBase64: false, koHints: false });
 
 /**
  * Fails the pass when Excalidraw was bundled but its size buttons or its font data URL were never found (a renamed
@@ -71,6 +74,9 @@ function assertPatched(seen: PatchSeen): void {
   if (seen.excalidraw && !seen.fontBase64) {
     throw new Error('excalidraw-assets: the font data URL (toBase64) was not found in Excalidraw; update patchFontBase64');
   }
+  if (seen.excalidraw && !seen.koHints) {
+    throw new Error('excalidraw-assets: the ko-KR hints (canvasPanning) were not found in Excalidraw; update patchKoHints');
+  }
 }
 
 /**
@@ -81,7 +87,7 @@ function assertPatched(seen: PatchSeen): void {
 // The rewritten font spread, so a change inside patchFontBase64's helpers changes the id too.
 const FONT_BASE64_SAMPLE = patchFontBase64('data:font/woff2;base64,String.fromCharCode(...new Uint8Array(x))');
 const PATCH_ID = createHash('sha256')
-  .update([stripCdnFallback, patchExcalidraw, patchFontSizeSteps, patchFontBase64, FONT_BASE64_SAMPLE, FALLBACK_RE, JSON.stringify(FONT_SIZE_STEPS)].map(String).join('\n'))
+  .update([stripCdnFallback, patchExcalidraw, patchFontSizeSteps, patchFontBase64, patchKoHints, JSON.stringify(KO_HINTS), FONT_BASE64_SAMPLE, FALLBACK_RE, JSON.stringify(FONT_SIZE_STEPS)].map(String).join('\n'))
   .digest('hex')
   .slice(0, 8);
 
