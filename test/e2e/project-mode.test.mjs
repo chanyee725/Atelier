@@ -66,15 +66,42 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   await page.getByText('세션', { exact: true }).first().waitFor({ timeout: 10_000 });
   assert.equal(await page.locator('[data-testid="sidebar"], aside').count(), 0, 'no editor sidebar');
   // E30c: the PR/CI switch is on the run screen and flips through the real route.
-  const sw = page.getByRole('switch', { name: /PR·CI 추적/ });
+  const sw = page.getByRole('switch', { name: 'PR·CI 추적', exact: true });
   await sw.waitFor({ timeout: 10_000 });
   assert.equal(await sw.isChecked(), true);
   await sw.click();
-  await page.waitForFunction(() => document.querySelector('[role=switch]')?.getAttribute('aria-checked') === 'false');
+  await page.getByRole('switch', { name: 'PR·CI 추적', exact: true, checked: false }).waitFor();
   const on = async () => (await (await fetch(`http://127.0.0.1:${port}/api/workspace/pr-tracking`)).json()).on;
   assert.equal(await on(), false);
   await sw.click();
-  await page.waitForFunction(() => document.querySelector('[role=switch]')?.getAttribute('aria-checked') === 'true');
+  await page.getByRole('switch', { name: 'PR·CI 추적', exact: true, checked: true }).waitFor();
   assert.equal(await on(), true);
+
+  // The header nav stays whole next to the switch at phone and desktop widths, also with a broken settings.json (409).
+  const nav = page.getByRole('navigation', { name: '세션 화면' });
+  const navFits = () =>
+    nav.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { fits: r.width > 0 && el.scrollWidth <= el.clientWidth + 1 && r.left >= 0 && r.right <= innerWidth + 1, width: r.width, scroll: el.scrollWidth };
+    });
+  const errorText = page.getByText('설정 파일을 읽을 수 없어요.');
+  for (const broken of [false, true]) {
+    if (broken) writeFileSync(join(ws, '.drawing', 'settings.json'), '{ not json');
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.reload();
+      await sw.waitFor({ timeout: 10_000 });
+      if (broken) await errorText.waitFor({ timeout: 10_000 });
+      const m = await navFits();
+      assert.ok(m.fits, `nav clipped at ${width}px (broken settings: ${broken}): ${JSON.stringify(m)}`);
+      if (broken) {
+        const box = await errorText.boundingBox();
+        assert.ok(box && box.x >= 0 && box.x + box.width <= width + 1, `error text off screen at ${width}px`);
+      }
+    }
+  }
+  // The name stays fixed; the broken-file cause reaches screen readers as the description.
+  const described = await sw.evaluate((el) => (el.getAttribute('aria-describedby') || '').split(' ').map((id) => document.getElementById(id)?.textContent).join(' '));
+  assert.match(described, /설정 파일을 읽을 수 없어요/);
   assert.deepEqual(errors, []);
 });

@@ -10,6 +10,7 @@ export function PrTrackingToggle() {
   const [pr, setPr] = useState<State>(null);
   const [error, setError] = useState<string | null>(null);
   const errId = useId();
+  const hintId = useId();
   const broken = typeof pr === 'object' && pr !== null;
   useEffect(() => {
     let alive = true;
@@ -31,19 +32,24 @@ export function PrTrackingToggle() {
     }
   };
 
+  // The switch's name stays 'PR·CI 추적'; the hint and the error reach screen readers as its description.
+  // The wrapper shrinks and the error wraps within a capped width, so it never pushes the header nav off screen.
+  const hint = pr === 'unsupported' ? '이 서버에선 바꿀 수 없어요' : broken ? '고친 뒤 눌러서 다시 확인해요' : null;
+  const describedBy = [hint && hintId, (broken || error) && errId].filter(Boolean).join(' ') || undefined;
   return (
-    <div className="flex min-w-0 flex-col">
-      <label title="이 워크스페이스에서 gh로 PR과 CI 상태를 확인해요." className="flex h-7 shrink-0 items-center gap-2 text-sm text-muted-foreground">
+    <div className="flex min-w-0 max-w-72 shrink flex-col">
+      <label title="이 워크스페이스에서 gh로 PR과 CI 상태를 확인해요." className="flex h-7 items-center gap-2 text-sm whitespace-nowrap text-muted-foreground">
         <Switch
           checked={pr === true}
           disabled={pr === null || pr === 'unsupported'}
-          aria-describedby={broken || error ? errId : undefined}
+          aria-label="PR·CI 추적"
+          aria-describedby={describedBy}
           onCheckedChange={on => void toggle(on)}
         />
         PR·CI 추적
-        <span className="sr-only">{pr === 'unsupported' ? '이 서버에선 바꿀 수 없어요' : broken ? '고친 뒤 눌러서 다시 확인해요' : pr ? '켜짐' : '꺼짐'}</span>
+        <span id={hintId} className="sr-only">{hint}</span>
       </label>
-      <p id={errId} aria-live="polite" className="text-xs text-destructive">
+      <p id={errId} aria-live="polite" className="text-xs break-words text-destructive">
         {broken ? pr.broken : error}
       </p>
     </div>

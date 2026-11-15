@@ -66,7 +66,7 @@ export default function DispatchApp() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b px-6 max-md:px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-2.5 max-md:px-4">
         <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {NAV.map(n => (
             <a
@@ -83,17 +83,17 @@ export default function DispatchApp() {
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex shrink-0 items-center gap-3">
-        <PrTrackingToggle />
-        <a
-          href="#tv"
-          onClick={e => { e.preventDefault(); go('tv'); }}
-          title="벽 화면처럼 크게 띄워 둬요"
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-        >
-          <Monitor aria-hidden className="size-3.5" />
-          상시 화면
-        </a>
+        <div className="ml-auto flex min-w-0 items-center gap-3">
+          <PrTrackingToggle />
+          <a
+            href="#tv"
+            onClick={e => { e.preventDefault(); go('tv'); }}
+            title="벽 화면처럼 크게 띄워 둬요"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <Monitor aria-hidden className="size-3.5" />
+            <span className="max-sm:sr-only">상시 화면</span>
+          </a>
         </div>
       </header>
       {offline}
