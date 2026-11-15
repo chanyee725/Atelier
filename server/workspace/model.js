@@ -4,6 +4,8 @@
 
 // Block `layout` rules are shared with the web (a higher sub-format `v` is kept verbatim).
 import { cleanLayout, layoutProblem } from '../../shared/render/block-layout.ts';
+// Block `codeRefs` (code references per node) follow the same rules, shared with the web.
+import { blockCodeProblem, cleanBlockCode } from '../../shared/render/block-code.ts';
 // Pipeline `plan` rules are shared with the web (a higher `plan.v` is kept verbatim).
 import { cleanPlan, planProblem } from '../../shared/dispatch/plan.ts';
 
@@ -14,7 +16,9 @@ export const FILE_EXT = '.dpx.json';
 // 3: blocks may carry `layout` (node position overrides); an older server would drop it, so it must
 // treat v3 files as read-only.
 // 4: an optional top-level `plan` (pipeline steps, docs/design/dispatch-integration/2-file-format-and-live-overlay.md §3).
-export const FORMAT_VERSION = 4;
+// 5: blocks may carry `codeRefs` (code references per node); an older server would drop it, so it must
+// treat v5 files as read-only.
+export const FORMAT_VERSION = 5;
 
 export const emptyDocument = () => ({ type: 'doc', content: [] });
 export const emptyCanvas = () => ({ elements: [], appState: {} });
@@ -40,6 +44,12 @@ function normalizeLayout(l, at) {
   return cleanLayout(l);
 }
 
+function normalizeCodeRefs(c, at) {
+  const problem = blockCodeProblem(c, at);
+  if (problem) throw new ValidationError(problem);
+  return cleanBlockCode(c);
+}
+
 function normalizeBlock(b, i, lenient) {
   if (!isObj(b)) throw new ValidationError(`blocks[${i}] must be an object`);
   if (typeof b.id !== 'string' || !b.id) throw new ValidationError(`blocks[${i}].id must be a non-empty string`);
@@ -54,6 +64,14 @@ function normalizeBlock(b, i, lenient) {
       out.layout = normalizeLayout(b.layout, `blocks[${i}].layout`);
     } catch (e) {
       // On read, a broken layout (hand-edited file) only loses the moved positions, not the whole file.
+      if (!lenient || !(e instanceof ValidationError)) throw e;
+    }
+  }
+  if (b.codeRefs !== undefined) {
+    try {
+      out.codeRefs = normalizeCodeRefs(b.codeRefs, `blocks[${i}].codeRefs`);
+    } catch (e) {
+      // On read, broken code refs (hand-edited file) only lose the refs, not the whole file.
       if (!lenient || !(e instanceof ValidationError)) throw e;
     }
   }

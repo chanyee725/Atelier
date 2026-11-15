@@ -53,11 +53,24 @@ A block may carry `layout`, the node positions a user moved on top of the automa
 
 ## Block `codeRefs`
 
-Code references per diagram node (feature label to code locations). Format, limits and the agent guide: `docs/agent-diagrams.md`; design: `docs/design/code-linked-nodes.md`. At most 2000 nodes per block; adding it makes the file format `version` 5 (older files are read as they are and stored as v5 on the next save). Invalid `codeRefs` on `PUT` gets 400.
+A block may carry `codeRefs`: where in the code each node's feature lives (design: `docs/design/code-linked-nodes.md` §1; how agents write it: `docs/agent-diagrams.md`). Keys are node names, like `layout.items`. Files that have it are format `version` 5; older files read as they are and are stored as v5 on the next save. An older server treats v5 files as read-only (422). (The block's own `code` field stays the diagram-as-code text.)
+
+```jsonc
+"codeRefs": { "v": 1, "nodes": { "로봇 데이터 녹화": { "summary": "카메라·관절 값을 저장해요",
+  "refs": [ { "path": "src/record/recorder.py", "start": 42, "end": 118, "symbol": "Recorder.record_episode", "note": "에피소드 단위 저장" } ] } } }
+```
+
+- Optional. `v`: integer >= 1. `nodes`: at most 2000 entries; keys 1-200 characters, never `__proto__`; each value has optional `summary` (at most 500 characters) and `refs` (array, at most 20).
+- Ref: `path` (1-500 characters, repo-relative, `/`-separated, no leading `/`, no `..` or empty segment, no backslash or NUL), `start` integer >= 1, optional `end` integer >= `start` with `end - start` <= 2000, optional `symbol` (at most 200) and `note` (at most 300).
+- A `PUT` with invalid `codeRefs` gets 400. A stored file whose `codeRefs` is invalid still reads; only those refs are dropped. Unknown fields inside a `v` 1 value are dropped; a newer `v` is kept verbatim (only checked to be an object with an integer `v`).
+- Diagram-as-code shorthand: a node attribute `code: "path[:start[-end]][#symbol]; ..."` (`;`-separated; a bare path means line 1) is parsed into `node.code` by `shared/dsl`. `mergeCodeRefs` (`shared/render/block-code.ts`) merges it with the block's entry: the block wins (summary and refs stay), the DSL adds refs the block does not have (same path, range and symbol), at most 20 per node. Bad pieces are skipped with a warning.
+- Entries whose key is no node of the block's code (a node being renamed) are stored as they are, like `layout.items`, so autosave never loses data; the 2000-entry limit applies. Cleaning them up is an explicit action in the web panel, not a save side effect.
+- Markdown export strips `code:` attributes from the diagram code it prints (`stripCodeAttrs`); Eraser's handling of the attribute is not verified. Only flowchart and cloud-architecture accept `code:`; sequence and ERD still warn.
+- Converting a block to free-form shapes copies a node's merged entry to the shape as `customData.codeRefs` (`{summary?, refs}`).
 
 ## Pipeline `plan`
 
-A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one of its diagram blocks (design: `docs/design/dispatch-integration/2-file-format-and-live-overlay.md` §3). Files are format `version` 4; v3 files read as they are and are stored as v4 on the next save. An older server treats v4 files as read-only (422). Rules live in `shared/dispatch/plan.ts` (`planProblem`, `cleanPlan`), shared by the server and the web.
+A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one of its diagram blocks (design: `docs/design/dispatch-integration/2-file-format-and-live-overlay.md` §3). Files that have it are format `version` 4 or newer; older files read as they are and are stored in the current version on the next save. An older server treats newer files as read-only (422). Rules live in `shared/dispatch/plan.ts` (`planProblem`, `cleanPlan`), shared by the server and the web.
 
 ```jsonc
 "plan": { "v": 1, "block": "b_pipe", "defaults": { "provider": "claude", "perm": "acceptEdits" },
@@ -81,6 +94,19 @@ A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one
 | `{op:'add', step, before?}` | Insert a step before step `before`, or at the end. |
 | `{op:'set', id, step}` | Change step `id`'s fields; `null` removes a field. A new `id` is renamed in every `after` and keeps the node link. |
 | `{op:'remove', id}` | Remove step `id` and drop it from every `after`. |
+
+## Code window `GET /api/code`
+
+Read-only. `GET /api/code?path=<repo-relative>&start=<n>&end=<n>` returns `{path, start, end, total, lines, language, truncated?}`: the requested range plus up to 20 context lines each side, at most 400 lines, clamped to the file. `start`/`end` are the first and last line number of `lines` (`lines[i]` is line `start + i`); `total` is the file's line count. `language` comes from the extension (for highlighting only).
+
+- Range: `start` missing → line 1; `end` missing → `start` (whole file when both are missing). A range longer than 400 lines is cut at 400 lines from its start (no context) and the response has `truncated: true`.
+- Root: the git project holding the workspace. None: 404 `{error:'no-project'}`.
+- Git-tracked files only (`git ls-files --error-unmatch`, no shell): untracked or gitignored → 404 `{error:'not-tracked'}`.
+- 400: path with a `%` left after the one decode (double encoding), absolute path, `..`, NUL, backslash, a directory, `start`/`end` not an integer, `< 1`, or `start > end`.
+- 416: `start` past the last line.
+- 403: realpath outside the root (symlink escape), and, case-insensitively, any `.git` segment, segments starting with `.env`, and key/secret files (`*.pem`, `*.key`, `id_rsa*`, `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`).
+- 404 missing, 413 over 1 MB (exactly 1 MB is fine), 415 binary (NUL in the first 8 KB).
+- Nothing is written, cached on disk or logged (no content, no absolute paths).
 
 ## Errors
 

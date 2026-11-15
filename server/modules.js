@@ -5,6 +5,7 @@ import * as runs from './runs/index.js';
 import * as dispatch from './dispatch/index.js';
 import * as pipeline from './pipeline/index.js';
 import * as cursor from './cursor/index.js';
+import * as code from './code/index.js';
 
 export const modules = [
   { name: 'workspace', setup: workspace.setup },
@@ -16,4 +17,6 @@ export const modules = [
   { name: 'pipeline', setup: pipeline.setup },
   // Live agent cursor (E56): where an agent session is editing a diagram, as `cursor` SSE events (memory only).
   { name: 'cursor', setup: cursor.setup },
+  // Read-only code window for feature-linked nodes (E504b): GET /api/code in the git project holding the workspace.
+  { name: 'code', setup: code.setup },
 ];

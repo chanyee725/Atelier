@@ -1,5 +1,7 @@
 // Public types of the diagram-as-code parser. Pure data, JSON-serializable.
 
+import type { CodeRef } from './code-refs.ts';
+
 export type DiagramType = 'cloud-architecture' | 'flowchart' | 'sequence' | 'erd';
 export type Severity = 'error' | 'warning';
 
@@ -66,6 +68,8 @@ export interface GraphNode {
   attrs: Attrs;
   /** True when created only because a connection mentioned it. */
   implicit: boolean;
+  /** Parsed from the `code` attribute (`path[:start[-end]][#symbol]; ...`); absent when there is none. */
+  code?: CodeRef[];
   span: Span;
 }
 
