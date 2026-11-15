@@ -48,13 +48,13 @@ async function open(t, path, elements, blocks = []) {
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
   const call = async (m, u, b) => (await fetch(BASE + u, { method: m, headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: b && JSON.stringify(b) })).json();
   const f = await call('POST', '/api/file', { path, title: '안내' });
-  if (elements.length || blocks.length) await call('PUT', `/api/file?path=${path}`, { ...f, version: 2, blocks, canvas: { ...f.canvas, elements } });
+  if (elements.length || blocks.length) await call('PUT', `/api/file?path=${path}`, { ...f, blocks, canvas: { ...f.canvas, elements } });
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
   await page.goto(`${BASE}/#file=${path}`);
   await page.waitForSelector('.excalidraw canvas', { timeout: 30000 });
   await page.getByRole('button', { name: '캔버스', exact: true }).click();
-  await page.waitForTimeout(800);
+  await page.locator('.excalidraw .HintViewer, .excalidraw canvas').first().waitFor({ state: 'attached', timeout: 15000 });
   return page;
 }
 
@@ -63,6 +63,9 @@ const shown = async (page) => {
   assert.equal(await page.locator('.excalidraw canvas').count() > 0, true, 'the canvas is open');
   return page.locator('.excalidraw .HintViewer').first().isVisible();
 };
+
+const hint = (page) => page.locator('.excalidraw .HintViewer').first();
+const WAIT = { timeout: 15000 };
 
 test('the pan hint shows on an empty canvas and is hidden once elements are there', SKIP, async (t) => {
   const page = await open(t, 'empty', []);
@@ -74,13 +77,12 @@ test('the pan hint shows on an empty canvas and is hidden once elements are ther
   await page.mouse.move(750, 400, { steps: 5 });
   await page.mouse.up();
   await page.mouse.click(1100, 700);
-  await page.waitForTimeout(400);
+  await hint(page).waitFor({ state: 'hidden', ...WAIT });
   assert.equal(await shown(page), false, 'hidden after drawing a shape');
   await page.keyboard.press('Control+a'); // select everything, then delete it
   await page.keyboard.press('Delete');
-  await page.waitForTimeout(400);
   await page.mouse.click(1100, 700);
-  await page.waitForTimeout(400);
+  await hint(page).waitFor({ state: 'visible', ...WAIT });
   assert.equal(await shown(page), true, 'deleted elements do not count: shown again');
 });
 
@@ -96,7 +98,8 @@ test('a file holding only deleted elements still shows the hint', SKIP, async (t
 
 test('the pan hint is hidden for a canvas that only holds a diagram-as-code block', SKIP, async (t) => {
   const page = await open(t, 'block', [], [{ id: 'b1', type: 'architecture', code: 'title T\nWeb [icon: user]', x: 0, y: 0, w: 0, h: 0 }]);
-  await page.waitForTimeout(1200);
+  await page.locator('.excalidraw canvas').first().waitFor({ state: 'visible', ...WAIT });
+  await page.waitForFunction(() => !document.querySelector('.excalidraw .HintViewer')?.checkVisibility(), null, WAIT);
   assert.equal(await shown(page), false, 'the rendered block counts as an element');
 });
 
@@ -104,14 +107,15 @@ test('text editing and search keep their own hints while elements are on the can
   const page = await open(t, 'hints', [rect('r'), { ...rect('t'), type: 'text', x: 600, y: 500, width: 60, height: 25, text: 'findme', originalText: 'findme', fontSize: 20, fontFamily: 5, textAlign: 'left', verticalAlign: 'top', containerId: null, lineHeight: 1.25, autoResize: true, index: 'a1' }]);
   assert.equal(await shown(page), false, 'idle: hidden');
   await page.mouse.dblclick(1000, 700); // empty area: starts a new text
-  await page.waitForTimeout(400);
-  assert.equal(await shown(page), true, 'text editing hint is shown');
+  await hint(page).waitFor({ state: 'visible', ...WAIT });
+  assert.match(await hint(page).innerText(), /ESC/i, 'text editing hint names the key that finishes editing');
   await page.keyboard.press('Escape');
   await page.mouse.click(1100, 800);
-  await page.waitForTimeout(300);
+  await hint(page).waitFor({ state: 'hidden', ...WAIT });
   assert.equal(await shown(page), false, 'hidden again after editing');
   await page.keyboard.press('Control+f');
   await page.keyboard.type('findme');
-  await page.waitForTimeout(800);
+  await hint(page).waitFor({ state: 'visible', ...WAIT });
+  assert.match(await hint(page).innerText(), /escape|esc/i, 'search hint tells how to close the search');
   assert.equal(await shown(page), true, 'search hint is shown while there are matches');
 });
