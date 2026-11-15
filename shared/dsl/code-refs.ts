@@ -95,15 +95,38 @@ export function stripCodeAttrs(src: string): string {
         entries.push({ first: entryStart, last: end, isCode: k.kind === 'word' && k.text === 'code' && tokens[entryStart + 1]?.kind === 'colon' });
       }
     };
+    let depth = 0; // balanced nested `[...]` inside a value belongs to the value
+    let stop = -1; // first `,`/`]` seen inside a nested bracket: where the entry ends if that bracket never closes
     for (; j < tokens.length; j++) {
       const k = tokens[j]!.kind;
+      if (depth > 0 && stop < 0 && (k === 'comma' || k === 'rbracket')) stop = j;
+      const lineEnd = k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace';
+      if (stop >= 0 && lineEnd) {
+        // Unmatched `[` swallowed the rest of the line: restart right at the first `,`/`]` like a plain value.
+        j = stop - 1;
+        depth = 0;
+        stop = -1;
+        continue;
+      }
       if (k === 'rbracket') {
+        if (depth > 0) {
+          depth--;
+          continue;
+        }
         endEntry(j - 1);
         close = j;
         break;
       }
-      if (k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace' || k === 'lbracket') break;
-      if (k === 'comma') {
+      if (k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace') break;
+      if (k === 'lbracket') {
+        // A bracket right after the entry's `key:` is nested only once the key's colon was seen.
+        if (tokens[entryStart]?.kind === 'word' && tokens.slice(entryStart, j).some((t) => t.kind === 'colon')) {
+          depth++;
+          continue;
+        }
+        break;
+      }
+      if (k === 'comma' && depth === 0) {
         endEntry(j - 1);
         entryStart = j + 1;
       }
