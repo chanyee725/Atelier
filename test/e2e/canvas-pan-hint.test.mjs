@@ -119,3 +119,15 @@ test('text editing and search keep their own hints while elements are on the can
   assert.match(await hint(page).innerText(), /escape|esc/i, 'search hint tells how to close the search');
   assert.equal(await shown(page), true, 'search hint is shown while there are matches');
 });
+
+// #527: Excalidraw's ko-KR locale lacks some hints (they fell back to English); the build puts Korean ones in.
+test('a selected node shows its hint in Korean only', SKIP, async (t) => {
+  const page = await open(t, 'korean', [rect('r')]);
+  await page.mouse.click(1100, 700); // focus the canvas
+  await page.keyboard.press('Control+a'); // the only element is selected
+  await hint(page).waitFor({ state: 'visible', ...WAIT });
+  const text = await hint(page).innerText();
+  assert.match(text, /Enter 키를 눌러 텍스트를 넣어요/);
+  assert.match(text, /방향키/, 'the flowchart hint is Korean too');
+  assert.equal(text.replace(/Ctrl|⌘|Enter|Esc|Alt|Shift|Delete/g, '').match(/[A-Za-z]{2,}/g), null, `English left in the hint: ${text}`);
+});
