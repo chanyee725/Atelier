@@ -30,7 +30,7 @@ test('DSL: code attribute is exposed on nodes, groups walk, diagnostics warn on 
   const { ast, diagnostics } = parse(src, 'cloud-architecture');
   const g = ast as GraphDiagram;
   const refs = dslCodeRefs(g.children);
-  assert.deepEqual(refs, { Rec: [{ path: 'src/r.py', start: 42, end: 118, symbol: 'R.run' }, { path: 'b.py', start: 3 }] });
+  assert.deepEqual({ ...refs }, { Rec: [{ path: 'src/r.py', start: 42, end: 118, symbol: 'R.run' }, { path: 'b.py', start: 3 }] });
   assert.equal(diagnostics.filter((d) => d.severity === 'warning').length, 1);
   assert.match(diagnostics.find((d) => d.severity === 'warning')!.message, /Bad code reference/);
   assert.equal(diagnostics.some((d) => /Unknown attribute 'code'/.test(d.message)), false);
@@ -83,12 +83,33 @@ test('mergeCodeRefs: block wins, DSL adds missing refs, no duplicates, cap, pure
   assert.deepEqual(m.A, { summary: 's', refs: [good.nodes.A!.refs[0], { path: 'c.py', start: 2 }] });
   assert.deepEqual(m.B, { refs: [{ path: 'd.py', start: 7 }] });
   assert.equal(JSON.stringify(good), before);
-  assert.deepEqual(mergeCodeRefs(undefined, undefined), {});
-  assert.deepEqual(mergeCodeRefs(good, undefined), good.nodes);
+  assert.deepEqual({ ...mergeCodeRefs(undefined, undefined) }, {});
+  assert.deepEqual({ ...mergeCodeRefs(good, undefined) }, good.nodes);
   // newer block v is not understood: only DSL refs
-  assert.deepEqual(mergeCodeRefs({ v: 2, nodes: 'x' } as never, { A: [{ path: 'q.py', start: 1 }] }), { A: { refs: [{ path: 'q.py', start: 1 }] } });
+  assert.deepEqual({ ...mergeCodeRefs({ v: 2, nodes: 'x' } as never, { A: [{ path: 'q.py', start: 1 }] }) }, { A: { refs: [{ path: 'q.py', start: 1 }] } });
   const full = mergeCodeRefs({ v: 1, nodes: { A: { refs: Array.from({ length: MAX_CODE_REFS }, (_, i) => ({ path: `f${i}.py`, start: 1 })) } } }, { A: [{ path: 'extra.py', start: 1 }] });
   assert.equal(full.A!.refs.length, MAX_CODE_REFS);
+});
+
+test('node names that are Object.prototype members are plain keys (constructor, toString, __proto__)', () => {
+  const src = 'constructor [code: "a.py:1-2"]\ntoString [code: "b.py:3"]\nhasOwnProperty [code: "c.py:4"]\n__proto__ [code: "d.py:5"]\nconstructor > toString';
+  const g = parse(src, 'flowchart-diagram').ast as GraphDiagram;
+  const dsl = dslCodeRefs(g.children);
+  assert.deepEqual(Object.keys(dsl).sort(), ['__proto__', 'constructor', 'hasOwnProperty', 'toString']);
+  assert.deepEqual(dsl['__proto__'], [{ path: 'd.py', start: 5 }]);
+  const m = mergeCodeRefs({ v: 1, nodes: { toString: { refs: [{ path: 'x.py', start: 1 }] } } }, dsl);
+  assert.deepEqual(m['constructor'], { refs: [{ path: 'a.py', start: 1, end: 2 }] });
+  assert.deepEqual(m['toString'], { refs: [{ path: 'x.py', start: 1 }, { path: 'b.py', start: 3 }] });
+  assert.deepEqual(m['hasOwnProperty'], { refs: [{ path: 'c.py', start: 4 }] });
+  assert.deepEqual(m['__proto__'], { refs: [{ path: 'd.py', start: 5 }] });
+  assert.equal(Object.hasOwn(mergeCodeRefs(undefined, undefined), 'constructor'), false);
+  const box = (id: string, x: number) => ({ kind: 'box', id, role: 'node', shape: 'rectangle', x, y: 0, w: 50, h: 30, paint: { mode: 'outline' }, shadow: false });
+  const scene = { type: 'flowchart', width: 300, height: 60, items: [box('constructor', 0), box('__proto__', 100), box('valueOf', 200)] } as unknown as Scene;
+  let n = 0;
+  const { skeletons } = sceneToFreeform(scene, { x: 0, y: 0, width: 300 }, () => `k${n++}`, m);
+  assert.deepEqual(skeletons[0]!.customData, { codeRefs: { refs: [{ path: 'a.py', start: 1, end: 2 }] } });
+  assert.deepEqual(skeletons[1]!.customData, { codeRefs: { refs: [{ path: 'd.py', start: 5 }] } });
+  assert.equal('customData' in skeletons[2]!, false);
 });
 
 test('free-form conversion copies the node entry to customData.codeRefs', () => {

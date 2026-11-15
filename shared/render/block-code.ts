@@ -89,15 +89,16 @@ const sameRef = (a: CodeRef, b: CodeRef) => a.path === b.path && a.start === b.s
  * The block wins: its summary and refs stay as they are; a DSL ref is added only when the block has no ref with the
  * same path, range and symbol. Total refs per node stay within {@link MAX_CODE_REFS}. Pure; inputs are not changed.
  * A block `codeRefs` with a newer `v` is not understood, so only the DSL refs are returned.
+ * The result has no prototype, so node names like `constructor` or `__proto__` are plain keys; look up with `Object.hasOwn`.
  */
 export function mergeCodeRefs(block: BlockCode | undefined, dsl: Record<string, CodeRef[]> | undefined): Record<string, NodeCode> {
-  const out: Record<string, NodeCode> = {};
+  const out: Record<string, NodeCode> = Object.create(null);
   if (block && block.v <= BLOCK_CODE_VERSION && isObj(block.nodes)) {
     for (const [k, n] of Object.entries(block.nodes)) out[k] = { ...(n.summary !== undefined ? { summary: n.summary } : {}), refs: n.refs.map(cleanRef) };
   }
   for (const [k, refs] of Object.entries(dsl ?? {})) {
-    if (k === '__proto__' || !refs.length) continue;
-    const node = out[k] ?? (out[k] = { refs: [] });
+    if (!refs.length) continue;
+    const node = Object.hasOwn(out, k) ? out[k]! : (out[k] = { refs: [] });
     for (const r of refs) {
       if (node.refs.length >= MAX_CODE_REFS) break;
       if (!node.refs.some((x) => sameRef(x, r))) node.refs.push(cleanRef(r));
@@ -106,9 +107,9 @@ export function mergeCodeRefs(block: BlockCode | undefined, dsl: Record<string, 
   return out;
 }
 
-/** Node name -> refs from a parsed graph's `code` attributes (walks groups). */
+/** Node name -> refs from a parsed graph's `code` attributes (walks groups). The result has no prototype. */
 export function dslCodeRefs(children: readonly { kind: string; name: string; code?: CodeRef[]; children?: unknown[] }[]): Record<string, CodeRef[]> {
-  const out: Record<string, CodeRef[]> = {};
+  const out: Record<string, CodeRef[]> = Object.create(null);
   const walk = (list: readonly { kind: string; name: string; code?: CodeRef[]; children?: unknown[] }[]) => {
     for (const c of list) {
       if (c.kind === 'node' && c.code?.length) out[c.name] = c.code;
