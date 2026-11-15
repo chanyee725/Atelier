@@ -21,8 +21,8 @@ const LANGUAGES = {
 };
 export const languageOf = (file) => LANGUAGES[path.extname(file).slice(1).toLowerCase()] ?? 'text';
 
-// Segments that are never served: git internals, env files and key/secret material.
-const SECRET_SEGMENT = /^(\.git|\.env.*|.*\.pem|.*\.key|id_rsa.*|.*\.p12|.*\.pfx|\.npmrc|\.netrc|credentials.*|secrets.*)$/i;
+// Segments that are never served: git internals, Dispatch state, env files and key/secret material.
+const SECRET_SEGMENT = /^(\.git|\.dispatch|\.env.*|.*\.pem|.*\.key|id_rsa.*|.*\.p12|.*\.pfx|\.npmrc|\.netrc|credentials.*|secrets.*)$/i;
 const isSecret = (segments) => segments.some((s) => SECRET_SEGMENT.test(s));
 
 /** Normalised '/'-separated repo-relative path, or null for absolute, '..', NUL, backslash or empty input. */
@@ -72,7 +72,11 @@ async function readGuarded(root, rel) {
     const st = await fh.stat();
     if (st.isDirectory()) return { status: 400, error: 'is a directory' };
     if (!st.isFile()) return { status: 404, error: 'not a file' };
+    // Both the requested path and its realpath target must be tracked, so a tracked symlink cannot expose an
+    // ignored or untracked file.
     if (!(await isTracked(root, rel))) return { status: 404, error: 'not-tracked' };
+    const realRel = inside.split(path.sep).join('/');
+    if (realRel !== rel && !(await isTracked(root, realRel))) return { status: 404, error: 'not-tracked' };
     if (st.size > MAX_BYTES) return { status: 413, error: 'file too large' };
     const buf = await fh.readFile();
     if (buf.subarray(0, SNIFF).includes(0)) return { status: 415, error: 'binary file' };

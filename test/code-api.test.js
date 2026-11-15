@@ -30,18 +30,22 @@ async function rig(t, { git = true } = {}) {
   await writeFile(join(repo, '.npmrc'), 'x\n');
   await writeFile(join(repo, 'src', 'exact.txt'), 'x'.repeat(1024 * 1024));
   await writeFile(join(repo, 'src', 'empty.txt'), '');
-  await writeFile(join(repo, '.gitignore'), 'ignored.txt\n');
+  await writeFile(join(repo, '.gitignore'), 'ignored.txt\nlocal.json\n');
+  await writeFile(join(repo, 'local.json'), '{"secret":1}\n');
+  await writeFile(join(repo, 'ab.txt'), 'ab\n');
+  await writeFile(join(repo, 'a[b].txt'), 'bracket\n');
   await writeFile(join(repo, 'ignored.txt'), 'local\n');
   await writeFile(join(repo, 'src', 'untracked.js'), 'u\n');
   await symlink(outside, join(repo, 'src', 'out-dir'));
   await symlink(join(outside, 'secret.txt'), join(repo, 'src', 'out-file'));
   await symlink('a.py', join(repo, 'src', 'inside-link'));
   await symlink('../.env', join(repo, 'src', 'to-env'));
+  await symlink('local.json', join(repo, 'link-to-ignored'));
   if (git) {
     const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
     g('init', '-q');
     g('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'add', '-f', '.');
-    g('rm', '-q', '--cached', 'src/untracked.js', 'ignored.txt');
+    g('--literal-pathspecs', 'rm', '-q', '--cached', 'src/untracked.js', 'ignored.txt', 'local.json', 'a[b].txt');
     g('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '-m', 'init');
   }
   const app = await createApp({ workspaceDir: join(repo, 'ws') }, { publicDir: base, moduleList: [{ name: 'code', setup: code.setup }] });
@@ -100,7 +104,7 @@ test('bad path or range: 400', async (t) => {
 
 test('forbidden: .git, .env*, key and secret files, symlink escapes', async (t) => {
   const { get } = await rig(t);
-  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env']) {
+  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env', '.dispatch/x', '.DISPATCH/x', 'src/.Dispatch/wt/a.js']) {
     assert.equal((await get(`path=${encodeURIComponent(p)}`)).status, 403, p);
   }
   assert.equal((await get('path=src/inside-link')).status, 200);
@@ -174,4 +178,27 @@ test('truncated: a range over 400 lines is cut at 400 from its start', async (t)
   const ok = await get('path=src/a.py&start=1&end=400');
   assert.equal(ok.body.truncated, undefined);
   assert.ok(ok.body.lines.length <= 400);
+});
+
+test('pathspec magic and globs are literal: untracked a[b].txt next to tracked ab.txt is 404', async (t) => {
+  const { get } = await rig(t);
+  assert.equal((await get('path=ab.txt')).status, 200);
+  // a[b].txt exists on disk but is untracked: the glob must not match ab.txt.
+  for (const q of ['path=a[b].txt', 'path=a%5Bb%5D.txt']) {
+    const r = await get(q);
+    assert.equal(r.status, 404, q);
+    assert.equal(r.body.error, 'not-tracked', q);
+  }
+  // No such files on disk: pathspec magic and wildcards never resolve to ab.txt.
+  for (const q of [`path=${encodeURIComponent(':(top)ab.txt')}`, 'path=a*.txt', 'path=a%2A.txt']) {
+    assert.equal((await get(q)).status, 404, q);
+  }
+});
+
+test('a tracked symlink to a gitignored file is 404 not-tracked and leaks nothing', async (t) => {
+  const { get } = await rig(t);
+  const r = await get('path=link-to-ignored');
+  assert.equal(r.status, 404);
+  assert.equal(r.body.error, 'not-tracked');
+  assert.equal(JSON.stringify(r.body).includes('secret'), false);
 });
