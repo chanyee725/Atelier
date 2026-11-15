@@ -3,8 +3,9 @@
 // Model connect/disconnect goes through the server's provider routes, which run the user's own CLI login;
 // nothing here reads, shows or keeps a token, key or account name: status and percentages only.
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, type DispatchSettings, type ProviderInfo } from '../api';
+import { api, type DispatchSettings, type ProviderInfo } from '../api';
 import { Switch } from '../components/ui/switch';
+import { usePrTracking, useStatusLine } from '../dispatch/usePrTracking';
 import { cn } from '../lib/utils';
 import type { ThemePref } from '../theme';
 import { MODELS_CHANGED } from './context';
@@ -274,8 +275,8 @@ const actionLabel = (r: ProviderRow) => (r.action === 'connect' ? '연결' : r.a
 
 function RunPanel() {
   const [settings, setSettings] = useState<Load<DispatchSettings>>({ kind: 'loading' });
-  const [pr, setPr] = useState<boolean | null | 'unsupported' | { broken: string }>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const { note, status } = useStatusLine();
+  const { pr, toggle: togglePr, broken: prBroken } = usePrTracking(status);
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -288,92 +289,27 @@ function RunPanel() {
         if (alive) setSettings({ kind: 'off', message: '실행 설정을 불러오지 못했어요.' });
       }
     })();
-    api.prTracking().then(
-      (r) => alive && setPr(r.on),
-      (e) => alive && setPr(e instanceof ApiError && e.status === 409 ? { broken: e.message } : 'unsupported'),
-    );
     return () => {
       alive = false;
     };
   }, []);
 
-  // One status line, one writer. announce() clears the line, then writes the text ~120ms later so a live region
-  // sees an empty state in between (screen readers skip a same-text rewrite that lands in the same tick), which
-  // also makes a repeated message get read again (#419 item 1). The newest action *started* owns the line: each
-  // action takes a ticket with begin(), and a response that arrives under an older ticket is dropped, however late
-  // it is (#416, #419 items 3/5). A dropped *error* is not lost: it is carried and appended to the next text that
-  // is written (#419 item 6).
-  const noteTimer = useRef<number | undefined>(undefined);
-  const noteSeq = useRef(0);
-  const pendingError = useRef<string | null>(null);
-  const carriedError = useRef<string | null>(null);
-  const begin = () => {
-    window.clearTimeout(noteTimer.current);
-    if (pendingError.current) carriedError.current = pendingError.current;
-    pendingError.current = null;
-    setNote(null);
-    return ++noteSeq.current;
-  };
-  const announce = (ticket: number, text: string, isError = false) => {
-    if (ticket !== noteSeq.current) {
-      if (isError) carriedError.current = text;
-      return;
-    }
-    window.clearTimeout(noteTimer.current);
-    pendingError.current = isError ? text : null;
-    noteTimer.current = window.setTimeout(() => {
-      if (ticket !== noteSeq.current) return;
-      const extra = carriedError.current && carriedError.current !== text ? carriedError.current : null;
-      carriedError.current = null;
-      pendingError.current = null;
-      setNote(extra ? `${text} ${extra}` : text);
-    }, 120);
-  };
-  // Unmounted while waiting: nothing is written afterwards.
-  useEffect(() => () => window.clearTimeout(noteTimer.current), []);
+  // Saves can overlap: a response may only replace the shown settings if no newer save's response already did.
+  const appliedSave = useRef(0);
   const save = async (patch: Parameters<typeof api.saveDispatchSettings>[0]) => {
-    const ticket = begin();
+    const ticket = status.begin();
     try {
       const next = await api.saveDispatchSettings(patch);
-      setSettings({ kind: 'ok', value: next });
-      announce(ticket, '저장했어요.');
+      if (ticket > appliedSave.current) {
+        appliedSave.current = ticket;
+        setSettings({ kind: 'ok', value: next });
+      }
+      status.announce(ticket, '저장했어요.');
     } catch (e) {
-      announce(ticket, e instanceof Error ? e.message : '저장하지 못했어요.', true);
+      status.announce(ticket, e instanceof Error ? e.message : '저장하지 못했어요.', true);
     }
   };
   const prErrId = useId();
-  const prBroken = typeof pr === 'object' && pr !== null;
-  // A 409 (unreadable settings file) shows its cause once, in the red line the switch points at, and leaves the
-  // switch enabled so focus stays put; pressing it again re-reads the file, so fixing it recovers without reopening.
-  // A retry that still fails says so in the status line. Responses can arrive out of order: only the newest
-  // toggle may touch `pr` or the status line (#419 items 3/5); a superseded toggle's non-409 error is carried.
-  const toggleSeq = useRef(0);
-  const togglePr = async (on: boolean) => {
-    const seq = ++toggleSeq.current;
-    const wasBroken = prBroken;
-    const ticket = begin();
-    const stale = () => seq !== toggleSeq.current;
-    try {
-      if (wasBroken) {
-        const r = await api.prTracking();
-        if (stale()) return;
-        setPr(r.on);
-        announce(ticket, '다시 불러왔어요.');
-        return;
-      }
-      const r = await api.setPrTracking(on);
-      if (stale()) return;
-      setPr(r.on);
-      announce(ticket, '저장했어요.');
-    } catch (e) {
-      const text = e instanceof Error ? e.message : '저장하지 못했어요.';
-      if (e instanceof ApiError && e.status === 409) {
-        if (stale()) return;
-        setPr({ broken: e.message });
-        if (wasBroken) announce(ticket, '아직 읽을 수 없어요.');
-      } else announce(ticket, text, true);
-    }
-  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -409,13 +345,13 @@ function RunPanel() {
             checked={pr === true}
             disabled={pr === null || pr === 'unsupported'}
             aria-describedby={prBroken ? prErrId : undefined}
-            onCheckedChange={(on) => void togglePr(on)}
+            onCheckedChange={togglePr}
           />
-          {pr === 'unsupported' ? '이 서버에선 바꿀 수 없어요' : prBroken ? '고친 뒤 눌러서 다시 확인해요' : pr ? '켜짐' : '꺼짐'}
+          {pr === 'unsupported' ? '이 서버에선 바꿀 수 없어요' : prBroken !== null ? '고친 뒤 눌러서 다시 확인해요' : pr ? '켜짐' : '꺼짐'}
         </label>
         {/* Always rendered (never display:none) so the live region stays in the accessibility tree and its text change is announced. */}
         <p id={prErrId} aria-live="polite" className="text-xs text-destructive">
-          {prBroken ? pr.broken : null}
+          {prBroken}
         </p>
       </Group>
       <p role="status" className="text-xs text-muted-foreground">
