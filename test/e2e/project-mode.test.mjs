@@ -65,6 +65,9 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   await page.waitForURL(/\/dispatch$/);
   await page.getByText('세션', { exact: true }).first().waitFor({ timeout: 10_000 });
   assert.equal(await page.locator('[data-testid="sidebar"], aside').count(), 0, 'no editor sidebar');
+  // E30d: the run header is exactly 48px tall at 1280px (it was 49px).
+  const headerH = await page.locator('header').first().evaluate((el) => el.getBoundingClientRect().height);
+  assert.equal(headerH, 48, `run header height ${headerH}`);
   // E30c: the PR/CI switch is on the run screen and flips through the real route.
   const sw = page.getByRole('switch', { name: 'PR·CI 추적', exact: true });
   await sw.waitFor({ timeout: 10_000 });
@@ -102,6 +105,7 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   }
   // The name stays fixed; the broken-file cause reaches screen readers as the description.
   const described = await sw.evaluate((el) => (el.getAttribute('aria-describedby') || '').split(' ').map((id) => document.getElementById(id)?.textContent).join(' '));
+  assert.equal(await sw.getAttribute('aria-label'), null, 'name comes from the visible label, not a duplicate aria-label');
   assert.match(described, /설정 파일을 읽을 수 없어요/);
   assert.deepEqual(errors, []);
 });
