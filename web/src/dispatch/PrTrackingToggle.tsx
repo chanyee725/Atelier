@@ -12,7 +12,7 @@ export function PrTrackingToggle() {
   const hintId = useId();
   const line = [broken, note].filter(Boolean).join(' ');
 
-  // The switch's name stays 'PR·CI 추적'; the hint and the error reach screen readers as its description.
+  // The switch's name stays 'PR·CI 추적', taken from the wrapping label's visible text (no aria-label, so it is read once); the hint and the error reach screen readers as its description.
   // The wrapper shrinks and the error wraps within a capped width, so it never pushes the header nav off screen.
   const hint = pr === 'unsupported' ? '이 서버에선 바꿀 수 없어요' : broken ? '고친 뒤 눌러서 다시 확인해요' : null;
   const describedBy = [hint && hintId, line && errId].filter(Boolean).join(' ') || undefined;
@@ -22,13 +22,12 @@ export function PrTrackingToggle() {
         <Switch
           checked={pr === true}
           disabled={pr === null || pr === 'unsupported'}
-          aria-label="PR·CI 추적"
           aria-describedby={describedBy}
           onCheckedChange={toggle}
         />
         PR·CI 추적
-        <span id={hintId} className="sr-only">{hint}</span>
       </label>
+      <span id={hintId} className="sr-only">{hint}</span>
       <p id={errId} aria-live="polite" className="text-xs break-words text-destructive">
         {line}
       </p>

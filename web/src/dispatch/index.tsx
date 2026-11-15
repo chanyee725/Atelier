@@ -66,7 +66,7 @@ export default function DispatchApp() {
 
   return (
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-2.5 max-md:px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-[9.5px] max-md:px-4">
         <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {NAV.map(n => (
             <a
