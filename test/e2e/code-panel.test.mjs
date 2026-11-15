@@ -100,8 +100,15 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   assert.equal(await page.evaluate(() => document.scrollingElement.scrollTop), 0, 'the page itself did not scroll');
   if (SHOT) await page.screenshot({ path: join(SHOT, 'code-panel.png') });
 
+  // An open menu owns Esc: the first press closes only the menu, the second closes the panel.
+  await page.locator('[data-testid="main-menu-trigger"]').click();
+  await page.locator('.excalidraw .dropdown-menu, .excalidraw [role="menu"]').first().waitFor({ timeout: 5000 });
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
-  assert.equal(await panel.count(), 0, 'Esc closes the panel');
+  assert.equal(await page.locator('.excalidraw .dropdown-menu, .excalidraw [role="menu"]').count(), 0, 'first Esc closes the menu');
+  assert.equal(await panel.count(), 1, 'the panel stays while a menu was open');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await panel.count(), 0, 'second Esc closes the panel');
   assert.deepEqual(errors, []);
 });
