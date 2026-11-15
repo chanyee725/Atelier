@@ -154,13 +154,19 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
   const field = dialog.getByLabel('5시간 한도 (%)');
   await field.fill('77');
   // In one tick: the switch retry (STILL queued behind the 120ms timer), then the focused field blurs and saves.
+  await dialog.getByRole('status').evaluate((el) => {
+    const seen = [];
+    new MutationObserver(() => seen.push(el.textContent)).observe(el, { childList: true, subtree: true, characterData: true });
+    window.__seen4 = seen;
+  });
   await sw().evaluate((el) => {
     el.click();
     document.activeElement.blur();
   });
-  await page.waitForTimeout(500);
-  const finalNote = await dialog.getByRole('status').first().textContent();
-  assert.equal(finalNote, '저장했어요.', 'the number-field save text wins over the delayed toggle note, exactly');
+  await page.waitForFunction(() => window.__seen4.includes('저장했어요.'));
+  // The toggle's note was superseded by the save at begin(): its timer is cleared, so STILL is never written.
+  assert.deepEqual(await page.evaluate(() => window.__seen4.filter((x) => x && x !== '저장했어요.')), [], 'only the save text is ever written');
+  assert.equal(await dialog.getByRole('status').first().textContent(), '저장했어요.', 'the number-field save text wins over the delayed toggle note, exactly');
 
   // 5. Two toggles 120ms apart (#419 items 2/3/5/7): the first POST answers late ({on:false}, 500ms), the second
   // answers at once ({on:true}). The late response must not overwrite the newer switch state or status text.
@@ -168,21 +174,34 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
   await open();
   await dialog.getByText('켜짐', { exact: true }).waitFor();
   let posts = 0;
+  const bodies = [];
+  let firstAnswered;
+  const firstDone = new Promise((r) => (firstAnswered = r));
   await page.route('**/api/workspace/pr-tracking', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     const n = ++posts;
+    bodies.push(route.request().postDataJSON());
     const json = (on) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ on }) });
     if (n === 1) {
       await new Promise((r) => setTimeout(r, 500));
-      return json(false);
+      await json(false);
+      return firstAnswered();
     }
     return json(true);
   });
+  const until = async (cond) => {
+    for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 25));
+    assert.ok(cond(), 'timed out');
+  };
   await sw().evaluate((el) => el.click());
-  await page.waitForTimeout(120);
+  await until(() => posts === 1);
   await sw().evaluate((el) => el.click());
-  await page.waitForTimeout(900);
+  await until(() => posts === 2);
+  await firstDone; // the late first answer has been delivered; the page must have ignored it
+  await dialog.getByRole('status').filter({ hasText: '저장했어요.' }).waitFor();
   assert.equal(posts, 2);
+  // The switch is controlled by the server's answer, so both clicks (still showing on) ask for off.
+  assert.deepEqual(bodies, [{ on: false }, { on: false }]);
   assert.equal(await sw().getAttribute('aria-checked'), 'true', 'the late first response does not overwrite the newer switch state');
   assert.equal(await dialog.getByRole('status').first().textContent(), '저장했어요.');
   await page.unroute('**/api/workspace/pr-tracking');
