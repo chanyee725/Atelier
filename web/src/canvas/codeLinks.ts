@@ -178,7 +178,7 @@ export function codeError(status: number, error?: string): string {
 export type Badge = { blockId: string; node: string; x: number; y: number };
 
 /** The element and view fields badge placement reads. */
-export type BadgeEl = SceneEl & { opacity?: number; angle?: number; fileId?: string | null };
+export type BadgeEl = SceneEl & { opacity?: number; angle?: number; fileId?: string | null; containerId?: string | null };
 export type BadgeView = { scrollX: number; scrollY: number; zoom: { value: number }; offsetLeft: number; offsetTop: number };
 
 /**
@@ -200,7 +200,7 @@ export function placeBadges(
     if (e.isDeleted || e.opacity === 0 || (e.angle ?? 0) !== 0) continue;
     const blockId = blockIdOf(e);
     if (blockId === null) {
-      if (e.type !== 'text' && shapeCode(e)) {
+      if (!(e.type === 'text' && e.containerId) && shapeCode(e)) {
         const f = layoutFrame(e, { width: 1, origin: { x: 0, y: 0 } }, view);
         out.push({ blockId: '', node: e.id, x: f.x + e.width * view.zoom, y: f.y });
       }

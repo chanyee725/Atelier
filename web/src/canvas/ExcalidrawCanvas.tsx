@@ -183,6 +183,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   // "기능 코드" panel (docs/design/code-linked-nodes.md §3): the node or shape whose code it shows.
   const [codeTarget, setCodeTarget] = useState<CodeTarget | null>(null);
   const codeTargetRef = useRef(codeTarget);
+  const blockPanelRef = useRef(false);
   codeTargetRef.current = codeTarget;
   const [infoOf] = useState(codeInfoCache);
   const codeOf = useCallback(
@@ -644,6 +645,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.isComposing || !codeTargetRef.current) return;
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')) return;
+      // The "다이어그램 코드" panel is on top and the code panel is hidden behind it: leave Esc to that panel.
+      if (blockPanelRef.current) return;
+      // Esc belongs to the topmost layer: an open menu, list or popover (Excalidraw's own, or a native popover) closes first.
+      if (document.querySelector('[role="menu"], [role="listbox"], .excalidraw .dropdown-menu, .excalidraw .popover, [popover]:popover-open')) return;
       setCodeTarget(null);
     };
     window.addEventListener('keydown', onKey, true);
@@ -902,6 +907,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   }, [api, handle, tryEdit, resetLayout, toFreeform]);
 
   const block = editing ? blocks.find((b) => b.id === editing) : undefined;
+  blockPanelRef.current = !!block;
   useEffect(() => {
     if (editing && !block) setEditing(null);
   }, [editing, block]);
@@ -1029,6 +1035,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       )}
       {!block && codeView && (
         <CodePanel
+          key={`${codeTarget?.kind === 'node' ? `${codeTarget.blockId}:${codeTarget.node}` : codeTarget?.kind === 'shape' ? codeTarget.id : ''}`}
           label={codeView.label}
           code={codeView.code}
           orphans={codeView.orphans}
