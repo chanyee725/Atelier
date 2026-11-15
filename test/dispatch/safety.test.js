@@ -78,7 +78,7 @@ test("cli: refuses anything outside the allowlist, and any shell", async () => {
 test("cli: a real agent CLI or gh never starts under npm test", async () => {
   // An executable named claude (or gh) in a folder without the fake marker counts as real.
   const dir = tmp("drawing-real-cli-");
-  for (const bin of ["claude", "codex", "agy", "gh"]) {
+  for (const bin of ["claude", "gh"]) {
     writeFileSync(path.join(dir, bin), `#!${process.execPath}\nprocess.exit(0);\n`);
     chmodSync(path.join(dir, bin), 0o755);
     const env = { ...process.env, PATH: dir };
@@ -90,15 +90,19 @@ test("cli: a real agent CLI or gh never starts under npm test", async () => {
   await assert.rejects(runCli("gh", ["--version"], { env: { ...process.env, PATH: tmp("drawing-empty-bin-") } }), e => e.code === "ECLIDENIED");
 });
 
-test("cli: the real seam runs the fake CLIs from a marked folder", async () => {
+test("cli: the real seam runs the fake claude from a marked folder; codex and agy are refused", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const env = { ...process.env, ...bin.env };
-  for (const name of ["claude", "codex", "agy"]) {
-    const { stdout } = await runCli(name, ["--version"], { env });
-    assert.equal(stdout.trim(), `${name} 0.0.0-fake`);
+  const { stdout } = await runCli("claude", ["--version"], { env });
+  assert.equal(stdout.trim(), "claude 0.0.0-fake");
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
+  // Codex and Gemini (agy) are gone from the allow list: no spawn path, even with a fake on PATH.
+  for (const name of ["codex", "agy"]) {
+    assert.throws(() => spawnCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
+    await assert.rejects(runCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
   }
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude", "codex", "agy"]);
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"], "a refused CLI never started");
   // git is not an agent CLI: it runs from the normal PATH.
   assert.match((await runCli("git", ["--version"])).stdout, /^git version/);
   assert.equal(readdirSync(bin.dir).includes(FAKE_MARKER), true);
@@ -107,11 +111,9 @@ test("cli: the real seam runs the fake CLIs from a marked folder", async () => {
 /* ---------------- permission matrix ---------------- */
 
 const MODELS = [
-  { id: "claude-haiku-5-5", provider: "claude", efforts: ["low"], contextWindow: 200000 },
-  { id: "gpt-x", provider: "openai", efforts: ["low"], contextWindow: 200000 },
-  { id: "gemini-3.8-flash-low", provider: "gemini", efforts: ["low"], contextWindow: 1000000 },
+  { id: "claude-fable-5-2", provider: "claude", efforts: ["low"], contextWindow: 200000 },
 ];
-const ROLES = [{ id: "impl", name: "구현자", model: "claude-haiku-5-5", perm: "plan", prompt: "" }];
+const ROLES = [{ id: "impl", name: "구현자", model: "claude-fable-5-2", perm: "plan", prompt: "" }];
 
 async function makeHub(bin, root = tmp("drawing-safety-hub-")) {
   const store = new Store(root);
@@ -123,47 +125,32 @@ async function makeHub(bin, root = tmp("drawing-safety-hub-")) {
 }
 
 const flagAfter = (args, flag) => args[args.indexOf(flag) + 1];
-// What each provider's CLI must get for each mode; null = refused with 400 before anything starts.
-const MATRIX = {
-  claude: { manual: a => flagAfter(a, "--permission-mode") === "manual", acceptEdits: a => flagAfter(a, "--permission-mode") === "acceptEdits",
-    auto: a => flagAfter(a, "--permission-mode") === "auto", plan: a => flagAfter(a, "--permission-mode") === "plan" },
-  openai: { manual: a => a.includes('sandbox_mode="read-only"'), acceptEdits: a => a.includes('sandbox_mode="workspace-write"'),
-    auto: a => a.includes('sandbox_mode="workspace-write"'), plan: a => a.includes('sandbox_mode="read-only"') },
-  gemini: { manual: null, acceptEdits: null, auto: a => flagAfter(a, "--mode") === "auto", plan: a => flagAfter(a, "--mode") === "plan" },
-};
-const BIN = { claude: "claude", openai: "codex", gemini: "agy" };
+// What the Claude CLI must get for each mode.
+const MATRIX = { manual: a => flagAfter(a, "--permission-mode") === "manual", acceptEdits: a => flagAfter(a, "--permission-mode") === "acceptEdits",
+  auto: a => flagAfter(a, "--permission-mode") === "auto", plan: a => flagAfter(a, "--permission-mode") === "plan" };
 
-test("permission matrix: 4 modes x 3 providers through hub.create", async () => {
+test("permission matrix: 4 modes through hub.create, never looser than chosen", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const { hub, store } = await makeHub(bin);
   let cells = 0;
-  for (const model of MODELS) {
-    for (const [perm, ok] of Object.entries(MATRIX[model.provider])) {
-      cells++;
-      const label = `${model.provider}/${perm}`;
-      const before = bin.calls().length;
-      if (!ok) {
-        await assert.rejects(hub.create({ items: [{ role: "impl", model: model.id, perm }], commonPrompt: "hi", worktree: false }), e => e.status === 400, label);
-        await new Promise(r => setTimeout(r, 50));
-        assert.equal(bin.calls().length, before, `${label} started a CLI`);
-        continue;
-      }
-      const [s] = await hub.create({ items: [{ role: "impl", model: model.id, perm }], commonPrompt: "hi", worktree: false });
-      const call = await until(() => bin.calls().slice(before).find(c => c.bin === BIN[model.provider]));
-      assert.equal(ok(call.args), true, `${label}: ${JSON.stringify(call.args)}`);
-      for (const loose of ["--dangerously-skip-permissions", "bypassPermissions", "--yolo", "danger-full-access", "--dangerously-bypass-approvals-and-sandbox"]) {
-        assert.equal(call.args.some(a => a.includes(loose)), false, `${label} got ${loose}`);
-      }
-      assert.equal(store.data.sessions[s.id].perm, perm);
+  for (const [perm, ok] of Object.entries(MATRIX)) {
+    cells++;
+    const before = bin.calls().length;
+    const [s] = await hub.create({ items: [{ role: "impl", model: "claude-fable-5-2", perm }], commonPrompt: "hi", worktree: false });
+    const call = await until(() => bin.calls().slice(before).find(c => c.bin === "claude"));
+    assert.equal(ok(call.args), true, `${perm}: ${JSON.stringify(call.args)}`);
+    for (const loose of ["--dangerously-skip-permissions", "bypassPermissions", "--yolo", "danger-full-access", "--dangerously-bypass-approvals-and-sandbox"]) {
+      assert.equal(call.args.some(a => a.includes(loose)), false, `${perm} got ${loose}`);
     }
+    assert.equal(store.data.sessions[s.id].perm, perm);
   }
-  assert.equal(cells, 12);
-  // No agy call ever carried the skip flag, whatever the mode.
-  assert.equal(bin.calls().filter(c => c.bin === "agy").some(c => c.args.includes("--dangerously-skip-permissions")), false);
+  assert.equal(cells, 4);
+  await assert.rejects(hub.create({ items: [{ role: "impl", perm: "bypassPermissions" }], commonPrompt: "hi", worktree: false }), e => e.status === 400);
+  assert.equal(bin.calls().every(c => c.bin === "claude"), true);
 });
 
-test("resumeInterrupted resumes only sessions whose provider is connected", async () => {
+test("resumeInterrupted resumes Claude sessions only; old-provider sessions load as done and never start", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const root = tmp("drawing-safety-resume-");
@@ -172,40 +159,50 @@ test("resumeInterrupted resumes only sessions whose provider is connected", asyn
   const base = { role: "impl", effort: null, perm: "plan", prompt: "", canSpawn: false, cwd: root, startedAt: 0, updatedAt: 0, last: "",
     turns: 0, ctx: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, providerSessionId: null };
   store.data.sessions = {
-    c: { ...base, id: "c", n: 1, name: "C", provider: "claude", model: "claude-haiku-5-5", status: "running" },
-    o: { ...base, id: "o", n: 2, name: "O", provider: "openai", model: "gpt-x", status: "running" },
-    g: { ...base, id: "g", n: 3, name: "G", provider: "gemini", model: "gemini-3.8-flash-low", status: "waiting" },
+    c: { ...base, id: "c", n: 1, name: "C", provider: "claude", model: "claude-fable-5-2", status: "running" },
+    o: { ...base, id: "o", n: 2, name: "O", provider: "openai", model: "gpt-x", status: "running", interrupted: true },
+    g: { ...base, id: "g", n: 3, name: "G", provider: "gemini", model: "gemini-3.8-flash-low", status: "waiting", interrupted: true },
   };
   store.save = () => {};
   const hub = new Hub({ root, store, models: MODELS, roles: ROLES, port: 0, limits: new SharedLimits(path.join(root, "limits.json")), spawnCli: fakeSpawner(bin) });
   after(() => hub.stopAll());
-  for (const s of Object.values(store.data.sessions)) assert.equal(s.interrupted, true, s.id);
+  assert.equal(store.data.sessions.c.interrupted, true);
+  for (const id of ["o", "g"]) {
+    assert.equal(store.data.sessions[id].status, "done", id);
+    assert.equal(store.data.sessions[id].interrupted, false, id);
+  }
 
-  hub.isConnected = p => p === "claude";
+  hub.isConnected = () => true;
   hub.resumeInterrupted();
   await until(() => bin.calls().some(c => c.bin === "claude"));
   await new Promise(r => setTimeout(r, 100));
   assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
   assert.equal(store.data.sessions.c.interrupted, false);
-  assert.equal(store.data.sessions.o.interrupted, true);
-  assert.equal(store.data.sessions.g.interrupted, true);
 
-  // Connecting OpenAI later resumes the Codex session, and only that one.
-  hub.isConnected = p => p === "claude" || p === "openai";
-  hub.resumeInterrupted();
-  await until(() => bin.calls().some(c => c.bin === "codex"));
-  await new Promise(r => setTimeout(r, 100));
-  assert.deepEqual(bin.calls().map(c => c.bin).sort(), ["claude", "codex"]);
-  assert.equal(store.data.sessions.g.interrupted, true);
+  // send refuses an old-provider session before anything is pushed to its transcript or any CLI starts.
+  const before = hub.transcript("o").length;
+  assert.throws(() => hub.send("o", "hello", { force: true }), /지원하지 않는 모델/);
+  assert.equal(hub.transcript("o").length, before);
+  await new Promise(r => setTimeout(r, 50));
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
+  // start refuses too (defence in depth), recording an error instead of spawning.
+  hub.start(store.data.sessions.g, "hi");
+  assert.equal(store.data.sessions.g.status, "error");
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
 });
 
-test("Codex limits (~/.codex/sessions) are read only while OpenAI is connected", async () => {
+test("hub.create maps an old model to Fable 5.2 (mappedFrom) and drops efforts the list lacks", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
-  const { hub } = await makeHub(bin);
-  hub.isConnected = p => p !== "openai";
-  assert.equal((await hub.providerLimits()).openai, null);
-  // The only call site is behind the connection check.
-  const hubText = CODE.find(f => f.rel === "server/dispatch/hub.js").text;
-  assert.deepEqual(hubText.match(/.*codexLimits\(\).*/g).map(l => l.trim()), ['openai: this.isConnected("openai") ? await codexLimits() : null,']);
+  const { hub, store } = await makeHub(bin);
+  const made = await hub.create({ items: [
+    { role: "impl", model: "claude-haiku-5-5", effort: "low" },
+    { role: "impl", model: "gpt-x", effort: "minimal" },
+    { role: "impl", model: "claude-fable-5-2", effort: "low" },
+  ], commonPrompt: "hi", worktree: false });
+  assert.deepEqual(made.map(m => m.model), ["claude-fable-5-2", "claude-fable-5-2", "claude-fable-5-2"]);
+  assert.deepEqual(made.map(m => m.mappedFrom), ["claude-haiku-5-5", "gpt-x", undefined]);
+  assert.deepEqual(made.map(m => store.data.sessions[m.id].effort), ["low", null, "low"]);
+  assert.doesNotMatch(JSON.stringify(store.data.sessions), /haiku|gpt-x/);
 });
+

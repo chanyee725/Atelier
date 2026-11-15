@@ -74,9 +74,9 @@ async function start(again = null) {
 }
 
 const STEPS = [
-  { id: 'api', title: '서버 API', role: 'impl', model: 'claude-haiku-5-5', done: 'auth.test 통과', files: ['server/auth.js'] },
-  { id: 'ui', title: '로그인 화면', role: 'impl', model: 'claude-haiku-5-5' },
-  { id: 'review', title: '리뷰', role: 'review', model: 'claude-haiku-5-5', after: ['api', 'ui'] },
+  { id: 'api', title: '서버 API', role: 'impl', model: 'claude-fable-5-2', done: 'auth.test 통과', files: ['server/auth.js'] },
+  { id: 'ui', title: '로그인 화면', role: 'impl', model: 'claude-fable-5-2' },
+  { id: 'review', title: '리뷰', role: 'review', model: 'claude-fable-5-2', after: ['api', 'ui'] },
 ];
 
 test('write_plan writes a draft, gates create_sessions, and 시작하기 hands the approved revision to the lead', { timeout: 60_000 }, async () => {
@@ -120,7 +120,10 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     const saved = await call('PUT', `/api/file?path=${encodeURIComponent(w.body.path)}`, { ...cur });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     st = await call('GET', `/api/pipeline?path=${encodeURIComponent(w.body.path)}`);
-    assert.deepEqual(st.body.changes, ['단계 ui 모델 claude-haiku-5-5 → claude-sonnet-5-5']);
+    assert.deepEqual(st.body.changes, ['단계 ui 모델 claude-fable-5-2 → claude-sonnet-5-5']);
+    // An old model name is no blocker: the step is listed under legacyModels and runs on Fable 5.2.
+    assert.deepEqual(st.body.blockers, []);
+    assert.deepEqual(st.body.legacyModels, { ui: 'claude-sonnet-5-5' });
 
     // A stale revision is refused; the current one starts.
     const stale = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
@@ -210,7 +213,7 @@ test('a one-step plan with autostart starts at once', { timeout: 60_000 }, async
   const t = await start();
   try {
     const { call, lead } = t;
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '오타 고치기', steps: [{ title: '오타', role: 'impl', model: 'claude-haiku-5-5' }], autostart: true });
+    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '오타 고치기', steps: [{ title: '오타', role: 'impl', model: 'claude-fable-5-2' }], autostart: true });
     assert.equal(w.status, 200, JSON.stringify(w.body));
     assert.equal(w.body.state, 'running');
     assert.ok(w.body.runId);

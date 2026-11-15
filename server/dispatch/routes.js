@@ -120,21 +120,21 @@ export function routeTable(d) {
       return { ok: true };
     }],
     // Already logged in on this machine → just connect; otherwise run the CLI's browser login first.
-    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/login$/, async ([id]) => {
+    ["POST", /^\/api\/providers\/(claude)\/login$/, async ([id]) => {
       if (!d.providers()[id]?.cliLoggedIn) await d.refreshProviders();
       if (d.providers()[id]?.cliLoggedIn) { d.setEnabled(id, true); await d.refreshProviders(); return { ok: true, connected: true }; }
       d.login(id, d.refreshProviders, ok => ok && d.setEnabled(id, true));
       return { ok: true, connected: false };
     }],
-    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/cancel$/, async ([id]) => { d.cancelLogin(id); return { ok: true }; }],
+    ["POST", /^\/api\/providers\/(claude)\/cancel$/, async ([id]) => { d.cancelLogin(id); return { ok: true }; }],
     // Disconnects from Drawing only; the CLI stays logged in unless `cli: true` is passed.
-    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/logout$/, async ([id], b) => {
+    ["POST", /^\/api\/providers\/(claude)\/logout$/, async ([id], b) => {
       d.setEnabled(id, false);
       if (b.cli) await d.logout(id);
       await d.refreshProviders();
       return { ok: true };
     }],
-    // No API-key route: a key would pass through this server. Use `codex login --with-api-key` in a terminal.
+    // No API-key route: a key would pass through this server. Use the Claude CLI in a terminal.
     ["POST", /^\/api\/providers\/refresh$/, async () => { await d.refreshProviders(); return d.providers(); }],
   ];
 }

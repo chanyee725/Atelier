@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Minimal MCP stdio server that lets a manager session drive Dispatch over its local HTTP API.
-// Spawned by Claude Code (--mcp-config) or Codex (mcp_servers.dispatch) with DISPATCH_URL / DISPATCH_PARENT.
+// Spawned by Claude Code (--mcp-config) with DISPATCH_URL / DISPATCH_PARENT.
 
 // Only this machine's loopback: a DISPATCH_URL pointing anywhere else is refused, and there is no
 // default port to fall back to (the server passes its own URL when it starts a session).
@@ -69,7 +69,7 @@ const LEAD_TOOLS = [
             properties: {
               role: { type: "string", description: "역할 id (list_roles 참고)" },
               task: { type: "string", description: "이 세션에게 줄 구체적인 지시" },
-              model: { type: "string", description: "모델 id. 생략하면 역할 기본값" },
+              model: { type: "string", description: "모델은 항상 claude-fable-5-2예요. 생략해도 되고, 다른 값을 넘겨도 Fable 5.2로 실행돼요" },
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
               count: { type: "integer", minimum: 1, maximum: 4 },
@@ -157,7 +157,7 @@ const LEAD_TOOLS = [
               id: { type: "string", description: "단계 id (영문·숫자·-·_). 생략하면 s1, s2…" },
               title: { type: "string" },
               role: { type: "string", description: "역할 id (list_roles 참고)" },
-              model: { type: "string" },
+              model: { type: "string", description: "생략하면 돼요. 모든 단계는 claude-fable-5-2로 쓰여요" },
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
               n: { type: "integer", minimum: 1, maximum: 4, description: "이 단계의 세션 수" },

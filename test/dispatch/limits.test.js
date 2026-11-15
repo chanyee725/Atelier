@@ -12,19 +12,38 @@ async function tmpFile(t) {
 }
 const claude = (five, updatedAt) => ({ five, seven: 0.1, fiveReset: 1e13, sevenReset: 1e13, updatedAt });
 
-test("mergeLimits: newest updatedAt wins per section", () => {
-  const a = { claude: claude(0.5, 200), gemini: { reached: true, reset: 5, at: 100 } };
-  const b = { claude: claude(0.2, 100), gemini: { reached: false, reset: null, at: 300 } };
+test("mergeLimits: the Claude section with the newer updatedAt wins", () => {
+  const a = { claude: claude(0.5, 200) };
+  const b = { claude: claude(0.2, 100) };
   const m = mergeLimits(a, b);
   assert.equal(m.claude.five, 0.5);
-  assert.equal(m.gemini.reached, false);
   assert.deepEqual(mergeLimits(b, a), m);
 });
 
-test("mergeLimits: keeps numbers only, drops anything else", () => {
-  const m = mergeLimits({ claude: { ...claude(0.3, 1), email: "x@y", token: "t" }, gemini: { reached: true, at: 1, account: "x" } }, null);
+test("mergeLimits: the Claude section keeps numbers only; keys this server does not know pass through untouched", () => {
+  const gemini = { reached: true, reset: 5, at: 100, note: "kept as it is" };
+  const m = mergeLimits({ claude: { ...claude(0.3, 1), email: "x@y", token: "t" }, gemini }, null);
   assert.deepEqual(Object.keys(m.claude).sort(), ["fable", "fableReset", "five", "fiveReset", "seven", "sevenReset", "updatedAt"]);
-  assert.deepEqual(Object.keys(m.gemini).sort(), ["at", "reached", "reset"]);
+  assert.deepEqual(m.gemini, gemini);
+});
+
+test("SharedLimits: a limits.json with a gemini key (written by another server) round-trips through load, write and refresh", async t => {
+  const file = await tmpFile(t);
+  const gemini = { reached: true, reset: 123, at: 99 };
+  await writeFile(file, JSON.stringify({ claude: claude(0.1, 10), gemini, other: [1, 2] }));
+  const a = new SharedLimits(file);
+  await a.load();
+  await a.setClaude(claude(0.4, Date.now()));
+  let disk = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(disk.gemini, gemini);
+  assert.deepEqual(disk.other, [1, 2]);
+  assert.equal(disk.claude.five, 0.4);
+  // Another server changes the unknown key; this server picks it up and keeps writing it back.
+  await writeFile(file, JSON.stringify({ ...disk, gemini: { ...gemini, reached: false, at: 100 } }));
+  await a.refresh();
+  await a.setClaude(claude(0.5, Date.now() + 1));
+  disk = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(disk.gemini, { ...gemini, reached: false, at: 100 });
 });
 
 test("SharedLimits: an older write does not overwrite a newer value", async t => {
@@ -47,10 +66,9 @@ test("SharedLimits: refresh picks up another server's change and emits once", as
   await a.setClaude(claude(0.7, Date.now()));
   assert.equal(await b.refresh(), true);
   assert.equal(await b.refresh(), false);  // nothing new
-  await a.setGemini({ reached: true, reset: null });
+  await a.setClaude(claude(0.8, Date.now() + 5));
   assert.equal(await b.refresh(), true);
-  assert.equal(b.gemini.reached, true);
-  assert.deepEqual(seen, [0.7, 0.7]);
+  assert.deepEqual(seen, [0.7, 0.8]);
 });
 
 test("SharedLimits: a missing file starts empty and is seeded from the per-project copy", async t => {
@@ -59,7 +77,7 @@ test("SharedLimits: a missing file starts empty and is seeded from the per-proje
   await a.load();
   assert.equal(a.claude.five, null);
   assert.equal(await a.refresh(), false);
-  await a.load({ claude: claude(0.3, 50), gemini: null });
+  await a.load({ claude: claude(0.3, 50) });
   assert.equal(JSON.parse(await readFile(file, "utf8")).claude.five, 0.3);
   // A second project with an older copy does not roll the shared value back.
   const b = new SharedLimits(file);
@@ -121,7 +139,7 @@ test("SharedLimits: a stale lock is taken over, and refresh repairs a file that 
   await a.setClaude(claude(0.4, 3000));
   assert.equal(JSON.parse(await readFile(file, "utf8")).claude.five, 0.4);
 
-  await writeFile(file, JSON.stringify({ claude: claude(0.9, 1000), gemini: null })); // older value won on disk
+  await writeFile(file, JSON.stringify({ claude: claude(0.9, 1000) })); // older value won on disk
   assert.equal(await a.refresh(), false);
   assert.equal(JSON.parse(await readFile(file, "utf8")).claude.updatedAt, 3000);
 });
@@ -149,7 +167,7 @@ test("Hub: Fable's weekly window shows on its own and keeps its value across oth
   assert.deepEqual(l.fable, { windows: [{ label: "Fable 주간", used: 0.04, reset: far * 1000 }] });
 
   done = next();
-  hub.onClaude({ id: "s2", model: "claude-haiku-5-5" }, event({ five_hour: win(0.2, far), seven_day: win(0.07, far) }));
+  hub.onClaude({ id: "s2", model: "claude-fable-5-2" }, event({ five_hour: win(0.2, far), seven_day: win(0.07, far) }));
   await done;
   l = await hub.providerLimits();
   assert.equal(l.claude.windows[0].used, 0.2);
@@ -166,13 +184,30 @@ test("SharedLimits: two updates in the same millisecond both land, the later one
     const a = shared.setClaude({ five: 0.14, seven: 0.06 });
     const b = shared.setClaude({ five: 0.2, seven: 0.07 });
     await Promise.all([a, b]);
-    const g1 = shared.setGemini({ reached: false });
-    const g2 = shared.setGemini({ reached: true });
-    await Promise.all([g1, g2]);
   } finally { Date.now = realNow; }
   assert.equal(shared.claude.five, 0.2);
-  assert.equal(shared.gemini.reached, true);
   const disk = JSON.parse(await readFile(file, "utf8"));
   assert.equal(disk.claude.five, 0.2);
-  assert.equal(disk.gemini.reached, true);
+});
+
+test("Hub guards: guardCheck and limitHit both check five, seven and the Fable weekly window, with the fable ticket key", async t => {
+  const { Hub } = await import("../../server/dispatch/hub.js");
+  const file = await tmpFile(t);
+  const mk = async limits => {
+    const shared = new SharedLimits(file);
+    await shared.load();
+    await shared.setClaude({ ...claude(0.1, Date.now()), seven: 0.1, ...limits, updatedAt: Date.now() + Math.random() });
+    const store = { data: { sessions: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 } } }, save() {} };
+    return new Hub({ root: path.dirname(file), store, models: [], roles: [], port: 0, limits: shared });
+  };
+  const far = Date.now() + 3600_000;
+  let hub = await mk({ fable: 0.9, fableReset: far });
+  assert.match(hub.guardCheck(1), /Fable 주간 한도 90%/);
+  assert.deepEqual(hub.limitHit(), { key: `fable:${far}`, reason: "Fable 주간 한도 90%", resetAt: far });
+  hub = await mk({ seven: 0.9, sevenReset: far, fable: 0.1, fableReset: far });
+  assert.match(hub.guardCheck(1), /주간 한도 90%/);
+  assert.equal(hub.limitHit().key, `seven:${far}`);
+  hub = await mk({ fable: 0.5, fableReset: far });
+  assert.equal(hub.guardCheck(1), null);
+  assert.equal(hub.limitHit(), null);
 });

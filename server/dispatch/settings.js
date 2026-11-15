@@ -1,3 +1,5 @@
+import { staticModels } from "./models.js";
+
 // Team settings a user changes from the 설정 page, saved per project in .dispatch/state.json.
 // Environment variables still seed the defaults, so existing setups keep working until changed.
 
@@ -89,7 +91,7 @@ export function patchTeam(store, patch, { roles, models }) {
       if (!roles.some(r => r.id === role)) continue;
       if (model === null || model === "") { delete rm[role]; continue; }
       if (!models.some(m => m.id === model)) throw Object.assign(new Error(`알 수 없는 모델: ${model}`), { status: 400 });
-      rm[role] = model;
+      rm[role] = model; // only Fable 5.2 is in the list, so this is the only value that passes
     }
     next.roleModels = rm;
   }
@@ -97,8 +99,11 @@ export function patchTeam(store, patch, { roles, models }) {
   return teamSettings(store);
 }
 
-/** Roles as the UI and the lead see them: preset defaults with the user's model overrides. */
-export function effectiveRoles(roles, store) {
+/**
+ * Roles as the UI and the lead see them: preset defaults with the user's model overrides. Overrides
+ * naming a model that is no longer offered (saved before Fable 5.2 only) are ignored.
+ */
+export function effectiveRoles(roles, store, models = staticModels()) {
   const rm = teamSettings(store).roleModels;
-  return roles.map(r => (rm[r.id] ? { ...r, model: rm[r.id] } : r));
+  return roles.map(r => (rm[r.id] && models.some(m => m.id === rm[r.id]) ? { ...r, model: rm[r.id] } : r));
 }

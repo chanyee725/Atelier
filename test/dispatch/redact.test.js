@@ -41,8 +41,8 @@ test("redact leaves ordinary agent output alone", () => {
   assert.equal(redact(42), 42);
 });
 
-const MODELS = [{ id: "claude-haiku-5-5", provider: "claude", efforts: ["low"], contextWindow: 200000 }];
-const ROLES = [{ id: "impl", name: "구현자", model: "claude-haiku-5-5", perm: "plan", prompt: "ROLE PROMPT" }];
+const MODELS = [{ id: "claude-fable-5-2", provider: "claude", efforts: ["low"], contextWindow: 200000 }];
+const ROLES = [{ id: "impl", name: "구현자", model: "claude-fable-5-2", perm: "plan", prompt: "ROLE PROMPT" }];
 
 async function makeHub() {
   const root = mkdtempSync(path.join(tmpdir(), "drawing-redact-"));
@@ -52,7 +52,7 @@ async function makeHub() {
   store.save = () => {}; // no delayed write into a folder the test removes; the test flushes itself
   const hub = new Hub({ root, store, models: MODELS, roles: ROLES, port: 0, limits: new SharedLimits(path.join(root, "limits.json")),
     spawnCli: () => { throw Object.assign(new Error("no CLI in this test"), { code: "ECLIDENIED" }); } });
-  const s = { id: "s1", n: 1, name: "Juno", role: "impl", provider: "claude", model: "claude-haiku-5-5", effort: null, perm: "plan",
+  const s = { id: "s1", n: 1, name: "Juno", role: "impl", provider: "claude", model: "claude-fable-5-2", effort: null, perm: "plan",
     prompt: `custom prompt for ${MAIL}`, canSpawn: false, cwd: root, status: "idle", startedAt: 0, updatedAt: 0, last: "", turns: 0,
     ctx: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, providerSessionId: null, error: null };
   store.data.sessions[s.id] = s;

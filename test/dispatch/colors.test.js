@@ -61,8 +61,8 @@ test("pickColor: random, prefers colours no session has yet", () => {
   assert.ok(seen.size > 1, "not a fixed colour");
 });
 
-const MODELS = [{ id: "claude-haiku-5-5", provider: "claude", efforts: ["low"], contextWindow: 200000 }];
-const ROLES = [{ id: "impl", name: "구현자", model: "claude-haiku-5-5", perm: "plan", prompt: "ROLE PROMPT" }];
+const MODELS = [{ id: "claude-fable-5-2", provider: "claude", efforts: ["low"], contextWindow: 200000 }];
+const ROLES = [{ id: "impl", name: "구현자", model: "claude-fable-5-2", perm: "plan", prompt: "ROLE PROMPT" }];
 
 test("a session gets its colour when it is created, keeps it, and it is saved as metadata", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "drawing-colors-"));

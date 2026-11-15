@@ -1,4 +1,5 @@
-export type Provider = "claude" | "openai" | "gemini";
+/** The only provider that runs. Stored sessions may carry an older value, so readers use `string`. */
+export type Provider = "claude";
 export type Status = "starting" | "running" | "waiting" | "idle" | "done" | "error";
 /** Monitoring state decided by the server: what the session needs from a person. */
 export type SessionState = "working" | "waiting" | "stuck" | "failed" | "resting" | "done";
@@ -22,7 +23,8 @@ export interface Session {
   roleName: string;
   /** Agent cursor colour (E56), one of server/dispatch/colors.js, picked at random when the session is created. */
   color?: string;
-  provider: Provider;
+  /** `claude` for new sessions; an older saved session may say `openai` or `gemini` (read-only). */
+  provider: string;
   model: string;
   modelLabel: string;
   effort: string | null;
@@ -91,7 +93,8 @@ export interface Entry {
 export interface Model {
   id: string;
   label: string;
-  provider: Provider;
+  /** Always `claude` today; `string` so web code reading older data still compiles. */
+  provider: string;
   efforts: string[];
   defaultEffort: string | null;
   contextWindow: number;
@@ -155,7 +158,7 @@ export interface Snapshot {
   roles: Role[];
   perms: string[];
   models: Model[];
-  providers: Record<Provider, ProviderStatus>;
+  providers: Record<string, ProviderStatus>;
   limits: Limits;
   settings: Settings;
   sessions: Session[];

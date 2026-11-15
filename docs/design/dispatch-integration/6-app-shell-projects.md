@@ -1,5 +1,7 @@
 # 6. 앱 셸: 프로젝트 중심 구조와 Linear에 가까운 다크 화면 (E42, #122)
 
+> 대체됨(E505): Codex·Gemini 관련 부분은 `docs/design/fable-only-projects.md`가 대체해요. 에이전트는 claude-fable-5-2 하나만 써요.
+
 상태: **안 확정(2026-11-13).** 대시보드·프로젝트 홈·사이드바는 B안, 문서·다이어그램 화면은 A안이에요(§3.1). 색은 shadcn/ui 기본 테마, 글꼴은 Pretendard, 크기는 첫 시안의 약 108%예요(§4). 구현은 §9의 티켓 5개로 나눠요. 이 문서는 설계만이고 앱 코드는 바꾸지 않았어요.
 
 - 프로토타입: `6-app-shell-prototype/index.html` (정적 HTML, 네트워크 요청 없음)

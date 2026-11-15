@@ -3,28 +3,15 @@ import { runCli as run, spawnCli } from "./cli.js";
 // Login itself is delegated to each CLI: it opens the browser OAuth flow and keeps its own credentials.
 // Dispatch never reads or stores tokens, keys, or account emails.
 const CLI = {
-  gemini: { bin: "agy", login: ["install"], logout: [], store: "~/.gemini/antigravity-cli" },
   claude: { bin: "claude", login: ["auth", "login"], logout: ["auth", "logout"], store: "~/.claude" },
-  openai: { bin: "codex", login: ["login"], logout: ["logout"], store: "~/.codex" },
 };
 
 const state = {
-  gemini: { busy: false, url: null, error: null },
   claude: { busy: false, url: null, error: null },
-  openai: { busy: false, url: null, error: null },
 };
 
 async function version(bin) {
   try { return (await run(bin, ["--version"], { timeout: 10000 })).stdout.trim().split("\n")[0]; } catch { return null; }
-}
-
-async function geminiStatus() {
-  try {
-    const v = await version("agy");
-    return { connected: !!v, method: v ? "Antigravity CLI (agy)" : null };
-  } catch {
-    return { connected: false, method: null };
-  }
 }
 
 async function claudeStatus() {
@@ -40,30 +27,11 @@ async function claudeStatus() {
   }
 }
 
-async function codexStatus() {
-  try {
-    const { stdout, stderr } = await run("codex", ["login", "status"], { timeout: 15000 });
-    const out = (stdout + stderr).trim();
-    const connected = /logged in/i.test(out) && !/not logged in/i.test(out);
-    const method = !connected ? null : /chatgpt/i.test(out) ? "ChatGPT 계정" : /api key/i.test(out) ? "API 키" : "로그인됨";
-    return { connected, method };
-  } catch {
-    return { connected: false, method: null };
-  }
-}
-
 export async function providerStatus() {
-  const [gv, cv, ov, gs, cs, os] = await Promise.all([
-    version("agy"), version("claude"), version("codex"),
-    geminiStatus(), claudeStatus(), codexStatus(),
-  ]);
+  const [cv, cs] = await Promise.all([version("claude"), claudeStatus()]);
   return {
-    gemini: { name: "Gemini", installed: !!gv, cli: gv, ...gs, ...state.gemini, store: CLI.gemini.store,
-              run: "agy -p --output-format stream-json", keySupported: false },
     claude: { name: "Claude", installed: !!cv, cli: cv, ...cs, ...state.claude, store: CLI.claude.store,
               run: "claude -p --output-format stream-json", keySupported: false },
-    openai: { name: "OpenAI Codex", installed: !!ov, cli: ov, ...os, ...state.openai, store: CLI.openai.store,
-              run: "codex exec --json", keySupported: false },
   };
 }
 
@@ -96,6 +64,7 @@ export function cancelLogin(id) {
 }
 
 export async function logout(id) {
+  if (!CLI[id]) return;
   await run(CLI[id].bin, CLI[id].logout, { timeout: 15000 }).catch(() => {});
 }
 
