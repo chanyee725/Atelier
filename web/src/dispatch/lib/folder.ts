@@ -54,3 +54,11 @@ export function openCounts(sessions: readonly Pick<Session, 'folder' | 'status'>
 /** A project home's sessions: those whose folder is the project's path, open ones first, then newest. */
 export const sessionsOf = <T extends Pick<Session, 'folder' | 'status' | 'startedAt'>>(sessions: readonly T[], folder: string): T[] =>
   sessions.filter(s => s.folder === folder).sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || (b.startedAt ?? 0) - (a.startedAt ?? 0));
+
+/** Folders the scope may be filed under: the project paths, plus a picked project itself until the list has arrived (a
+ *  `#folder=` link must not show an empty board, or count everything as 미분류, before the first answer). */
+export const knownFolders = (paths: readonly string[], scope: Scope, ready: boolean): Set<string> => {
+  const k = new Set(paths);
+  if (!ready && typeof scope === 'string') k.add(scope);
+  return k;
+};

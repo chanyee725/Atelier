@@ -3,16 +3,14 @@ import { Circle, CircleAlert, CircleCheck, CircleX, LoaderCircle, TriangleAlert,
 import { Badge } from '../components/ui/badge';
 import { Progress } from '../components/ui/progress';
 import { cn } from '../lib/utils';
-import { STATE, TONE_TEXT, level, levelTone, type Tone } from './lib/format.ts';
+import { STATE, TONE_TEXT, level, levelTone, providerName, type Tone } from './lib/format.ts';
 import type { SessionState } from './types';
-
-const PROVIDER: Record<string, string> = { claude: 'Claude' };
 
 /** Provider and model as one neutral tag. No provider colours: the name says which one it is. */
 export function ModelTag({ provider, label, className }: { provider: string; label: string; className?: string }) {
   return (
     <Badge variant="secondary" title={label} className={cn('max-w-full min-w-0 shrink gap-1 rounded-md px-1.5 font-normal', className)}>
-      <span className="shrink-0 font-semibold">{PROVIDER[provider] ?? provider}</span>
+      <span className="shrink-0 font-semibold">{providerName(provider)}</span>
       <span className="truncate text-muted-foreground">{label}</span>
     </Badge>
   );
