@@ -107,6 +107,17 @@ export const percent = (used: number | null | undefined) => (used == null || !Nu
 /** Above this a usage figure turns to the warning colour (doc 6 §2.1). */
 export const WARN_PERCENT = 75;
 
+type UsageWindow = { label: string; used: number | null };
+type LimitWindows = { claude?: { windows: UsageWindow[] } | null; fable?: { windows: UsageWindow[] } | null };
+/** The account's 5-hour window, picked by label (not position). */
+export const fiveHourWindow = (limits: LimitWindows) => limits.claude?.windows.find((w) => w.label === '5시간') ?? null;
+/**
+ * The one "한도 도달" rule, shared by the sidebar and the settings dialog: connected, and any window the server
+ * reports (account 5시간, account 주간, Fable's own weekly) is at 100%. Hidden windows still count.
+ */
+export const limitReached = (connected: boolean, limits: LimitWindows) =>
+  connected && [...(limits.claude?.windows ?? []), ...(limits.fable?.windows ?? [])].some((w) => (percent(w.used) ?? 0) >= 100);
+
 export type ModelLine = { id: string; name: string; installed: boolean | null; connected: boolean; pct: number | null; reached: boolean };
 export type ModelTone = 'ok' | 'warn' | 'off';
 /**

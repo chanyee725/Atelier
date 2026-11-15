@@ -213,3 +213,22 @@ test('focus after settings close: keeps a real focus, else the opener, else the 
   assert.equal(row.focused, 1);
   assert.equal(trigger.focused, 3);
 });
+
+test('limit reached: sidebar and settings share one rule, including the account 주간 window', async () => {
+  const { limitReached, fiveHourWindow } = await import('../../web/src/projectNav.ts');
+  const cases = [
+    { name: 'account weekly 100%', limits: { claude: { windows: [{ label: '5시간', used: 0.2 }, { label: '주간', used: 1 }] } }, want: true },
+    { name: '5시간 100%', limits: { claude: { windows: [{ label: '5시간', used: 1 }, { label: '주간', used: 0.1 }] } }, want: true },
+    { name: 'Fable weekly 100%', limits: { claude: { windows: [{ label: '5시간', used: 0.1 }] }, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } }, want: true },
+    { name: 'all below', limits: { claude: { windows: [{ label: '5시간', used: 0.99 }, { label: '주간', used: 0.5 }] } }, want: false },
+  ];
+  for (const c of cases) {
+    const row = providerRows({ claude: { connected: true } }, c.limits)[0];
+    assert.equal(row.status === '한도에 닿았어요', c.want, c.name);
+    assert.equal(row.tone === 'warn' && row.status === '한도에 닿았어요', c.want, c.name);
+    assert.equal(limitReached(true, c.limits), c.want, c.name);
+  }
+  assert.equal(limitReached(false, cases[0].limits), false);
+  // 5시간 is picked by label, not position.
+  assert.equal(fiveHourWindow({ claude: { windows: [{ label: '주간', used: 1 }, { label: '5시간', used: 0.3 }] } })?.used, 0.3);
+});
