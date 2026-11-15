@@ -77,11 +77,12 @@ const LEAD_TOOLS = [
           },
         },
         worktree: { type: "boolean", description: "세션마다 git worktree 분리 (기본 true)" },
+        folder: { type: "string", description: "프로젝트 폴더(워크스페이스 최상위 폴더) 경로. 생략하면 이 관리자의 폴더" },
       },
     },
-    run: async ({ sessions, worktree = true }) => {
+    run: async ({ sessions, worktree = true, folder }) => {
       const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1 }));
-      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT });
+      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }) });
       return res.sessions.map(brief);
     },
   },

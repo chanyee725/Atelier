@@ -28,6 +28,21 @@ export async function setup(ctx) {
     },
   });
 
+  const RUNS_LIST_CAP = 50;
+  const filesUnder = (nodes) => nodes.flatMap((n) => (n.type === 'folder' ? filesUnder(n.children) : n.type === 'file' ? [n.path] : []));
+  // Run record metadata (summaries, never transcripts) of every file under one top-level folder, newest first.
+  async function listFolder(name) {
+    if (typeof name !== 'string' || !name || name.startsWith('.') || /[/\\\0]/.test(name)) throw new StoreError(400, 'folder is required');
+    const folder = (await store.tree()).find((n) => n.type === 'folder' && n.name === name);
+    if (!folder) throw new StoreError(404, 'folder not found');
+    const out = [];
+    for (const file of filesUnder(folder.children)) {
+      for (const run of (await recorder.list(file)).runs) out.push({ file, ...run });
+    }
+    out.sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+    return { folder: name, runs: out.slice(0, RUNS_LIST_CAP) };
+  }
+
   return {
     recorder,
     close: () => {
@@ -41,6 +56,18 @@ export async function setup(ctx) {
         path: '/api/runs/active',
         handler(_req, res) {
           send(res, 200, { files: recorder.runningFiles() });
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/runs/list',
+        async handler(_req, res, _ctx, _m, url) {
+          try {
+            send(res, 200, await listFolder(url.searchParams.get('folder')));
+          } catch (err) {
+            if (!(err instanceof StoreError)) throw err;
+            send(res, err.status, { error: err.message });
+          }
         },
       },
       route('GET', '/api/runs', (p) => recorder.list(p)),
