@@ -5,8 +5,8 @@
 
 export const KO_HINTS: Readonly<Record<string, string>> = {
   canvasPanning: '캔버스를 옮기려면 마우스 휠이나 스페이스바를 누른 채 드래그하거나 손 도구를 써요.',
-  linearElement: '여러 점을 잇으려면 클릭하고, 직선은 바로 드래그해요.',
-  arrowTool: '여러 점을 잇으려면 클릭하고, 직선은 드래그해요. {{arrowShortcut}} 키를 다시 누르면 화살표 종류가 바뀌어요.',
+  linearElement: '여러 점을 이으려면 클릭하고, 직선은 바로 드래그해요.',
+  arrowTool: '여러 점을 이으려면 클릭하고, 직선은 드래그해요. {{arrowShortcut}} 키를 다시 누르면 화살표 종류가 바뀌어요.',
   freeDraw: '클릭한 채 드래그하고, 다 그렸으면 놓아요.',
   text: '팁: 선택 도구로 빈 곳을 더블 클릭해도 텍스트를 넣을 수 있어요.',
   embeddable: '클릭하고 드래그해서 웹사이트 임베드를 만들어요.',
