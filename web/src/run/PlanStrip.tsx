@@ -147,42 +147,43 @@ export function PlanStrip({ session }: { session: FileSession }) {
           시작하기
         </Button>
       </span>
-      <dialog
-        ref={dialog}
-        aria-labelledby={titleId}
-        onClose={() => setConfirming(false)}
-        className="m-auto w-[min(28rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
-      >
-        <h2 id={titleId} className="border-b px-4 py-2.5 text-sm font-semibold">
-          이 계획으로 시작할까요?
-        </h2>
-        <div className="flex flex-col gap-1.5 px-4 py-3">
-          <p>
-            세션 {view.sessions}개{viewLimits ? ` · ${viewLimits}` : ''}
-          </p>
-          <p>바뀐 점: {view.changes.length ? view.changes.join(', ') : '없어요'}</p>
-          {/* Space is reserved (visibility, not display) so the buttons do not move under the pointer. */}
-          <p id={noticeId} role="alert" className="text-destructive" style={{ visibility: notice ? 'visible' : 'hidden' }}>
-            {notice ?? PLAN_CHANGED_NOTICE}
-          </p>
-          {asks > 0 && <p className="text-destructive">물어볼 것 {asks}개에 답이 없어요. 그래도 시작할까요?</p>}
-        </div>
-        <form method="dialog" className="flex items-center justify-end gap-2 border-t px-4 py-2.5">
-          <Button type="submit" value="cancel" variant="outline" size="sm" className="bg-transparent px-3 text-sm">
-            취소
-          </Button>
-          <Button
-            size="sm"
-            disabled={busy}
-            aria-describedby={notice ? noticeId : undefined}
-            className="px-3 text-sm hover:bg-primary"
-            onClick={() => void start()}
-          >
-            시작하기
-          </Button>
-        </form>
-      </dialog>
     </Alert>
+    {/* Outside the live region too, so the open dialog and its role="alert" are not nested live regions. */}
+    <dialog
+      ref={dialog}
+      aria-labelledby={titleId}
+      onClose={() => setConfirming(false)}
+      className="m-auto w-[min(28rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
+    >
+      <h2 id={titleId} className="border-b px-4 py-2.5 text-sm font-semibold">
+        이 계획으로 시작할까요?
+      </h2>
+      <div className="flex flex-col gap-1.5 px-4 py-3">
+        <p>
+          세션 {view.sessions}개{viewLimits ? ` · ${viewLimits}` : ''}
+        </p>
+        <p>바뀐 점: {view.changes.length ? view.changes.join(', ') : '없어요'}</p>
+        {/* Space is reserved (visibility, not display) so the buttons do not move under the pointer. */}
+        <p id={noticeId} role="alert" className="text-destructive" style={{ visibility: notice ? 'visible' : 'hidden' }}>
+          {notice ?? PLAN_CHANGED_NOTICE}
+        </p>
+        {asks > 0 && <p className="text-destructive">물어볼 것 {asks}개에 답이 없어요. 그래도 시작할까요?</p>}
+      </div>
+      <form method="dialog" className="flex items-center justify-end gap-2 border-t px-4 py-2.5">
+        <Button type="submit" value="cancel" variant="outline" size="sm" className="bg-transparent px-3 text-sm">
+          취소
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy}
+          aria-describedby={notice ? noticeId : undefined}
+          className="px-3 text-sm hover:bg-primary"
+          onClick={() => void start()}
+        >
+          시작하기
+        </Button>
+      </form>
+    </dialog>
     {/* Outside the live region, so a status refresh does not read the whole list again. */}
     {blocked && <span id={blockersId} className="sr-only">{status.blockers.join(', ')}</span>}
     </>

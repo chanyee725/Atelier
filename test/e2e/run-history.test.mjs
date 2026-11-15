@@ -117,6 +117,8 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   assert.ok(await start.evaluate((el) => el === document.activeElement), 'focusable');
   await start.dispatchEvent('click');
   assert.equal(await page.locator('dialog[open]').count(), 0, 'click does not open the confirm');
+  await start.press('Enter');
+  assert.equal(await page.locator('dialog[open]').count(), 0, 'Enter does not open the confirm');
 
   // 버전 기록: labels in run order.
   await page.getByRole('button', { name: '더 보기' }).click();
