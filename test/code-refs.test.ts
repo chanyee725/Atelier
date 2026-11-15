@@ -129,3 +129,24 @@ test('stripCodeAttrs removes code attributes only', async () => {
   assert.equal(stripCodeAttrs(src), 'A [icon: video]\nB\nC [color: red]\nD [icon: db]\nA > B');
   assert.equal(stripCodeAttrs('title "code: x"'), 'title "code: x"');
 });
+
+test('stripCodeAttrs leaves code: inside quoted values and other text unchanged (E504g)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  const keep = [
+    'A [label: "see code: here"]',
+    'A [label: "see code: here", color: red]',
+    "A [label: \"it's code: 'x'\"]",
+    'A [label: "x[]"]',
+    'A [label: "a, ]b"]',
+    'x[] > y',
+    'A [icon: db, label: "a [ , ] b"]',
+    'title "code: x"',
+    '// A [code: "x.py"]',
+    'A [link: "https://x.test/code: a"]',
+  ];
+  for (const line of keep) assert.equal(stripCodeAttrs(line), line, line);
+  assert.equal(stripCodeAttrs('A [label: "see code: here", code: "a.py"]'), 'A [label: "see code: here"]');
+  assert.equal(stripCodeAttrs('A [code: "a.py", label: "x[]"]\nB [label: "code: y", code: b.py:3, color: red]'), 'A [label: "x[]"]\nB [label: "code: y", color: red]');
+  assert.equal(stripCodeAttrs('A [code: "a.py"] > B [code: "b.py", icon: db]'), 'A > B [icon: db]');
+  assert.equal(stripCodeAttrs('A [ code : "a.py" ] // note'), 'A // note');
+});
