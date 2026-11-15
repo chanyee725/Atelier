@@ -165,13 +165,25 @@ export function parseAttrs(c: Cursor, keys: ReadonlySet<string> = c.keys): Attrs
     const vals: Token[] = [];
     // Balanced nested `[...]` belongs to the value (e.g. `code: app/[id]/page.tsx`).
     let depth = 0;
+    let stop = -1; // first `,`/`]` seen inside a nested bracket: where the value ends if that bracket never closes
+    let hitEnd = false;
+    const valStart = c.pos;
     for (;;) {
       const k = c.peek().kind;
-      if (['newline', 'eof', 'rbrace', 'lbrace'].includes(k)) break;
+      if (['newline', 'eof', 'rbrace', 'lbrace'].includes(k)) {
+        hitEnd = true;
+        break;
+      }
       if (depth === 0 && (k === 'comma' || k === 'rbracket')) break;
+      if (depth > 0 && stop < 0 && (k === 'comma' || k === 'rbracket')) stop = vals.length;
       if (k === 'lbracket') depth++;
       else if (k === 'rbracket') depth--;
       vals.push(c.next());
+    }
+    if (hitEnd && stop >= 0) {
+      // Unmatched `[`: end the value at the first `,`/`]` like a plain value.
+      vals.length = stop;
+      c.pos = valStart + stop;
     }
     if (vals.length === 0) {
       c.error(key, `Missing value for '${key.text}'`);

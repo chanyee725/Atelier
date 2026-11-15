@@ -163,3 +163,14 @@ test('stripCodeAttrs and parseAttrs handle brackets inside unquoted values (E504
   assert.deepEqual({ ...dslCodeRefs((ast as GraphDiagram).children) }, { A: [{ path: 'app/[id]/page.tsx', start: 1 }] });
   assert.deepEqual(diagnostics.filter((d) => d.severity === 'error' || /Bad code/.test(d.message)), []);
 });
+
+test('unmatched [ in an unquoted value ends at the first , or ] like a plain value (E504h)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  assert.equal(stripCodeAttrs('A [code: a[b, color: red]'), 'A [color: red]');
+  assert.equal(stripCodeAttrs('A [color: red, code: a[b]'), 'A [color: red]');
+  const { ast, diagnostics } = parse('A [label: a[b, color: red]\nB', 'cloud-architecture');
+  const a = (ast as GraphDiagram).children[0] as { attrs?: Record<string, string> };
+  assert.equal(a.attrs?.label, 'a[b');
+  assert.equal(a.attrs?.color, 'red');
+  assert.deepEqual(diagnostics.filter((d) => d.severity === 'error'), []);
+});

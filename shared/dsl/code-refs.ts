@@ -96,8 +96,18 @@ export function stripCodeAttrs(src: string): string {
       }
     };
     let depth = 0; // balanced nested `[...]` inside a value belongs to the value
+    let stop = -1; // first `,`/`]` seen inside a nested bracket: where the entry ends if that bracket never closes
     for (; j < tokens.length; j++) {
       const k = tokens[j]!.kind;
+      if (depth > 0 && stop < 0 && (k === 'comma' || k === 'rbracket')) stop = j;
+      const lineEnd = k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace';
+      if (stop >= 0 && lineEnd) {
+        // Unmatched `[` swallowed the rest of the line: restart right at the first `,`/`]` like a plain value.
+        j = stop - 1;
+        depth = 0;
+        stop = -1;
+        continue;
+      }
       if (k === 'rbracket') {
         if (depth > 0) {
           depth--;
