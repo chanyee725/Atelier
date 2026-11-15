@@ -1,6 +1,6 @@
 // Settings dialog model (E57): sections, provider rows and the run-guard fields, kept free of React so
 // node --test can check them. Status and percentages only: no account, email or token ever reaches here.
-import { limitReached, percent } from '../projectNav.ts';
+import { fiveHourWindow, percent, reachedWindows } from '../projectNav.ts';
 import type { ThemePref } from '../theme';
 
 export const SECTIONS = [
@@ -25,11 +25,8 @@ const NAMES: Record<ProviderId, string> = { claude: 'Claude · Fable 5.2' };
 
 /** What /api/state reports per provider; only the fields this dialog reads. */
 export type { ProviderInfo } from '../api';
-import type { ProviderInfo } from '../api';
-export type LimitsView = {
-  claude?: { windows: { label: string; used: number | null }[] } | null;
-  fable?: { windows: { label: string; used: number | null }[] } | null;
-};
+import type { ProviderInfo, ProviderLimits } from '../api';
+export type LimitsView = ProviderLimits;
 
 export type ProviderAction = 'connect' | 'disconnect' | 'cancel' | null;
 export type ProviderRow = {
@@ -41,6 +38,8 @@ export type ProviderRow = {
   action: ProviderAction;
   /** Usage windows, e.g. 5시간 42%; empty when not connected or unknown. */
   windows: { label: string; pct: number }[];
+  /** Labels of the windows at 100%, e.g. 주간; empty when no limit is reached. */
+  reachedLabels: string[];
   error: string | null;
   /** The CLI's own sign-in page while a login runs (https only). */
   loginUrl: string | null;
@@ -54,15 +53,17 @@ export function providerRows(providers: Partial<Record<string, ProviderInfo>>, l
     const connected = !!p.connected;
     const busy = !!p.busy;
     const missing = p.installed === false;
-    // 5시간 from the account window, then Fable's own weekly window once it has reported.
-    const raw = [...(limits.claude?.windows ?? []).filter((w) => w.label !== '주간').slice(0, 1), ...(limits.fable?.windows ?? [])];
+    // 5시간 from the account window (same pick as the sidebar), then Fable's own weekly window once it has reported.
+    const five = fiveHourWindow(limits);
+    const raw = [...(five ? [five] : []), ...(limits.fable?.windows ?? [])];
     const windows = connected ? raw.flatMap((w) => (percent(w.used) == null ? [] : [{ label: w.label, pct: percent(w.used)! }])) : [];
-    const reached = limitReached(connected, limits);
+    const hit = reachedWindows(connected, limits).map((w) => w.label);
+    const reached = hit.length > 0;
     const status = busy ? '연결하는 중이에요' : missing ? 'CLI가 설치되지 않았어요' : !connected ? '연결 안 됨' : reached ? '한도에 닿았어요' : '연결됨';
     const tone = !connected ? 'idle' : reached || windows.some((w) => w.pct > WARN_AT) ? 'warn' : 'ok';
     const action: ProviderAction = busy ? 'cancel' : connected ? 'disconnect' : missing ? null : 'connect';
     const loginUrl = busy && typeof p.url === 'string' && p.url.startsWith('https://') ? p.url : null;
-    return { id, name: NAMES[id], tone, status, action, windows, error: p.error ?? null, loginUrl };
+    return { id, name: NAMES[id], tone, status, action, windows, reachedLabels: hit, error: p.error ?? null, loginUrl };
   });
 }
 
