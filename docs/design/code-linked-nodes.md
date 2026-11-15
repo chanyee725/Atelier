@@ -36,8 +36,9 @@ Validated like `layout` (docs/workspace-api.md "Block `layout`"): bad `codeRefs`
 dropped on read; unknown `v` kept verbatim; at most 2000 nodes. develop is already format v4 (`plan`), so adding it
 bumps the file format `version` to **v5**: v4 and older files are read as they are and stored as v5 on the next save; an
 older server treats v5 files as read-only (422), so it can never drop `codeRefs` through `normalizeContent`.
-Refs are keyed by node name, like `layout.items`: renaming a node leaves its refs orphaned (dropped on the next save
-when no node has that name; the web keeps them while the DSL is being edited).
+Refs are keyed by node name, like `layout.items`: renaming a node leaves its refs orphaned. The server keeps orphaned
+entries as they are (never dropped on save; the 2000-node cap applies), so an autosave in the middle of a rename loses
+nothing. Cleanup is only an explicit action in the code panel ("연결 안 된 코드 정리").
 
 ### Diagram-as-code shorthand
 
@@ -67,10 +68,12 @@ free-form copies each node's entry onto its shape.
 
 - Root = the git project that holds the workspace (same root the server already resolves for `.dispatch/`).
   No git project → 404 `{error:'no-project'}`.
-- Git-tracked files only: the path must be listed by `git ls-files --error-unmatch -- <path>` (run through
-  `server/dispatch/cli.js`, no shell). This keeps gitignored local config, `node_modules/` and `.dispatch/wt/` out.
+- Git-tracked files only: the path must be listed by `git --literal-pathspecs ls-files --error-unmatch -- <path>` run
+  with `cwd` = root (through `server/dispatch/cli.js`, no shell). Literal pathspecs stop glob and magic matching
+  (`a[b].txt` must not match tracked `ab.txt`; `:(top)x` is just a name). This keeps gitignored local config, `node_modules/` and `.dispatch/wt/` out.
   Not tracked → 404 `{error:'not-tracked'}`. The deny list below stays as a second layer.
-- Path checks: decode once (reject any `%` left after decoding, so no double encoding), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
+- Path checks: decode once (reject any `%` left after decoding, so no double encoding; this deliberately also refuses
+  real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
   403); reject, case-insensitively, `.git/` and any segment starting with `.env`, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
   `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file.
 - Limits: file ≤ 1 MB (exactly 1 MB is allowed, one byte more → 413), binary (NUL in first 8 KB) → 415, directory → 400.
@@ -79,7 +82,7 @@ free-form copies each node's entry onto its shape.
   `start`/`end` missing → from line 1; non-integer, `< 1` or `start > end` → 400; `start > total` → 416. Read only, no writes, no outbound requests, no caching on disk.
 - No content is logged (path + status only at debug level).
 - Tests (E504b) cover: symlink escape (file and folder), `..` and `%2e%2e` / double encoding, `.ENV` / `.Env.local`,
-  untracked and gitignored files, directory path, the 1 MB boundary, every range error above, `truncated`.
+  untracked and gitignored files, `a[b].txt` untracked next to tracked `ab.txt`, directory path, the 1 MB boundary, every range error above, `truncated`.
 
 ## 3. Web: node click → code panel
 
@@ -106,22 +109,27 @@ free-form copies each node's entry onto its shape.
 Excalidraw 0.18.1 cannot register a new family without patching: `Fonts.register` is `private static` and `Fonts` is
 not exported (only `FONT_FAMILY`). So:
 
-- **Approach (decided):** keep our clean font id 9 ("Liberation Sans") and override its face. Excalidraw loads family 9
-  from `/excalidraw/fonts/` (our own vendored copy, `EXCALIDRAW_ASSET_PATH`); serve Pretendard woff2 files from the
-  `pretendard` npm package at those Liberation Sans asset URLs (build/vendor step, documented in the script that copies
-  Excalidraw fonts), plus the Hangul unicode ranges from Pretendard's dynamic subset. No patching of Excalidraw code, no
-  CDN. If the vendored asset layout makes this impossible, stop and report before patching.
-- **Metrics:** Excalidraw computes line height and baseline for family 9 from its own `FONT_METADATA` (Liberation).
-  Measure Pretendard's ascent/descent/line gap against it; set `CLEAN_LINE_HEIGHT` to the value that keeps a single
-  13px line vertically centred, and correct the metric at runtime only through public API if one exists. Report the
-  measured numbers in the PR.
+- **Approach (decided):** keep our clean font id 9 ("Liberation Sans") and replace its single face file. Excalidraw
+  defines one face for family 9 with no `unicode-range`, so extra subset faces cannot be added, and a separate CSS
+  `@font-face` for Hangul would neither trigger Excalidraw's redraw nor be included in its own SVG export. So the one
+  file served at the Liberation Sans asset URL under `/excalidraw/fonts/` (our vendored copy) is a Pretendard Regular
+  woff2 holding Latin + Hangul (KS X 1001 2,350 syllables + jamo + Latin/punctuation subset, built from the `pretendard`
+  npm package by a checked-in script, like `scripts/subset-clean-font.py`). No CDN, and no Excalidraw changes beyond the
+  transforms `web/vite.config.ts` already applies. If the vendored asset layout makes this impossible, stop and report.
+- **License:** Pretendard is OFL-1.1 with the reserved name "Pretendard": the file served under the Liberation name is
+  a modified subset, so it is fine; record it in NOTICE.md and next to the Excalidraw font comment in
+  `web/vite.config.ts` (source, version, subset command, OFL text path).
+- **Metrics:** Excalidraw computes line height and baseline for family 9 from its own `FONT_METADATA` (Liberation),
+  which is not exported, so there is no runtime correction. Measure Pretendard's ascent/descent/line gap, set
+  `CLEAN_LINE_HEIGHT` so a single 13px line sits vertically centred within ±1px of the box centre, and report the
+  numbers in the PR.
 - **Existing texts:** saved width/height are Liberation-based. On load, re-measure free-form and bound text in
   family 9 (and hand fonts, already converted in `cleanStyle.ts`) with the existing refit path (`refit.ts`) so text
   never overflows its box and bound text stays centred.
 - **Export:** `shared/render` embeds "Drawing Sans" (Pretendard Latin subset). Hangul in SVG/PNG export also uses
   Pretendard by subsetting to the glyphs used at export time (web side); the shared Latin subset stays as it is. Size
-  cap: main web bundle grows by at most 150 KB gzip, `shared/render` by at most 20 KB; checked with `npm run build`
-  and reported in the PR.
+  caps: the family-9 woff2 asset at most 400 KB; main web JS bundle at most +150 KB gzip (export subsetter);
+  `shared/render` at most +20 KB; checked with `npm run build` and the built asset sizes, reported in the PR.
 - **Done when:** headless screenshots of (1) a new canvas with Korean + Latin text, (2) a diagram block, (3) an
   existing file with Liberation and hand-font texts show Pretendard and no text overflowing its box; full e2e passes.
 
