@@ -2,7 +2,7 @@
 // /api/workspace/pr-tracking route. Framework-free so it is unit-tested without a DOM (test/web/pr-tracking.test.ts);
 // the React hook is in usePrTracking.ts.
 import { api, ApiError } from '../api.ts';
-import { createStatusLine, type StatusLine } from '../statusLine.ts';
+import type { StatusLine } from '../statusLine.ts';
 
 /** null: loading. 'unsupported': this server has no such route. { broken }: settings file unreadable (409). */
 export type PrState = boolean | null | 'unsupported' | { broken: string };
@@ -47,7 +47,8 @@ export function createPrTracking(opts: { status: StatusLine; onState: (s: PrStat
         const r = wasBroken ? await client.prTracking() : await client.setPrTracking(on);
         if (stale()) return;
         set(r.on);
-        status.announce(ticket, wasBroken ? '다시 불러왔어요.' : savedNote);
+        // A silent switch (savedNote '') stays silent on recovery too: its status line is the aria-describedby target.
+        status.announce(ticket, wasBroken && savedNote ? '다시 불러왔어요.' : savedNote);
       } catch (e) {
         if (e instanceof ApiError && e.status === 409) {
           if (stale()) return;
@@ -60,4 +61,3 @@ export function createPrTracking(opts: { status: StatusLine; onState: (s: PrStat
     },
   };
 }
-

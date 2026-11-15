@@ -74,11 +74,15 @@ test('a 409 shows its cause once, the retry that still fails says so, and recove
 });
 
 test('savedNote can be silent for a switch that shows success itself', async () => {
-  stubRoute([{ body: { on: true } }]);
+  stubRoute([{ body: { on: true } }, { status: 409, body: BROKEN }, { body: { on: true } }]);
   const { notes, ctl } = setup('');
   await ctl.toggle(true);
   await sleep(50);
   assert.equal(notes.at(-1), '');
+  await ctl.toggle(true);
+  await ctl.toggle(true);
+  await sleep(50);
+  assert.equal(notes.at(-1), '', 'recovering from a broken file stays silent too');
 });
 
 test('a failed save is announced as an error; no route means unsupported', async () => {
