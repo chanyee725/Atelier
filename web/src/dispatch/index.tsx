@@ -1,13 +1,17 @@
 // The /dispatch screen: opens the event stream and shows the session board (cards or timeline), the usage screen
 // or the always-on screen, picked by the URL hash (#timeline, #usage, #tv), with the session sheet on top.
 // Loaded lazily from main.tsx so the editor bundle does not carry it.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Monitor } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { cn } from '../lib/utils';
 import { useTheme } from '../theme';
 import { AlwaysOnView } from './AlwaysOnView';
 import { hashOf, viewOf, type View } from './lib/usage.ts';
+import { folderOf, hashWith, type Scope } from './lib/folder.ts';
+import { ProjectRail } from './ProjectRail';
+import { ScopeProvider } from './scope';
+import { projectsApi, type ProjectInfo } from '../api';
 import { SessionSheet } from './SessionSheet';
 import { SessionsPage } from './SessionsPage';
 import { SessionTimeline } from './SessionTimeline';
@@ -24,21 +28,35 @@ const NAV: { view: View; label: string }[] = [
   { view: 'usage', label: '사용량' },
 ];
 
-/** The hash-picked view, following back/forward and links. */
-function useView(): [View, (v: View) => void] {
-  const [view, setView] = useState<View>(() => viewOf(location.hash));
+/** The hash-picked view and project scope, following back/forward and links. */
+function useRoute(): [View, Scope, (v: View, scope?: Scope) => void] {
+  const read = () => [viewOf(location.hash), folderOf(location.hash)] as const;
+  const [route, setRoute] = useState(read);
   useEffect(() => {
-    const on = () => setView(viewOf(location.hash));
+    const on = () => setRoute(read());
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  const go = (v: View) => {
-    const h = hashOf(v);
+  const go = (v: View, scope: Scope = route[1]) => {
+    const h = hashWith(hashOf(v).slice(1), scope);
     if (h) location.hash = h;
     else history.pushState(null, '', location.pathname + location.search);
-    setView(v);
+    setRoute([v, scope]);
   };
-  return [view, go];
+  return [route[0], route[1], go];
+}
+
+/** Projects of the workspace for the rail; an empty list when the request fails (everything then counts as 미분류). */
+function useProjectList(): ProjectInfo[] {
+  const [list, setList] = useState<ProjectInfo[]>([]);
+  useEffect(() => {
+    let live = true;
+    const load = () => void projectsApi.projects().then(d => live && setList(d.projects), () => {});
+    load();
+    const t = setInterval(load, 60_000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+  return list;
 }
 
 export default function DispatchApp() {
@@ -47,7 +65,11 @@ export default function DispatchApp() {
   const online = useDispatch(s => s.online);
   const unavailable = useDispatch(s => s.unavailable);
   const [open, setOpen] = useState<string | null>(null);
-  const [view, go] = useView();
+  const [view, scope, go] = useRoute();
+  const projects = useProjectList();
+  const known = useMemo(() => new Set(projects.map(p => p.path)), [projects]);
+  const names = useMemo(() => new Map(projects.map(p => [p.path, p.name])), [projects]);
+  const ctx = useMemo(() => ({ scope, known, names }), [scope, known, names]);
   useEffect(() => connect(), []);
 
   const offline = ready && !online && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>;
@@ -65,13 +87,14 @@ export default function DispatchApp() {
   }
 
   return (
+    <ScopeProvider value={ctx}>
     <div className="flex h-dvh flex-col bg-background text-foreground">
       <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-[9.5px] max-md:px-4">
         <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {NAV.map(n => (
             <a
               key={n.view}
-              href={hashOf(n.view) || location.pathname}
+              href={hashWith(hashOf(n.view).slice(1), scope) || location.pathname}
               aria-current={view === n.view ? 'page' : undefined}
               onClick={e => { e.preventDefault(); go(n.view); }}
               className={cn(
@@ -97,7 +120,9 @@ export default function DispatchApp() {
         </div>
       </header>
       {offline}
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-1 max-md:flex-col">
+        {!unavailable && ready && <ProjectRail projects={projects} scope={scope} view={hashOf(view).slice(1)} onPick={sc => go(view, sc)} />}
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {unavailable ? (
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
@@ -110,7 +135,9 @@ export default function DispatchApp() {
           <SessionsPage onOpen={setOpen} onUsage={() => go('usage')} actions={<TaskBoardButton />} />
         )}
       </main>
+      </div>
       {sheet}
     </div>
+    </ScopeProvider>
   );
 }

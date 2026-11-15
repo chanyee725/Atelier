@@ -9,6 +9,7 @@ import { attentionItems, elapsed, type AttentionItem, type AttentionKind } from 
 import { TONE_TEXT, fmtK, fmtUsd, isOpen, stateOf, totalTok, until } from './lib/format.ts';
 import { StatusBadge } from './parts';
 import { useDispatch } from './store';
+import { useScoped } from './scope';
 import type { Session } from './types';
 
 /** Rows shown before "n건 더 보기". */
@@ -79,8 +80,7 @@ function Row({ item, now, onClick }: { item: AttentionItem; now: number; onClick
 
 /** `onUsage` opens the limits screen (PR 2); without it limit rows are not clickable. */
 export function AttentionStrip({ onOpen, onUsage }: { onOpen: (id: string) => void; onUsage?: () => void }) {
-  const sessions = useDispatch(s => s.sessions);
-  const tasks = useDispatch(s => s.tasks);
+  const { sessions, tasks } = useScoped();
   const limits = useDispatch(s => s.limits);
   const guard = useDispatch(s => s.settings.guard);
   const now = useNow();
@@ -126,7 +126,7 @@ const sumCost = (ss: Session[]) => (ss.some(s => s.cost != null) ? ss.reduce((a,
 
 /** One small summary line: open sessions, working, waiting, cost, tokens. */
 export function SummaryLine() {
-  const sessions = useDispatch(s => s.sessions);
+  const { sessions } = useScoped();
   const c: Record<string, number> = {};
   for (const s of sessions) { const st = stateOf(s); c[st] = (c[st] ?? 0) + 1; }
   const items: [string, string | number][] = [

@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { cn } from '../lib/utils';
 import { useNow } from './AttentionStrip';
 import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, visibleTasks } from './lib/board.ts';
-import { useDispatch } from './store';
+import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
 
 /** Bar colour per stage: the mix tells at a glance where a task spent its time. */
@@ -79,7 +79,7 @@ function Board({ tasks }: { tasks: BoardTask[] }) {
 /** The 작업 보드 button for the 세션 board's `actions` slot, with the sheet it opens. */
 export function TaskBoardButton() {
   const [open, setOpen] = useState(false);
-  const tasks = useDispatch(s => s.tasks);
+  const { tasks } = useScoped();
   const openCount = tasks.filter(t => t.stage !== 'done').length;
   return (
     <>

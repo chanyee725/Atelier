@@ -11,6 +11,7 @@ import { byUrgency, stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
 import { Meter, ModelTag, StatusBadge } from './parts';
 import { useDispatch } from './store';
+import { useScoped } from './scope';
 import type { Session, SessionState } from './types';
 
 const FILTERS: { id: 'all' | SessionState; label: string }[] = [
@@ -98,7 +99,7 @@ function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session;
  * `onUsage` opens the limits screen from a limit row.
  */
 export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string) => void; onUsage?: () => void; actions?: ReactNode }) {
-  const sessions = useDispatch(s => s.sessions);
+  const { sessions, scope } = useScoped();
   const roles = useDispatch(s => s.roles);
   const [filter, setFilter] = useState<'all' | SessionState>('all');
   const [showDone, setShowDone] = useState(false);
@@ -137,7 +138,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
       {sessions.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
           <p className="font-medium">아직 세션이 없어요</p>
-          <p className="max-w-md text-sm text-muted-foreground">파이프라인을 시작하거나 관리자 세션이 팀을 만들면 여기에 보여요.</p>
+          <p className="max-w-md text-sm text-muted-foreground">{scope === undefined ? '파이프라인을 시작하거나 관리자 세션이 팀을 만들면 여기에 보여요.' : '이 프로젝트의 계획에서 시작하기를 누르면 여기에 보여요.'}</p>
           {actions && <div className="mt-2 flex items-center gap-2">{actions}</div>}
         </div>
       ) : (

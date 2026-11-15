@@ -11,6 +11,7 @@ import { STATE, TONE_COLOR, stateOf } from './lib/format.ts';
 import { rowHistory } from './lib/usage.ts';
 import { StatusBadge } from './parts';
 import { api, useDispatch } from './store';
+import { useScoped } from './scope';
 import type { Session, SessionState } from './types';
 
 type Timeline = { now: number; windowMs: number; sessions: Record<string, Entry[]> };
@@ -101,7 +102,7 @@ function Axis({ now, windowMs }: { now: number; windowMs: number }) {
 }
 
 export function SessionTimeline({ onOpen }: { onOpen: (id: string) => void }) {
-  const sessions = useDispatch(s => s.sessions);
+  const { sessions } = useScoped();
   const roles = useDispatch(s => s.roles);
   const [data, setData] = useState<Timeline | null>(null);
   const [now, setNow] = useState(() => Date.now());
