@@ -8,14 +8,18 @@ import type { ProjectInfo } from '../api';
 
 const item = 'flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-7';
 
-export function ProjectRail({ projects, scope, view, onPick }: {
-  projects: ProjectInfo[]; scope: Scope; view: string; onPick: (s: Scope) => void;
+export function ProjectRail({ projects, state, scope, view, onPick }: {
+  projects: ProjectInfo[]; state: 'loading' | 'ready' | 'failed'; scope: Scope; view: string; onPick: (s: Scope) => void;
 }) {
   const sessions = useDispatch(s => s.sessions);
   const counts = openCounts(sessions, new Set(projects.map(p => p.path)));
+  const counted = state === 'ready'; // before the first list every session would count as 미분류
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  // The picked entry is told apart by weight and an edge bar as well as colour, and by Highlight under forced colours.
   const entries: { key: string; label: string; value: Scope; count: number }[] = [
     { key: 'all', label: '전체', value: undefined, count: total },
+    // A linked project the list has not named yet still shows, picked.
+    ...(!counted && typeof scope === 'string' && !projects.some(p => p.path === scope) ? [{ key: `p:${scope}`, label: scope.split('/').pop() || scope, value: scope as Scope, count: 0 }] : []),
     ...projects.map(p => ({ key: `p:${p.path}`, label: p.name, value: p.path as Scope, count: counts.get(p.path) ?? 0 })),
     { key: 'none', label: '미분류', value: null, count: counts.get(null) ?? 0 },
   ];
@@ -30,10 +34,10 @@ export function ProjectRail({ projects, scope, view, onPick }: {
                 href={hashWith(view, e.value) || location.pathname}
                 aria-current={on ? 'page' : undefined}
                 onClick={ev => { ev.preventDefault(); onPick(e.value); }}
-                className={cn(item, on && 'bg-muted text-foreground')}
+                className={cn(item, on && 'bg-muted font-semibold text-foreground shadow-[inset_2px_0_0_currentColor] forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:shadow-none')}
               >
                 <span className="truncate">{e.label}</span>
-                {e.count > 0 && <span title="열린 세션" className="ml-auto text-xs tabular-nums max-md:ml-0">{e.count}</span>}
+                {counted && e.count > 0 && <span title="열린 세션" className="ml-auto text-xs tabular-nums max-md:ml-0">{e.count}</span>}
               </a>
             </li>
           );

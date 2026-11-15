@@ -8,7 +8,7 @@ import { cn } from '../lib/utils';
 import { useTheme } from '../theme';
 import { AlwaysOnView } from './AlwaysOnView';
 import { hashOf, viewOf, type View } from './lib/usage.ts';
-import { folderOf, hashWith, type Scope } from './lib/folder.ts';
+import { folderOf, hashWith, knownFolders, type Scope } from './lib/folder.ts';
 import { ProjectRail } from './ProjectRail';
 import { ScopeProvider } from './scope';
 import { projectsApi, type ProjectInfo } from '../api';
@@ -46,17 +46,23 @@ function useRoute(): [View, Scope, (v: View, scope?: Scope) => void] {
   return [route[0], route[1], go];
 }
 
-/** Projects of the workspace for the rail; an empty list when the request fails (everything then counts as 미분류). */
-function useProjectList(): ProjectInfo[] {
+type ListState = 'loading' | 'ready' | 'failed';
+
+/** Projects of the workspace for the rail, with whether the first answer is in. A failed refresh keeps the last list. */
+function useProjectList(): [ProjectInfo[], ListState] {
   const [list, setList] = useState<ProjectInfo[]>([]);
+  const [state, setState] = useState<ListState>('loading');
   useEffect(() => {
     let live = true;
-    const load = () => void projectsApi.projects().then(d => live && setList(d.projects), () => {});
+    const load = () => void projectsApi.projects().then(
+      d => { if (live) { setList(d.projects); setState('ready'); } },
+      () => { if (live) setState(s => (s === 'ready' ? s : 'failed')); },
+    );
     load();
     const t = setInterval(load, 60_000);
     return () => { live = false; clearInterval(t); };
   }, []);
-  return list;
+  return [list, state];
 }
 
 export default function DispatchApp() {
@@ -66,8 +72,8 @@ export default function DispatchApp() {
   const unavailable = useDispatch(s => s.unavailable);
   const [open, setOpen] = useState<string | null>(null);
   const [view, scope, go] = useRoute();
-  const projects = useProjectList();
-  const known = useMemo(() => new Set(projects.map(p => p.path)), [projects]);
+  const [projects, listState] = useProjectList();
+  const known = useMemo(() => knownFolders(projects.map(p => p.path), scope, listState === 'ready'), [projects, scope, listState]);
   const names = useMemo(() => new Map(projects.map(p => [p.path, p.name])), [projects]);
   const ctx = useMemo(() => ({ scope, known, names }), [scope, known, names]);
   useEffect(() => connect(), []);
@@ -121,12 +127,15 @@ export default function DispatchApp() {
       </header>
       {offline}
       <div className="flex min-h-0 flex-1 max-md:flex-col">
-        {!unavailable && ready && <ProjectRail projects={projects} scope={scope} view={hashOf(view).slice(1)} onPick={sc => go(view, sc)} />}
+        {!unavailable && ready && <ProjectRail projects={projects} state={listState} scope={scope} view={hashOf(view).slice(1)} onPick={sc => go(view, sc)} />}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        {listState === 'failed' && !unavailable && ready && <p role="status" className="m-0 border-b px-6 py-2 text-sm text-muted-foreground">프로젝트 목록을 불러오지 못했어요. 잠시 뒤에 다시 시도해요.</p>}
         {unavailable ? (
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
           <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>
+        ) : typeof scope === 'string' && listState === 'loading' ? (
+          <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 목록을 불러오는 중이에요…</p>
         ) : view === 'usage' ? (
           <UsagePage />
         ) : view === 'timeline' ? (
