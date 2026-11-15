@@ -55,8 +55,8 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
     server.kill();
     await exited;
     fake.cleanup();
-    rmSync(repo, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);

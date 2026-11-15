@@ -22,7 +22,7 @@ function snapshot(root) {
   return seen;
 }
 
-export function pollWatch(root, _opts, listener, intervalMs = 100) {
+export function pollWatch(root, _opts, listener, intervalMs = 250) {
   let prev = snapshot(root);
   let closed = false;
   const timer = setInterval(() => {

@@ -34,7 +34,7 @@ test('canvas insert menu in a headless browser', { skip: !ON && 'set DRAW_E2E=1,
   t.after(async () => {
     await browser?.close();
     server.kill();
-    rmSync(ws, { recursive: true, force: true });
+    rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);

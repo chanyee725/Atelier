@@ -49,7 +49,7 @@ test('an empty file an agent fills fits the new blocks; a view the user moved to
   t.after(async () => {
     await browser?.close();
     server.kill();
-    rmSync(repo, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   // Another session's server may share ports: write only once the log names this workspace.

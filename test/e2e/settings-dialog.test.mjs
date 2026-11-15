@@ -54,8 +54,8 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
     await browser?.close();
     server.kill();
     fake.cleanup();
-    rmSync(repo, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
@@ -126,6 +126,8 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   await gemini.getByRole('button', { name: 'Gemini 취소' }).waitFor();
   busy = false;
   await dialog.getByText('로그인이 끝났지만 연결되지 않았어요. 다시 해 주세요.').waitFor({ timeout: 5000 });
+  // A poll already in flight when the login ended may still land on a loaded machine (#447): let it settle, then count.
+  await page.waitForTimeout(1000);
   let polls = 0;
   page.on('request', (r) => r.url().endsWith('/api/state') && polls++);
   await page.waitForTimeout(2500);

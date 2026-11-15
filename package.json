@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node server/index.js",
-    "test": "DRAW_WORKSPACE_WATCH=poll node --test \"test/**/*.test.*\"",
+    "test": "DRAW_WORKSPACE_WATCH=poll node --test --test-concurrency=4 \"test/**/*.test.*\"",
     "icons": "node scripts/build-icons.mjs",
     "pack": "node scripts/pack.mjs",
     "build": "node scripts/build-icons.mjs --check && tsc -p shared && tsc -p web && vite build --config web/vite.config.ts",

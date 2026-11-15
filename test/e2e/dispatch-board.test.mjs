@@ -56,8 +56,8 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     await browser?.close();
     server.kill();
     fake.cleanup();
-    rmSync(repo, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   try {
     for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));

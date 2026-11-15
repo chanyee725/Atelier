@@ -35,7 +35,7 @@ test('export and shortcuts in a headless browser', { skip: !ON && 'set DRAW_E2E=
   t.after(async () => {
     await browser?.close();
     server.kill();
-    rmSync(ws, { recursive: true, force: true });
+    rmSync(ws, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   // Only go on when the log shows our own server on our own port and folder (another session may own a port).

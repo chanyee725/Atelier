@@ -74,8 +74,8 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
     await browser?.close();
     server.kill();
     fake.cleanup();
-    rmSync(repo, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   try {
     for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
