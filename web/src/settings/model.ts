@@ -1,6 +1,6 @@
 // Settings dialog model (E57): sections, provider rows and the run-guard fields, kept free of React so
 // node --test can check them. Status and percentages only: no account, email or token ever reaches here.
-import { percent } from '../projectNav.ts';
+import { limitReached, percent } from '../projectNav.ts';
 import type { ThemePref } from '../theme';
 
 export const SECTIONS = [
@@ -57,7 +57,7 @@ export function providerRows(providers: Partial<Record<string, ProviderInfo>>, l
     // 5시간 from the account window, then Fable's own weekly window once it has reported.
     const raw = [...(limits.claude?.windows ?? []).filter((w) => w.label !== '주간').slice(0, 1), ...(limits.fable?.windows ?? [])];
     const windows = connected ? raw.flatMap((w) => (percent(w.used) == null ? [] : [{ label: w.label, pct: percent(w.used)! }])) : [];
-    const reached = connected && windows.some((w) => w.pct >= 100);
+    const reached = limitReached(connected, limits);
     const status = busy ? '연결하는 중이에요' : missing ? 'CLI가 설치되지 않았어요' : !connected ? '연결 안 됨' : reached ? '한도에 닿았어요' : '연결됨';
     const tone = !connected ? 'idle' : reached || windows.some((w) => w.pct > WARN_AT) ? 'warn' : 'ok';
     const action: ProviderAction = busy ? 'cancel' : connected ? 'disconnect' : missing ? null : 'connect';
