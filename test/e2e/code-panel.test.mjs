@@ -100,6 +100,17 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   assert.equal(await page.evaluate(() => document.scrollingElement.scrollTop), 0, 'the page itself did not scroll');
   if (SHOT) await page.screenshot({ path: join(SHOT, 'code-panel.png') });
 
+  // #528: the node is selected, yet the left style panel stays hidden while the code panel is open.
+  const style = page.locator('.excalidraw .App-menu__left');
+  assert.equal(await style.isVisible(), false, 'style panel hidden while the code panel is open');
+  // Closing the code panel with the node still selected brings the style panel back.
+  await page.getByRole('button', { name: /닫기/ }).first().click().catch(() => page.keyboard.press('Escape'));
+  await panel.waitFor({ state: 'detached' });
+  await style.waitFor({ state: 'visible', timeout: 5000 });
+  await badge.click();
+  await panel.waitFor();
+  assert.equal(await style.isVisible(), false, 'style panel hidden again on reopen');
+
   // An open menu owns Esc: the first press closes only the menu, the second closes the panel.
   await page.locator('[data-testid="main-menu-trigger"]').click();
   await page.locator('.excalidraw .dropdown-menu, .excalidraw [role="menu"]').first().waitFor({ timeout: 5000 });

@@ -200,6 +200,12 @@ body {
   display: none;
 }
 
+/* The code panel owns the right side; keep the left style panel out of the way while it is open (#528).
+   Only hidden, not unselected: closing the code panel brings it back for the still-selected node. */
+.code-panel-open .excalidraw .App-menu__left {
+  display: none;
+}
+
 /* The web-embed tool (right after "frame" in the extra-tools menu) is off: embeds would load outside pages. */
 .excalidraw [data-testid="toolbar-frame"] + [data-testid="toolbar-embeddable"] {
   /* !important: Excalidraw's own menu-item rules load later and set display. */

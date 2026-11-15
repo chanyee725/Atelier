@@ -961,7 +961,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const patchBlock = (p: Partial<Block>) => onChangeRef.current({ blocks: blocksRef.current.map((b) => (b.id === editing ? { ...b, ...p } : b)) });
 
   return (
-    <div ref={wrap} className={`relative h-full w-full${blockSelected ? ' block-selected' : ''}${hidePanHint ? ' hide-pan-hint' : ''}`} data-canvas="excalidraw">
+    <div ref={wrap} className={`relative h-full w-full${blockSelected ? ' block-selected' : ''}${hidePanHint ? ' hide-pan-hint' : ''}${!block && codeView ? ' code-panel-open' : ''}`} data-canvas="excalidraw">
       <Excalidraw
         excalidrawAPI={setApi}
         initialData={initialData}
