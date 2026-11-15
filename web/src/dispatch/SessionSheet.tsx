@@ -15,6 +15,7 @@ import { questionOf } from './lib/question.ts';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
+import { canRun, READ_ONLY_NOTICE } from './lib/runnable';
 
 type Report = (p: Promise<unknown>) => Promise<boolean>;
 
@@ -238,6 +239,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [entries, s.pending.length]);
   const agent = s.provider === 'claude' ? 'Claude' : s.modelLabel || s.provider;
+  const runnable = canRun(s);
   return (
     <div
       ref={box}
@@ -246,7 +248,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     >
       {!entries && <p className="text-sm text-muted-foreground">대화를 불러오는 중이에요…</p>}
       {entries?.length === 0 && (
-        <p className="text-sm text-muted-foreground">이번 서버 실행 중에 주고받은 대화가 없어요. 메시지를 보내면 이전 세션을 이어서 실행해요.</p>
+        <p className="text-sm text-muted-foreground">이번 서버 실행 중에 주고받은 대화가 없어요.{runnable && ' 메시지를 보내면 이전 세션을 이어서 실행해요.'}</p>
       )}
       {entries && groupTools(entries).map(g => (g.length === 1 && g[0]!.e.kind !== 'tool'
         ? <EntryView key={g[0]!.i} m={g[0]!.e} agent={agent} />
@@ -308,6 +310,7 @@ function Composer({ s, text, setText, inputRef, report }: { s: Session; text: st
     if (await report(api('POST', `/api/sessions/${encodeURIComponent(s.id)}/message`, { text: v }))) setText('');
     setBusy(false);
   };
+  if (!canRun(s)) return <p role="note" className="border-t px-6 py-4 text-sm text-muted-foreground">{READ_ONLY_NOTICE}</p>;
   return (
     <div className="flex items-end gap-2 border-t p-4">
       <Textarea
