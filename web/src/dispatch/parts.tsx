@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 import { STATE, TONE_TEXT, level, levelTone, type Tone } from './lib/format.ts';
 import type { SessionState } from './types';
 
-const PROVIDER: Record<string, string> = { claude: 'Claude', openai: 'GPT', gemini: 'Gemini' };
+const PROVIDER: Record<string, string> = { claude: 'Claude' };
 
 /** Provider and model as one neutral tag. No provider colours: the name says which one it is. */
 export function ModelTag({ provider, label, className }: { provider: string; label: string; className?: string }) {

@@ -63,7 +63,7 @@ export function burnNow(sessions: readonly Pick<Session, 'burn'>[]): { perHour: 
   return { perHour: rated.reduce((a, s) => a + (s.burn?.perHour ?? 0), 0), rated: rated.length };
 }
 
-/** The `n` sessions that cost the most (sessions without a cost, like Codex or Gemini, are left out). */
+/** The `n` sessions that cost the most (sessions without a cost are left out). */
 export function topSessions<T extends Pick<Session, 'cost'>>(sessions: readonly T[], n = 10): T[] {
   return sessions.filter(s => s.cost != null).sort((a, b) => (b.cost ?? 0) - (a.cost ?? 0)).slice(0, n);
 }
@@ -212,7 +212,7 @@ export function createUsageRefetcher<T>(
   return r;
 }
 
-/** Changes when any session's cost or token totals move (Codex and agy report tokens but no cost). */
+/** Changes when any session's cost or token totals move (a session may report tokens but no cost). */
 export function usageKey(sessions: readonly Pick<Session, 'cost' | 'usage'>[]): string {
   let cost = 0;
   let tokens = 0;

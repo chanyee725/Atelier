@@ -9,6 +9,7 @@ import { svgDataURL } from './resolution.ts';
 import { sceneToSvg } from '../../../shared/render/index.ts';
 import { DARK_CANVAS_BACKGROUND, preDarkFilterColor } from '../../../shared/render/darkFilter.ts';
 import { FONT_FAMILY } from '../../../shared/render/text.ts';
+import { CLEAN_FONT_FACE } from '../../../shared/render/svg.ts';
 import { glyphsToEmbed } from '../fonts/embedText.ts';
 
 /**
@@ -45,6 +46,8 @@ function placeholder(message: string, theme: PicTheme) {
   return {
     svg:
       `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" text-rendering="geometricPrecision">` +
+      // The Latin Drawing Sans face, so the Latin in a message draws in Pretendard like the Hangul (withFaces adds that).
+      `<style>${CLEAN_FONT_FACE}</style>` +
       `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="8" fill="none" stroke="${border}" stroke-dasharray="6 4"/>` +
       `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" dominant-baseline="middle" font-family="${esc(FONT_FAMILY.clean)}" font-size="14" fill="${fg}">${esc(message)}</text></svg>`,
     width: w,

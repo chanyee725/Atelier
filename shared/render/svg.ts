@@ -394,7 +394,8 @@ function hashOf(s: string): string {
 const fontFace = (family: string, weight: number, base64: string) =>
   `@font-face{font-family:'${family}';font-weight:${weight};src:url(data:font/woff2;base64,${base64}) format('woff2')}`;
 const ROUGH_FONT_FACE = fontFace('Shantell Sans', 400, SHANTELL_SANS_WOFF2_BASE64);
-const CLEAN_FONT_FACE = fontFace(CLEAN_FONT_NAME, 400, DRAWING_SANS_400_WOFF2_BASE64);
+/** The Latin Drawing Sans (Pretendard) `@font-face` rule, for pictures drawn outside `sceneToSvg` (the block placeholder). */
+export const CLEAN_FONT_FACE = fontFace(CLEAN_FONT_NAME, 400, DRAWING_SANS_400_WOFF2_BASE64);
 const CLEAN_BOLD_FONT_FACE = fontFace(CLEAN_FONT_NAME, 600, DRAWING_SANS_600_WOFF2_BASE64);
 // Text in the clean face inherits the root font-family; rough and mono text name their own. `\b` leaves the space after
 // `<text` for `\s`, so an attribute is found wherever it sits in the tag, first included.

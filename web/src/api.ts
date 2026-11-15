@@ -50,8 +50,8 @@ export type ProviderState = { installed: boolean | null; connected: boolean; bus
 export type LimitWindow = { label: string; used: number | null; reset: number | null };
 export type ProviderLimits = {
   claude?: { windows: LimitWindow[] } | null;
-  openai?: { windows: LimitWindow[] } | null;
-  gemini?: { reached: boolean; reset: number | null } | null;
+  /** Fable's own weekly window; null until a Fable turn has reported it. */
+  fable?: { windows: LimitWindow[] } | null;
 };
 
 export type ProviderInfo = { installed?: boolean | null; connected?: boolean; busy?: boolean; url?: string | null; error?: string | null };
@@ -88,6 +88,9 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
   return data as T;
 }
 
+/** A window of lines from a git-tracked file (GET /api/code, docs/workspace-api.md "Code window"). */
+export type CodeWindow = { path: string; start: number; end: number; total: number; lines: string[]; language: string; truncated?: boolean };
+
 const q = (p: string) => `?path=${encodeURIComponent(p)}`;
 
 export const api = {
@@ -108,6 +111,13 @@ export const api = {
     call<DispatchSettings>('POST', '/api/settings', patch),
   prTracking: () => call<{ on: boolean }>('GET', '/api/workspace/pr-tracking'),
   setPrTracking: (on: boolean) => call<{ on: boolean }>('POST', '/api/workspace/pr-tracking', { on }),
+  /** Read only; `start`/`end` are 1-based and inclusive. */
+  code: (path: string, start: number, end: number, signal?: AbortSignal) =>
+    fetch(`/api/code${q(path)}&start=${start}&end=${end}`, { signal }).then(async (res) => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`);
+      return data as CodeWindow;
+    }),
   readFile: (path: string) => call<DpxFile>('GET', `/api/file${q(path)}`),
   /** `content`: starting document, canvas, blocks and plan (a template); defaults to an empty file. */
   createFile: (path: string, title: string, content?: Partial<Pick<DpxFile, 'document' | 'canvas' | 'blocks' | 'plan'>>) =>

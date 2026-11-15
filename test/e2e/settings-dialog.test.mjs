@@ -81,37 +81,47 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
   await dialog.getByRole('radio', { name: '라이트' }).check();
 
-  // 2. Switch to 모델 연결: three provider rows from the fake CLIs.
+  // 2. Switch to 모델 연결: one model row (Claude · Fable 5.2).
   await dialog.getByRole('button', { name: '모델 연결' }).click();
   assert.equal(await current(), '모델 연결');
   const rows = dialog.locator('li[data-provider]');
   await rows.first().waitFor();
-  assert.deepEqual(await rows.evaluateAll((els) => els.map((e) => e.dataset.provider)), ['claude', 'openai', 'gemini']);
+  assert.deepEqual(await rows.evaluateAll((els) => els.map((e) => e.dataset.provider)), ['claude']);
   const claude = dialog.locator('li[data-provider="claude"]');
   // Connect: the fake claude reports a logged-in CLI, so the server just turns the connection on.
-  await claude.getByRole('button', { name: 'Claude 연결', exact: true }).click();
-  await claude.getByRole('button', { name: 'Claude 연결 끊기' }).waitFor();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).click();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).waitFor();
   assert.match(await claude.getByTestId('provider-status').textContent(), /^연결됨/);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-models-1200.png') });
-  await claude.getByRole('button', { name: 'Claude 연결 끊기' }).click();
-  await claude.getByRole('button', { name: 'Claude 연결', exact: true }).waitFor();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).click();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).waitFor();
   assert.equal(await claude.getByTestId('provider-status').textContent(), '연결 안 됨');
 
   // #219 review fixes, with a CLI login simulated by rewriting /api/state (the fakes are always logged in).
   const posts = [];
   page.on('request', (r) => r.method() === 'POST' && r.url().includes('/api/providers/') && posts.push(new URL(r.url()).pathname));
-  // (1) Gemini login runs, then ends without connecting: polling stops and the dialog says so.
+  // (3) A double click sends one request: the second click while the first runs is dropped.
+  await page.route('**/api/providers/claude/login', async (route) => {
+    await new Promise((r) => setTimeout(r, 400));
+    await route.continue();
+  });
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).dblclick();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).waitFor();
+  assert.equal(posts.filter((p) => p === '/api/providers/claude/login').length, 1, `one login request: ${posts}`);
+  await page.unroute('**/api/providers/claude/login');
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).click();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).waitFor();
+  // (1) The login runs, then ends without connecting: polling stops and the dialog says so.
   let busy = true;
   await page.route('**/api/state', async (route) => {
     const res = await route.fetch();
     const body = await res.json();
-    body.providers.gemini = { ...body.providers.gemini, busy, connected: false, error: null };
+    body.providers.claude = { ...body.providers.claude, busy, connected: false, error: null };
     await route.fulfill({ response: res, json: body });
   });
   await dialog.getByRole('button', { name: '실행' }).click();
   await dialog.getByRole('button', { name: '모델 연결' }).click();
-  const gemini = dialog.locator('li[data-provider="gemini"]');
-  await gemini.getByRole('button', { name: 'Gemini 취소' }).waitFor();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 취소' }).waitFor();
   busy = false;
   await dialog.getByText('로그인이 끝났지만 연결되지 않았어요. 다시 해 주세요.').waitFor({ timeout: 5000 });
   let polls = 0;
@@ -121,16 +131,34 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   // (2) Closing the dialog while a login runs cancels it.
   busy = true;
   await dialog.getByRole('button', { name: '다시 확인' }).click();
-  await gemini.getByRole('button', { name: 'Gemini 취소' }).waitFor();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 취소' }).waitFor();
   // 다시 확인 starts polling again while the login runs (#228 review).
   polls = 0;
   await page.waitForTimeout(2500);
   assert.ok(polls >= 1, `polling restarted after 다시 확인: ${polls}`);
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
-  for (let i = 0; i < 50 && !posts.includes('/api/providers/gemini/cancel'); i++) await page.waitForTimeout(50);
-  assert.ok(posts.includes('/api/providers/gemini/cancel'), `cancel sent on close: ${posts}`);
+  for (let i = 0; i < 50 && !posts.includes('/api/providers/claude/cancel'); i++) await page.waitForTimeout(50);
+  assert.ok(posts.includes('/api/providers/claude/cancel'), `cancel sent on close: ${posts}`);
   await page.unroute('**/api/state');
+  // (2b) Esc while the login request is still in flight (the server refreshes every CLI first): once it
+  // returns unconnected, the closed dialog cancels the login the server started meanwhile (#228 review).
+  await page.route('**/api/providers/claude/login', async (route) => {
+    await new Promise((r) => setTimeout(r, 600));
+    await route.fulfill({ json: { ok: true, connected: false } });
+  });
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: '명령 찾기' }).fill('모델 연결 열기');
+  await page.getByRole('option', { name: /^모델 연결 열기/ }).first().click();
+  await dialog.waitFor();
+  posts.length = 0;
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.ok(!posts.includes('/api/providers/claude/cancel'), `no cancel before the login returns: ${posts}`);
+  for (let i = 0; i < 50 && !posts.includes('/api/providers/claude/cancel'); i++) await page.waitForTimeout(50);
+  assert.deepEqual(posts, ['/api/providers/claude/login', '/api/providers/claude/cancel'], `cancel after a late login: ${posts}`);
+  await page.unroute('**/api/providers/claude/login');
   await page.keyboard.press('Control+k');
   await page.getByRole('combobox', { name: '명령 찾기' }).fill('설정 열기');
   await page.getByRole('option', { name: /^설정 열기/ }).first().click();
@@ -197,7 +225,7 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   await claude.waitFor();
   const box = await dialog.boundingBox();
   assert.ok(box.x >= 0 && box.x + box.width <= 390, `dialog fits 390px: ${JSON.stringify(box)}`);
-  for (const b of [dialog.getByRole('button', { name: '모델 연결' }), claude.getByRole('button', { name: 'Claude 연결', exact: true }), dialog.getByRole('button', { name: '닫기' })]) {
+  for (const b of [dialog.getByRole('button', { name: '모델 연결' }), claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }), dialog.getByRole('button', { name: '닫기' })]) {
     const h = (await b.boundingBox()).height;
     assert.ok(h >= 44, `target ≥ 44px at 390px, got ${h}`);
   }
@@ -211,7 +239,7 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
   await drawer.waitFor();
-  await drawer.getByRole('button', { name: /^Codex / }).click();
+  await drawer.getByRole('button', { name: /^Claude · Fable 5.2 / }).click();
   await dialog.waitFor();
   assert.equal(await current(), '모델 연결');
   await drawer.waitFor({ state: 'detached' });

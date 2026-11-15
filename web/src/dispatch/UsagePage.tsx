@@ -137,7 +137,6 @@ export function UsagePage() {
   const cache = cacheRate(agg.byModel);
   const roleTotal = Object.values(agg.byRole).reduce((a, b) => a + b, 0) || 1;
   const label = (id: string) => models.find(m => m.id === id)?.label ?? id;
-  const noCost = (id: string) => models.find(m => m.id === id)?.provider === 'openai';
   const modelRows = Object.entries(agg.byModel).sort((a, b) => b[1].cost - a[1].cost || b[1].output - a[1].output);
   const top = topSessions(sessions);
   const sessionTotal = sessions.reduce((a, s) => a + (s.cost ?? 0), 0) || 1;
@@ -196,7 +195,7 @@ export function UsagePage() {
                     <th scope="row" className="truncate py-2 pr-2 text-left font-normal" title={label(m)}>{label(m)}</th>
                     <td className="py-2 text-right" title={`새 입력 ${fmtK(u.input)}, 캐시 ${fmtK(u.cacheRead + u.cacheWrite)}`}>{fmtK(u.input + u.cacheRead + u.cacheWrite)}</td>
                     <td className="py-2 text-right">{fmtK(u.output)}</td>
-                    <td className="py-2 text-right">{noCost(m) ? '—' : fmtUsd(u.cost)}</td>
+                    <td className="py-2 text-right">{fmtUsd(u.cost)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -244,7 +243,7 @@ export function UsagePage() {
                 })}
               </tbody>
             </table>
-          ) : <Empty>비용을 알리는 세션이 없어요. Codex·Gemini 세션은 비용을 알리지 않아요.</Empty>}
+          ) : <Empty>비용을 알리는 세션이 없어요.</Empty>}
         </Panel>
       </div>
     </div>
