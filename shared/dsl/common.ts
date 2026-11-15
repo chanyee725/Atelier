@@ -6,7 +6,7 @@ const ELEMENT_KEYS = ['icon', 'color', 'label', 'link', 'colorMode', 'styleMode'
  * Our extensions, which Eraser's code never uses (so it still parses): `subtitle` (a node's second line),
  * `badge` and `badgeColor` (a chip on the top-right corner).
  */
-export const GRAPH_KEYS = new Set([...ELEMENT_KEYS, 'shape', 'wrap', 'connectorStyle', 'subtitle', 'badge', 'badgeColor']);
+export const GRAPH_KEYS = new Set([...ELEMENT_KEYS, 'shape', 'wrap', 'connectorStyle', 'subtitle', 'badge', 'badgeColor', 'code']);
 export const SEQUENCE_KEYS = new Set(ELEMENT_KEYS);
 export const ERD_KEYS = new Set(ELEMENT_KEYS);
 export const LEGEND_KEYS = new Set([...ELEMENT_KEYS, 'shape', 'connection', 'position']);
