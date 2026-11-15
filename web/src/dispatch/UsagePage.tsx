@@ -6,13 +6,16 @@ import { TriangleAlert } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
 import { roleColor } from '../run/overlayModel';
-import { burnWarnText, fmtK, fmtRate, fmtUsd, pct, until } from './lib/format.ts';
+import { burnWarnText, fmtK, fmtRate, fmtUsd, pct, totalTok, until } from './lib/format.ts';
 import {
   WEEK, aggregate, burnNow, cacheRate, createUsageRefetcher, outliers, topSessions, totals, usageKey, weekHint,
 } from './lib/usage.ts';
 import { Meter } from './parts';
 import { api, useDispatch } from './store';
+import { useScope, useScoped } from './scope';
+import { UNFILED } from './lib/folder.ts';
 import type { UsageDay } from './types';
+import type { Session } from '../../../shared/dispatch/types.ts';
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -49,7 +52,7 @@ function LimitsPanel() {
     { label: 'Fable', value: limits.fable ?? null, reset: limits.fableReset ?? null },
   ].filter(r => r.value != null);
   return (
-    <Panel title="사용량 한도" note={guard.enabled ? `5시간 ${pct(guard.five)} · 주간 ${pct(guard.seven)}부터 새 작업을 막아요` : '자동 차단이 꺼져 있어요'}>
+    <Panel title="한도 · 계정 전체" note={guard.enabled ? `5시간 ${pct(guard.five)} · 주간 ${pct(guard.seven)}부터 새 작업을 막아요` : '자동 차단이 꺼져 있어요'}>
       {rows.length ? (
         <ul className="flex flex-col gap-3">
           {rows.map(r => (
@@ -70,12 +73,13 @@ function LimitsPanel() {
 
 /** Daily cost for the last 7 days; a day at twice the usual (median) cost or more gets a warning mark and "n배". */
 function DailyPanel({ days }: { days: UsageDay[] }) {
+  const { scope } = useScope();
   const week = days.slice(-WEEK);
   const { median, ratio } = outliers(week.map(d => d.cost));
   const max = Math.max(...week.map(d => d.cost), 0.0001);
   const total = week.reduce((a, d) => a + d.cost, 0);
   return (
-    <Panel title="일별 비용" note={`최근 7일 ${fmtUsd(total)}`}>
+    <Panel title="일별 비용" note={`${scope === undefined ? '' : '계정 전체 · '}최근 7일 ${fmtUsd(total)}`}>
       <ol className="flex h-40 items-end gap-2 pt-5" aria-label="최근 7일 일별 비용">
         {week.map((d, i) => {
           const r = ratio[i];
@@ -108,10 +112,46 @@ function DailyPanel({ days }: { days: UsageDay[] }) {
 
 const th = 'pb-2 font-normal';
 
+type FolderUsage = { sessions: number; cost: number; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } };
+
+/** Cost and tokens of the picked project's sessions (GET /api/usage?folder=; 미분류 is summed from the sessions in view). */
+function ProjectPanel({ name, folder, sessions }: { name: string; folder: string | null; sessions: Session[] }) {
+  const [data, setData] = useState<FolderUsage | null>(null);
+  const [failed, setFailed] = useState(false);
+  const key = usageKey(sessions);
+  useEffect(() => {
+    if (folder === null) { setData(null); return; }
+    const ctl = new AbortController();
+    api<FolderUsage>('GET', `/api/usage?folder=${encodeURIComponent(folder)}`, undefined, ctl.signal)
+      .then(d => { setData(d); setFailed(false); }, () => { if (!ctl.signal.aborted) setFailed(true); });
+    return () => ctl.abort();
+  }, [folder, key]);
+  const local: FolderUsage = {
+    sessions: sessions.length,
+    cost: sessions.reduce((a, s) => a + (s.cost ?? 0), 0),
+    tokens: sessions.reduce((a, s) => ({ input: a.input + s.usage.input, output: a.output + s.usage.output, cacheRead: a.cacheRead + s.usage.cacheRead, cacheWrite: a.cacheWrite + s.usage.cacheWrite }), { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+  };
+  const u = folder === null ? local : data;
+  return (
+    <Panel title={`${name} 사용량`} note="이 프로젝트의 세션만">
+      {u ? (
+        <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+          <Stat label="세션" value={`${u.sessions}개`} />
+          <Stat label="비용" value={fmtUsd(u.cost)} hint="Claude API 요금으로 환산" />
+          <Stat label="토큰" value={fmtK(totalTok(u.tokens))} />
+        </div>
+      ) : <Empty>{failed ? '프로젝트 사용량을 불러오지 못했어요' : '불러오는 중이에요…'}</Empty>}
+    </Panel>
+  );
+}
+
 export function UsagePage() {
   const models = useDispatch(s => s.models);
   const roles = useDispatch(s => s.roles);
-  const sessions = useDispatch(s => s.sessions);
+  const all = useDispatch(s => s.sessions);
+  const { scope, names } = useScope();
+  const { sessions: scoped } = useScoped();
+  const sessions = all; // the daily chart, roles and models are account-wide; only the project panel and the top list follow the scope
   const [days, setDays] = useState<UsageDay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -139,8 +179,8 @@ export function UsagePage() {
   const label = (id: string) => models.find(m => m.id === id)?.label ?? id;
   const noCost = (id: string) => models.find(m => m.id === id)?.provider === 'openai';
   const modelRows = Object.entries(agg.byModel).sort((a, b) => b[1].cost - a[1].cost || b[1].output - a[1].output);
-  const top = topSessions(sessions);
-  const sessionTotal = sessions.reduce((a, s) => a + (s.cost ?? 0), 0) || 1;
+  const top = topSessions(scoped);
+  const sessionTotal = scoped.reduce((a, s) => a + (s.cost ?? 0), 0) || 1;
 
   if (firstLoadFailed) return (
     <div role="alert" className="flex items-center gap-3 p-6 text-sm text-destructive">
@@ -152,9 +192,10 @@ export function UsagePage() {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-4 p-6 max-md:p-4">
+      {scope !== undefined && <ProjectPanel name={scope === null ? UNFILED : names.get(scope) ?? scope} folder={scope} sessions={scoped} />}
       <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
-        <Stat label="오늘" value={fmtUsd(t.today)} hint="Claude API 요금으로 환산" />
-        <Stat label="최근 7일" value={fmtUsd(t.week)} hint={`${weekHint(t.week, t.prev, fmtUsd)} · 14일 ${fmtUsd(t.all)}`} />
+        <Stat label={scope === undefined ? '오늘' : '오늘 · 계정 전체'} value={fmtUsd(t.today)} hint="Claude API 요금으로 환산" />
+        <Stat label={scope === undefined ? '최근 7일' : '최근 7일 · 계정 전체'} value={fmtUsd(t.week)} hint={`${weekHint(t.week, t.prev, fmtUsd)} · 14일 ${fmtUsd(t.all)}`} />
         <Stat label="지금 시간당" value={burn.rated ? fmtRate(burn.perHour) : '—'}
           hint={burn.rated ? `최근 30분 · 세션 ${burn.rated}개 합계` : sessions.some(s => s.burn) ? '시작하고 5분 뒤부터 보여요' : '비용을 알리는 세션이 없어요'} />
         <Stat label="캐시 적중률" value={pct(cache)} hint="최근 7일 입력 중 캐시에서 읽은 비율" />
@@ -163,7 +204,7 @@ export function UsagePage() {
       <div className="grid grid-cols-3 gap-3 max-xl:grid-cols-2 max-lg:grid-cols-1">
         <LimitsPanel />
         <DailyPanel days={list} />
-        <Panel title="역할별 비용" note="최근 7일">
+        <Panel title="역할별 비용" note={scope === undefined ? '최근 7일' : '최근 7일 · 계정 전체'}>
           {roles.length ? (
             <ul className="flex flex-col gap-3">
               {roles.map(r => (
@@ -179,7 +220,7 @@ export function UsagePage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
-        <Panel title="모델별 사용량" note="최근 7일">
+        <Panel title="모델별 사용량" note={scope === undefined ? '최근 7일' : '최근 7일 · 계정 전체'}>
           {modelRows.length ? (
             <table className="w-full table-fixed text-sm">
               <thead className="text-xs text-muted-foreground">

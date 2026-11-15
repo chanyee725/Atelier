@@ -4,6 +4,7 @@
 import { recordState, type Entry } from '../../../../shared/dispatch/timeline.js';
 import type { Session, SessionState, Usage, UsageDay } from '../../../../shared/dispatch/types.ts';
 import { stateOf } from './format.ts';
+import { viewPart } from './folder.ts';
 
 export const WEEK = 7;
 
@@ -77,7 +78,7 @@ export function alwaysOnOrder<T extends { id: string; startedAt: number }>(list:
 /** Screens of /dispatch, picked by the URL hash so a wall display can open `#tv` directly and survive a reload. */
 export type View = 'sessions' | 'timeline' | 'usage' | 'tv';
 export function viewOf(hash: string): View {
-  const h = hash.replace(/^#/, '');
+  const h = viewPart(hash);
   return h === 'timeline' || h === 'usage' || h === 'tv' ? h : 'sessions';
 }
 export const hashOf = (v: View) => (v === 'sessions' ? '' : `#${v}`);
