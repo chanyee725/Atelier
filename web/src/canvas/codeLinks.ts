@@ -222,3 +222,9 @@ export function placeBadges(
 
 export const sameBadges = (a: readonly Badge[], b: readonly Badge[]) =>
   a.length === b.length && a.every((p, i) => p.blockId === b[i]!.blockId && p.node === b[i]!.node && p.x === b[i]!.x && p.y === b[i]!.y);
+
+/** Scroll offset for the code preview: a range that fits is centred; a taller one starts at its first line (small top margin). */
+export function previewScrollTop({ firstTop, span, boxHeight }: { firstTop: number; span: number; boxHeight: number }): number {
+  const margin = span > boxHeight ? 16 : (boxHeight - span) / 2;
+  return Math.max(0, firstTop - margin);
+}
