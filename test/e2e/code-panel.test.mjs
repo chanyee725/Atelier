@@ -104,7 +104,7 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   const style = page.locator('.excalidraw .App-menu__left');
   assert.equal(await style.isVisible(), false, 'style panel hidden while the code panel is open');
   // Closing the code panel with the node still selected brings the style panel back.
-  await page.getByRole('button', { name: /닫기/ }).first().click().catch(() => page.keyboard.press('Escape'));
+  await panel.getByRole('button', { name: '닫기', exact: true }).click();
   await panel.waitFor({ state: 'detached' });
   await style.waitFor({ state: 'visible', timeout: 5000 });
   await badge.click();
@@ -121,5 +121,69 @@ test('code badge opens the panel with the range highlighted; Esc closes it', { s
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   assert.equal(await panel.count(), 0, 'second Esc closes the panel');
+  assert.deepEqual(errors, []);
+});
+
+test('a code-linked free-form shape opens the panel and keeps the style panel visible', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
+  const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
+  const repo = mkdtempSync(join(tmpdir(), 'draw-code-shape-'));
+  const git = (...a) => execFileSync('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...a], { stdio: 'ignore' });
+  git('init', '-q');
+  mkdirSync(join(repo, 'src'));
+  writeFileSync(join(repo, 'src', 'app.py'), Array.from({ length: 80 }, (_, i) => `line_${i + 1} = ${i + 1}`).join('\n') + '\n');
+  git('add', 'src/app.py');
+  git('commit', '-q', '-m', 'init');
+  const ws = join(repo, 'docs');
+  mkdirSync(ws);
+  const port = await freePort();
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = '';
+  server.stdout.on('data', (d) => (log += d));
+  server.stderr.on('data', (d) => (log += d));
+  const BASE = `http://127.0.0.1:${port}`;
+  let browser;
+  t.after(async () => {
+    await browser?.close();
+    server.kill();
+    rmSync(repo, { recursive: true, force: true });
+  });
+  for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
+  assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
+
+  const call = async (m, u, b) => {
+    const r = await fetch(BASE + u, { method: m, headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: b && JSON.stringify(b) });
+    return r.json();
+  };
+  const f = await call('POST', '/api/file', { path: 'shape', title: 'Shape' });
+  const rect = {
+    id: 'shape_1', type: 'rectangle', x: 0, y: 0, width: 240, height: 120, angle: 0, strokeColor: '#1e1e1e', backgroundColor: '#a5d8ff', fillStyle: 'solid',
+    strokeWidth: 2, strokeStyle: 'solid', roughness: 0, opacity: 100, groupIds: [], frameId: null, roundness: null, seed: 1, version: 1, versionNonce: 1,
+    isDeleted: false, boundElements: null, updated: 1, link: null, locked: false,
+    customData: { codeRefs: { refs: [{ path: 'src/app.py', start: 40, end: 44 }] } },
+  };
+  await call('PUT', '/api/file?path=shape', { ...f, canvas: { ...f.canvas, elements: [rect] }, blocks: [] });
+
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
+  const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
+  await page.goto(`${BASE}/#file=shape`);
+  await page.waitForSelector('.excalidraw canvas', { timeout: 30000 });
+  await page.waitForTimeout(1500);
+  await page.getByRole('button', { name: '캔버스', exact: true }).click();
+  await page.waitForTimeout(500);
+  await page.keyboard.press('Shift+1');
+  await page.waitForTimeout(500);
+
+  const panel = page.getByRole('complementary', { name: '기능 코드' });
+  assert.equal(await panel.count(), 0);
+  // A plain click on the shape selects it and opens the panel; its style panel stays.
+  const box = await page.locator('[data-canvas]').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await panel.waitFor({ timeout: 10000 });
+  assert.equal(await panel.locator('[data-code-ref="src/app.py:40-44"]').count(), 1);
+  const style = page.locator('.excalidraw .App-menu__left');
+  await style.waitFor({ state: 'visible', timeout: 5000 });
+  assert.equal(await style.isVisible(), true, 'style panel stays visible for a shape target');
   assert.deepEqual(errors, []);
 });
