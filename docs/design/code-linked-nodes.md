@@ -74,7 +74,7 @@ free-form copies each node's entry onto its shape.
   Not tracked → 404 `{error:'not-tracked'}`. The deny list below stays as a second layer.
 - Path checks: decode once (reject any `%` left after decoding, so no double encoding; this deliberately also refuses
   real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
-  403); reject, case-insensitively, `.git/` and any segment starting with `.env`, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
+  403); reject, case-insensitively, `.git/`, `.dispatch/` and any segment starting with `.env`, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
   `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file.
 - Limits: file ≤ 1 MB (exactly 1 MB is allowed, one byte more → 413), binary (NUL in first 8 KB) → 415, directory → 400.
   Returned window ≤ 400 lines: the range plus up to 20 lines of context each side, clamped to the file. A range longer
@@ -116,8 +116,10 @@ not exported (only `FONT_FAMILY`). So:
   woff2 holding Latin + Hangul (KS X 1001 2,350 syllables + jamo + Latin/punctuation subset, built from the `pretendard`
   npm package by a checked-in script, like `scripts/subset-clean-font.py`). No CDN, and no Excalidraw changes beyond the
   transforms `web/vite.config.ts` already applies. If the vendored asset layout makes this impossible, stop and report.
-- **License:** Pretendard is OFL-1.1 with the reserved name "Pretendard": the file served under the Liberation name is
-  a modified subset, so it is fine; record it in NOTICE.md and next to the Excalidraw font comment in
+- **License:** Pretendard is OFL-1.1 with the Reserved Font Name "Pretendard". A subset is a modified version, so it
+  must not carry that name: the new subset script renames the name table (IDs 1/3/4/6) to "Drawing Sans" like
+  `scripts/subset-clean-font.py` does, and no "Pretendard" name is left in the file. Add to the existing Pretendard
+  entry in NOTICE.md and next to the Excalidraw font comment in
   `web/vite.config.ts` (source, version, subset command, OFL text path).
 - **Metrics:** Excalidraw computes line height and baseline for family 9 from its own `FONT_METADATA` (Liberation),
   which is not exported, so there is no runtime correction. Measure Pretendard's ascent/descent/line gap, set
