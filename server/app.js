@@ -21,7 +21,7 @@ const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
  * (0 before listen).
  */
 // Project mode serves the run screen only. Document/file writes of the editor stay closed; the /dispatch UI never
-// calls them. Kept open: /api/pipeline/* (plan, start, stop, ...), PATCH /api/file/plan (agents' step edits), /api/sessions/*.
+// calls them. Kept open: POST /api/workspace/pr-tracking (a per-workspace setting, not a document), /api/pipeline/* (plan, start, stop, ...), PATCH /api/file/plan (agents' step edits), /api/sessions/*.
 const PROJECT_MODE_BLOCKED = [
   ['PUT', /^\/api\/file$/],
   ['POST', /^\/api\/file$/],
@@ -31,7 +31,6 @@ const PROJECT_MODE_BLOCKED = [
   ['POST', /^\/api\/move$/],
   ['POST', /^\/api\/trash\/restore$/],
   ['POST', /^\/api\/history$/],
-  ['POST', /^\/api\/workspace\/pr-tracking$/],
 ];
 
 /**

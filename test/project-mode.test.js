@@ -436,8 +436,10 @@ test('project mode: editor document writes answer 403; pipeline and plan routes 
       const base = `http://127.0.0.1:${app.server.address().port}`;
       const call = async (method, path, headers = { 'x-drawing': '1' }) => (await fetch(base + path, { method, headers })).status;
       try {
-        for (const [m, p] of [['PUT', '/api/file'], ['POST', '/api/file'], ['DELETE', '/api/file'], ['POST', '/api/folder'], ['DELETE', '/api/folder'], ['POST', '/api/move'], ['POST', '/api/trash/restore'], ['POST', '/api/history'], ['POST', '/api/workspace/pr-tracking']])
+        for (const [m, p] of [['PUT', '/api/file'], ['POST', '/api/file'], ['DELETE', '/api/file'], ['POST', '/api/folder'], ['DELETE', '/api/folder'], ['POST', '/api/move'], ['POST', '/api/trash/restore'], ['POST', '/api/history']])
           assert.equal(await call(m, p), projectMode ? 403 : 200, `${m} ${p}`);
+        // The PR/CI switch is a workspace setting, not a document: open in project mode (E30c).
+        assert.equal(await call('POST', '/api/workspace/pr-tracking'), 200);
         assert.equal(await call('POST', '/api/pipeline/start'), 200);
         assert.equal(await call('PATCH', '/api/file/plan'), 200);
         // Header rule still applies, and it fires before the project-mode block: compare bodies (#397).
