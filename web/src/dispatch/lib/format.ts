@@ -9,6 +9,10 @@ export const isOpen = (s: { status: Status }) => s.status !== 'done' && s.status
 export type Level = 'none' | 'ok' | 'warn' | 'bad';
 export const level = (x: number | null | undefined): Level => (x == null ? 'none' : x >= 0.9 ? 'bad' : x >= 0.75 ? 'warn' : 'ok');
 
+/** Display names per provider id. Old saved sessions may still say openai or gemini, so those stay. */
+export const PROVIDER: Record<string, string> = { claude: 'Claude', openai: 'GPT', gemini: 'Gemini' };
+export const providerName = (id: string) => PROVIDER[id] ?? id;
+
 /** Time until `t`: "12분", "3시간 5분", "2일 4시간"; "—" when unknown. */
 export function until(t: number | null, now = Date.now()) {
   if (!t) return '—';
