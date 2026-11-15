@@ -425,3 +425,20 @@ test('runs: a carried step without sessions stays done: it cannot be skipped, an
     assert.equal(r.steps.impl.state, 'done');
   });
 });
+
+test('runs: endRun closes a done run\'s worked steps as done (E502); read-only steps are not abandoned', async () => {
+  await withRecorder({}, async ({ store, recorder, clock }) => {
+    await store.createFile('a');
+    const { id } = await recorder.startRun({ file: 'a', plan: PLAN });
+    // impl: a teammate worked and went idle (resting), the lead closed the task without a commit.
+    recorder.updateSession(id, 'impl', { sid: 's_1', name: 'Juno', provider: 'claude', state: 'resting' });
+    clock.advance(1000);
+    const rec = await recorder.endRun(id, 'done', { results: { impl: { abandoned: true }, review: { abandoned: true } } });
+    assert.equal(rec.steps.impl.state, 'done');
+    assert.ok(rec.steps.impl.endedAt > 0);
+    assert.equal(rec.steps.impl.result, undefined);
+    // review had no session at all: still abandoned (skipped).
+    assert.equal(rec.steps.review.state, 'skipped');
+    assert.deepEqual(rec.steps.review.result, { abandoned: true });
+  });
+});

@@ -383,14 +383,23 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
     flushEvents(runId);
     for (const [id, r] of Object.entries(results ?? {})) {
       const step = run.record.steps[id];
-      const result = mergeResult(step?.result, pickResult(r));
-      if (!step || !result) continue;
-      step.result = result;
+      const picked = pickResult(r);
+      if (!step || !picked) continue;
+      // The board closes a step without a commit when read-only work finished; only a step nobody worked on was dropped.
+      const worked = !step.carried && step.sessions.length > 0;
+      const result = picked.abandoned && worked ? step.result ?? null : mergeResult(step.result, picked);
+      if (result) step.result = result;
       // A step carried over from an earlier run stays done: it finished there.
-      if (result.abandoned && !step.carried && step.sessions.length === 0 && step.state !== 'skipped') {
+      if (result?.abandoned && !step.carried && step.sessions.length === 0 && step.state !== 'skipped') {
         step.state = 'skipped';
         step.endedAt = now();
         run.record.timeline.push([step.endedAt, id, 'skipped']);
+      } else if (state === 'done' && !result?.abandoned && step.state !== 'skipped' && step.state !== 'done') {
+        // Closed on the board: its sessions may still read resting, but the step is over (E502).
+        step.state = 'done';
+        step.startedAt ??= now();
+        step.endedAt = now();
+        run.record.timeline.push([step.endedAt, id, 'done']);
       }
     }
     run.record.state = state;
