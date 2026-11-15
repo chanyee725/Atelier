@@ -89,9 +89,16 @@ curl -s -X PUT "http://127.0.0.1:4330/api/file?path=analysis/robot" \
 
 Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the reason; fix it and save again. Send back every field you read: a save rewrites the whole file.
 
+## Privacy and limits
+
+- `summary` and `note` are stored in the document. Write only a description of the code. Never include secrets, tokens, API keys, emails, real names or conversation text.
+- The DSL `code:` attribute works only in `flowchart` and `cloud-architecture` diagrams.
+- Refs are keyed by node name. When you rename a node, rename its `codeRefs.nodes` key too, or the refs are orphaned.
+
 ## Checklist
 
 1. Every label is a short Korean feature name, no file names.
 2. Every node that maps to code has at least one ref with `path` and `start`.
 3. `summary` says what the feature does in one sentence; `note` says what that range does.
-4. Paths exist in the repo and lines match the current file.
+4. Summaries and notes hold no secrets or personal data; renamed nodes have renamed keys.
+5. Paths exist in the repo and lines match the current file.
