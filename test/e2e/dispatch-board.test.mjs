@@ -41,7 +41,7 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
   const port = await freePort();
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
   const server = spawn(process.execPath, ['server/index.js', ws], {
-    env: { HOME: home, DRAW_PORT: String(port), ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
+    env: { HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -56,8 +56,8 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     await browser?.close();
     server.kill();
     fake.cleanup();
-    rmSync(repo, { recursive: true, force: true });
-    rmSync(home, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   try {
     for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));

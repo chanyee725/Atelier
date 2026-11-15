@@ -37,7 +37,7 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   const ws = join(repo, 'ws');
   mkdirSync(ws);
   const port = await freePort();
-  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));
@@ -46,7 +46,7 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   t.after(async () => {
     await browser?.close();
     server.kill();
-    rmSync(repo, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
@@ -117,9 +117,10 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   assert.ok(await start.evaluate((el) => el === document.activeElement), 'focusable');
   // open() in PlanStrip is async (save, POST /api/pipeline, then the dialog), so an immediate dialog count passes even without
   // the blocked guard. Record the requests and wait past the round trip before asserting nothing started (#421).
+  // Only writes count: the strip's own passive GET status refresh may land at any time under load (#447) and starts nothing.
   const pipelineCalls = [];
   page.on('request', (r) => {
-    if (new URL(r.url()).pathname.startsWith('/api/pipeline')) pipelineCalls.push(`${r.method()} ${r.url()}`);
+    if (r.method() !== 'GET' && new URL(r.url()).pathname.startsWith('/api/pipeline')) pipelineCalls.push(`${r.method()} ${r.url()}`);
   });
   await start.dispatchEvent('click');
   await start.press('Enter');

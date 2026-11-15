@@ -876,3 +876,40 @@ test('an outside edit found by the restarted watcher\'s catch-up is flagged catc
     await rm(ws, { recursive: true, force: true });
   }
 });
+
+test('the default watcher is the real fs.watch; only DRAW_WORKSPACE_WATCH=poll swaps in polling', async () => {
+  const fsWatch = (await import('node:fs')).watch;
+  const { pickWatchFn } = await import('../server/workspace/store.js');
+  const { pollWatch } = await import('../server/workspace/poll-watch.js');
+  assert.equal(pickWatchFn({}), fsWatch);
+  assert.equal(pickWatchFn({ DRAW_WORKSPACE_WATCH: '' }), fsWatch);
+  assert.equal(pickWatchFn({ DRAW_WORKSPACE_WATCH: 'poll' }), pollWatch);
+});
+
+test('pollWatch reports outside edits, new files and deletions, and stops on close', async () => {
+  const { pollWatch } = await import('../server/workspace/poll-watch.js');
+  const { writeFile, unlink, mkdir } = await import('node:fs/promises');
+  const ws = await mkdtemp(join(tmpdir(), 'draw-ws-'));
+  const seen = [];
+  const w = pollWatch(ws, { recursive: true }, (_e, f) => seen.push(f), 20);
+  const until = async (fn) => { for (let i = 0; i < 100 && !fn(); i++) await new Promise((r) => setTimeout(r, 20)); assert.ok(fn(), JSON.stringify(seen)); };
+  try {
+    await mkdir(join(ws, 'sub'));
+    await writeFile(join(ws, 'sub', 'a.dpx'), 'one');
+    await until(() => seen.includes('sub/a.dpx'));
+    seen.length = 0;
+    await writeFile(join(ws, 'sub', 'a.dpx'), 'two two');
+    await until(() => seen.includes('sub/a.dpx'));
+    seen.length = 0;
+    await unlink(join(ws, 'sub', 'a.dpx'));
+    await until(() => seen.includes('sub/a.dpx'));
+    w.close();
+    seen.length = 0;
+    await writeFile(join(ws, 'late.dpx'), 'x');
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(seen, []);
+  } finally {
+    w.close();
+    await rm(ws, { recursive: true, force: true });
+  }
+});

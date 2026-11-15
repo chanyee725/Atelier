@@ -1,6 +1,7 @@
 // Workspace file store: one `*.dpx.json` per diagram file, sub-folders = folders.
 // Writes are atomic (temp file in the same dir + rename) and serialized; stale writes are refused by revision.
 import { watch } from 'node:fs';
+import { pollWatch } from './poll-watch.js';
 import { link, mkdir, readdir, readFile, rename, rm, rmdir, stat, lstat, unlink, writeFile } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
@@ -40,9 +41,14 @@ const TRASH_ID = /^\d{13}-[0-9a-f]{8}$/;
 // Pipeline run records (server/runs/) live beside history and follow the file the same way on move, delete and restore.
 export const RUNS_DIR = ['.drawing', 'runs'];
 
+// Normal runs use the real recursive fs.watch. Only the test harness sets DRAW_WORKSPACE_WATCH=poll (no inotify instance per server).
+export function pickWatchFn(env = process.env) {
+  return env.DRAW_WORKSPACE_WATCH === 'poll' ? pollWatch : watch;
+}
+
 export function createStore(
   workspaceDir,
-  { onExternalChange, watchDebounceMs = 60, watchRestartMs = 1000, watchFn = watch, now = Date.now, historyIntervalMs = HISTORY_INTERVAL_MS, historyMax = HISTORY_MAX } = {},
+  { onExternalChange, watchDebounceMs = 60, watchRestartMs = 1000, watchFn = pickWatchFn(), now = Date.now, historyIntervalMs = HISTORY_INTERVAL_MS, historyMax = HISTORY_MAX } = {},
 ) {
   const fsr = createResolver(workspaceDir);
   const known = new Map(); // rel file path -> { hash, revision } of the content we last wrote or saw
