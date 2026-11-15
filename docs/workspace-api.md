@@ -78,6 +78,16 @@ A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one
 | `{op:'set', id, step}` | Change step `id`'s fields; `null` removes a field. A new `id` is renamed in every `after` and keeps the node link. |
 | `{op:'remove', id}` | Remove step `id` and drop it from every `after`. |
 
+## Code window `GET /api/code`
+
+Read-only. `GET /api/code?path=<repo-relative>&start=<n>&end=<n>` returns `{path, start, end, total, lines, language}`: the requested range plus up to 20 context lines each side, at most 400 lines, clamped to the file. `start`/`end` are the first and last line number of `lines` (`lines[i]` is line `start + i`); `total` is the file's line count. `start` defaults to 1, `end` to `start`. `language` comes from the extension (for highlighting only).
+
+- Root: the git project holding the workspace. None: 404 `{error:'no-project'}`.
+- 400: absolute path, `..`, NUL, backslash, bad or reversed range, start past the end of the file.
+- 403: realpath outside the root (symlink escape), any `.git` segment, segments starting with `.env`, and key/secret files (`*.pem`, `*.key`, `id_rsa*`, `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`).
+- 404 missing or not a regular file, 413 over 1 MB, 415 binary (NUL in the first 8 KB).
+- Nothing is written, cached on disk or logged (no content, no absolute paths).
+
 ## Errors
 
 Filesystem conflicts map to 400/409 (`ENOTDIR`, `EISDIR`, `EEXIST`, `ENOTEMPTY`). Responses and server logs never contain absolute paths.
