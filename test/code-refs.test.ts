@@ -129,3 +129,48 @@ test('stripCodeAttrs removes code attributes only', async () => {
   assert.equal(stripCodeAttrs(src), 'A [icon: video]\nB\nC [color: red]\nD [icon: db]\nA > B');
   assert.equal(stripCodeAttrs('title "code: x"'), 'title "code: x"');
 });
+
+test('stripCodeAttrs leaves code: inside quoted values and other text unchanged (E504g)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  const keep = [
+    'A [label: "see code: here"]',
+    'A [label: "see code: here", color: red]',
+    "A [label: \"it's code: 'x'\"]",
+    'A [label: "x[]"]',
+    'A [label: "a, ]b"]',
+    'x[] > y',
+    'A [icon: db, label: "a [ , ] b"]',
+    'title "code: x"',
+    '// A [code: "x.py"]',
+    'A [link: "https://x.test/code: a"]',
+  ];
+  for (const line of keep) assert.equal(stripCodeAttrs(line), line, line);
+  assert.equal(stripCodeAttrs('A [label: "see code: here", code: "a.py"]'), 'A [label: "see code: here"]');
+  assert.equal(stripCodeAttrs('A [code: "a.py", label: "x[]"]\nB [label: "code: y", code: b.py:3, color: red]'), 'A [label: "x[]"]\nB [label: "code: y", color: red]');
+  assert.equal(stripCodeAttrs('A [code: "a.py"] > B [code: "b.py", icon: db]'), 'A > B [icon: db]');
+  assert.equal(stripCodeAttrs('A [ code : "a.py" ] // note'), 'A // note');
+});
+
+test('stripCodeAttrs and parseAttrs handle brackets inside unquoted values (E504h)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  assert.equal(stripCodeAttrs('A [code: app/[id]/page.tsx, color: red]'), 'A [color: red]');
+  assert.equal(stripCodeAttrs('A [color: red, code: app/[id]/page.tsx]'), 'A [color: red]');
+  assert.equal(stripCodeAttrs('A [code: app/[id]/page.tsx]\nB'), 'A\nB');
+  assert.equal(stripCodeAttrs('A [code: a/[x]/[y].tsx:3, icon: db]'), 'A [icon: db]');
+  assert.equal(stripCodeAttrs('A [code: x.py, color: red]'), 'A [color: red]');
+  assert.equal(stripCodeAttrs('A [color: red]'), 'A [color: red]');
+  const { ast, diagnostics } = parse('A [code: app/[id]/page.tsx, color: red]\nB', 'cloud-architecture');
+  assert.deepEqual({ ...dslCodeRefs((ast as GraphDiagram).children) }, { A: [{ path: 'app/[id]/page.tsx', start: 1 }] });
+  assert.deepEqual(diagnostics.filter((d) => d.severity === 'error' || /Bad code/.test(d.message)), []);
+});
+
+test('unmatched [ in an unquoted value ends at the first , or ] like a plain value (E504h)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  assert.equal(stripCodeAttrs('A [code: a[b, color: red]'), 'A [color: red]');
+  assert.equal(stripCodeAttrs('A [color: red, code: a[b]'), 'A [color: red]');
+  const { ast, diagnostics } = parse('A [label: a[b, color: red]\nB', 'cloud-architecture');
+  const a = (ast as GraphDiagram).children[0] as { attrs?: Record<string, string> };
+  assert.equal(a.attrs?.label, 'a[b');
+  assert.equal(a.attrs?.color, 'red');
+  assert.deepEqual(diagnostics.filter((d) => d.severity === 'error'), []);
+});

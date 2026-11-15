@@ -2,6 +2,8 @@
 // The DSL shorthand `code: "path[:start[-end]][#symbol]; ..."` is parsed here; the block JSON (`codeRefs`) is
 // validated and merged in `shared/render/block-code.ts`.
 
+import { tokenize } from './tokenizer.ts';
+
 export interface CodeRef {
   /** Repo-relative, '/'-separated, no '..', no leading '/'. */
   path: string;
@@ -70,23 +72,81 @@ export function parseCodeAttr(text: string): ParsedCodeAttr {
   return { refs, problems };
 }
 
-const CODE_ATTR = /(\[[^\]\n]*?)(?:,\s*)?\bcode\s*:\s*(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|[^,\]\n]*)\s*(,?)\s*/g;
-
 /**
  * The diagram code without `code:` attributes, for text that leaves the app as Eraser-style diagram code
  * (Eraser's handling of unknown attributes is not verified). An attribute list left empty is removed too.
+ * Uses the DSL tokenizer, so `code:` inside quoted text or comments and all other text stay byte-for-byte unchanged.
  */
 export function stripCodeAttrs(src: string): string {
-  return src
-    .split('\n')
-    .map((line) => {
-      let out = line;
-      for (let i = 0; i < 20 && out.includes('code'); i++) {
-        const next = out.replace(CODE_ATTR, (_m, head: string, comma: string) => (comma ? `${head}${head.endsWith('[') ? '' : ', '}` : head));
-        if (next === out) break;
-        out = next;
+  if (!src.includes('code')) return src;
+  const { tokens } = tokenize(src);
+  const cuts: Array<{ from: number; to: number; text: string }> = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i]!.kind !== 'lbracket') continue;
+    const open = tokens[i]!;
+    // One attribute list: entries [first token, last token] between `[`, commas and `]`.
+    const entries: Array<{ first: number; last: number; isCode: boolean }> = [];
+    let j = i + 1;
+    let close = -1;
+    let entryStart = j;
+    const endEntry = (end: number) => {
+      if (end >= entryStart) {
+        const k = tokens[entryStart]!;
+        entries.push({ first: entryStart, last: end, isCode: k.kind === 'word' && k.text === 'code' && tokens[entryStart + 1]?.kind === 'colon' });
       }
-      return out.replace(/\s*\[\s*,?\s*\]/g, '').replace(/,\s*\]/g, ']').replace(/\[\s*,\s*/g, '[');
-    })
-    .join('\n');
+    };
+    let depth = 0; // balanced nested `[...]` inside a value belongs to the value
+    let stop = -1; // first `,`/`]` seen inside a nested bracket: where the entry ends if that bracket never closes
+    for (; j < tokens.length; j++) {
+      const k = tokens[j]!.kind;
+      if (depth > 0 && stop < 0 && (k === 'comma' || k === 'rbracket')) stop = j;
+      const lineEnd = k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace';
+      if (stop >= 0 && lineEnd) {
+        // Unmatched `[` swallowed the rest of the line: restart right at the first `,`/`]` like a plain value.
+        j = stop - 1;
+        depth = 0;
+        stop = -1;
+        continue;
+      }
+      if (k === 'rbracket') {
+        if (depth > 0) {
+          depth--;
+          continue;
+        }
+        endEntry(j - 1);
+        close = j;
+        break;
+      }
+      if (k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace') break;
+      if (k === 'lbracket') {
+        // A bracket right after the entry's `key:` is nested only once the key's colon was seen.
+        if (tokens[entryStart]?.kind === 'word' && tokens.slice(entryStart, j).some((t) => t.kind === 'colon')) {
+          depth++;
+          continue;
+        }
+        break;
+      }
+      if (k === 'comma' && depth === 0) {
+        endEntry(j - 1);
+        entryStart = j + 1;
+      }
+    }
+    i = Math.max(i, j - 1);
+    if (close < 0 || !entries.some((e) => e.isCode)) continue;
+    const kept = entries.filter((e) => !e.isCode);
+    const end = tokens[close]!;
+    if (kept.length === 0) {
+      // Drop the whole list and the whitespace before it.
+      let from = open.offset;
+      while (from > 0 && (src[from - 1] === ' ' || src[from - 1] === '\t')) from--;
+      cuts.push({ from, to: end.offset + 1, text: '' });
+      continue;
+    }
+    // Rebuild the list from the kept entries' source text; everything outside the brackets is untouched.
+    const text = kept.map((e) => src.slice(tokens[e.first]!.offset, tokens[e.last]!.offset + tokens[e.last]!.length)).join(', ');
+    cuts.push({ from: open.offset, to: end.offset + 1, text: `[${text}]` });
+  }
+  let out = src;
+  for (const { from, to, text } of cuts.reverse()) out = out.slice(0, from) + text + out.slice(to);
+  return out;
 }

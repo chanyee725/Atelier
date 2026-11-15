@@ -13,6 +13,7 @@ import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limi
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
 import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
 import { AGENT_COLORS, pickColor } from "./colors.js";
+import { deriveFolder } from "./session-folder.js";
 
 const badRequest = msg => Object.assign(new Error(msg), { status: 400 });
 
@@ -120,6 +121,8 @@ export class Hub extends EventEmitter {
     // E27: holdTeam(lead) -> true while the person stopped that lead's plan (멈추기): its team's reports and
     // restart resumes wait. ticketNote(lead) -> text added to a limit ticket's resume message, or "".
     this.holdTeam = null;
+    // topFolders() -> paths of the workspace's top-level folders (set by index.js); a session's `folder` must be one.
+    this.topFolders = null;
     this.ticketNote = null;
 
     // Transcripts live in memory only (a ring buffer per session); nothing is written to disk, so a
@@ -131,6 +134,10 @@ export class Hub extends EventEmitter {
       if (s.status === "running" || s.status === "waiting" || s.status === "starting") { s.status = "idle"; s.interrupted = true; }
       // Sessions from before cursor colours (E56) get theirs now, saved so a restart does not pick another.
       if (!AGENT_COLORS.includes(s.color)) { s.color = pickColor(this.sessions.map(x => x.color)); colored = true; }
+    }
+    // Sessions from before the folder field (E505c) get one from the plan they are still linked to, else null; saved so it stays.
+    for (const s of Object.values(store.data.sessions)) {
+      if (s.folder === undefined) { s.folder = deriveFolder(s, store.data.pipelines); colored = true; }
     }
     if (colored) store.save();
   }
@@ -457,11 +464,13 @@ export class Hub extends EventEmitter {
   /* ---------------- create ---------------- */
 
   // items: [{ role, model, effort, perm, prompt, n }]
-  async create({ items, commonPrompt, worktree = true, parent = null }) {
+  async create({ items, commonPrompt, worktree = true, parent = null, folder }) {
     const total = items.reduce((a, x) => a + (x.n || 1), 0);
     if (!total) throw new Error("만들 세션이 없어요");
     const gate = parent && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
+    // A folder is a top-level workspace folder that exists; without one the session inherits its parent's.
+    const top = await this.resolveFolder(folder, parent);
     for (const it of items) {
       const id = it.model || this.roles.find(r => r.id === it.role)?.model;
       const provider = this.models.find(m => m.id === id)?.provider;
@@ -508,7 +517,7 @@ export class Hub extends EventEmitter {
           provider: model.provider, model: model.id, modelLabel: model.label,
           effort: it.effort || null, perm: it.perm || role.perm,
           prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
-          cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent,
+          cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder: top,
           status: "starting", startedAt: Date.now(), updatedAt: Date.now(),
           last: "", turns: 0, ctx: 0, ctxWindow: model.contextWindow,
           usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -525,6 +534,29 @@ export class Hub extends EventEmitter {
       }
     }
     return made.map(s => this.publicSession(s));
+  }
+
+  /** The folder a new session gets: the asked-for top folder (must exist, else 400), else the parent's, else null. */
+  async resolveFolder(folder, parent) {
+    if (folder != null && folder !== "") {
+      const paths = typeof folder === "string" && this.topFolders ? await this.topFolders() : [];
+      if (!paths.includes(folder)) throw Object.assign(new Error("folder는 워크스페이스에 있는 프로젝트 폴더여야 해요"), { status: 400 });
+      return folder;
+    }
+    const p = parent && this.get(parent);
+    return p?.folder ?? null;
+  }
+
+  /** Cost and tokens of one project folder's sessions, from the sessions' own counters. */
+  folderUsage(folder) {
+    const mine = this.sessions.filter(s => (s.folder ?? null) === folder);
+    const tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    let cost = 0;
+    for (const s of mine) {
+      cost += s.cost || 0;
+      for (const k in tokens) tokens[k] += s.usage?.[k] || 0;
+    }
+    return { folder, sessions: mine.length, cost, tokens };
   }
 
   /* ---------------- control ---------------- */

@@ -53,7 +53,7 @@ A block may carry `layout`, the node positions a user moved on top of the automa
 
 ## Block `codeRefs`
 
-A block may carry `codeRefs`: where in the code each node's feature lives (design: `docs/design/code-linked-nodes.md` §1). Keys are node names, like `layout.items`. Files that have it are format `version` 5; older files read as they are and are stored as v5 on the next save. An older server treats v5 files as read-only (422). (The block's own `code` field stays the diagram-as-code text.)
+A block may carry `codeRefs`: where in the code each node's feature lives (design: `docs/design/code-linked-nodes.md` §1; how agents write it: `docs/agent-diagrams.md`). Keys are node names, like `layout.items`. Files that have it are format `version` 5; older files read as they are and are stored as v5 on the next save. An older server treats v5 files as read-only (422). (The block's own `code` field stays the diagram-as-code text.)
 
 ```jsonc
 "codeRefs": { "v": 1, "nodes": { "로봇 데이터 녹화": { "summary": "카메라·관절 값을 저장해요",

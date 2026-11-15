@@ -39,10 +39,10 @@ export function adapt([method, path, fn]) {
   return {
     method,
     path,
-    async handler(req, res, _ctx, match) {
+    async handler(req, res, _ctx, match, url) {
       try {
         const body = method === "GET" ? {} : await readBody(req);
-        send(res, 200, await fn(match.slice(1), body ?? {}));
+        send(res, 200, await fn(match.slice(1), body ?? {}, url));
       } catch (e) {
         if (!res.headersSent) send(res, e.status || 400, { error: e.message });
         else res.end();
@@ -65,7 +65,13 @@ export function routeTable(d) {
   };
   return [
     ["GET", /^\/api\/state$/, async () => d.snapshot()],
-    ["GET", /^\/api\/usage$/, async () => d.usage()],
+    ["GET", /^\/api\/usage$/, async (_, __, url) => {
+      // ?folder=<path>: cost and tokens of that project's sessions (the daily chart stays account-wide, see usage()).
+      const p = url?.searchParams.get("folder");
+      if (p == null) return d.usage();
+      if (!p || p.startsWith(".") || /[\/\\\0]/.test(p)) throw fail(400, "folder가 올바르지 않아요");
+      return hub.folderUsage(p);
+    }],
     // Other projects are no longer probed over the network: this server's own usage only.
     ["GET", /^\/api\/usage\/all$/, async () => ({ projects: (await d.projects()).map(p => ({ ...p, ...d.usage() })) })],
     ["GET", /^\/api\/prefs$/, async () => d.readPrefs()],
@@ -82,7 +88,7 @@ export function routeTable(d) {
       return settings;
     }],
     ["POST", /^\/api\/sessions$/, async (_, b) => ({
-      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null }),
+      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder }),
     })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/diff$/, async ([id]) => diff(session(id).cwd, root)],

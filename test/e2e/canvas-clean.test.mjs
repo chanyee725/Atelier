@@ -261,7 +261,8 @@ test("a labelled rectangle grows to fit its label in the clean font, and its arr
 });
 
 test('pasting one handwriting text measures that text only', SKIP, async (t) => {
-  // `other` is clean already, with a width from another machine: a paste must not touch it.
+  // `other` is saved in font id 9 (Liberation Sans before Pretendard) with a width from another face: it is measured
+  // once on open, and the paste must not touch it again.
   const { page, saved, errors, cleanWidth } = await open(t, 'paste', [text('other', 100, 300, 'Leave me alone', 9)]);
   const str = 'Pasted by hand';
   const clip = JSON.stringify({ type: 'excalidraw/clipboard', elements: [text('pasted', 0, 0, str, 1)], files: {} });
@@ -278,8 +279,9 @@ test('pasting one handwriting text measures that text only', SKIP, async (t) => 
   const want = await cleanWidth(str);
   assert.ok(Math.abs(pasted.width - want) < 1, `pasted width ${pasted.width}, measured in the clean font ${want}`);
   const other = s.get('other');
-  assert.equal(other.width, 3, 'the other text keeps its saved width');
-  assert.equal(other.version, 5, 'and its version');
+  const otherWant = await cleanWidth('Leave me alone');
+  assert.ok(Math.abs(other.width - otherWant) < 1, `the other text was measured in Pretendard on open: ${other.width} vs ${otherWant}`);
+  assert.equal(other.version, 5, 'and keeps its version');
   assert.deepEqual(errors, []);
 });
 
