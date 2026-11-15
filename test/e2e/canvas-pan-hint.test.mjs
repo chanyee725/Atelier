@@ -28,7 +28,7 @@ const rect = (id, extra = {}) => ({
   seed: 1, version: 5, versionNonce: 1, isDeleted: false, boundElements: null, updated: 1, link: null, locked: false, index: 'a0', ...extra,
 });
 
-async function open(t, path, elements) {
+async function open(t, path, elements, blocks = []) {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const ws = mkdtempSync(join(tmpdir(), 'draw-hint-'));
   const port = await freePort();
@@ -48,7 +48,7 @@ async function open(t, path, elements) {
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
   const call = async (m, u, b) => (await fetch(BASE + u, { method: m, headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: b && JSON.stringify(b) })).json();
   const f = await call('POST', '/api/file', { path, title: '안내' });
-  if (elements.length) await call('PUT', `/api/file?path=${path}`, { ...f, canvas: { ...f.canvas, elements } });
+  if (elements.length || blocks.length) await call('PUT', `/api/file?path=${path}`, { ...f, version: 2, blocks, canvas: { ...f.canvas, elements } });
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
   const page = await (await browser.newContext({ viewport: { width: 1400, height: 900 } })).newPage();
   await page.goto(`${BASE}/#file=${path}`);
@@ -76,7 +76,7 @@ test('the pan hint shows on an empty canvas and is hidden once elements are ther
   await page.mouse.click(1100, 700);
   await page.waitForTimeout(400);
   assert.equal(await shown(page), false, 'hidden after drawing a shape');
-  await page.mouse.click(600, 350); // the left edge: select the shape, then delete it
+  await page.keyboard.press('Control+a'); // select everything, then delete it
   await page.keyboard.press('Delete');
   await page.waitForTimeout(400);
   await page.mouse.click(1100, 700);
@@ -92,4 +92,26 @@ test('the pan hint is hidden when a file with elements is loaded', SKIP, async (
 test('a file holding only deleted elements still shows the hint', SKIP, async (t) => {
   const page = await open(t, 'deleted', [rect('gone', { isDeleted: true })]);
   assert.equal(await shown(page), true);
+});
+
+test('the pan hint is hidden for a canvas that only holds a diagram-as-code block', SKIP, async (t) => {
+  const page = await open(t, 'block', [], [{ id: 'b1', type: 'architecture', code: 'title T\nWeb [icon: user]', x: 0, y: 0, w: 0, h: 0 }]);
+  await page.waitForTimeout(1200);
+  assert.equal(await shown(page), false, 'the rendered block counts as an element');
+});
+
+test('text editing and search keep their own hints while elements are on the canvas', SKIP, async (t) => {
+  const page = await open(t, 'hints', [rect('r'), { ...rect('t'), type: 'text', x: 600, y: 500, width: 60, height: 25, text: 'findme', originalText: 'findme', fontSize: 20, fontFamily: 5, textAlign: 'left', verticalAlign: 'top', containerId: null, lineHeight: 1.25, autoResize: true, index: 'a1' }]);
+  assert.equal(await shown(page), false, 'idle: hidden');
+  await page.mouse.dblclick(1000, 700); // empty area: starts a new text
+  await page.waitForTimeout(400);
+  assert.equal(await shown(page), true, 'text editing hint is shown');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(1100, 800);
+  await page.waitForTimeout(300);
+  assert.equal(await shown(page), false, 'hidden again after editing');
+  await page.keyboard.press('Control+f');
+  await page.keyboard.type('findme');
+  await page.waitForTimeout(800);
+  assert.equal(await shown(page), true, 'search hint is shown while there are matches');
 });

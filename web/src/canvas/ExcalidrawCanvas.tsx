@@ -515,7 +515,9 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       scheduleSharpen();
     }
     // Only the idle case (selection tool, nothing selected, no box drag) shows that hint; other hints (arrow, erase) stay.
-    setHidePanHint(appState.activeTool.type === 'selection' && sel.length === 0 && !appState.selectionElement && sceneEls.some((e) => !e.isDeleted));
+    // Text editing and an active search keep their own hints (type text, Escape closes search).
+    const searching = !!appState.openSidebar && !!appState.searchMatches?.length;
+    setHidePanHint(appState.activeTool.type === 'selection' && sel.length === 0 && !appState.selectionElement && !appState.editingTextElement && !searching && sceneEls.some((e) => !e.isDeleted));
     setBlockSelected(sel.length > 0 && sel.every((e) => blockIdOf(e as unknown as SceneEl) !== null));
     setSelBlock(sel.length === 1 ? blockIdOf(sel[0] as unknown as SceneEl) : null);
     const ed = editRef.current;
