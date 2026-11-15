@@ -80,12 +80,15 @@ A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one
 
 ## Code window `GET /api/code`
 
-Read-only. `GET /api/code?path=<repo-relative>&start=<n>&end=<n>` returns `{path, start, end, total, lines, language}`: the requested range plus up to 20 context lines each side, at most 400 lines, clamped to the file. `start`/`end` are the first and last line number of `lines` (`lines[i]` is line `start + i`); `total` is the file's line count. `start` defaults to 1, `end` to `start`. `language` comes from the extension (for highlighting only).
+Read-only. `GET /api/code?path=<repo-relative>&start=<n>&end=<n>` returns `{path, start, end, total, lines, language, truncated?}`: the requested range plus up to 20 context lines each side, at most 400 lines, clamped to the file. `start`/`end` are the first and last line number of `lines` (`lines[i]` is line `start + i`); `total` is the file's line count. `language` comes from the extension (for highlighting only).
 
+- Range: `start` missing → line 1; `end` missing → `start` (whole file when both are missing). A range longer than 400 lines is cut at 400 lines from its start (no context) and the response has `truncated: true`.
 - Root: the git project holding the workspace. None: 404 `{error:'no-project'}`.
-- 400: absolute path, `..`, NUL, backslash, bad or reversed range, start past the end of the file.
-- 403: realpath outside the root (symlink escape), any `.git` segment, segments starting with `.env`, and key/secret files (`*.pem`, `*.key`, `id_rsa*`, `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`).
-- 404 missing or not a regular file, 413 over 1 MB, 415 binary (NUL in the first 8 KB).
+- Git-tracked files only (`git ls-files --error-unmatch`, no shell): untracked or gitignored → 404 `{error:'not-tracked'}`.
+- 400: path with a `%` left after the one decode (double encoding), absolute path, `..`, NUL, backslash, a directory, `start`/`end` not an integer, `< 1`, or `start > end`.
+- 416: `start` past the last line.
+- 403: realpath outside the root (symlink escape), and, case-insensitively, any `.git` segment, segments starting with `.env`, and key/secret files (`*.pem`, `*.key`, `id_rsa*`, `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`).
+- 404 missing, 413 over 1 MB (exactly 1 MB is fine), 415 binary (NUL in the first 8 KB).
 - Nothing is written, cached on disk or logged (no content, no absolute paths).
 
 ## Errors

@@ -28,6 +28,11 @@ async function rig(t, { git = true } = {}) {
   await writeFile(join(repo, 'src', 'server.pem'), 'k\n');
   await writeFile(join(repo, 'src', 'credentials.json'), '{}\n');
   await writeFile(join(repo, '.npmrc'), 'x\n');
+  await writeFile(join(repo, 'src', 'exact.txt'), 'x'.repeat(1024 * 1024));
+  await writeFile(join(repo, 'src', 'empty.txt'), '');
+  await writeFile(join(repo, '.gitignore'), 'ignored.txt\n');
+  await writeFile(join(repo, 'ignored.txt'), 'local\n');
+  await writeFile(join(repo, 'src', 'untracked.js'), 'u\n');
   await symlink(outside, join(repo, 'src', 'out-dir'));
   await symlink(join(outside, 'secret.txt'), join(repo, 'src', 'out-file'));
   await symlink('a.py', join(repo, 'src', 'inside-link'));
@@ -36,6 +41,7 @@ async function rig(t, { git = true } = {}) {
     const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
     g('init', '-q');
     g('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'add', '-f', '.');
+    g('rm', '-q', '--cached', 'src/untracked.js', 'ignored.txt');
     g('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '-m', 'init');
   }
   const app = await createApp({ workspaceDir: join(repo, 'ws') }, { publicDir: base, moduleList: [{ name: 'code', setup: code.setup }] });
@@ -87,14 +93,14 @@ test('returns the range with context lines and language', async (t) => {
 
 test('bad path or range: 400', async (t) => {
   const { get } = await rig(t);
-  for (const q of ['', 'path=/etc/passwd', 'path=../x', 'path=src/../../x', 'path=src%5Ca.py', 'path=src/a.py%00', 'path=src/a.py&start=0', 'path=src/a.py&start=x', 'path=src/a.py&start=9&end=3', 'path=src/a.py&start=5000']) {
+  for (const q of ['', 'path=/etc/passwd', 'path=../x', 'path=src/../../x', 'path=src%5Ca.py', 'path=src/a.py%00', 'path=src/a.py&start=0', 'path=src/a.py&start=x', 'path=src/a.py&start=9&end=3', 'path=src/%252e%252e/a.py', 'path=src/a.py&start=1.5', 'path=src/a.py&start=-1', 'path=src/a.py&end=0', 'path=src/a.py&start=5&end=x', 'path=src', 'path=%252e%252e%252fx']) {
     assert.equal((await get(q)).status, 400, q);
   }
 });
 
 test('forbidden: .git, .env*, key and secret files, symlink escapes', async (t) => {
   const { get } = await rig(t);
-  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', 'src/out-file', 'src/out-dir/secret.txt', 'src/to-env']) {
+  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env']) {
     assert.equal((await get(`path=${encodeURIComponent(p)}`)).status, 403, p);
   }
   assert.equal((await get('path=src/inside-link')).status, 200);
@@ -103,9 +109,9 @@ test('forbidden: .git, .env*, key and secret files, symlink escapes', async (t) 
 test('413 over 1 MB, 415 binary, 404 missing or not a regular file', async (t) => {
   const { get } = await rig(t);
   assert.equal((await get('path=src/big.txt')).status, 413);
+  assert.equal((await get('path=src/exact.txt')).status, 200);
   assert.equal((await get('path=src/bin.dat')).status, 415);
   assert.equal((await get('path=src/nope.py')).status, 404);
-  assert.equal((await get('path=src')).status, 404);
 });
 
 test('read only and no-store; other methods are not routed', async (t) => {
@@ -121,4 +127,51 @@ test('workspace outside a git project: 404 no-project', async (t) => {
   const r = await get('path=src/a.py');
   assert.equal(r.status, 404);
   assert.equal(r.body.error, 'no-project');
+});
+
+test('%2e%2e is decoded once and rejected; double encoding rejected', async (t) => {
+  const { get } = await rig(t);
+  assert.equal((await get('path=src/%2e%2e/%2e%2e/outside/secret.txt')).status, 400);
+  assert.equal((await get('path=src%252fa.py')).status, 400);
+});
+
+test('untracked and gitignored files are 404 not-tracked; tracked symlink inside root works', async (t) => {
+  const { get } = await rig(t);
+  for (const p of ['src/untracked.js', 'ignored.txt']) {
+    const r = await get(`path=${p}`);
+    assert.equal(r.status, 404, p);
+    assert.equal(r.body.error, 'not-tracked', p);
+  }
+  assert.equal((await get('path=src/a.py')).status, 200);
+});
+
+test('directory is 400 (a symlinked directory too)', async (t) => {
+  const { get } = await rig(t);
+  assert.equal((await get('path=src')).status, 400);
+});
+
+test('range errors: start past the end 416, start > end 400; empty file ok', async (t) => {
+  const { get } = await rig(t);
+  assert.equal((await get('path=src/a.py&start=1001')).status, 416);
+  assert.equal((await get('path=src/a.py&start=1000')).status, 200);
+  assert.equal((await get('path=src/a.py&start=10&end=9')).status, 400);
+  const e = await get('path=src/empty.txt');
+  assert.equal(e.status, 200);
+  assert.deepEqual(e.body.lines, []);
+  assert.equal((await get('path=src/empty.txt&start=1')).status, 416);
+});
+
+test('truncated: a range over 400 lines is cut at 400 from its start', async (t) => {
+  const { get } = await rig(t);
+  const r = await get('path=src/a.py&start=11&end=900');
+  assert.equal(r.body.truncated, true);
+  assert.equal(r.body.start, 11);
+  assert.equal(r.body.end, 410);
+  assert.equal(r.body.lines.length, 400);
+  const whole = await get('path=src/a.py');
+  assert.equal(whole.body.truncated, true);
+  assert.equal(whole.body.start, 1);
+  const ok = await get('path=src/a.py&start=1&end=400');
+  assert.equal(ok.body.truncated, undefined);
+  assert.ok(ok.body.lines.length <= 400);
 });

@@ -2,6 +2,7 @@
 // the git project that holds the workspace, for the "기능 코드" panel. Never writes, caches or logs file content.
 import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
+import { ownGitEnv, runCli } from '../dispatch/cli.js';
 import { findProject } from '../dispatch/project.js';
 import { gitTop } from '../dispatch/index.js';
 import { sendJson } from '../app.js';
@@ -43,6 +44,16 @@ export function windowOf(total, start, end) {
   return { start: from, end: to };
 }
 
+// Git-tracked files only (keeps gitignored config, node_modules/ and .dispatch/wt/ out). No shell; literal pathspec.
+async function isTracked(root, rel) {
+  try {
+    await runCli('git', ['-C', root, '--literal-pathspecs', 'ls-files', '--error-unmatch', '--', rel], { env: ownGitEnv() });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function readGuarded(root, rel) {
   const segments = rel.split('/');
   if (isSecret(segments)) return { status: 403, error: 'forbidden' };
@@ -59,7 +70,9 @@ async function readGuarded(root, rel) {
   try {
     fh = await open(real, 'r');
     const st = await fh.stat();
+    if (st.isDirectory()) return { status: 400, error: 'is a directory' };
     if (!st.isFile()) return { status: 404, error: 'not a file' };
+    if (!(await isTracked(root, rel))) return { status: 404, error: 'not-tracked' };
     if (st.size > MAX_BYTES) return { status: 413, error: 'file too large' };
     const buf = await fh.readFile();
     if (buf.subarray(0, SNIFF).includes(0)) return { status: 415, error: 'binary file' };
@@ -80,7 +93,9 @@ export async function setup(ctx, deps = {}) {
       path: '/api/code',
       async handler(req, res, _ctx, _m, url) {
         if (!root) return sendJson(res, 404, { error: 'no-project' });
-        const rel = cleanPath(url.searchParams.get('path'));
+        const rawPath = url.searchParams.get('path');
+        // searchParams decoded once already: a '%' left over means double encoding.
+        const rel = rawPath?.includes('%') ? null : cleanPath(rawPath);
         const start = toInt(url.searchParams.get('start'));
         const endRaw = toInt(url.searchParams.get('end'));
         if (!rel || Number.isNaN(start) || Number.isNaN(endRaw) || start === 0 || endRaw === 0 || (start != null && endRaw != null && endRaw < start)) {
@@ -92,8 +107,9 @@ export async function setup(ctx, deps = {}) {
         if (all.length && all[all.length - 1] === '') all.pop();
         const total = all.length;
         const from = start ?? 1;
-        if (from > Math.max(total, 1)) return sendJson(res, 400, { error: 'range outside file' });
-        const w = windowOf(total, from, endRaw ?? (start == null ? total : from));
+        if (start != null && start > total) return sendJson(res, 416, { error: 'range outside file' });
+        const wanted = Math.min(endRaw ?? (start == null ? total : from), total);
+        const w = windowOf(total, from, wanted);
         res.setHeader('cache-control', 'no-store');
         return sendJson(res, 200, {
           path: rel,
@@ -102,6 +118,7 @@ export async function setup(ctx, deps = {}) {
           total,
           lines: all.slice(w.start - 1, w.end).map((l) => l.replace(/\r$/, '')),
           language: languageOf(rel),
+          ...(wanted - from + 1 > MAX_WINDOW && { truncated: true }),
         });
       },
     }],
