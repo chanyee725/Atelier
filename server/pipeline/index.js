@@ -364,10 +364,14 @@ export async function setup(ctx) {
     const prevCarry = entry.carry;
     delete entry.carry;
     Object.assign(entry, { state: 'running', approvedRevision: file.revision, approvedAt: Date.now(), runId: record.id, steps: Object.keys(record.steps), links: {} });
-    // The lead and its team now work for the project the approved plan lives in (E505c).
+    // The lead and its live team (or members without a folder) now work for the project the approved plan
+    // lives in (E505c). Finished sessions keep the folder they worked for, with their cost.
     const planFolder = topFolder(path);
     if (planFolder) {
-      for (const s of d.hub.sessions) if ((s.id === entry.lead || s.parent === entry.lead) && s.folder !== planFolder) d.hub.touch(s, { folder: planFolder });
+      for (const s of d.hub.sessions) {
+        const mine = s.id === entry.lead || (s.parent === entry.lead && (!['done', 'error'].includes(s.status) || s.folder == null));
+        if (mine && s.folder !== planFolder) d.hub.touch(s, { folder: planFolder });
+      }
     }
     save();
     const lines = [

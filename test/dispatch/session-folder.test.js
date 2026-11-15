@@ -137,6 +137,29 @@ test('lead plans: no path goes into the lead project folder; 시작하기 gives 
   } finally { await t.stop(); }
 });
 
+test('시작하기 moves only the lead, live team members and folderless ones; finished sessions keep their folder', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, d } = t;
+    const lead = (await mk(call, { items: [{ role: 'lead', task: 'plan' }], folder: 'alpha' })).body.sessions[0];
+    await settled(d, lead.id);
+    const old = (await mk(call, { items: [{ role: 'impl', task: 'a' }], parent: lead.id })).body.sessions[0];
+    const live = (await mk(call, { items: [{ role: 'impl', task: 'b' }], parent: lead.id })).body.sessions[0];
+    const bare = (await mk(call, { items: [{ role: 'impl', task: 'c' }], parent: lead.id })).body.sessions[0];
+    await settled(d, old.id); await settled(d, live.id); await settled(d, bare.id);
+    d.hub.touch(d.hub.get(old.id), { status: 'done' });
+    d.hub.touch(d.hub.get(bare.id), { status: 'done', folder: null });
+    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'beta/p.dpx.json', title: 'beta 계획', goal: 'x', steps: STEP });
+    assert.equal(w.status, 200, JSON.stringify(w.body));
+    const go = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
+    assert.equal(go.status, 200, JSON.stringify(go.body));
+    assert.equal(d.hub.get(lead.id).folder, 'beta');
+    assert.equal(d.hub.get(live.id).folder, 'beta');
+    assert.equal(d.hub.get(bare.id).folder, 'beta');
+    assert.equal(d.hub.get(old.id).folder, 'alpha');
+  } finally { await t.stop(); }
+});
+
 test('old sessions without folder: derived from a plan link only, else null', () => {
   const pipelines = { 'alpha/a.dpx.json': { lead: 'L1', links: { S1: 'api' } }, 'root.dpx.json': { lead: 'L2', links: { S2: 'x' } } };
   assert.equal(deriveFolder({ id: 'S1' }, pipelines), 'alpha');
