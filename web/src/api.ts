@@ -2,12 +2,14 @@
 // Node position overrides for a block (docs/design/block-drag-edit.md §2.1). Keys of `items` are node or empty-group names.
 export type { BlockLayout } from '../../shared/render/block-layout.ts';
 import type { BlockLayout } from '../../shared/render/block-layout.ts';
+import type { BlockCode } from '../../shared/render/block-code.ts';
+export type { BlockCode } from '../../shared/render/block-code.ts';
 // Newest file format this web build understands; a 422 on a file above it means a newer app wrote it.
-export const FILE_FORMAT_VERSION = 4;
+export const FILE_FORMAT_VERSION = 5;
 // Pipeline steps (format v4). The web only carries it through saves for now; docs/workspace-api.md "Pipeline `plan`".
 export type { Plan, PlanStep } from '../../shared/dispatch/plan.ts';
 import type { Plan } from '../../shared/dispatch/plan.ts';
-export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; frameId?: string };
+export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; codeRefs?: BlockCode; frameId?: string };
 export type DpxFile = {
   version: number;
   title: string;

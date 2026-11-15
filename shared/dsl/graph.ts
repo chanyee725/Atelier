@@ -3,6 +3,7 @@ import {
   parseConnectionTail, parseEndpoints, parseKeywordValue, recoverLine,
   type Endpoint,
 } from './common.ts';
+import { parseCodeAttr } from './code-refs.ts';
 import type { Attrs, Direction, GraphChild, GraphDiagram, GraphEdge, GraphGroup, GraphNode } from './types.ts';
 
 const DIRECTIONS: readonly string[] = ['down', 'up', 'left', 'right'];
@@ -155,6 +156,14 @@ export function parseGraph(c: Cursor, type: GraphDiagram['type']): GraphDiagram 
 
     for (const ep of first) define(ep, 'node');
     endStatement(c);
+  }
+
+  // `code:` attribute -> refs on the node (a later `code` on a connection endpoint replaced the earlier one in attrs).
+  for (const item of registry.values()) {
+    if (item.kind !== 'node' || item.attrs.code === undefined) continue;
+    const { refs, problems } = parseCodeAttr(item.attrs.code);
+    for (const m of problems) c.warn(item.span, m);
+    if (refs.length) item.code = refs;
   }
 
   while (stack.length > 1) {

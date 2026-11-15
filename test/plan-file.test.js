@@ -48,7 +48,7 @@ test('a plan saves, reads back clean, and a file without one stays an ordinary d
     let r = await call('PUT', '/api/file?path=p', { revision: 1, title: 'P', blocks: [block], plan: { ...plan, junk: 1 } });
     assert.equal(r.status, 200);
     r = await call('GET', '/api/file?path=p');
-    assert.equal(r.body.version, 4);
+    assert.equal(r.body.version, 5);
     assert.deepEqual(r.body.plan, plan);
     // A save without plan removes it (the web always sends what it loaded).
     await call('PUT', '/api/file?path=p', { revision: r.body.revision, title: 'P', blocks: [block] });
@@ -67,7 +67,7 @@ test('a v3 file reads as is and becomes v4 with a plan; a broken stored plan is 
   assert.equal(f.version, 3);
   assert.equal('plan' in f, false);
   const saved = normalizeContent({ ...f, plan });
-  assert.equal(saved.version, 4);
+  assert.equal(saved.version, 5);
   assert.deepEqual(saved.plan, plan);
   const broken = parseStored(JSON.stringify({ ...JSON.parse(v3), version: 4, plan: { v: 1, block: 'b_pipe', steps: 'nope' } }));
   assert.equal('plan' in broken, false);
@@ -228,7 +228,7 @@ test('PATCH /api/file/plan applies step ops, bumps the revision, keeps history a
 test('PATCH refuses files and plans from a newer version', async () => {
   await withApp(async ({ ws, call }) => {
     const head = { title: 't', document: { type: 'doc', content: [] }, canvas: {}, blocks: [block], revision: 1 };
-    await writeFile(join(ws, 'newer.dpx.json'), JSON.stringify({ ...head, version: 5 }));
+    await writeFile(join(ws, 'newer.dpx.json'), JSON.stringify({ ...head, version: 6 }));
     await writeFile(join(ws, 'newplan.dpx.json'), JSON.stringify({ ...head, version: 4, plan: { v: 2, x: 1 } }));
     const op = { ops: [{ op: 'plan', block: 'b_pipe' }] };
     assert.equal((await call('PATCH', PLAN_URL('newer'), op)).status, 422);

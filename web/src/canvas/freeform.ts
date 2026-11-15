@@ -2,6 +2,7 @@
 // Input is the composed scene (layout applied); output is element skeletons for convertToExcalidrawElements
 // plus the arrow bindings to set afterwards. Icons are left out: nodes keep their labels only.
 import type { Point, Scene, SceneBox, SceneEdge, SceneIcon, SceneText, ShapeKind } from '../../../shared/render/scene.ts';
+import type { NodeCode } from '../../../shared/render/block-code.ts';
 import { THEMES, resolvePaint, strokeOf } from '../../../shared/render/theme.ts';
 import { CLEAN_FONT_FAMILY } from './cleanStyle.ts';
 
@@ -35,9 +36,9 @@ function nodeAt(p: Point, nodes: SceneBox[]) {
 /**
  * Skeletons for a graph scene placed like the block image: nodes become shapes with their label bound inside,
  * edges arrows (bent like the drawing) with their label, groups dashed rectangles with a title. Light colours,
- * like the block pictures.
+ * like the block pictures. `codeRefs` (node name -> code references) is copied onto the node shapes as `customData.codeRefs`.
  */
-export function sceneToFreeform(scene: Scene, at: Placement, newId: () => string): Freeform {
+export function sceneToFreeform(scene: Scene, at: Placement, newId: () => string, codeRefs: Record<string, NodeCode> = {}): Freeform {
   // The block picture may be stretched unevenly (Shift-drag), so each axis has its own scale; text and strokes use the smaller.
   const kx = scene.width > 0 ? at.width / scene.width : 1;
   const ky = scene.height > 0 && at.height ? at.height / scene.height : kx;
@@ -102,6 +103,7 @@ export function sceneToFreeform(scene: Scene, at: Placement, newId: () => string
       roughness: 0,
       roundness: SHAPE[b.shape] ? null : { type: 3 },
       ...(group ? { groupIds: [groupOf.get(b)!] } : {}),
+      ...(b.role === 'node' && b.id !== undefined && Object.hasOwn(codeRefs, b.id) ? { customData: { codeRefs: structuredClone(codeRefs[b.id]) } } : {}),
       ...(label ? { label: { text: label, fontSize: sizeOf(nodeLabel.get(b)), fontFamily: CLEAN_FONT_FAMILY, strokeColor: p.text } } : {}),
     });
   }
