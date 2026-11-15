@@ -23,6 +23,10 @@ Drawing (the Dispatch plugin) serves http://127.0.0.1:4330 and spawns `claude` /
 
 Stop the server with `<skill-dir>/scripts/stop.sh "<project-root>"`; restart it (to load new server code) with `<skill-dir>/scripts/restart.sh "<project-root>"`. A restart cuts running turns, but those sessions are resumed with a note; the transcript itself lives in memory only and is gone after a restart.
 
+## Code-analysis diagrams
+
+When you draw a diagram of code in Drawing, label nodes by feature in short Korean (never file names) and attach code locations as refs. Format, full example and the save call: `docs/agent-diagrams.md` in the Drawing repo.
+
 ## Update
 
 When the user asks to update ("디스패치 업데이트", "최신으로"), use the `dispatch-update` skill: it downloads the latest release bundle from GitHub and restarts running servers.

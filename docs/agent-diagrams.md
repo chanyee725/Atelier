@@ -1,0 +1,97 @@
+# Drawing code-analysis diagrams (guide for agents)
+
+Design: `docs/design/code-linked-nodes.md` (§1 data model, §4 agent side). API details: `docs/workspace-api.md`.
+
+## Rule
+
+- **Label nodes by feature, in short Korean** (e.g. `로봇 데이터 녹화`, `LeRobot 형식 변환`). Never put file names, paths or class names in a label (`record.py` is wrong).
+- **Attach where the feature lives as code references**, not in the label: the DSL attribute `code: "path:start-end#symbol"`, and in block JSON `codeRefs.nodes` with `summary` and `note`.
+
+## Reference format
+
+`path[:start[-end]][#symbol]`, several separated by `;`.
+
+- `path`: repo-relative, `/`-separated, no `..`, no leading `/`.
+- `start`, `end`: 1-based, inclusive. `end` is optional (= `start`); `end - start <= 2000`.
+- `symbol`: optional, max 200 characters.
+- Per node: at most 20 refs; `summary` max 500 characters; ref `note` max 300 characters.
+
+Notes and summary exist only in block JSON. The DSL attribute carries path, lines and symbol only.
+
+## Diagram-as-code
+
+```
+title 로봇 데이터 파이프라인
+direction right
+
+로봇 데이터 녹화 [icon: video, code: "src/record/recorder.py:42-118#Recorder.record_episode"]
+LeRobot 형식 변환 [code: "convert/lerobot.py:10-80#to_lerobot; convert/schema.py:5"]
+학습 데이터 저장 [icon: database]
+
+로봇 데이터 녹화 > LeRobot 형식 변환 > 학습 데이터 저장
+```
+
+DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. Eraser ignores the `code` attribute.
+
+## Full block (in a `.dpx.json` file)
+
+The block key is `codeRefs` (the block's own `code` is the DSL string). It is keyed by node name, the same key the DSL and `layout.items` use:
+
+```json
+{
+  "id": "b1",
+  "type": "flowchart",
+  "code": "title 로봇 데이터 파이프라인\n로봇 데이터 녹화 [icon: video, code: \"src/record/recorder.py:42-118#Recorder.record_episode\"]\nLeRobot 형식 변환 [code: \"convert/lerobot.py:10-80#to_lerobot\"]\n로봇 데이터 녹화 > LeRobot 형식 변환",
+  "x": 0, "y": 0, "w": 0, "h": 0,
+  "codeRefs": {
+    "v": 1,
+    "nodes": {
+      "로봇 데이터 녹화": {
+        "summary": "카메라와 관절 값을 에피소드 단위로 저장해요",
+        "refs": [
+          { "path": "src/record/recorder.py", "start": 42, "end": 118,
+            "symbol": "Recorder.record_episode",
+            "note": "카메라·관절 값을 에피소드 단위로 저장" }
+        ]
+      },
+      "LeRobot 형식 변환": {
+        "summary": "녹화 결과를 LeRobot 데이터셋 형식으로 바꿔요",
+        "refs": [
+          { "path": "convert/lerobot.py", "start": 10, "end": 80, "symbol": "to_lerobot" },
+          { "path": "convert/schema.py", "start": 5 }
+        ]
+      }
+    }
+  }
+}
+```
+
+
+Free-form canvas shapes carry the same shape in `customData.codeRefs` (`{summary, refs}`).
+
+## Saving: `PUT /api/file`
+
+Read the file first to get its `revision`, edit `blocks`, then save the whole file. Every non-GET request needs the `x-drawing: 1` header. A stale `revision` gets 409 with the current one: re-read and retry.
+
+```bash
+curl -s "http://127.0.0.1:4330/api/file?path=analysis/robot" > /tmp/robot.json   # note .revision
+
+curl -s -X PUT "http://127.0.0.1:4330/api/file?path=analysis/robot" \
+  -H 'content-type: application/json' -H 'x-drawing: 1' \
+  -d '{
+    "revision": 7,
+    "title": "로봇 데이터 파이프라인",
+    "document": { "type": "doc", "content": [] },
+    "canvas": { "elements": [] },
+    "blocks": [ /* the block above */ ]
+  }'
+```
+
+Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the reason; fix it and save again. Send back every field you read: a save rewrites the whole file.
+
+## Checklist
+
+1. Every label is a short Korean feature name, no file names.
+2. Every node that maps to code has at least one ref with `path` and `start`.
+3. `summary` says what the feature does in one sentence; `note` says what that range does.
+4. Paths exist in the repo and lines match the current file.
