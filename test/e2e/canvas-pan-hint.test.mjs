@@ -32,7 +32,7 @@ async function open(t, path, elements, blocks = []) {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const ws = mkdtempSync(join(tmpdir(), 'draw-hint-'));
   const port = await freePort();
-  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));

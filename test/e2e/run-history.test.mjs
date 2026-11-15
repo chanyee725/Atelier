@@ -37,7 +37,7 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   const ws = join(repo, 'ws');
   mkdirSync(ws);
   const port = await freePort();
-  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));

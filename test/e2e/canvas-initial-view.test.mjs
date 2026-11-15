@@ -40,7 +40,7 @@ test('an empty file an agent fills fits the new blocks; a view the user moved to
   mkdirSync(ws);
   const abs = join(ws, 'fill.dpx.json');
   const port = await freePort();
-  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));

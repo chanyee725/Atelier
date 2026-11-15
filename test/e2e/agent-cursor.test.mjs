@@ -81,7 +81,7 @@ async function run(t, cpuThrottle) {
   const port = await freePort();
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
   const server = spawn(process.execPath, ['server/index.js', ws], {
-    env: { PATH, HOME: home, DRAW_PORT: String(port), ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
+    env: { PATH, HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

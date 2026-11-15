@@ -58,7 +58,7 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
   const port = await freePort();
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
   const server = spawn(process.execPath, ['server/index.js', ws], {
-    env: { HOME: home, DRAW_PORT: String(port), ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
+    env: { HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', ...fake.env, PATH, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

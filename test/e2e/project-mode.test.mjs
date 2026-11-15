@@ -38,7 +38,7 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   const port = await freePort();
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
   const server = spawn(process.execPath, ['server/index.js', '--project-mode', ws], {
-    env: { HOME: home, DRAW_PORT: String(port), ...fake.env, PATH },
+    env: { HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', ...fake.env, PATH },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';

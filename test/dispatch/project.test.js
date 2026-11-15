@@ -307,7 +307,7 @@ async function lockOnceSet(file, timeoutMs = 5000) {
 async function startServer(ws, home) {
   const port = await freePort();
   const child = spawn(process.execPath, [SERVER, ws], {
-    env: { PATH: process.env.PATH, HOME: home, DRAW_PORT: String(port) },
+    env: { PATH: process.env.PATH, HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let out = '';
