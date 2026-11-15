@@ -25,13 +25,16 @@ import { RunOverlay } from './RunOverlay';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
 import { parse } from '../../../shared/dsl/index.ts';
-import { dslCodeRefs, mergeCodeRefs } from '../../../shared/render/block-code.ts';
+import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements } from './cleanStyle';
 import { openingView, rememberView } from './initialView';
 import { refitTexts, type FitEl } from './refit';
 import { RefitQueue } from './refitQueue';
 import './clean.css';
+import { CodePanel } from './CodePanel';
+import { CodeBadges } from './CodeBadges';
+import { codeInfoCache, shapeCode, shapeLabel, targetAfterNodes, targetAfterSelection, withoutOrphans, type CodeEl, type CodeTarget } from './codeLinks';
 import { hitHandle, imageReason, layoutFrame, layoutHandles, toLayout, type LayoutFrame } from './layoutEdit';
 
 export type CanvasData = { elements: unknown[]; appState: Record<string, unknown> };
@@ -176,6 +179,29 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const startN = useRef(0);
   // Opacity the edited block image had before it was hidden under the overlay.
   const hiddenOpacity = useRef(100);
+
+  // "기능 코드" panel (docs/design/code-linked-nodes.md §3): the node or shape whose code it shows.
+  const [codeTarget, setCodeTarget] = useState<CodeTarget | null>(null);
+  const codeTargetRef = useRef(codeTarget);
+  codeTargetRef.current = codeTarget;
+  const [infoOf] = useState(codeInfoCache);
+  const codeOf = useCallback(
+    (blockId: string) => {
+      const b = blocksRef.current.find((x) => x.id === blockId);
+      return b ? infoOf(b) : undefined;
+    },
+    [infoOf],
+  );
+  // Badges are placed again when any block's code or code refs change (not on a move).
+  const codeSeen = useRef<{ list: readonly unknown[]; n: number }>({ list: [], n: 0 });
+  {
+    const list = blocks.flatMap((b) => [b.id, b.code, b.codeRefs]);
+    const old = codeSeen.current.list;
+    if (list.length !== old.length || list.some((x, i) => x !== old[i])) codeSeen.current = { list, n: codeSeen.current.n + 1 };
+  }
+  const codeVersion = codeSeen.current.n;
+  // Selection (and edit mode) last seen by handleChange: the panel follows only changes of it.
+  const selSeen = useRef('');
 
   const imageOf = (els: readonly ExcalidrawElement[], blockId: string) => els.find((e) => !e.isDeleted && blockIdOf(e as unknown as SceneEl) === blockId) as ExcalidrawImageElement | undefined;
 
@@ -525,6 +551,12 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     setHidePanHint(appState.activeTool.type === 'selection' && sel.length === 0 && !appState.selectionElement && !appState.editingTextElement && !searching && sceneEls.some((e) => !e.isDeleted));
     setBlockSelected(sel.length > 0 && sel.every((e) => blockIdOf(e as unknown as SceneEl) !== null));
     setSelBlock(sel.length === 1 ? blockIdOf(sel[0] as unknown as SceneEl) : null);
+    const selSig = `${sel.map((e) => e.id).sort().join(',')}|${editRef.current?.blockId ?? ''}`;
+    if (selSig !== selSeen.current) {
+      selSeen.current = selSig;
+      const view = { ids: sel.map((e) => e.id), editing: editRef.current?.blockId ?? null };
+      setCodeTarget((prev) => targetAfterSelection(prev, view, sceneEls as unknown as readonly CodeEl[]));
+    }
     const ed = editRef.current;
     if (ed) {
       // While editing, the overlay follows zoom, pan and the block image; a deleted image (undo, another tab) ends it.
@@ -604,6 +636,32 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     if (patch.canvas || patch.blocks) onChangeRef.current(patch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Escape closes the code panel from anywhere but a text field. Added at mount, so it runs before the layout overlay's
+  // own Escape (which stops the event) and one press both closes the panel and leaves edit mode.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || !codeTargetRef.current) return;
+      if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')) return;
+      setCodeTarget(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+
+  /** A `</>` badge was clicked: show that code and select its block image or shape, so the click target is clear. */
+  const openCode = useCallback(
+    (t: CodeTarget) => {
+      const xapi = apiRef.current;
+      if (!xapi) return;
+      if (editRef.current && !(t.kind === 'node' && t.blockId === editRef.current.blockId)) exitEdit(false);
+      const el = t.kind === 'node' ? imageOf(xapi.getSceneElements(), t.blockId) : xapi.getSceneElements().find((e) => e.id === t.id && !e.isDeleted);
+      setCodeTarget(t);
+      if (el) xapi.updateScene({ appState: { selectedElementIds: { [el.id]: true } }, captureUpdate: CaptureUpdateAction.NEVER });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [exitEdit],
+  );
 
   // Double-click on a diagram block opens its code instead of Excalidraw's image crop.
   useEffect(() => {
@@ -856,6 +914,43 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const pruned = b && prunedLayout(b);
     if (pruned) onChangeRef.current({ blocks: blocksRef.current.map((x) => (x.id === prev ? pruned : x)) });
   }, [editing]);
+  // What the code panel shows; nothing when its node or shape is gone (a rename, an undo).
+  const editCodeNodes = useMemo(() => {
+    const info = edit ? codeOf(edit.blockId) : undefined;
+    return info ? new Set(Object.keys(info.nodes)) : undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edit, codeOf, codeVersion]);
+  let codeView: { label: string; code: NodeCode; orphans: number; clean?: () => void } | null = null;
+  if (codeTarget?.kind === 'node') {
+    const b = blocks.find((x) => x.id === codeTarget.blockId);
+    const info = b && infoOf(b);
+    if (b && info && Object.hasOwn(info.nodes, codeTarget.node)) {
+      codeView = {
+        label: info.labels[codeTarget.node] ?? codeTarget.node,
+        code: info.nodes[codeTarget.node]!,
+        orphans: info.orphans.length,
+        clean: () => {
+          if (!window.confirm(`연결이 끊긴 코드 ${info.orphans.length}개를 지울까요?`)) return;
+          onChangeRef.current({
+            blocks: blocksRef.current.map((x) => {
+              if (x.id !== b.id) return x;
+              const { codeRefs: _old, ...rest } = x;
+              const kept = withoutOrphans(x.codeRefs, info.orphans);
+              return kept ? { ...rest, codeRefs: kept } : rest;
+            }),
+          });
+        },
+      };
+    }
+  } else if (codeTarget?.kind === 'shape' && api) {
+    const els = api.getSceneElements() as unknown as readonly CodeEl[];
+    const el = els.find((e) => e.id === codeTarget.id && !e.isDeleted);
+    const code = shapeCode(el);
+    if (el && code) codeView = { label: shapeLabel(els, el), code, orphans: 0 };
+  }
+  useEffect(() => {
+    if (codeTarget && !codeView) setCodeTarget(null);
+  });
   const patchBlock = (p: Partial<Block>) => onChangeRef.current({ blocks: blocksRef.current.map((b) => (b.id === editing ? { ...b, ...p } : b)) });
 
   return (
@@ -879,6 +974,9 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         }}
       />
       {api && wrap.current && <RunOverlay api={api} wrap={wrap.current} pictureOf={pictureOf} hide={edit?.blockId ?? null} />}
+      {api && wrap.current && (
+        <CodeBadges api={api} wrap={wrap.current} codeOf={codeOf} pictureOf={pictureOf} hide={edit?.blockId ?? null} version={codeVersion} active={codeTarget} onOpen={openCode} />
+      )}
       {api && wrap.current && path && <AgentCursors api={api} wrap={wrap.current} file={path} />}
       {edit && editBlock && overlaySess && overlayFrame && wrap.current && (
         <LayoutEditOverlay
@@ -893,6 +991,12 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           onExit={() => exitEdit(true)}
           onOpenCode={() => setEditing(edit.blockId)}
           onWheel={forwardWheel}
+          codeNodes={editCodeNodes}
+          activeNode={codeTarget?.kind === 'node' && codeTarget.blockId === edit.blockId ? codeTarget.node : null}
+          onSelect={(ids) => {
+            const info = codeOf(edit.blockId);
+            if (info) setCodeTarget((prev) => targetAfterNodes(prev, edit.blockId, ids, info));
+          }}
         />
       )}
       <LayoutBar
@@ -921,6 +1025,18 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
             </button>
           ))}
         </div>
+      )}
+      {!block && codeView && (
+        <CodePanel
+          label={codeView.label}
+          code={codeView.code}
+          orphans={codeView.orphans}
+          onCleanOrphans={codeView.clean}
+          onClose={() => {
+            setCodeTarget(null);
+            focusCanvas(wrap.current);
+          }}
+        />
       )}
       {block && (
         <aside

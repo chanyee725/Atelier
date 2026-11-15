@@ -21,6 +21,7 @@ import {
   type LayoutHandle,
   type Line,
 } from './layoutEdit';
+import { CodeBadge } from './CodeBadges';
 
 /** A press that entered edit mode on a node: the overlay continues it as a drag. */
 export type EditStart = { id: string; clientX: number; clientY: number; shift: boolean; n: number };
@@ -40,6 +41,12 @@ type Props = {
   onOpenCode: () => void;
   /** Wheel over the overlay goes to the canvas, so zoom and pan keep working. */
   onWheel: (e: WheelEvent) => void;
+  /** Nodes that carry code: they get a `</>` badge (a click selects the node). */
+  codeNodes?: ReadonlySet<string>;
+  /** Node whose code the panel shows, for the badge's pressed state. */
+  activeNode?: string | null;
+  /** Called with the selected node ids whenever the selection changes. */
+  onSelect?: (ids: string[]) => void;
 };
 
 // Pixels a press must travel before it counts as a drag (a smaller move is a click).
@@ -54,7 +61,7 @@ type Gesture =
   | { kind: 'drag'; x0: number; y0: number; leaves: string[]; moved: boolean; clickId: string | null }
   | { kind: 'marquee'; x0: number; y0: number; keep: Set<string> };
 
-export function LayoutEditOverlay({ layout, session, frame, dark, wrap, start, stale = false, onCommit, onExit, onOpenCode, onWheel }: Props) {
+export function LayoutEditOverlay({ layout, session, frame, dark, wrap, start, stale = false, onCommit, onExit, onOpenCode, onWheel, codeNodes, activeNode = null, onSelect }: Props) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set(start ? [start.id] : []));
   // Drawing of an uncommitted drag; kept after the commit until the block's layout catches up, so nothing flickers.
   const [preview, setPreview] = useState<{ sig: string; scene: Scene; svg: string; guides: Line[] } | null>(null);
@@ -63,6 +70,10 @@ export function LayoutEditOverlay({ layout, session, frame, dark, wrap, start, s
   const handles = useMemo(() => layoutHandles(committed.scene.handles, committed.scene.origin), [committed]);
   const shown = preview ?? committed;
   const shownHandles = useMemo(() => (preview ? layoutHandles(preview.scene.handles, preview.scene.origin) : handles), [preview, handles]);
+
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
+  useEffect(() => onSelectRef.current?.([...selected]), [selected]);
 
   // Latest values for the window listeners of a gesture.
   const live = useRef({ layout, session, frame, handles, selected, stale, onCommit, dark });
@@ -363,6 +374,12 @@ export function LayoutEditOverlay({ layout, session, frame, dark, wrap, start, s
           return <rect data-marquee="" x={Math.min(a.x, b.x)} y={Math.min(a.y, b.y)} width={Math.abs(a.x - b.x)} height={Math.abs(a.y - b.y)} fill={`${ACCENT}14`} stroke={ACCENT} strokeWidth={1} />;
         })()}
       </svg>
+      {codeNodes &&
+        shownHandles.map((h) => {
+          if (h.kind !== 'node' || !codeNodes.has(h.id)) return null;
+          const r = rect(h);
+          return <CodeBadge key={h.id} x={r.x + r.w} y={r.y} on={activeNode === h.id} label={h.id} onOpen={() => setSelected(new Set([h.id]))} />;
+        })}
     </div>
   );
 }
