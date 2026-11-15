@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
 import { join, normalize, sep } from 'node:path';
 import { FONT_SIZE_STEPS, patchFontSizeSteps } from './src/canvas/sizeSteps.ts';
+import { patchFontBase64 } from './src/canvas/fontBase64.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const outDir = fileURLToPath(new URL('../public', import.meta.url));
@@ -40,27 +41,35 @@ function stripCdnFallback(code: string, id: string): string | null {
   return out;
 }
 
-/** Every rewrite of Excalidraw's bundle: the font fallback and the style panel's size steps (#292). */
+/**
+ * Every rewrite of Excalidraw's bundle: the font fallback, the style panel's size steps (#292) and the SVG export's
+ * font inlining (fontBase64.ts, #453).
+ */
 function patchExcalidraw(code: string, id: string, seen: PatchSeen): string | null {
   if (!EXCALIDRAW_DIST_RE.test(id)) return null;
   seen.excalidraw = true;
   const local = stripCdnFallback(code, id);
   const sized = patchFontSizeSteps(local ?? code);
   if (sized !== null) seen.sizeSteps = true;
-  return sized ?? local;
+  const inlined = patchFontBase64(sized ?? local ?? code);
+  if (inlined !== null) seen.fontBase64 = true;
+  return inlined ?? sized ?? local;
 }
 
-/** Whether one bundling pass met Excalidraw's code, and whether the size steps were rewritten in it. */
-type PatchSeen = { excalidraw: boolean; sizeSteps: boolean };
-const newSeen = (): PatchSeen => ({ excalidraw: false, sizeSteps: false });
+/** Whether one bundling pass met Excalidraw's code, and which rewrites found their target in it. */
+type PatchSeen = { excalidraw: boolean; sizeSteps: boolean; fontBase64: boolean };
+const newSeen = (): PatchSeen => ({ excalidraw: false, sizeSteps: false, fontBase64: false });
 
 /**
- * Fails the pass when Excalidraw was bundled but its size buttons were never found (a renamed test id or a
- * moved dist path), so the stock sizes cannot silently come back.
+ * Fails the pass when Excalidraw was bundled but its size buttons or its font data URL were never found (a renamed
+ * test id or a moved dist path), so the stock sizes or the export's stack overflow cannot silently come back.
  */
 function assertPatched(seen: PatchSeen): void {
   if (seen.excalidraw && !seen.sizeSteps) {
     throw new Error('excalidraw-assets: the size buttons (fontSize-small) were not found in Excalidraw; update patchFontSizeSteps');
+  }
+  if (seen.excalidraw && !seen.fontBase64) {
+    throw new Error('excalidraw-assets: the font data URL (toBase64) was not found in Excalidraw; update patchFontBase64');
   }
 }
 
@@ -69,8 +78,10 @@ function assertPatched(seen: PatchSeen): void {
  * key of its dependency cache (node_modules/.vite), so a dev server re-bundles Excalidraw instead of serving a
  * copy rewritten by older code (#307).
  */
+// The rewritten font spread, so a change inside patchFontBase64's helpers changes the id too.
+const FONT_BASE64_SAMPLE = patchFontBase64('data:font/woff2;base64,String.fromCharCode(...new Uint8Array(x))');
 const PATCH_ID = createHash('sha256')
-  .update([stripCdnFallback, patchExcalidraw, patchFontSizeSteps, FALLBACK_RE, JSON.stringify(FONT_SIZE_STEPS)].map(String).join('\n'))
+  .update([stripCdnFallback, patchExcalidraw, patchFontSizeSteps, patchFontBase64, FONT_BASE64_SAMPLE, FALLBACK_RE, JSON.stringify(FONT_SIZE_STEPS)].map(String).join('\n'))
   .digest('hex')
   .slice(0, 8);
 
