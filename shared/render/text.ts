@@ -7,17 +7,18 @@ import type { TextSize, Typeface } from './scene.ts';
 /** Family name of the bundled clean face (font-clean.ts); `sceneToSvg` embeds it in every picture that uses it. */
 export const CLEAN_FONT_NAME = 'Drawing Sans';
 
-// The embedded face has Latin only. Hangul comes from the next installed family: named Korean fonts first, because
-// `system-ui` alone can pick another CJK locale's font. No Pretendard here: the page loads it as a webfont, so an
-// inline SVG (the layout edit overlay) would draw Hangul in it while the canvas image, which cannot see page fonts,
-// draws the system font.
-const HANGUL_FALLBACK = "'Noto Sans KR', 'Noto Sans CJK KR', 'Apple SD Gothic Neo', 'Malgun Gothic'";
+// The embedded face has Latin only. Hangul: a picture drawn as an <img> (canvas block, previews, export) gets
+// Pretendard faces under the same family name, cut to the glyphs it uses (web/src/fonts/hangulFace.ts). An inline
+// SVG on the page (the layout edit overlay) reaches the page's bundled Pretendard webfont by name, so both draw the
+// same font with no extra bytes. Without either (Node, a failed font load), the named Korean system fonts, because
+// `system-ui` alone can pick another CJK locale's font.
+const HANGUL_FALLBACK = "'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Noto Sans CJK KR', 'Apple SD Gothic Neo', 'Malgun Gothic'";
 
 export const FONT_FAMILY: Record<Typeface, string> = {
   clean: `'${CLEAN_FONT_NAME}', ${HANGUL_FALLBACK}, system-ui, -apple-system, 'Segoe UI', sans-serif`,
   // Hangul after `monospace`: a Korean family listed earlier would take the Latin too when no mono face is installed.
-  mono: `'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace, ${HANGUL_FALLBACK}`,
-  rough: `'Shantell Sans', ${HANGUL_FALLBACK}, system-ui, sans-serif`,
+  mono: `'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace, '${CLEAN_FONT_NAME}', ${HANGUL_FALLBACK}`,
+  rough: `'Shantell Sans', '${CLEAN_FONT_NAME}', ${HANGUL_FALLBACK}, system-ui, sans-serif`,
 };
 
 export const FONT_SIZE: Record<TextSize, number> = { small: 13, medium: 16, large: 20 };

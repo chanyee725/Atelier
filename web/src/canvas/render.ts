@@ -8,6 +8,8 @@ import { drawSig, fileIdFor, hash, type BlockLike, type OriginAnchor } from './s
 import { svgDataURL } from './resolution.ts';
 import { sceneToSvg } from '../../../shared/render/index.ts';
 import { DARK_CANVAS_BACKGROUND, preDarkFilterColor } from '../../../shared/render/darkFilter.ts';
+import { FONT_FAMILY } from '../../../shared/render/text.ts';
+import { glyphsToEmbed } from '../fonts/embedText.ts';
 
 /**
  * How a picture is painted: `light`, `dark`, or `dark-canvas` = the dark palette pre-corrected for Excalidraw's dark
@@ -44,7 +46,7 @@ function placeholder(message: string, theme: PicTheme) {
     svg:
       `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" text-rendering="geometricPrecision">` +
       `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="8" fill="none" stroke="${border}" stroke-dasharray="6 4"/>` +
-      `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif" font-size="14" fill="${fg}">${esc(message)}</text></svg>`,
+      `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" dominant-baseline="middle" font-family="${esc(FONT_FAMILY.clean)}" font-size="14" fill="${fg}">${esc(message)}</text></svg>`,
     width: w,
     height: h,
   };
@@ -102,12 +104,26 @@ export function renderBlock(b: BlockLike, theme: PicTheme): Promise<BlockPicture
     .then(() => draw(b, theme, key))
     // The renderer threw: say so on the canvas (failed) instead of showing an unexplained placeholder.
     .catch((): Drawn => ({ ...placeholder('그리지 못했어요. 코드를 확인해 주세요', theme), failed: true }))
-    .then((r) => picture(b.id, r));
+    .then(async (r) => picture(b.id, { ...r, svg: await withFaces(r.svg) }));
   queue.set(key, run);
   latestCall.set(key, { sig, result: run });
   // Never more entries than pictures, so a picture kept for a pending call is not the only thing holding it.
   if (latestCall.size > MAX_PICTURES) latestCall.delete(latestCall.keys().next().value!);
   return run;
+}
+
+/**
+ * The picture with Pretendard faces for its Hangul embedded (fonts/hangulFace.ts): as an <img> it cannot see the
+ * page's Pretendard. Loaded on use, and only in the browser (the font files are build assets).
+ */
+async function withFaces(svg: string): Promise<string> {
+  if (typeof document === 'undefined' || !glyphsToEmbed(svg).size) return svg;
+  try {
+    const { withHangulFaces } = await import('../fonts/hangulFace.ts');
+    return await withHangulFaces(svg);
+  } catch {
+    return svg;
+  }
 }
 
 // The latest call per block + theme, so a call with unchanged code does no work.
