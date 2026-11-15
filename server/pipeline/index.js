@@ -17,6 +17,7 @@ import { FILE_EXT } from '../workspace/model.js';
 import { redact } from '../dispatch/redact.js';
 import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
+import { topFolder } from '../dispatch/session-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
 import { resolvedStep } from '../../shared/dispatch/plan.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
@@ -302,6 +303,8 @@ export async function setup(ctx) {
       const own = leadEntries(lead.id, 'plan')[0];
       path = own ? own[0] : null;
     }
+    // A new plan the lead names no path for goes into its project folder (E505c), if it has one.
+    const leadFolder = lead.folder ?? null;
     const existing = path ? all[path] : null;
     if (existing?.state === 'paused') throw new StoreError(409, '멈춘 계획이에요. 사용자가 계획 다시 열기를 누르면 고칠 수 있어요');
     if (existing?.state === 'running') throw new StoreError(409, '실행 중인 계획은 바꿀 수 없어요. 바뀐 점은 note_step으로 남겨 주세요');
@@ -320,11 +323,14 @@ export async function setup(ctx) {
       revision = r.revision;
     } else {
       built = buildPlanFile(input, null);
-      path ??= await freePath(built.title);
+      path ??= await freePath(built.title, leadFolder ? `${leadFolder}/${PIPELINE_DIR}` : PIPELINE_DIR);
       const r = await ws.createFile(path, { title: built.title, document: built.document, blocks: [built.block], plan: built.plan });
       path = r.path;
       revision = r.revision;
     }
+    // The lead works for the project its plan lives in.
+    const planFolder = topFolder(path);
+    if (planFolder && planFolder !== lead.folder) d.hub.touch(lead, { folder: planFolder });
     all[path] = { lead: lead.id, state: 'plan', draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }) };
     drafts.set(path, built.plan);
     save();
@@ -362,6 +368,11 @@ export async function setup(ctx) {
     const prevCarry = entry.carry;
     delete entry.carry;
     Object.assign(entry, { state: 'running', approvedRevision: file.revision, approvedAt: Date.now(), runId: record.id, steps: Object.keys(record.steps), links: {} });
+    // The lead and its team now work for the project the approved plan lives in (E505c).
+    const planFolder = topFolder(path);
+    if (planFolder) {
+      for (const s of d.hub.sessions) if ((s.id === entry.lead || s.parent === entry.lead) && s.folder !== planFolder) d.hub.touch(s, { folder: planFolder });
+    }
     save();
     const lines = [
       `[계획 승인 · rev ${file.revision}] ${path}`,

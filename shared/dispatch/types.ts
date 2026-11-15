@@ -35,6 +35,8 @@ export interface Session {
   branch: string | null;
   worktree: boolean;
   parent: string | null;
+  /** Top-level workspace folder (project) the session works for; null = 미분류. Older servers omit it. */
+  folder?: string | null;
   status: Status;
   startedAt: number;
   updatedAt: number;

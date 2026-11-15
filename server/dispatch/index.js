@@ -68,6 +68,8 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     store.data.settings.enabled = { ...enabled(), [id]: on };
     store.save();
   };
+  // A session's folder must be a top-level workspace folder; the workspace module knows them (none in tests of the hub alone).
+  if (dep.topFolders) hub.topFolders = dep.topFolders;
   hub.isConnected = provider => !!providers[provider]?.connected;
   hub.burn = new Burn(store); // $/h per session and the burnWarn flag, on every session object
 
@@ -163,7 +165,8 @@ export async function setup(ctx, deps = {}) {
   if (!claim.ok) return off(claim.reason, claim.port);
   let d;
   try {
-    d = await createDispatch({ root: found.root, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
+    const topFolders = async () => ((await ctx.modules.workspace?.store?.tree()) ?? []).filter(n => n.type === "folder").map(n => n.name);
+    d = await createDispatch({ root: found.root, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
   } catch (e) {
     await claim.lock.release();
     throw e;
