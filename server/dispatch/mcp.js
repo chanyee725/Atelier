@@ -139,7 +139,7 @@ const LEAD_TOOLS = [
   },
   {
     name: "write_plan",
-    description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 같은 계획을 고칠 때는 path 없이 다시 부른다. 쓴 뒤에는 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 사용자가 시작하기를 누르기 전에는 create_sessions가 거절된다. 1-2개 파일의 작은 수정은 단계 하나 + autostart: true로 바로 시작할 수 있다. 코드 분석 다이어그램의 노드 라벨은 기능을 짧은 한국어로 쓰고 파일 이름은 쓰지 않는다. 코드 위치는 code: \"path:start-end#symbol\" 로 붙인다(docs/agent-diagrams.md).",
+    description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 같은 계획을 고칠 때는 path 없이 다시 부른다. 쓴 뒤에는 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 사용자가 시작하기를 누르기 전에는 create_sessions가 거절된다. 1-2개 파일의 작은 수정은 단계 하나 + autostart: true로 바로 시작할 수 있다. 코드 분석 다이어그램의 노드 라벨은 기능을 짧은 한국어로 쓰고 파일 이름은 쓰지 않는다. 코드 위치는 code: \"path:start-end#symbol\" 로 붙이고, 블록 JSON에서는 codeRefs: {v:1, nodes:{\"<라벨>\":{summary, refs:[{path,start,end?,symbol?}]}}} 로 붙인다(Drawing 저장소 docs/agent-diagrams.md).",
     inputSchema: {
       type: "object",
       required: ["goal", "steps"],

@@ -51,6 +51,10 @@ A block may carry `layout`, the node positions a user moved on top of the automa
 - A `PUT` with an invalid `layout` gets 400. A stored file whose `layout` is invalid still reads; only that layout is dropped.
 - Unknown fields inside a `v` 1 layout are dropped. A layout with a `v` newer than the server knows is kept verbatim (only checked to be an object with an integer `v`), so a newer client's layout is never wiped.
 
+## Block `codeRefs`
+
+Code references per diagram node (feature label to code locations). Format, limits and the agent guide: `docs/agent-diagrams.md`; design: `docs/design/code-linked-nodes.md`. At most 2000 nodes per block; adding it makes the file format `version` 5 (older files are read as they are and stored as v5 on the next save). Invalid `codeRefs` on `PUT` gets 400.
+
 ## Pipeline `plan`
 
 A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one of its diagram blocks (design: `docs/design/dispatch-integration/2-file-format-and-live-overlay.md` §3). Files are format `version` 4; v3 files read as they are and are stored as v4 on the next save. An older server treats v4 files as read-only (422). Rules live in `shared/dispatch/plan.ts` (`planProblem`, `cleanPlan`), shared by the server and the web.

@@ -31,7 +31,7 @@ LeRobot 형식 변환 [code: "convert/lerobot.py:10-80#to_lerobot; convert/schem
 로봇 데이터 녹화 > LeRobot 형식 변환 > 학습 데이터 저장
 ```
 
-DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. Eraser ignores the `code` attribute.
+DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. How Eraser treats the `code` attribute is not verified, so Drawing strips `code:` attributes when it exports the DSL (copy for Eraser).
 
 ## Full block (in a `.dpx.json` file)
 
@@ -71,28 +71,31 @@ Free-form canvas shapes carry the same shape in `customData.codeRefs` (`{summary
 
 ## Saving: `PUT /api/file`
 
-Read the file first to get its `revision`, edit `blocks`, then save the whole file. Every non-GET request needs the `x-drawing: 1` header. A stale `revision` gets 409 with the current one: re-read and retry.
+Read the whole file, change only the block, and send the whole file back with its `revision`. Never type `document`, `canvas` or `plan` by hand: a save rewrites the whole file, so anything missing is wiped. Every non-GET request needs the `x-drawing: 1` header. A stale `revision` gets 409 with the current one: re-read and retry. `PORT` is the port in the dispatch skill.
 
 ```bash
-curl -s "http://127.0.0.1:4330/api/file?path=analysis/robot" > /tmp/robot.json   # note .revision
+URL="http://127.0.0.1:$PORT/api/file?path=analysis/robot"
+curl -s "$URL" > /tmp/robot.json
 
-curl -s -X PUT "http://127.0.0.1:4330/api/file?path=analysis/robot" \
-  -H 'content-type: application/json' -H 'x-drawing: 1' \
-  -d '{
-    "revision": 7,
-    "title": "로봇 데이터 파이프라인",
-    "document": { "type": "doc", "content": [] },
-    "canvas": { "elements": [] },
-    "blocks": [ /* the block above */ ]
-  }'
+# set codeRefs on one block (id "b1"); everything else stays as read
+jq '.blocks |= map(if .id == "b1" then .codeRefs = {
+      v: 1,
+      nodes: { "로봇 데이터 녹화": { summary: "카메라와 관절 값을 에피소드 단위로 저장해요",
+        refs: [ { path: "src/record/recorder.py", start: 42, end: 118, symbol: "Recorder.record_episode" } ] } }
+    } else . end)' /tmp/robot.json > /tmp/robot.next.json
+
+curl -s -X PUT "$URL" -H 'content-type: application/json' -H 'x-drawing: 1' -d @/tmp/robot.next.json
 ```
 
-Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the reason; fix it and save again. Send back every field you read: a save rewrites the whole file.
+The GET body already holds `revision`, `title`, `document`, `canvas`, `blocks` and `plan` (if any), so the PUT body is the same JSON with the edited block. The block shown above is what `b1` looks like after the edit.
+
+Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the reason; fix it and save again.
 
 ## Privacy and limits
 
 - `summary` and `note` are stored in the document. Write only a description of the code. Never include secrets, tokens, API keys, emails, real names or conversation text.
 - The DSL `code:` attribute works only in `flowchart` and `cloud-architecture` diagrams.
+- At most 2000 nodes per block. The file format is v5 once a block has `codeRefs`; an older server opens such files read-only.
 - Refs are keyed by node name. When you rename a node, rename its `codeRefs.nodes` key too, or the refs are orphaned.
 
 ## Checklist

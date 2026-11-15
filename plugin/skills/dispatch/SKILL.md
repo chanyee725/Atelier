@@ -25,7 +25,7 @@ Stop the server with `<skill-dir>/scripts/stop.sh "<project-root>"`; restart it 
 
 ## Code-analysis diagrams
 
-When you draw a diagram of code in Drawing, label nodes by feature in short Korean (never file names) and attach code locations as refs. Format, full example and the save call: `docs/agent-diagrams.md` in the Drawing repo.
+When you draw a diagram of code in Drawing, label nodes by feature in short Korean (never file names) and attach code locations as refs. Format, full example and the save call: `docs/agent-diagrams.md` in the Drawing repo (not in your project; the short rule is also in your session prompt).
 
 ## Update
 
