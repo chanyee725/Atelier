@@ -425,3 +425,60 @@ test('runs: a carried step without sessions stays done: it cannot be skipped, an
     assert.equal(r.steps.impl.state, 'done');
   });
 });
+
+test('runs: endRun closes a done run\'s worked steps as done (E502); read-only steps are not abandoned', async () => {
+  await withRecorder({}, async ({ store, recorder, clock }) => {
+    await store.createFile('a');
+    const { id } = await recorder.startRun({ file: 'a', plan: PLAN });
+    // impl: a teammate worked and went idle (resting), the lead closed the task without a commit.
+    recorder.updateSession(id, 'impl', { sid: 's_1', name: 'Juno', provider: 'claude', state: 'resting' });
+    clock.advance(1000);
+    const rec = await recorder.endRun(id, 'done', { results: { impl: { abandoned: true }, review: { abandoned: true } } });
+    assert.equal(rec.steps.impl.state, 'done');
+    assert.ok(rec.steps.impl.endedAt > 0);
+    assert.equal(rec.steps.impl.result, undefined);
+    // review had no session at all: still abandoned (skipped).
+    assert.equal(rec.steps.review.state, 'skipped');
+    assert.deepEqual(rec.steps.review.result, { abandoned: true });
+  });
+});
+
+test('runs: endRun keeps failed / stuck / waiting steps as they were, with their abandoned result (E502)', async () => {
+  await withRecorder({}, async ({ store, recorder }) => {
+    await store.createFile('a');
+    const plan = { v: 1, block: 'b_pipe', steps: [{ id: 'f' }, { id: 's' }, { id: 'w' }] };
+    const { id } = await recorder.startRun({ file: 'a', plan });
+    for (const [step, st] of [['f', 'failed'], ['s', 'stuck'], ['w', 'waiting']]) recorder.updateSession(id, step, { sid: `s_${step}`, provider: 'claude', state: st });
+    const rec = await recorder.endRun(id, 'done', { results: { f: { abandoned: true }, s: { abandoned: true }, w: { abandoned: true } } });
+    for (const [step, st] of [['f', 'failed'], ['s', 'stuck'], ['w', 'waiting']]) {
+      assert.equal(rec.steps[step].state, st, step);
+      assert.deepEqual(rec.steps[step].result, { abandoned: true }, step);
+      assert.equal(rec.steps[step].endedAt, null, step);
+    }
+  });
+});
+
+test('runs: endRun ends a resting step closed at a commit as done (E502)', async () => {
+  await withRecorder({}, async ({ store, recorder }) => {
+    await store.createFile('a');
+    const { id } = await recorder.startRun({ file: 'a', plan: PLAN });
+    recorder.updateSession(id, 'impl', { sid: 's_1', provider: 'claude', state: 'resting' });
+    const rec = await recorder.endRun(id, 'done', { results: { impl: { commit: 'c06f887', base: 'develop' } } });
+    assert.equal(rec.steps.impl.state, 'done');
+    assert.ok(rec.steps.impl.endedAt > 0);
+    assert.equal(rec.steps.impl.result.commit, 'c06f887');
+  });
+});
+
+test('runs: a stopped run leaves its steps as they were (E502)', async () => {
+  await withRecorder({}, async ({ store, recorder }) => {
+    await store.createFile('a');
+    const { id } = await recorder.startRun({ file: 'a', plan: PLAN });
+    recorder.updateSession(id, 'impl', { sid: 's_1', provider: 'claude', state: 'resting' });
+    const rec = await recorder.endRun(id, 'stopped');
+    assert.equal(rec.state, 'stopped');
+    assert.equal(rec.steps.impl.state, 'resting');
+    assert.equal(rec.steps.impl.endedAt, null);
+    assert.equal(rec.steps.review.state, 'pending');
+  });
+});
