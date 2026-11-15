@@ -228,6 +228,7 @@ function ModelsPanel({ onLogins, isClosed }: { onLogins: (ids: ProviderId[]) => 
               <span className="text-sm font-medium">{r.name}</span>
               <span className="text-xs text-muted-foreground" data-testid="provider-status">
                 {r.status}
+                {r.reachedLabels.length > 0 && ` (${r.reachedLabels.join(', ')})`}
                 {r.windows.map((w) => (
                   <span key={w.label} className="tabular-nums">
                     {' · '}
