@@ -100,6 +100,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const [editing, setEditing] = useState<string | null>(null);
   // Only diagram blocks are selected: hide Excalidraw's "double-click to crop" hint, since that opens the code.
   const [blockSelected, setBlockSelected] = useState(false);
+  // Excalidraw's "move the canvas" hint is for an empty canvas; with elements on it the hint only covers them (#438).
+  const [hidePanHint, setHidePanHint] = useState(false);
   // Blocks whose code has errors (they show their last good picture), for the notice on the canvas.
   const [broken, setBroken] = useState<BrokenBlock[]>([]);
   // Blocks drawn with their saved layout left out because the code changed a lot (design §4.2).
@@ -512,6 +514,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       sharpenView.current = view;
       scheduleSharpen();
     }
+    // Only the idle case (selection tool, nothing selected, no box drag) shows that hint; other hints (arrow, erase) stay.
+    setHidePanHint(appState.activeTool.type === 'selection' && sel.length === 0 && !appState.selectionElement && sceneEls.some((e) => !e.isDeleted));
     setBlockSelected(sel.length > 0 && sel.every((e) => blockIdOf(e as unknown as SceneEl) !== null));
     setSelBlock(sel.length === 1 ? blockIdOf(sel[0] as unknown as SceneEl) : null);
     const ed = editRef.current;
@@ -848,7 +852,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const patchBlock = (p: Partial<Block>) => onChangeRef.current({ blocks: blocksRef.current.map((b) => (b.id === editing ? { ...b, ...p } : b)) });
 
   return (
-    <div ref={wrap} className={`relative h-full w-full${blockSelected ? ' block-selected' : ''}`} data-canvas="excalidraw">
+    <div ref={wrap} className={`relative h-full w-full${blockSelected ? ' block-selected' : ''}${hidePanHint ? ' hide-pan-hint' : ''}`} data-canvas="excalidraw">
       <Excalidraw
         excalidrawAPI={setApi}
         initialData={initialData}
