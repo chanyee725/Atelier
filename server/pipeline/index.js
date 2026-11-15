@@ -24,7 +24,8 @@ import { nodeLabels, summaryNodes, withSummary, withoutSummary } from '../../sha
 
 const MAX_BODY = 1024 * 1024;
 export const PIPELINE_DIR = 'pipelines';
-const PROVIDER_NAMES = { claude: 'Claude', openai: 'OpenAI Codex', gemini: 'Gemini' };
+const PROVIDER_NAMES = { claude: 'Claude' };
+const FABLE_ID = 'claude-fable-5-2';
 
 async function readJson(req) {
   const chunks = [];
@@ -210,6 +211,7 @@ export async function setup(ctx) {
     const steps = plan?.steps ?? [];
     let sessions = 0;
     let usesClaude = false;
+    const legacyModels = {}; // step id -> the older model it names; the step runs on Fable 5.2 anyway
     if (!d) blockers.push('Dispatch가 꺼져 있어요');
     if (!plan || steps.length === 0) blockers.push('단계가 없어요');
     if (!entry) blockers.push('관리자가 쓴 계획이 아니에요');
@@ -220,6 +222,7 @@ export async function setup(ctx) {
       for (const raw of steps) {
         const s = resolvedStep(plan, raw);
         sessions += s.n ?? 1;
+        if (s.model && s.model !== FABLE_ID) legacyModels[s.id] = String(s.model).slice(0, 60);
         if (!s.role) {
           blockers.push(`단계 ${s.id}에 역할이 없어요`);
           continue;
@@ -230,11 +233,9 @@ export async function setup(ctx) {
           blockers.push(`단계 ${s.id}의 역할 "${s.role.slice(0, 40)}"을 몰라요`);
           continue;
         }
-        const modelId = s.model || role.model;
-        const model = d.models.find((m) => m.id === modelId);
-        if (!model) blockers.push(`단계 ${s.id}의 모델 "${String(modelId).slice(0, 60)}"을 몰라요`);
-        else if (!d.hub.isConnected(model.provider)) missing.add(model.provider);
-        else if (model.provider === 'claude') usesClaude = true;
+        // Every step runs on Fable 5.2: a plan that names another model (older plan) is not a blocker.
+        usesClaude = true;
+        if (!d.hub.isConnected('claude')) missing.add('claude');
       }
       for (const p of missing) blockers.push(`${PROVIDER_NAMES[p] ?? p}가 연결되지 않았어요`);
       const order = planOrderIn(plan, file.blocks ?? []);
@@ -242,7 +243,7 @@ export async function setup(ctx) {
       const guard = d && usesClaude ? d.hub.guardCheck(sessions) : null;
       if (guard) blockers.push(guard);
     }
-    return { blockers, sessions };
+    return { blockers, sessions, legacyModels };
   }
 
   async function status(path) {
@@ -251,8 +252,8 @@ export async function setup(ctx) {
     if (!file) throw new StoreError(404, 'not found');
     const entry = entries()?.[path] ?? null;
     const state = entry?.state ?? (file.plan ? 'plan' : null);
-    const { blockers, sessions } =
-      state === 'running' || state === 'done' ? { blockers: [], sessions: 0 } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0 } : check(path, file, entry);
+    const { blockers, sessions, legacyModels } =
+      state === 'running' || state === 'done' ? { blockers: [], sessions: 0, legacyModels: {} } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0, legacyModels: {} } : check(path, file, entry);
     const l = dispatch()?.hub.currentLimits() ?? null;
     return {
       path,
@@ -266,6 +267,7 @@ export async function setup(ctx) {
       pause: state === 'paused' ? (entry.pause ?? null) : null,
       doneAt: state === 'done' ? (entry.doneAt ?? null) : null,
       blockers,
+      legacyModels,
       changes: state === 'plan' && entry ? planChanges(drafts.get(path), file.plan) : [],
       sessions,
       limits: l ? { five: l.five ?? null, seven: l.seven ?? null, fiveReset: l.fiveReset ?? null, sevenReset: l.sevenReset ?? null } : null,
@@ -287,7 +289,9 @@ export async function setup(ctx) {
     if (!d) throw new StoreError(409, 'Dispatch가 꺼져 있어요');
     const lead = typeof body.lead === 'string' ? d.hub.get(body.lead) : null;
     if (!lead || !lead.canSpawn) throw new StoreError(400, '관리자 세션만 계획을 쓸 수 있어요');
-    const input = { title: body.title, goal: body.goal, steps: body.steps, risks: body.risks, asks: body.asks };
+    // Every step is written with claude-fable-5-2, whatever model the lead named.
+    const steps = Array.isArray(body.steps) ? body.steps.map((st) => (st && typeof st === 'object' ? { ...st, model: FABLE_ID } : st)) : body.steps;
+    const input = { title: body.title, goal: body.goal, steps, risks: body.risks, asks: body.asks };
     const problem = writePlanProblem(input);
     if (problem) throw new StoreError(400, problem);
     const all = entries();
@@ -364,7 +368,7 @@ export async function setup(ctx) {
       auto ? '단계 하나짜리 계획이라 바로 시작했다.' : '사용자가 이 계획으로 시작하기를 눌렀다.',
       changes.length ? `바뀐 점(네 초안 이후 사용자가 고친 것):\n${changes.map((c) => `- ${c}`).join('\n')}` : '바뀐 점: 없음',
       ...(carried.length ? [`지난 실행에서 끝난 단계(다시 하지 마라): ${carried.join(', ')}`] : []),
-      `승인된 리비전을 따른다. 단계마다 create_sessions로 팀원을 만들고, set_task에 step(${record && Object.keys(record.steps).join(', ')})과 owner(세션 이름)를 넣는다. 단계에 남길 한 줄은 note_step으로 남긴다.`,
+      `승인된 리비전을 따른다. 단계마다 create_sessions로 팀원을 만들고, set_task에 step(${record && Object.keys(record.steps).join(', ')})과 owner(세션 이름)를 넣는다. 단계에 남길 한 줄은 note_step으로 남긴다. 모델은 항상 claude-fable-5-2다. create_sessions에 model을 생략하거나 이 값을 쓴다(계획에 다른 모델이 적혀 있어도 Fable 5.2로 실행된다).`,
     ];
     try {
       d.hub.send(entry.lead, lines.join('\n'));
@@ -651,6 +655,12 @@ export async function setup(ctx) {
    * 복제해서 새 계획: a new draft next to `path` with the same plan, diagram and notes, without the summary block.
    * The lead that wrote the original owns the copy when it is still there and has no other plan going.
    */
+  /** A copy of the plan with every model (steps and defaults) rewritten to Fable 5.2, and any provider to claude. */
+  const fableOnly = (plan) => {
+    const fix = (f) => ({ ...f, ...(f.model && { model: FABLE_ID }), ...(f.provider && { provider: 'claude' }) });
+    return { ...plan, ...(plan.defaults && { defaults: fix(plan.defaults) }), steps: (plan.steps ?? []).map(fix) };
+  };
+
   async function duplicate(body) {
     if (typeof body?.path !== 'string') throw new StoreError(400, 'path is required');
     const path = ws.runs.fileRel(body.path);
@@ -660,7 +670,7 @@ export async function setup(ctx) {
     const title = `${file.title || '계획'} 복사`;
     const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
     const to = await freePath(title, dir);
-    const r = await ws.createFile(to, { title, document: withoutSummary(file.document), canvas: file.canvas, blocks: file.blocks, plan: file.plan });
+    const r = await ws.createFile(to, { title, document: withoutSummary(file.document), canvas: file.canvas, blocks: file.blocks, plan: fableOnly(file.plan) });
     const all = entries();
     const lead = all?.[path]?.lead;
     const d = dispatch();

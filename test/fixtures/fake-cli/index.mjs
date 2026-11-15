@@ -1,6 +1,6 @@
 // Helpers for tests that need the fake agent CLIs.
 //
-// fakeCliBin() makes a temp bin folder holding only `claude`, `codex` and `agy` (wrappers around
+// fakeCliBin() makes a temp bin folder holding only `claude` (wrappers around
 // the scripts here, started with this node by absolute path) plus the marker that tells
 // server/dispatch/cli.js the folder is fake. With PATH set to that folder alone no real CLI can be
 // found. fakeSpawner(bin) is a spawnCli for the Hub: the real seam, with PATH and FAKE_CLI_* set.
@@ -12,8 +12,8 @@ import { AGENT_CLIS, FAKE_MARKER, spawnCli } from "../../../server/dispatch/cli.
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-// `scenarios` gives one CLI its own lines ({ codex: [...] }); `codexModels` is what `codex debug models` lists.
-export function fakeCliBin({ scenario, scenarios = {}, codexModels, exit } = {}) {
+// `scenarios` gives one CLI its own lines ({ claude: [...] }).
+export function fakeCliBin({ scenario, scenarios = {}, exit } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "drawing-fake-cli-"));
   for (const bin of AGENT_CLIS) {
     const file = path.join(dir, bin);
@@ -32,7 +32,6 @@ export function fakeCliBin({ scenario, scenarios = {}, codexModels, exit } = {})
     env[`FAKE_CLI_SCENARIO_${bin.toUpperCase()}`] = file;
     writeFileSync(file, lines.map(l => JSON.stringify(l)).join("\n") + "\n");
   }
-  if (codexModels) env.FAKE_CLI_CODEX_MODELS = JSON.stringify({ models: codexModels });
   if (exit != null) env.FAKE_CLI_EXIT = String(exit);
   return {
     dir, log, env,

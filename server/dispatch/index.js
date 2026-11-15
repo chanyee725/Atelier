@@ -14,7 +14,7 @@ import { currentBranch } from "./git.js";
 import { Hub } from "./hub.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
 import { SharedLimits } from "./limits.js";
-import { codexModels, staticModels } from "./models.js";
+import { staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
@@ -30,21 +30,22 @@ export async function gitTop(dir) {
 }
 
 /** Every provider "not checked yet": what the UI shows before a provider is connected. */
-const UNCHECKED = Object.fromEntries(["gemini", "claude", "openai"].map(id => [id, { installed: null, connected: false, busy: false, url: null, error: null }]));
+const UNCHECKED = Object.fromEntries(["claude"].map(id => [id, { installed: null, connected: false, busy: false, url: null, error: null }]));
 
 /**
  * Starts Dispatch for the project at `root`. `deps` replaces the parts that start CLIs or touch the
- * home folder, so tests run with fakes: { providerStatus, codexModels, limitsFile, login, logout, cancelLogin,
+ * home folder, so tests run with fakes: { providerStatus, limitsFile, login, logout, cancelLogin,
  * spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
  */
 export async function createDispatch({ root, broadcast, port, deps = {} }) {
-  const dep = { providerStatus, codexModels, login, logout, cancelLogin, ...deps };
+  const dep = { providerStatus, login, logout, cancelLogin, ...deps };
   const store = new Store(root);
   await store.load();
   const models = staticModels();
-  // Claude limits and the Gemini quota live in ~/.dispatch/limits.json, shared by every server.
+  // Claude limits live in ~/.dispatch/limits.json, shared by every server.
   const limits = new SharedLimits(...(dep.limitsFile ? [dep.limitsFile] : []));
-  await limits.load({ claude: store.data.limits, gemini: store.data.geminiQuota }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
+  await limits.load({ claude: store.data.limits }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
+  // geminiQuota (saved by an older version) is dropped: Gemini is gone.
   if ("limits" in store.data || "geminiQuota" in store.data) { delete store.data.limits; delete store.data.geminiQuota; store.save(); }
   const hub = new Hub({ root, store, models, roles: ROLES, port, limits, spawnCli: dep.spawnCli });
 
@@ -59,13 +60,8 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     return out;
   };
   let providers = decorate(UNCHECKED);
-  let codexLoaded = false;
   async function refreshProviders() {
     providers = decorate(await dep.providerStatus());
-    if (enabled().openai && !codexLoaded) {
-      codexLoaded = true;
-      for (const m of await dep.codexModels()) if (!models.some(x => x.id === m.id)) models.push(m);
-    }
     broadcast("providers", providers);
   }
   const setEnabled = (id, on) => {
@@ -97,7 +93,7 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
   async function snapshot() {
     return {
       project: { name: path.basename(root), path: tilde(root), branch: await currentBranch(root) },
-      roles: effectiveRoles(ROLES, store), perms: PERMS, models, providers,
+      roles: effectiveRoles(ROLES, store, models), perms: PERMS, models, providers,
       limits: hub.currentLimits(), settings: { ...store.data.settings, team: teamSettings(store) },
       sessions: hub.sessions.map(s => hub.publicSession(s)),
       prefs: await readPrefs(),

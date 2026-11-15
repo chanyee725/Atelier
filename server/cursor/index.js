@@ -6,7 +6,7 @@
 // changed file's path, within ATTRIBUTE_MS. Read-only tools do not count, nor do calls that failed or finished more
 // than SETTLE_MS before the change (a jq or curl GET that left no edit), except in a watcher catch-up (see
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
-// parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
+// parallel and subagent calls cannot swap); without one, in call order.
 import { AGENT_COLORS } from '../dispatch/colors.js';
 import { changedCentre, changedKeys, mentionsFile, shapesOf } from './model.js';
 
@@ -79,7 +79,6 @@ export async function setup(ctx) {
 
   const onMessage = ({ id, entry }) => {
     if (entry?.kind === 'tool_result') {
-      if (entry.final) return; // Codex: its result belongs to the entry just before, which was final already
       // Paired by call id; without one, in call order: the session's oldest call still running.
       const open = recent.get(id)?.filter((c) => c.done === null);
       const call = entry.callId ? open?.find((c) => c.entry.callId === entry.callId) : open?.[0];
@@ -91,10 +90,8 @@ export async function setup(ctx) {
     }
     if (entry?.kind !== 'tool' || typeof entry.text !== 'string') return;
     const list = recent.get(id) ?? [];
-    // Codex reports a call only once it has finished, with no result to follow.
     const now = Date.now();
-    const final = entry.final === true || entry.name === 'edit';
-    list.push({ entry, at: now, done: final ? now : null, failed: final && !!entry.error });
+    list.push({ entry, at: now, done: null, failed: false });
     if (list.length > RECENT_PER_SESSION) list.shift();
     recent.set(id, list);
     if (entry.text.includes('.dpx.json')) baseline(entry.text).catch(() => {});

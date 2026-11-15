@@ -1,16 +1,16 @@
-// The one place that starts child processes (CLAUDE.md): the user's agent CLIs (claude, codex,
-// agy), git and gh. Never through a shell. Everything else in the server imports spawnCli/runCli
+// The one place that starts child processes (CLAUDE.md): the user's Claude CLI (claude), git and
+// gh. Never through a shell. Everything else in the server imports spawnCli/runCli
 // from here; test/dispatch/safety.test.js fails when child_process shows up anywhere else.
 //
-// Under `node --test` an agent CLI or gh only starts from a fake bin folder (one holding FAKE_MARKER,
-// see test/fixtures/fake-cli/), so npm test can never start a real claude, codex, agy or gh (which
+// Under `node --test` the claude CLI or gh only starts from a fake bin folder (one holding FAKE_MARKER,
+// see test/fixtures/fake-cli/), so npm test can never start a real claude or gh (which
 // would reach the network) even when one is on PATH.
 import { execFile, spawn } from "node:child_process";
 import { accessSync, constants, existsSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
-export const AGENT_CLIS = ["claude", "codex", "agy"];
+export const AGENT_CLIS = ["claude"];
 export const ALLOWED = [...AGENT_CLIS, "git", "gh"];
 export const FAKE_MARKER = ".drawing-fake-cli";
 // CLIs that must come from a fake bin folder under node --test (git stays local, so it may run).

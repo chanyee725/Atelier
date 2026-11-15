@@ -24,7 +24,7 @@ export function median(xs) {
  * Dollars per hour from a series of { t, cost } samples (cumulative cost, oldest first).
  * The cost at the window start is the last sample at or before it; a series younger than the
  * window counts from its first sample. `perHour` is null while the series spans less than MIN_SPAN;
- * no series at all (a Codex or Gemini session, which reports no cost) returns null.
+ * no series at all (a saved session of another provider, which reports no cost) returns null.
  */
 export function rateOf(samples, now, window = WINDOW) {
   if (!samples?.length) return null;

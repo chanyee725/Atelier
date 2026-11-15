@@ -34,7 +34,7 @@ export function diskView(data) {
 export class Store {
   constructor(root) {
     this.file = path.join(root, ".dispatch", "state.json");
-    this.data = { seq: 0, sessions: {}, daily: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 }, enabled: { claude: false, openai: false } } };
+    this.data = { seq: 0, sessions: {}, daily: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 }, enabled: { claude: false } } };
     this.timer = null;
     this.closed = false;
     this.writing = Promise.resolve();
