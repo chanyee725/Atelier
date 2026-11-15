@@ -365,11 +365,20 @@ export async function setup(ctx) {
     delete entry.carry;
     Object.assign(entry, { state: 'running', approvedRevision: file.revision, approvedAt: Date.now(), runId: record.id, steps: Object.keys(record.steps), links: {} });
     // The lead and its live team (or members without a folder) now work for the project the approved plan
-    // lives in (E505c). Finished sessions keep the folder they worked for, with their cost.
+    // lives in (E505c). Descendants of the lead count, not only direct children. Only `done` sessions are finished
+    // and keep their folder; an `error` session can be messaged back to running, so it moves with the team.
+    // A moved session carries its whole past cost to the new folder (cost is not split).
     const planFolder = topFolder(path);
     if (planFolder) {
-      for (const s of d.hub.sessions) {
-        const mine = s.id === entry.lead || (s.parent === entry.lead && (!['done', 'error'].includes(s.status) || s.folder == null));
+      const sessions = d.hub.sessions;
+      const team = new Set([entry.lead]);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const s of sessions) if (!team.has(s.id) && team.has(s.parent)) { team.add(s.id); grew = true; }
+      }
+      for (const s of sessions) {
+        if (!team.has(s.id)) continue;
+        const mine = s.id === entry.lead || !isFinished(s) || s.folder == null;
         if (mine && s.folder !== planFolder) d.hub.touch(s, { folder: planFolder });
       }
     }
@@ -396,6 +405,9 @@ export async function setup(ctx) {
   }
 
   // ---- 멈추기 · 이어서 하기 · 계획 다시 열기 (E27) ----
+
+  /** A session that is finished for good: only `done` (an `error` one can be messaged back to running). */
+  const isFinished = (s) => s.status === 'done';
 
   /**
    * Board tasks this run closed: the lead's step tasks that went done after this run's 시작하기. A duplicated plan

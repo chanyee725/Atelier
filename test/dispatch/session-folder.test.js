@@ -149,6 +149,10 @@ test('시작하기 moves only the lead, live team members and folderless ones; f
     await settled(d, old.id); await settled(d, live.id); await settled(d, bare.id);
     d.hub.touch(d.hub.get(old.id), { status: 'done' });
     d.hub.touch(d.hub.get(bare.id), { status: 'done', folder: null });
+    const bad = (await mk(call, { items: [{ role: 'impl', task: 'd' }], parent: lead.id })).body.sessions[0];
+    const grand = (await mk(call, { items: [{ role: 'impl', task: 'e' }], parent: live.id })).body.sessions[0];
+    await settled(d, bad.id); await settled(d, grand.id);
+    d.hub.touch(d.hub.get(bad.id), { status: 'error' });
     const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'beta/p.dpx.json', title: 'beta 계획', goal: 'x', steps: STEP });
     assert.equal(w.status, 200, JSON.stringify(w.body));
     const go = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
@@ -157,6 +161,8 @@ test('시작하기 moves only the lead, live team members and folderless ones; f
     assert.equal(d.hub.get(live.id).folder, 'beta');
     assert.equal(d.hub.get(bare.id).folder, 'beta');
     assert.equal(d.hub.get(old.id).folder, 'alpha');
+    assert.equal(d.hub.get(bad.id).folder, 'beta', 'error is not finished');
+    assert.equal(d.hub.get(grand.id).folder, 'beta', 'grandchildren move too');
   } finally { await t.stop(); }
 });
 
