@@ -44,3 +44,11 @@ test('project home lists open sessions first', () => {
   const list = sessionsOf([{ ...s('1', 'a', 'done'), startedAt: 9 }, { ...s('2', 'a'), startedAt: 1 }, { ...s('3', 'b c'), startedAt: 5 }] as never, 'a');
   assert.deepEqual(list.map((x) => x.id), ['2', '1']);
 });
+
+test('knownFolders keeps a picked project known until the project list has arrived', async () => {
+  const { knownFolders } = await import('../../web/src/dispatch/lib/folder.ts');
+  assert.deepEqual([...knownFolders([], '/w/alpha', false)], ['/w/alpha']);
+  assert.deepEqual([...knownFolders([], '/w/alpha', true)], []);
+  assert.deepEqual([...knownFolders(['/w/b'], null, false)], ['/w/b']);
+  assert.deepEqual([...knownFolders(['/w/b'], undefined, false)], ['/w/b']);
+});

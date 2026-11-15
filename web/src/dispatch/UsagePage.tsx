@@ -116,14 +116,17 @@ type FolderUsage = { sessions: number; cost: number; tokens: { input: number; ou
 
 /** Cost and tokens of the picked project's sessions (GET /api/usage?folder=; 미분류 is summed from the sessions in view). */
 function ProjectPanel({ name, folder, sessions }: { name: string; folder: string | null; sessions: Session[] }) {
-  const [data, setData] = useState<FolderUsage | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Tagged with its folder, so a switch never shows the previous project's numbers while the next one loads.
+  const [got, setGot] = useState<{ folder: string; data: FolderUsage } | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
+  const data = got && got.folder === folder ? got.data : null;
   const key = usageKey(sessions);
   useEffect(() => {
-    if (folder === null) { setData(null); return; }
+    if (folder === null) { setGot(null); return; }
+    setFailed(null);
     const ctl = new AbortController();
     api<FolderUsage>('GET', `/api/usage?folder=${encodeURIComponent(folder)}`, undefined, ctl.signal)
-      .then(d => { setData(d); setFailed(false); }, () => { if (!ctl.signal.aborted) setFailed(true); });
+      .then(d => { setGot({ folder, data: d }); setFailed(null); }, () => { if (!ctl.signal.aborted) setFailed(folder); });
     return () => ctl.abort();
   }, [folder, key]);
   const local: FolderUsage = {
@@ -140,7 +143,7 @@ function ProjectPanel({ name, folder, sessions }: { name: string; folder: string
           <Stat label="비용" value={fmtUsd(u.cost)} hint="Claude API 요금으로 환산" />
           <Stat label="토큰" value={fmtK(totalTok(u.tokens))} />
         </div>
-      ) : <Empty>{failed ? '프로젝트 사용량을 불러오지 못했어요' : '불러오는 중이에요…'}</Empty>}
+      ) : <Empty>{failed === folder ? '프로젝트 사용량을 불러오지 못했어요' : '불러오는 중이에요…'}</Empty>}
     </Panel>
   );
 }
@@ -195,9 +198,9 @@ export function UsagePage() {
       <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
         <Stat label={scope === undefined ? '오늘' : '오늘 · 계정 전체'} value={fmtUsd(t.today)} hint="Claude API 요금으로 환산" />
         <Stat label={scope === undefined ? '최근 7일' : '최근 7일 · 계정 전체'} value={fmtUsd(t.week)} hint={`${weekHint(t.week, t.prev, fmtUsd)} · 14일 ${fmtUsd(t.all)}`} />
-        <Stat label="지금 시간당" value={burn.rated ? fmtRate(burn.perHour) : '—'}
+        <Stat label={scope === undefined ? '지금 시간당' : '지금 시간당 · 계정 전체'} value={burn.rated ? fmtRate(burn.perHour) : '—'}
           hint={burn.rated ? `최근 30분 · 세션 ${burn.rated}개 합계` : sessions.some(s => s.burn) ? '시작하고 5분 뒤부터 보여요' : '비용을 알리는 세션이 없어요'} />
-        <Stat label="캐시 적중률" value={pct(cache)} hint="최근 7일 입력 중 캐시에서 읽은 비율" />
+        <Stat label={scope === undefined ? '캐시 적중률' : '캐시 적중률 · 계정 전체'} value={pct(cache)} hint="최근 7일 입력 중 캐시에서 읽은 비율" />
       </div>
 
       <div className="grid grid-cols-3 gap-3 max-xl:grid-cols-2 max-lg:grid-cols-1">

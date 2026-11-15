@@ -37,6 +37,7 @@ test('provider rows: at a limit warns (also Fable weekly); usage hidden while di
   const at = providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '5시간', used: 1 }] } })[0];
   assert.equal(at.tone, 'warn');
   assert.equal(at.status, '한도에 닿았어요');
+  assert.deepEqual(at.reachedLabels, ['5시간']);
   assert.equal(providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '5시간', used: 0.1 }] }, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } })[0].status, '한도에 닿았어요');
   assert.deepEqual(providerRows({ claude: { connected: false } }, { claude: { windows: [{ label: '5시간', used: 0.5 }] } })[0].windows, []);
 });
@@ -224,11 +225,23 @@ test('limit reached: sidebar and settings share one rule, including the account 
   ];
   for (const c of cases) {
     const row = providerRows({ claude: { connected: true } }, c.limits)[0];
-    assert.equal(row.status === '한도에 닿았어요', c.want, c.name);
     assert.equal(row.tone === 'warn' && row.status === '한도에 닿았어요', c.want, c.name);
     assert.equal(limitReached(true, c.limits), c.want, c.name);
   }
   assert.equal(limitReached(false, cases[0].limits), false);
   // 5시간 is picked by label, not position.
   assert.equal(fiveHourWindow({ claude: { windows: [{ label: '주간', used: 1 }, { label: '5시간', used: 0.3 }] } })?.used, 0.3);
+});
+
+test('provider rows: name the window that hit the limit; 5시간 picked by label, same as the sidebar', () => {
+  const weekly = providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '5시간', used: 0.2 }, { label: '주간', used: 1 }] } })[0];
+  assert.deepEqual(weekly.reachedLabels, ['주간']);
+  assert.deepEqual(weekly.windows, [{ label: '5시간', pct: 20 }]);
+  const fable = providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '5시간', used: 0.1 }] }, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } })[0];
+  assert.deepEqual(fable.reachedLabels, ['Fable 주간']);
+  assert.deepEqual(providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '5시간', used: 0.1 }] } })[0].reachedLabels, []);
+  // 주간 listed first: the row still shows 5시간, not the first non-주간 by position.
+  const swapped = providerRows({ claude: { connected: true } }, { claude: { windows: [{ label: '주간', used: 0.5 }, { label: '5시간', used: 0.3 }] } })[0];
+  assert.deepEqual(swapped.windows, [{ label: '5시간', pct: 30 }]);
+  assert.deepEqual(providerRows({ claude: { connected: false } }, { claude: { windows: [{ label: '5시간', used: 1 }] } })[0].reachedLabels, []);
 });

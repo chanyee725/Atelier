@@ -11,6 +11,7 @@ import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { ColumnHead, DocList, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
+import { RunsBlock } from './ProjectRuns';
 import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
@@ -395,7 +396,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
           )}
         </TabsContent>
         <TabsContent value="pipelines">
-          <Empty>이 프로젝트에서 실행한 파이프라인이 아직 없어요. 계획 문서에서 시작하기를 누르면 여기에 보여요.</Empty>
+          <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>
         </TabsContent>
         <TabsContent value="sessions">
           <ProjectSessions folder={project.path} onOpen={p.onOpen} />
