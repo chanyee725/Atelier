@@ -6,7 +6,7 @@ import { api, type DispatchStatus, type ProviderLimits, type ProviderState } fro
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from './components/ui/sidebar';
 import { cn } from './lib/utils';
 import { MODELS_CHANGED, useOpenSettings } from './settings/context';
-import { modelStatus, percent, type ModelLine, type ModelTone } from './projectNav';
+import { fiveHourWindow, limitReached, modelStatus, percent, type ModelLine, type ModelTone } from './projectNav';
 
 const PROVIDERS = [['claude', 'Claude · Fable 5.2']] as const;
 
@@ -41,14 +41,13 @@ function useModels() {
   const lines: ModelLine[] = PROVIDERS.map(([id, name]) => {
     const pv = providers[id];
     const connected = !!pv?.connected;
-    const windows = limits.claude?.windows;
     return {
       id,
       name,
       installed: pv?.installed ?? null,
       connected,
-      pct: connected ? percent(windows?.[0]?.used) : null,
-      reached: connected && [...(windows ?? []), ...(limits.fable?.windows ?? [])].some((w) => (percent(w.used) ?? 0) >= 100),
+      pct: connected ? percent(fiveHourWindow(limits)?.used) : null,
+      reached: limitReached(connected, limits),
     };
   });
   return { status, lines };
