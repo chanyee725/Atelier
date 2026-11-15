@@ -194,7 +194,9 @@ body {
 }
 
 /* Excalidraw suggests double-click/Enter to crop an image; on diagram blocks those open the code instead. */
-.block-selected .excalidraw .HintViewer {
+/* Elements on the canvas: the idle "move the canvas" hint would only cover them (#438). */
+.block-selected .excalidraw .HintViewer,
+.hide-pan-hint .excalidraw .HintViewer {
   display: none;
 }
 
