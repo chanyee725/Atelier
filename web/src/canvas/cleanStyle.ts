@@ -1,9 +1,13 @@
 // The canvas draws clean, not hand-drawn: Excalidraw's defaults are swapped for the 'architect' look
-// (no roughness), a plain sans font that is already bundled, round corners and thin lines.
+// (no roughness), Pretendard (Latin + Hangul, bundled), round corners and thin lines.
 // Used for new shapes the user draws, shapes from the insert menu, converted diagram blocks (freeform.ts),
 // and to tidy shapes that arrive hand-drawn (old files, paste, library).
 
-/** Excalidraw's "Liberation Sans" (bundled in the package, served from /excalidraw/fonts/). */
+/**
+ * Excalidraw's font id 9, "Liberation Sans". Excalidraw 0.18 cannot register a new family, so the file it loads for
+ * this id is replaced by Pretendard Regular (web/vite.config.ts, FONT_OVERRIDES): every text with this id, new or
+ * saved by an older build, is drawn, measured and exported in Pretendard.
+ */
 export const CLEAN_FONT_FAMILY = 9;
 
 /** Excalidraw's handwriting fonts: Virgil (1) and Excalifont (5). */
@@ -12,7 +16,12 @@ const HAND_FONTS: ReadonlySet<unknown> = new Set([1, 5]);
 /** Size of new free-form text: the size of node text in diagram blocks. Texts already saved keep their own size. */
 export const CLEAN_FONT_SIZE = 13;
 
-/** Excalidraw's line height for Liberation Sans (its FONT_METADATA): a 13px line is 14.95 high. */
+/**
+ * Excalidraw's line height for font id 9 (its FONT_METADATA, which cannot be changed): a 13px line is 14.95 high.
+ * Measured (units of 2048): Liberation ascent 1854 / descent 434, Pretendard 1950 / 494 (1.19 em of content; 1.15 is
+ * a little tight but Excalidraw clips nothing). Excalidraw's baseline offset still uses Liberation's numbers: 0.6px
+ * at 13px.
+ */
 export const CLEAN_LINE_HEIGHT = 1.15;
 
 /** Starting tool settings for a fresh canvas (`initialData.appState`). */
@@ -45,6 +54,11 @@ export function cleanSkeleton(sk: Record<string, unknown>): Record<string, unkno
     default:
       return { ...base, ...sk };
   }
+}
+
+/** Ids of the texts that were saved in font id 9: measured in a different face then, so they are measured again. */
+export function pretendardRefitIds(els: readonly { id: string; type: string; fontFamily?: number; isDeleted?: boolean }[]): string[] {
+  return els.filter((e) => e.type === 'text' && e.fontFamily === CLEAN_FONT_FAMILY && !e.isDeleted).map((e) => e.id);
 }
 
 type StyleEl = { id: string; type: string; roughness?: number; fontFamily?: number };

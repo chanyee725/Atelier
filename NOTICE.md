@@ -100,3 +100,8 @@ Bundled by Vite from its npm redistribution; no font is fetched at runtime.
 
 - Pretendard (`pretendard`), Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard),
   with Reserved Font Name 'Pretendard'. SIL Open Font License, Version 1.1.
+- Canvas text uses a cut-down copy of Pretendard Regular 1.3.9, renamed "Drawing Sans" (modified versions may not use the
+  Reserved Font Name). File `web/fonts/drawing-sans-canvas.woff2`, built by `scripts/subset-canvas-font.py`
+  (fonttools 4.68.0) from the `pretendard` npm package: Basic Latin, Latin-1, common punctuation, Hangul Jamo and the 2,350
+  KS X 1001 syllables. Served in place of Excalidraw's Liberation Sans file (`web/vite.config.ts`, `FONT_OVERRIDES`).
+  The copyright and license records stay inside the file; license text: `shared/render/fonts/drawing-sans-OFL.txt`.

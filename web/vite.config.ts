@@ -12,6 +12,15 @@ const outDir = fileURLToPath(new URL('../public', import.meta.url));
 // Excalidraw's own fonts (OFL/MIT, shipped in the npm package). Served from /excalidraw/fonts/
 // so the canvas never falls back to its CDN.
 const excalidrawFonts = fileURLToPath(new URL('../node_modules/@excalidraw/excalidraw/dist/prod/fonts', import.meta.url));
+// The canvas font (font id 9, "Liberation Sans" in Excalidraw) is Pretendard. Excalidraw 0.18 cannot register a font
+// family (Fonts.register is private) and defines id 9 with one face and no unicode-range, so the one file it loads from
+// /excalidraw/fonts/Liberation/ is replaced by web/fonts/drawing-sans-canvas.woff2: Pretendard Regular 1.3.9 (npm
+// `pretendard`, SIL OFL-1.1, license text in shared/render/fonts/drawing-sans-OFL.txt) cut to Latin, Jamo and the 2,350
+// KS X 1001 syllables, renamed "Drawing Sans" (Pretendard is a reserved font name). Regenerate (repo root, fonttools==4.68.0):
+//   python scripts/subset-canvas-font.py node_modules/pretendard/dist/web/static/woff2 web/fonts
+// Text, SVG and PNG export all load fonts through that registration, so they follow. docs/design/code-linked-nodes.md §5.
+const CANVAS_FONT = fileURLToPath(new URL('./fonts/drawing-sans-canvas.woff2', import.meta.url));
+const FONT_OVERRIDES: Record<string, string> = { 'Liberation/LiberationSans-Regular.woff2': CANVAS_FONT };
 const ASSET_BASE = '/excalidraw/';
 const FONT_PREFIX = `${ASSET_BASE}fonts/`;
 // Matches both the minified prod chunk and the readable dev chunk (`"X", \`...\``).
@@ -73,8 +82,9 @@ function excalidrawAssets(): Plugin {
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0] ?? '';
         if (!url.startsWith(FONT_PREFIX)) return next();
-        const file = normalize(join(excalidrawFonts, decodeURIComponent(url.slice(FONT_PREFIX.length))));
-        if (!file.startsWith(excalidrawFonts + sep) || !existsSync(file) || !statSync(file).isFile()) return next();
+        const name = decodeURIComponent(url.slice(FONT_PREFIX.length));
+        const file = FONT_OVERRIDES[name] ?? normalize(join(excalidrawFonts, name));
+        if ((!FONT_OVERRIDES[name] && !file.startsWith(excalidrawFonts + sep)) || !existsSync(file) || !statSync(file).isFile()) return next();
         res.setHeader('content-type', 'font/woff2');
         createReadStream(file).pipe(res);
       });
@@ -92,6 +102,7 @@ function excalidrawAssets(): Plugin {
     },
     writeBundle() {
       cpSync(excalidrawFonts, join(outDir, FONT_PREFIX), { recursive: true });
+      for (const [name, file] of Object.entries(FONT_OVERRIDES)) cpSync(file, join(outDir, FONT_PREFIX, name));
     },
   };
 }

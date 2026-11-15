@@ -25,7 +25,7 @@ import { RunOverlay } from './RunOverlay';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
-import { CLEAN_APP_STATE, cleanElements } from './cleanStyle';
+import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
 import { openingView, rememberView } from './initialView';
 import { refitTexts, type FitEl } from './refit';
 import { RefitQueue } from './refitQueue';
@@ -354,7 +354,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       // Before the font has loaded they would be measured with a fallback (and could grow their shape for good):
       // they wait for it instead (refitPending).
       const restored = restoreElements(tidy.elements as ExcalidrawElement[], null);
-      const free = refitNowOrLater(restored, tidy.refit, false) as typeof restored;
+      // Texts saved in the old font (id 9 was Liberation Sans) are measured in Pretendard too, so none overflows.
+      const free = refitNowOrLater(restored, [...new Set([...tidy.refit, ...pretendardRefitIds(restored)])], false) as typeof restored;
       sigRef.current = freeSignature(free);
       // A block goes back into the frame it was saved in, if that frame is still there (#83).
       const placed = placeBlocks(liveFrames(blocks, free as unknown as SceneEl[]), pics, liveRects(free));
