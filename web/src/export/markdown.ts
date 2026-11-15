@@ -1,5 +1,6 @@
 // Document → Markdown (pure, no DOM). A diagram embed becomes a fenced code block with its DSL code,
 // tagged with the diagram type, so the text stays readable and can be pasted back.
+import { stripCodeAttrs } from '../../../shared/dsl/code-refs.ts';
 import type { Block } from '../api.ts';
 import { DIAGRAM_NODE, FRAME_NODE, type DocNode } from '../doc/model.ts';
 
@@ -126,7 +127,7 @@ function block(n: N, ctx: Ctx): string {
     case DIAGRAM_NODE: {
       const b = typeof n.attrs?.blockId === 'string' ? ctx.blocks.get(n.attrs.blockId) : undefined;
       // An embed whose block is gone leaves nothing to write.
-      return b ? fence(b.code, b.type) : '';
+      return b ? fence(stripCodeAttrs(b.code), b.type) : '';
     }
     case FRAME_NODE: {
       // A canvas frame has no text form; leave a marker so the reader knows a figure was here.

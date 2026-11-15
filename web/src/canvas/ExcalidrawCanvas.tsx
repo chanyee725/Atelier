@@ -24,6 +24,8 @@ import { LayoutEditOverlay, focusCanvas, type EditStart } from './LayoutEditOver
 import { RunOverlay } from './RunOverlay';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
+import { parse } from '../../../shared/dsl/index.ts';
+import { dslCodeRefs, mergeCodeRefs } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
 import { openingView, rememberView } from './initialView';
@@ -296,7 +298,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const late = imageReason(img, 'freeform');
     if (late) return setNotice({ blockId: id, text: late });
     const { scene } = s.compose(b.layout);
-    const { skeletons, bindings } = sceneToFreeform(scene, { x: img.x, y: img.y, width: img.width, height: img.height }, () => Math.random().toString(36).slice(2, 12));
+    // Code references (block JSON plus the DSL `code:` attribute) travel to the shapes.
+    const parsed = parse(b.code).ast;
+    const codeRefs = mergeCodeRefs(b.codeRefs, 'children' in parsed ? dslCodeRefs(parsed.children) : undefined);
+    const { skeletons, bindings } = sceneToFreeform(scene, { x: img.x, y: img.y, width: img.width, height: img.height }, () => Math.random().toString(36).slice(2, 12), codeRefs);
     const converted = convertToExcalidrawElements(skeletons as never, { regenerateIds: false }) as unknown as ExcalidrawElement[];
     // A block inside a frame leaves its shapes in that frame.
     const frameId = frameFor(img, els);
