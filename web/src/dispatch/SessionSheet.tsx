@@ -237,7 +237,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [entries, s.pending.length]);
-  const agent = s.provider === 'openai' ? 'Codex' : s.provider === 'gemini' ? 'Gemini' : 'Claude';
+  const agent = s.provider === 'claude' ? 'Claude' : s.modelLabel || s.provider;
   return (
     <div
       ref={box}

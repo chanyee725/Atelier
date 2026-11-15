@@ -50,8 +50,8 @@ export type ProviderState = { installed: boolean | null; connected: boolean; bus
 export type LimitWindow = { label: string; used: number | null; reset: number | null };
 export type ProviderLimits = {
   claude?: { windows: LimitWindow[] } | null;
-  openai?: { windows: LimitWindow[] } | null;
-  gemini?: { reached: boolean; reset: number | null } | null;
+  /** Fable's own weekly window; null until a Fable turn has reported it. */
+  fable?: { windows: LimitWindow[] } | null;
 };
 
 export type ProviderInfo = { installed?: boolean | null; connected?: boolean; busy?: boolean; url?: string | null; error?: string | null };

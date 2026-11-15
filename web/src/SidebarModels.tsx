@@ -1,4 +1,4 @@
-// Sidebar model rows (design doc 6 §2.1, issue E51): one row per model (Claude 42% · Codex 81% · Gemini) with a
+// Sidebar model rows (design doc 6 §2.1, issue E51): one row, Claude · Fable 5.2 with its 5-hour usage with a
 // status dot and its text, aligned with the nav rows. A row opens the settings dialog on 모델 연결 (E57), the one
 // place that connects and disconnects models. Nothing here reads credentials or logs anything.
 import { useCallback, useEffect, useState } from 'react';
@@ -8,11 +8,7 @@ import { cn } from './lib/utils';
 import { MODELS_CHANGED, useOpenSettings } from './settings/context';
 import { modelStatus, percent, type ModelLine, type ModelTone } from './projectNav';
 
-const PROVIDERS = [
-  ['claude', 'Claude'],
-  ['openai', 'Codex'],
-  ['gemini', 'Gemini'],
-] as const;
+const PROVIDERS = [['claude', 'Claude · Fable 5.2']] as const;
 
 const DOT: Record<ModelTone, string> = { ok: 'bg-ok', warn: 'bg-warn', off: 'bg-muted-foreground' };
 
@@ -45,14 +41,14 @@ function useModels() {
   const lines: ModelLine[] = PROVIDERS.map(([id, name]) => {
     const pv = providers[id];
     const connected = !!pv?.connected;
-    const windows = id === 'claude' ? limits.claude?.windows : id === 'openai' ? limits.openai?.windows : undefined;
+    const windows = limits.claude?.windows;
     return {
       id,
       name,
       installed: pv?.installed ?? null,
       connected,
       pct: connected ? percent(windows?.[0]?.used) : null,
-      reached: id === 'gemini' && connected && !!limits.gemini?.reached,
+      reached: connected && [...(windows ?? []), ...(limits.fable?.windows ?? [])].some((w) => (percent(w.used) ?? 0) >= 100),
     };
   });
   return { status, lines };

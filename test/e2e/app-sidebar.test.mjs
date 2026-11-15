@@ -185,13 +185,13 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.keyboard.press('b');
   await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
-  // One model row each, with text next to the dot (nothing is connected in a scratch repo); a row opens its
+  // One model row, with text next to the dot (nothing is connected in a scratch repo); a row opens its
   // the settings dialog on 모델 연결 (E57), which is closed again without connecting.
   const models = nav.getByRole('list', { name: '모델 연결' });
   await models.waitFor();
-  assert.deepEqual((await models.locator('li').allInnerTexts()).map((s) => s.split('\n')[0]), ['Claude', 'Codex', 'Gemini']);
+  assert.deepEqual((await models.locator('li').allInnerTexts()).map((s) => s.split('\n')[0]), ['Claude · Fable 5.2']);
   for (const s of await models.locator('li').allInnerTexts()) assert.match(s, /연결 안 됨|꺼짐|연결됨|%|한도/);
-  await models.getByRole('button', { name: /^Codex / }).click();
+  await models.getByRole('button', { name: /^Claude · Fable 5.2 / }).click();
   const settings = page.getByRole('dialog', { name: '설정' });
   await settings.waitFor();
   assert.equal(await settings.locator('nav button[aria-current="page"]').textContent(), '모델 연결');
