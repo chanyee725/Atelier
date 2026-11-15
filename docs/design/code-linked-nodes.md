@@ -26,20 +26,20 @@ Per node: `{ "summary"?: string (max 500), "refs": CodeRef[] (max 20) }`.
 
 ### Diagram blocks (canonical store)
 
-A block may carry `code`, keyed by node name (the same key the DSL and `layout.items` use):
+A block may carry `codeRefs` (`code` is already the block's DSL source string), keyed by node name (the same key the DSL and `layout.items` use):
 
 ```jsonc
-"code": { "v": 1, "nodes": { "로봇 데이터 녹화": { "summary": "...", "refs": [ { "path": "...", "start": 42, "end": 118 } ] } } }
+"codeRefs": { "v": 1, "nodes": { "로봇 데이터 녹화": { "summary": "...", "refs": [ { "path": "...", "start": 42, "end": 118 } ] } } }
 ```
 
-Validated like `layout` (docs/workspace-api.md "Block `layout`"): bad `code` on PUT → 400; a bad stored `code` is
+Validated like `layout` (docs/workspace-api.md "Block `layout`"): bad `codeRefs` on PUT → 400; a bad stored `code` is
 dropped on read; unknown `v` kept verbatim; at most 2000 nodes. Adding it bumps the file format `version` (v4) with
 the same old-server read-only rule as v3.
 
 ### Diagram-as-code shorthand
 
 Eraser node attributes stay compatible; one extra attribute, `code`, is parsed into refs and merged with the block's
-`code.nodes` entry (block JSON wins on conflict, DSL adds refs that are not there yet):
+`codeRefs.nodes` entry (block JSON wins on conflict, DSL adds refs that are not there yet):
 
 ```
 로봇 데이터 녹화 [icon: video, code: "src/record/recorder.py:42-118#Recorder.record_episode"]
@@ -51,7 +51,7 @@ write them through the API). Eraser itself ignores the attribute; exporting to E
 
 ### Free-form canvas
 
-Excalidraw elements carry the same shape in `customData.code` (`{summary, refs}`); converting a diagram block to
+Excalidraw elements carry the same shape in `customData.codeRefs` (`{summary, refs}`); converting a diagram block to
 free-form copies each node's entry onto its shape.
 
 ## 2. Server: read-only code API
@@ -82,7 +82,7 @@ free-form copies each node's entry onto its shape.
 
 - New agent guide `docs/agent-diagrams.md` (also linked from the plugin `dispatch` skill and the `write_plan` /
   workspace docs): "노드 라벨은 기능(한국어 짧게), 파일 이름은 라벨에 쓰지 않아요. 코드 위치는 `code` 로 붙여요",
-  with a full example block (DSL + `code` JSON) and the API call to save it.
+  with a full example block (DSL + `codeRefs` JSON) and the API call to save it.
 - The server-side prompt fragment that Drawing gives agent sessions for diagrams (where `write_plan`'s description and
   the cursor docs live) gets the same two-line rule.
 
@@ -106,7 +106,7 @@ free-form copies each node's entry onto its shape.
 
 | Ticket | Scope |
 |---|---|
-| E504a | shared + server: block `code` field (validation, v4), DSL `code` attribute parse/merge, docs/workspace-api.md |
+| E504a | shared + server: block `codeRefs` field (validation, v4), DSL `code` attribute parse/merge, docs/workspace-api.md |
 | E504b | server: `GET /api/code` read-only API with guards and tests |
 | E504c | web: code badge, "기능 코드" panel, preview (after a + b) |
 | E504d | agent guide + prompt/skill text + example |
