@@ -2,7 +2,7 @@
 // (모든 파일 A, 최근 R, 보관함 B), projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, Settings, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Palette, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -370,9 +370,9 @@ export function Sidebar(p: Props) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton data-settings-trigger className="group/row" aria-haspopup="dialog" aria-keyshortcuts="," onClick={p.onSettings}>
-              <Settings aria-hidden />
-              <span className="truncate">설정</span>
-              {/* The key is announced through aria-keyshortcuts, so the button's name stays 설정. */}
+              <Palette aria-hidden />
+              <span className="truncate">테마</span>
+              {/* The key is announced through aria-keyshortcuts, so the button's name stays 테마. */}
               <Kbd aria-hidden className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">,</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>

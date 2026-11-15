@@ -1,4 +1,4 @@
-// Headless check of the settings dialog (E57): opened from the sidebar 설정 row, from Ctrl+K and from ",";
+// Headless check of the settings dialog (E57): opened from the sidebar 테마 row, from Ctrl+K and from ",";
 // section switching; one row per provider; connect and disconnect Claude through the fake CLIs; Esc closes.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
@@ -67,13 +67,13 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   const page = await browser.newPage({ viewport: { width: 1200, height: 860 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.goto(BASE);
-  await page.getByRole('button', { name: '설정', exact: true }).waitFor();
+  await page.getByRole('button', { name: '테마', exact: true }).waitFor();
 
   const dialog = page.getByRole('dialog', { name: '설정' });
   const current = () => dialog.locator('nav button[aria-current="page"]').textContent();
 
   // 1. Sidebar 설정 row → 일반, theme choices.
-  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await page.getByRole('button', { name: '테마', exact: true }).click();
   await dialog.waitFor();
   assert.equal(await current(), '일반');
   assert.equal(await dialog.getByRole('radio').count(), 3);
@@ -96,6 +96,30 @@ test('settings dialog: entry points, sections, provider connect/disconnect with 
   await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).click();
   await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).waitFor();
   assert.equal(await claude.getByTestId('provider-status').textContent(), '연결 안 됨');
+
+  // E509: not connected → the sidebar row reads 연결 안 됨 (text), and a 연결하기 button shows on hover / focus.
+  await dialog.getByRole('button', { name: '닫기' }).click();
+  const row = page.getByRole('navigation', { name: '모델 연결' }).or(page.locator('ul[aria-label="모델 연결"]')).first();
+  await row.getByText('연결 안 됨', { exact: true }).waitFor();
+  const connectBtn = row.getByRole('button', { name: '연결하기' });
+  await connectBtn.waitFor({ state: 'attached' });
+  await row.locator('li').hover();
+  assert.equal(await connectBtn.evaluate((el) => getComputedStyle(el).opacity), '1', 'visible on hover');
+  await page.mouse.move(0, 0);
+  await row.getByRole('button').first().focus();
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'model-connect', 'reachable by Tab');
+  assert.equal(await connectBtn.evaluate((el) => getComputedStyle(el).opacity), '1', 'visible on focus-within');
+  const sideLogin = page.waitForRequest((r) => r.method() === 'POST' && r.url().endsWith('/api/providers/claude/login'));
+  await page.keyboard.press('Enter');
+  await sideLogin;
+  await row.getByText('연결 안 됨', { exact: true }).waitFor({ state: 'detached', timeout: 8000 });
+  assert.equal(await connectBtn.count(), 0, 'no 연결하기 once connected');
+  await page.getByRole('button', { name: '테마', exact: true }).click();
+  await dialog.waitFor();
+  await dialog.getByRole('button', { name: '모델 연결' }).click();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결 끊기' }).click();
+  await claude.getByRole('button', { name: 'Claude · Fable 5.2 연결', exact: true }).waitFor();
 
   // #219 review fixes, with a CLI login simulated by rewriting /api/state (the fakes are always logged in).
   const posts = [];

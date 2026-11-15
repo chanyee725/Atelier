@@ -77,7 +77,7 @@ test('modelStatus: text next to every dot, warn above 75%', async () => {
   assert.deepEqual(modelStatus({ ...m, pct: null }, true), { text: '연결됨', long: '연결됨', tone: 'ok' });
   assert.equal(modelStatus({ ...m, reached: true }, true).text, '한도 도달');
   assert.deepEqual(modelStatus({ ...m, connected: false }, true), { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' });
-  assert.equal(modelStatus(m, false).text, '꺼짐');
+  assert.equal(modelStatus(m, false).text, '연결 안 됨');
 });
 
 test('paletteScope follows the screen: open file on the document, shown project on its home, none on the dashboard', () => {

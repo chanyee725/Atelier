@@ -68,7 +68,7 @@ test('settings dialog: PR/CI switch flips, persists, names a broken settings fil
   const dialog = page.getByRole('dialog', { name: '설정' });
   const open = async () => {
     await page.goto(BASE);
-    await page.getByRole('button', { name: '설정', exact: true }).click();
+    await page.getByRole('button', { name: '테마', exact: true }).click();
     await dialog.waitFor();
     await dialog.getByRole('button', { name: '실행' }).click();
   };
