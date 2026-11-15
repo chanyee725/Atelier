@@ -18,17 +18,17 @@ export const THEME_CHOICES: { id: ThemePref; label: string }[] = [
   { id: 'dark', label: '다크' },
 ];
 
-export const PROVIDER_IDS = ['claude', 'openai', 'gemini'] as const;
+// One model only (E505): Claude CLI running Fable 5.2. Older saved sessions may name other providers; they are not rows here.
+export const PROVIDER_IDS = ['claude'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
-const NAMES: Record<ProviderId, string> = { claude: 'Claude', openai: 'Codex', gemini: 'Gemini' };
+const NAMES: Record<ProviderId, string> = { claude: 'Claude · Fable 5.2' };
 
 /** What /api/state reports per provider; only the fields this dialog reads. */
 export type { ProviderInfo } from '../api';
 import type { ProviderInfo } from '../api';
 export type LimitsView = {
   claude?: { windows: { label: string; used: number | null }[] } | null;
-  openai?: { windows: { label: string; used: number | null }[] } | null;
-  gemini?: { reached: boolean } | null;
+  fable?: { windows: { label: string; used: number | null }[] } | null;
 };
 
 export type ProviderAction = 'connect' | 'disconnect' | 'cancel' | null;
@@ -54,9 +54,10 @@ export function providerRows(providers: Partial<Record<string, ProviderInfo>>, l
     const connected = !!p.connected;
     const busy = !!p.busy;
     const missing = p.installed === false;
-    const raw = id === 'gemini' ? [] : (limits[id]?.windows ?? []);
+    // 5시간 from the account window, then Fable's own weekly window once it has reported.
+    const raw = [...(limits.claude?.windows ?? []).filter((w) => w.label !== '주간').slice(0, 1), ...(limits.fable?.windows ?? [])];
     const windows = connected ? raw.flatMap((w) => (percent(w.used) == null ? [] : [{ label: w.label, pct: percent(w.used)! }])) : [];
-    const reached = connected && ((id === 'gemini' && !!limits.gemini?.reached) || windows.some((w) => w.pct >= 100));
+    const reached = connected && windows.some((w) => w.pct >= 100);
     const status = busy ? '연결하는 중이에요' : missing ? 'CLI가 설치되지 않았어요' : !connected ? '연결 안 됨' : reached ? '한도에 닿았어요' : '연결됨';
     const tone = !connected ? 'idle' : reached || windows.some((w) => w.pct > WARN_AT) ? 'warn' : 'ok';
     const action: ProviderAction = busy ? 'cancel' : connected ? 'disconnect' : missing ? null : 'connect';

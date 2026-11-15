@@ -1,6 +1,6 @@
 // Headless check of the rest of the Dispatch screens (E29, #156): one fake Claude session reports tokens, a cost and
 // a usage-limit event; then 사용량 shows today's cost, the 5-hour limit and the session in the top-10 table,
-// a Codex session (no cost, tokens only) still makes 사용량 refetch, 다시 불러오기 recovers a failed first load,
+// a second session's turn still makes 사용량 refetch, 다시 불러오기 recovers a failed first load,
 // 타임라인 shows the session's row, and 상시 화면 (#tv) shows its tile in the dark theme and Esc goes back.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no real
@@ -47,14 +47,7 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
     { type: 'rate_limit_event', rate_limit_info: { unifiedWindows: { five_hour: { utilization: 0.42, resetsAt: far, status: 'allowed' }, seven_day: { utilization: 0.1, resetsAt: far, status: 'allowed' } } } },
     { type: 'result', subtype: 'success', total_cost_usd: 1.25 },
   ];
-  // Codex reports tokens but no cost; its model comes from the fake `codex debug models`.
-  const codexScenario = [
-    { type: 'thread.started', thread_id: 'fake-usage-thread' },
-    { type: 'item.completed', item: { type: 'agent_message', text: 'ok' } },
-    { type: 'turn.completed', usage: { input_tokens: 700, output_tokens: 90 } },
-  ];
-  const codexModels = [{ slug: 'fake-codex', display_name: 'Fake Codex', visibility: 'list', supported_reasoning_levels: [{ effort: 'low' }], default_reasoning_level: 'low' }];
-  const fake = fakeCliBin({ scenario, scenarios: { codex: codexScenario }, codexModels });
+  const fake = fakeCliBin({ scenario });
   const port = await freePort();
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
   const server = spawn(process.execPath, ['server/index.js', ws], {
@@ -125,17 +118,12 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
     await page.waitForTimeout(2500);
     assert.equal(usageFetches, 1, 'one /api/usage request while the cost total stays the same');
 
-    // #328: a session without a cost (Codex) that only adds tokens still refetches /api/usage.
-    at('codex tokens refetch');
-    await call('POST', '/api/providers/openai/login');
-    const { sessions: codexSessions } = await call('POST', '/api/sessions', { items: [{ role: 'impl', model: 'fake-codex', prompt: 'say ok' }], worktree: false });
-    const codexName = codexSessions[0].name;
+    // A second session's turn changes the totals, so the page refetches /api/usage.
+    at('second session refetch');
+    const { sessions: second } = await call('POST', '/api/sessions', { items: [{ role: 'impl', prompt: 'say ok' }], worktree: false });
     for (let i = 0; i < 100 && usageFetches < 2; i++) await page.waitForTimeout(100);
-    assert.ok(usageFetches >= 2, `a token-only change should refetch /api/usage (requests: ${usageFetches})`);
-    const codex = (await call('GET', '/api/state')).sessions.find((s) => s.name === codexName);
-    assert.equal(codex.cost, null, 'the codex session reports no cost');
-    assert.ok(codex.usage.output > 0, 'the codex session counted tokens');
-    await page.getByRole('rowheader', { name: /Fake Codex|fake-codex/ }).waitFor();
+    assert.ok(usageFetches >= 2, `a usage change should refetch /api/usage (requests: ${usageFetches})`);
+    await page.locator(`[data-session="${second[0].name}"]`).waitFor();
 
     at('타임라인');
     await nav.getByRole('link', { name: '타임라인' }).click();
