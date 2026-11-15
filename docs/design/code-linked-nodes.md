@@ -74,7 +74,8 @@ free-form copies each node's entry onto its shape.
   Not tracked → 404 `{error:'not-tracked'}`. The deny list below stays as a second layer.
 - Path checks: decode once (reject any `%` left after decoding, so no double encoding; this deliberately also refuses
   real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
-  403); reject, case-insensitively, `.git/`, `.dispatch/` and any segment starting with `.env`, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
+  403); reject `.git` and `.dispatch` as any path segment (not only the leading one) and any segment starting with `.env`,
+  case-insensitively, on both the requested path and its realpath, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
   `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file.
 - Limits: file ≤ 1 MB (exactly 1 MB is allowed, one byte more → 413), binary (NUL in first 8 KB) → 415, directory → 400.
   Returned window ≤ 400 lines: the range plus up to 20 lines of context each side, clamped to the file. A range longer
@@ -117,8 +118,11 @@ not exported (only `FONT_FAMILY`). So:
   npm package by a checked-in script, like `scripts/subset-clean-font.py`). No CDN, and no Excalidraw changes beyond the
   transforms `web/vite.config.ts` already applies. If the vendored asset layout makes this impossible, stop and report.
 - **License:** Pretendard is OFL-1.1 with the Reserved Font Name "Pretendard". A subset is a modified version, so it
-  must not carry that name: the new subset script renames the name table (IDs 1/3/4/6) to "Drawing Sans" like
-  `scripts/subset-clean-font.py` does, and no "Pretendard" name is left in the file. Add to the existing Pretendard
+  must not carry that name as its font name. The new subset script does exactly what `scripts/subset-clean-font.py`
+  does: the font name records (name IDs 1/3/4/6) and the CFF font names become "Drawing Sans"; the copyright and
+  license records (IDs 0/13/14) are kept as-is, because the OFL forbids removing them. ID 3 (unique ID) keeps
+  `(subset of Pretendard <version>)`, as in the existing script, so "Pretendard" still appears there and in
+  the copyright/license records, never as the font name. Add to the existing Pretendard
   entry in NOTICE.md and next to the Excalidraw font comment in
   `web/vite.config.ts` (source, version, subset command, OFL text path).
 - **Metrics:** Excalidraw computes line height and baseline for family 9 from its own `FONT_METADATA` (Liberation),
