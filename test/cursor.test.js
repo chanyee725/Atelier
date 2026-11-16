@@ -455,7 +455,7 @@ test('cursor module: extensionless and partly encoded /api/file paths, five writ
     await r.change(rel, paras(i + 2));
     r.hub.emit('message', { id: 's1', entry: { kind: 'tool_result', callId: id, text: 'ok' } });
   }
-  const names = r.sent.filter((s) => s.event === 'cursor' && !s.data.status_only).map((s) => s.data.name);
+  const names = r.sent.filter((s) => s.event === 'cursor').map((s) => s.data.name);
   assert.deepEqual(names, ['Jude', 'Jude', 'Jude', 'Jude', 'Jude']);
   m.close();
 });
@@ -546,6 +546,31 @@ test('cursor module: a write carrying a session id (x-drawing-session) is that s
   await r.change(other, paras(2), { writer: 'Mo' });
   await r.change(other, paras(3), { sid: '33333333-3333-4333-8333-333333333333' });
   assert.deepEqual(docCursors(), ['Otto', 'Otto', '에이전트', 'Mo', '에이전트']);
+  m.close();
+});
+
+test('cursor module: a call left without a result when the turn ends is closed (#656)', async (t) => {
+  const later = clock(t);
+  const r = rig();
+  const m = await setup(r.ctx);
+  const rel = 'analysis/robot.dpx.json';
+  r.files.set(rel, paras(1));
+  const s1 = (r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' });
+  const docCursors = () => r.sent.filter((s) => s.event === 'cursor' && s.data.doc).map((s) => s.data.name);
+  // A call that names the file writes it, then the turn is stopped before its result comes.
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', callId: 'a', text: JSON.stringify({ command: `curl -X PUT 'http://127.0.0.1:1/api/file?path=analysis/robot' -d @/tmp/x.json` }) } });
+  await r.tick();
+  await r.change(rel, paras(2));
+  s1.status = 'idle';
+  r.hub.emit('session', s1);
+  // Its own edit still lands within the settle window.
+  await r.change(rel, paras(3));
+  // The next turn starts at once (before the session is forgotten): the old call is not running any more.
+  s1.status = 'running';
+  r.hub.emit('session', s1);
+  later(60_000);
+  await r.change(rel, paras(4)); // someone unnamed, a minute later
+  assert.deepEqual(docCursors(), ['Jude', 'Jude', '에이전트']);
   m.close();
 });
 
