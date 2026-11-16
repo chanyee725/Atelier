@@ -1,9 +1,13 @@
 // New agent activity while the app is open (E537, #654): a toast when the page is in view, a browser notification
 // when it is hidden and notifications are on (설정 > 일반, dispatch/lib/notify.ts). Start, finish and error only;
-// progress stays in the bell's feed, where every toast can be found again. Toasts sit in one popover="manual" region
-// (no light dismiss), close themselves after a while unless hovered or focused, and never take focus.
+// progress stays in the bell's feed, where every toast can be found again. App events (E540, #671: files, sessions,
+// models, settings, runs; activity/appToasts.ts) share the same stack. Toasts sit in one popover="manual" region at the
+// top right (no light dismiss); info closes itself after a while unless hovered or focused, errors stay until closed;
+// they never take focus.
 import { useEffect, useReducer, useRef } from 'react';
 import { X } from 'lucide-react';
+import type { AppToast, ToastTarget } from './appEvents';
+import { categoryOn, onAppToast, setToastOpener, watchAppEvents } from './appToasts';
 import { activitySentence } from '../../../shared/dispatch/agent-activity.ts';
 import { alertsOn } from '../dispatch/lib/notify';
 import { alertRoute, MODAL_SELECTOR, nextToasts, type ActivityEvent, type ToastAction, type ToastQueue } from './activity';
@@ -17,7 +21,15 @@ const MODAL_CHECK_MS = 400;
 /** A modal dialog is open: the page behind it is inert, so a toast could be neither read nor closed. */
 const modalOpen = () => !!document.querySelector(MODAL_SELECTOR);
 
-type Toast = { id: string; text: string; kind: ActivityEvent['kind']; color?: string };
+type Toast = { id: string; text: string; kind: ActivityEvent['kind'] | 'info'; color?: string; persist?: boolean; target?: ToastTarget };
+let seq = 0;
+const fromApp = (t: AppToast): Toast => ({
+  id: `app-${++seq}`,
+  text: t.text,
+  kind: t.tone === 'error' ? 'error' : 'info',
+  ...(t.persist ? { persist: true } : {}),
+  ...(t.target ? { target: t.target } : {}),
+});
 const reduce = (q: ToastQueue<Toast>, a: ToastAction<Toast>) => nextToasts(q, a, MAX_TOASTS);
 const EMPTY: ToastQueue<Toast> = { shown: [], waiting: [] };
 
@@ -32,7 +44,8 @@ function announce(text: string, region: HTMLElement | null) {
   }
 }
 
-export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
+/** onOpen: a document's path; onSession: a session id (the 열기 link of session toasts). */
+export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) => void; onSession: (id: string) => void }) {
   // Toasts that came while a modal dialog was open, or while MAX_TOASTS were on screen, wait in q.waiting.
   const [q, dispatch] = useReducer(reduce, EMPTY);
   const toasts = q.shown;
@@ -42,6 +55,9 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
   const held = useRef(false);
   const open = useRef(onOpen);
   open.current = onOpen;
+  const openSession = useRef(onSession);
+  openSession.current = onSession;
+  const go = (target: ToastTarget) => ('file' in target ? open.current(target.file) : openSession.current(target.session));
 
   const close = (id: string) => {
     clearTimeout(timers.current.get(id));
@@ -60,8 +76,11 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
   useEffect(() => {
     for (const t of toasts) {
       if (timers.current.has(t.id)) continue;
-      later(t.id);
-      announce(t.text, live.current);
+      // An error stays until it is closed (an empty entry marks it as announced).
+      if (t.persist) timers.current.set(t.id, undefined as unknown as ReturnType<typeof setTimeout>);
+      else later(t.id);
+      // Only the visible text, plus a note when the toast has an action (persistent-toast-notifications).
+      announce(t.target ? `${t.text}. 열기 버튼이 있어요` : t.text, live.current);
     }
   }, [toasts]);
 
@@ -92,13 +111,18 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
           }
           return;
         }
-        if (route !== 'toast') return;
-        const toast: Toast = { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}) };
+        if (route !== 'toast' || !categoryOn('agents')) return;
+        const toast: Toast = { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}), ...(e.kind === 'error' ? { persist: true } : {}), target: { file: e.file } };
         // Not behind a modal dialog, where it could be neither read nor closed: it waits until the dialog closes.
         dispatch({ type: 'add', toast, blocked: modalOpen() });
       }),
     [],
   );
+  useEffect(() => {
+    watchAppEvents();
+    setToastOpener((t) => t.target && go(t.target));
+    return onAppToast((t) => dispatch({ type: 'add', toast: fromApp(t), blocked: modalOpen() }));
+  }, []);
   useEffect(
     () => () => timers.current.forEach(clearTimeout),
     [],
@@ -132,7 +156,7 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
         ref={box}
         popover="manual"
         role="region"
-        aria-label="에이전트 알림"
+        aria-label="알림"
         className="activity-toasts"
         data-activity-toasts=""
         onMouseEnter={() => (held.current = true)}
@@ -143,10 +167,25 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
         }}
       >
         <ol>
-          {toasts.map((t) => (
+          {/* Newest on top, next to the screen's top edge. */}
+          {[...toasts].reverse().map((t) => (
             <li key={t.id} className="activity-toast" data-activity-toast={t.id} data-kind={t.kind}>
               <span className="activity-dot" aria-hidden style={t.color && /^#[0-9a-f]{6}$/i.test(t.color) ? { background: t.color } : undefined} />
               <span className="activity-text">{t.text}</span>
+              {t.target ? (
+                <button
+                  type="button"
+                  className="activity-open"
+                  onClick={() => {
+                    go(t.target!);
+                    close(t.id);
+                  }}
+                >
+                  열기
+                </button>
+              ) : (
+                <span />
+              )}
               <button type="button" className="activity-close" aria-label="알림 닫기" onClick={(e) => dismiss(t.id, e)}>
                 <X aria-hidden />
               </button>
