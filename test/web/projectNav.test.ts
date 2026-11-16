@@ -83,7 +83,7 @@ test('modelStatus: text next to every dot, warn above 75%', async () => {
 });
 
 test('paletteScope follows the screen: open file on the document, shown project on its home, none on the dashboard', () => {
-  // A file of A stays loaded while the user is on "모든 파일": no stale A chip there.
+  // A file of A stays loaded while the user is on "홈": no stale A chip there.
   assert.equal(paletteScope({ kind: 'all' }, view, 'A/login.dpx.json'), null);
   assert.equal(paletteScope({ kind: 'recent' }, view, 'A/login.dpx.json'), null);
   assert.deepEqual(paletteScope({ kind: 'doc' }, view, 'A/login.dpx.json'), { path: 'A', name: 'Alpha' });

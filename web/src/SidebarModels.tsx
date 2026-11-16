@@ -89,7 +89,7 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         }}
         className="max-md:h-11"
       >
-        {/* The provider's mark in the same 17px slot as the nav icons, so the name lines up with 모든 파일, 최근, 보관함. */}
+        {/* The provider's mark in the same 17px slot as the nav icons, so the name lines up with 홈, 최근, 보관함. */}
         <span aria-hidden className="grid size-[17px] shrink-0 place-items-center">
           <ProviderIcon provider={meta.id} className="size-4" />
         </span>
