@@ -106,6 +106,9 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.goto(`${BASE}/#file=plan.dpx.json`);
   await page.locator('.doc-editor').waitFor();
+  // The document alone (the default 둘 다 leaves the text pane narrower than the side form needs).
+  await page.locator('[role="radio"], button', { hasText: /^문서$/ }).first().click();
+  await page.waitForTimeout(300);
   const intro = page.locator('.doc-editor p', { hasText: '소개 문단' });
   await intro.waitFor();
 
@@ -166,7 +169,13 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
 
   // 3. A recent change jumps to its block and flashes it, without taking focus from the editor.
   await changes.last().click();
-  await page.locator('.doc-editor .doc-margin-flash').waitFor({ state: 'attached', timeout: 5000 });
+  // Still flashing a moment later (the editor redraws its blocks, so a class alone can be wiped at once).
+  await page.waitForTimeout(250);
+  const flash = await page.evaluate(() => {
+    const block = [...document.querySelectorAll('.doc-editor p')].find((e) => e.textContent.includes('첫 단계'));
+    return { animations: block?.getAnimations().length ?? -1, cls: !!block?.classList.contains('doc-margin-flash') };
+  });
+  assert.ok(flash.animations > 0 || flash.cls, `the jumped-to block flashes: ${JSON.stringify(flash)}`);
   assert.deepEqual(await caret(), mine);
 
   // 4. Collapse and open again: remembered per browser; focus stays in the editor.
@@ -180,6 +189,7 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
 
   if (SHOTS) {
     const shot = (n) => page.screenshot({ path: join(SHOTS, `doc-margin-${n}.png`) });
+    await page.waitForTimeout(500); // the column's width transition
     await shot('desktop-light');
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.waitForTimeout(150);
