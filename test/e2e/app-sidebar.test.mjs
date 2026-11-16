@@ -79,7 +79,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   const nav = page.getByRole('navigation', { name: '사이드바' });
   const frame = () => page.locator('[data-slot="sidebar-inset"]').getAttribute('data-frame');
   await nav.getByRole('button', { name: '결제 시스템', exact: false }).first().waitFor();
-  assert.equal(await nav.getByRole('button', { name: /모든 파일/ }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
   assert.equal(await frame(), 'floating');
   // Projects sorted by name; the meta name wins over the folder name.
   const projectNames = nav.locator('[data-slot="sidebar-group"] > ul > li > [data-slot="sidebar-menu-button"] > span.truncate');
@@ -88,7 +88,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   // Dashboard (layout B, #190): pill tabs with 프로젝트별 first shown, quick-create chips, / finds, 39px group heads, 만든 때.
   const dash = page.locator('main[data-screen="dashboard"]');
   const tabs = dash.getByRole('tablist', { name: '보기' });
-  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['전체', '최근', '프로젝트별']);
+  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['개요', '전체 파일', '최근', '프로젝트별']);
   assert.equal(await tabs.getByRole('tab', { name: '프로젝트별' }).getAttribute('aria-selected'), 'true');
   const chips = dash.getByRole('group', { name: '새로 만들기' }).getByRole('button');
   // Chips show the kind only; a visually hidden "새 " keeps names like "새 파이프라인 계획" for assistive tech and e2e.
@@ -122,7 +122,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   assert.equal(await dash.getByRole('button', { name: '로그인 로직 하위 문서' }).getAttribute('aria-expanded'), 'true');
   await page.keyboard.press('Control+a');
   await page.keyboard.press('Backspace');
-  await tabs.getByRole('tab', { name: '전체' }).click();
+  await tabs.getByRole('tab', { name: '전체 파일' }).click();
   assert.match(await dash.locator('[data-slot="column-head"]').first().innerText(), /위치/);
   assert.equal(await dash.locator('[data-doc-row]').count(), 5);
   // A file right in the workspace root has no group (no 미분류, #592) but stays here, placed at 최상위.
@@ -148,7 +148,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.keyboard.press('r');
   assert.equal(await nav.getByRole('button', { name: /최근/ }).getAttribute('aria-current'), 'page');
   await page.keyboard.press('a');
-  assert.equal(await nav.getByRole('button', { name: /모든 파일/ }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
 
   // A project opens its home (still floating) and unfolds its documents; a document with sub-documents shows a count.
   const pay = row(nav, /결제 시스템/);
@@ -228,7 +228,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
     await page.getByRole('button', { name: '메뉴 열기' }).click();
     const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
     await drawer.waitFor();
-    const all = drawer.getByRole('button', { name: /모든 파일/ });
+    const all = drawer.getByRole('button', { name: /^홈/ });
     assert.ok((await all.boundingBox()).height >= 44, 'drawer rows are 44px');
     await row(drawer, /결제 시스템/).click();
     await page.getByRole('button', { name: '메뉴 열기' }).click();

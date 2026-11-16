@@ -1,5 +1,5 @@
 // App sidebar, layout B (design doc 6 §2.1, §3.1): workspace name with search and new-file icons, the views
-// (모든 파일 A, 최근 R, 보관함 B) and the 세션 보드 link, projects with their nested sub-documents, one row per model with its connection
+// (홈 A, 최근 R, 보관함 B) and the 세션 보드 link, projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -332,7 +332,7 @@ export function Sidebar(p: Props) {
     sayTimer.current = setTimeout(() => setSaid(`${item.label}을(를) ${dest.label}(으)로 옮겼어요.`), 500);
   };
   const views = [
-    { id: 'all', label: '모든 파일', icon: Files, key: 'A', run: () => p.onSection({ kind: 'all' }) },
+    { id: 'all', label: '홈', icon: Files, key: 'A', run: () => p.onSection({ kind: 'all' }) },
     { id: 'recent', label: '최근', icon: Clock, key: 'R', run: () => p.onSection({ kind: 'recent' }) },
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
@@ -398,7 +398,7 @@ export function Sidebar(p: Props) {
       </p>
       <SidebarFooter>
         <SidebarModels />
-        <SidebarMenu>
+        <SidebarMenu className="mt-3">
           <SidebarMenuItem>
             <SettingsEntry />
           </SidebarMenuItem>

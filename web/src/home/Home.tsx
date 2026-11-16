@@ -1,4 +1,4 @@
-// Dashboard ("모든 파일") and project home: data loading, tabs, quick-create chips. Layout B of
+// Dashboard ("홈") and project home: data loading, tabs, quick-create chips. Layout B of
 // docs/design/dispatch-integration/6-app-shell-projects.md §3.1. Built from shadcn Tabs / Button / DropdownMenu.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, FilePlus2, FileText, Folder, Layers, Menu, PenTool, Plus, Search, Workflow } from 'lucide-react';
@@ -144,7 +144,7 @@ export function Home(props: HomeProps) {
   if (props.project && !project) return (
     <Empty>
       이 프로젝트를 찾지 못했어요.{' '}
-      <Button variant="link" className="h-auto p-0" onClick={() => props.onProject(null)}>모든 파일로 가기</Button>
+      <Button variant="link" className="h-auto p-0" onClick={() => props.onProject(null)}>홈으로 가기</Button>
     </Empty>
   );
   return (
@@ -207,7 +207,7 @@ const LetterBadge = ({ children }: { children: React.ReactNode }) => (
 function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   // 개요 (the dashboard, #685) opens first; the full list is one tab away.
   const [tab, setTab] = useState<DashTab>('home');
-  // Searching from 개요 shows the hits in 전체.
+  // Searching from 개요 shows the hits in 전체 파일.
   const onSearch = (q: string) => {
     onQuery(q);
     if (q.trim() && tab === 'home') setTab('all');
@@ -216,7 +216,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   const files = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
   // Projects without documents still get the 프로젝트별 tab (their groups and + buttons); only a bare workspace is empty.
   // Files right in the workspace root belong to no project: they have no group (no 미분류, #592) and stay reachable
-  // in 전체 / 최근 and through search, with 최상위 as their 위치. Nothing on disk changes.
+  // in 전체 파일 / 최근 and through search, with 최상위 as their 위치. Nothing on disk changes.
   const empty = files.length === 0 && data.projects.length === 0;
   const found = files.filter((f) => matchesQuery(f.title, query));
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
@@ -229,11 +229,11 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
             <Menu className="size-[17px]" />
           </SidebarTrigger>
         )}
-        <h1 className="m-0 shrink-0 text-[15px] font-semibold">모든 파일</h1>
+        <h1 className="m-0 shrink-0 text-[15px] font-semibold">홈</h1>
         {/* One row; on a narrow screen the pills scroll sideways instead of wrapping. */}
         <TabsList aria-label="보기" className="min-w-0 shrink justify-start overflow-x-auto [scrollbar-width:none] [&>*]:flex-none">
           <TabsTrigger value="home">개요</TabsTrigger>
-          <TabsTrigger value="all">전체</TabsTrigger>
+          <TabsTrigger value="all">전체 파일</TabsTrigger>
           <TabsTrigger value="recent">최근</TabsTrigger>
           <TabsTrigger value="projects">프로젝트별</TabsTrigger>
         </TabsList>
@@ -267,14 +267,14 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
         ))}
       </div>
       <TabsContent value="home" className="flex flex-col">
-        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onTab={setTab} />
+        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onCreate={() => p.onCreate('doc', null)} onTab={setTab} />
       </TabsContent>
       {tab === 'home' ? null : empty ? (
         <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
       ) : (
         <>
           <TabsContent value="all">
-            {found.length === 0 ? noMatch : <><ColumnHead location /><FileList files={found} label="모든 파일" onOpen={p.onOpen} onDelete={p.onDelete} /></>}
+            {found.length === 0 ? noMatch : <><ColumnHead location /><FileList files={found} label="전체 파일" onOpen={p.onOpen} onDelete={p.onDelete} /></>}
           </TabsContent>
           <TabsContent value="recent">
             {(() => {
@@ -283,7 +283,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
             })()}
           </TabsContent>
           <TabsContent value="projects">
-            {data.projects.length === 0 && <Empty>아직 프로젝트가 없어요. 파일은 전체에서 볼 수 있어요.</Empty>}
+            {data.projects.length === 0 && <Empty>아직 프로젝트가 없어요. 파일은 전체 파일에서 볼 수 있어요.</Empty>}
             {data.projects.length > 0 && <ColumnHead />}
             {data.projects.map((pr) => {
               if (query.trim() && filterDocs(pr.docs, query).length === 0) return null;
@@ -362,7 +362,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
             <Menu className="size-[17px]" />
           </SidebarTrigger>
         )}
-        <Button variant="ghost" size="icon-sm" aria-label="모든 파일로 돌아가기" onClick={() => p.onProject(null)}>
+        <Button variant="ghost" size="icon-sm" aria-label="홈으로 돌아가기" onClick={() => p.onProject(null)}>
           <ArrowLeft />
         </Button>
         <p className="m-0 flex min-w-0 items-center gap-1.5 text-sm">
