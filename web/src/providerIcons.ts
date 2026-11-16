@@ -23,8 +23,8 @@ export type ProviderBrand = { light: BrandShade; dark: BrandShade };
  * A gradient mark's `color` is its solid fallback (used if the gradient cannot be painted).
  */
 export const PROVIDER_BRANDS: Readonly<Record<string, ProviderBrand>> = {
-  // Anthropic's clay orange; light is a shade deeper so it clears 3:1 on the off-white sidebar.
-  claude: { light: { color: '#c15f3c' }, dark: { color: '#d97757' } },
+  // A clear orange (user, #679); light is a shade deeper so it clears 3:1 on the off-white sidebar.
+  claude: { light: { color: '#e8590c' }, dark: { color: '#ff8a3d' } },
   // OpenAI's mark is monochrome: near-black on light, near-white on dark.
   openai: { light: { color: '#0d0d0d' }, dark: { color: '#f2f2f2' } },
   // Gemini's blue → purple sparkle.
