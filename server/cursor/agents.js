@@ -12,9 +12,9 @@ const MAX_OUTSIDE = 20;
 const PRUNE_MS = 15_000;
 
 export async function setup(ctx, { now = Date.now } = {}) {
+  // Without the cursor module (no agent sessions: Dispatch off outside a git project) the list is always empty.
   const cursor = ctx.modules.cursor;
-  if (!cursor?.onHeld) return {};
-  const hub = ctx.modules.dispatch?.hub ?? null;
+  const hub = cursor?.onHeld ? ctx.modules.dispatch?.hub ?? null : null;
   const held = new Map(); // session id -> { file, at }
   const outside = new Map(); // label -> { file, at }, insertion order = age
   let last = '';
@@ -40,7 +40,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
     ctx.hub.broadcast('agents', { agents });
   };
 
-  const offHeld = cursor.onHeld((e) => {
+  const offHeld = (cursor?.onHeld ?? (() => () => {}))((e) => {
     if (!e?.sid) return;
     if (e.outside) {
       outside.delete(e.name);

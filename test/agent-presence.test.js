@@ -119,12 +119,32 @@ test('agents module: the list follows edits, sessions and named outside writers'
   assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, '에이전트');
   assert.equal(m.list().length, 2);
 
+  // A named write while Otto's call is still open: the request's own name wins over the guess...
+  const curl = { kind: 'tool', name: 'Bash', text: 'curl -X PUT /api/file?path=P%2Fb.dpx.json' };
+  r.hub.emit('message', { id: 's1', entry: { ...curl } });
+  await sleep(5);
+  await r.change('P/b.dpx.json', rect('q', 85), { writer: 'Ext2' });
+  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, 'Ext2');
+  // ...unless it is that session's own name.
+  r.hub.emit('message', { id: 's1', entry: { ...curl } });
+  await sleep(5);
+  await r.change('P/b.dpx.json', rect('q', 87), { writer: 'Otto' });
+  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.sid, 's1');
+
   // The session leaves: gone from the list.
   r.hub.sessions.s1.status = 'idle';
   r.hub.emit('removed', { id: 's1' });
-  assert.deepEqual(lists().at(-1).map((a) => a.name), ['Ext']);
+  assert.deepEqual(lists().at(-1).map((a) => a.name).sort(), ['Ext', 'Ext2']);
   m.close();
   r.ctx.modules.cursor.close();
+});
+
+test('agents module without agent sessions: GET answers an empty list', async () => {
+  const sent = [];
+  const m = await agents.setup({ hub: { broadcast: (e, d) => sent.push(e), onAttach() {} }, modules: { cursor: {} } });
+  assert.deepEqual(m.list(), []);
+  assert.equal(m.routes[0].path, '/api/workspace/agents');
+  m.close();
 });
 
 test('x-drawing-session over HTTP: cleaned label on the cursor and in GET /api/workspace/agents, nothing on disk', async () => {
