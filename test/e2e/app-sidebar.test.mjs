@@ -196,6 +196,13 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   const modelRow = models.getByRole('button', { name: /^Claude (연결 안 됨|연결됨|설치 안 됨|로그인 중|.*%.*|.*한도.*), 연결 관리$/ });
   await modelRow.waitFor({ state: 'attached' });
   assert.equal(await modelRow.getAttribute('aria-haspopup'), 'dialog');
+  // Clicking the row opens the 모델 연결 dialog; nothing is connected in a scratch repo, so its action button is 연결.
+  await modelRow.click();
+  const connect = page.getByRole('dialog', { name: '모델 연결' });
+  await connect.waitFor();
+  await connect.getByRole('button', { name: '연결', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await connect.waitFor({ state: 'hidden' });
   assert.equal(await page.getByRole('dialog', { name: '설정' }).count(), 0);
   await page.close();
 
