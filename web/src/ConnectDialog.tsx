@@ -75,7 +75,7 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
   const error = p?.error && key !== 'busy' && key !== 'connected' ? p.error : null;
   const rows = limitRows(limits);
   // Hover only on enabled buttons, ~120ms, none under prefers-reduced-motion (#559).
-  const btn = 'inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:opacity-60 aria-disabled:cursor-default';
+  const btn = 'inline-flex shrink-0 whitespace-nowrap h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:opacity-60 aria-disabled:cursor-default';
   return (
     <dialog
       ref={ref}
