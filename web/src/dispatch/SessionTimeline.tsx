@@ -126,13 +126,13 @@ export function SessionTimeline({ onOpen }: { onOpen: (id: string) => void }) {
 
   if (!sessions.length) {
     return (
-      <div className="mx-auto max-w-[1400px] p-6 max-md:p-4">
-        <p className="rounded-lg border border-dashed px-6 py-16 text-center text-sm text-muted-foreground">아직 세션이 없어요</p>
+      <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col p-6 max-md:p-4">
+        <p className="flex grow items-center justify-center rounded-lg border border-dashed px-6 py-16 text-center text-sm text-muted-foreground">아직 세션이 없어요</p>
       </div>
     );
   }
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-3 p-6 max-md:p-4">
+    <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col gap-3 p-6 max-md:p-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <span className="font-medium text-foreground">최근 2시간</span>
         {LEGEND.map(st => <span key={st} className="inline-flex items-center gap-1.5"><Swatch state={st} />{STATE[st].label}</span>)}

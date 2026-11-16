@@ -148,7 +148,7 @@ export function Home(props: HomeProps) {
     </Empty>
   );
   return (
-    <main className="min-h-0 flex-1 scroll-pt-[39px] overflow-auto" data-screen={project ? 'project' : 'dashboard'}>
+    <main className="flex min-h-0 flex-1 scroll-pt-[39px] flex-col overflow-auto" data-screen={project ? 'project' : 'dashboard'}>
       {project ? (
         <ProjectHome {...props} data={data} info={project} running={running} query={query} onQuery={setQuery} search={search} />
       ) : (
@@ -222,7 +222,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
   const tree = (docs: ProjectDoc[], label: string) => <DocList docs={filterDocs(docs, query)} collapsed={collapsed} label={label} running={p.running} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />;
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v as DashTab)} className="gap-0">
+    <Tabs value={tab} onValueChange={(v) => setTab(v as DashTab)} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
         {p.narrow && (
           <SidebarTrigger aria-label="메뉴 열기">
@@ -266,7 +266,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           </Button>
         ))}
       </div>
-      <TabsContent value="home">
+      <TabsContent value="home" className="flex flex-col">
         <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onTab={setTab} />
       </TabsContent>
       {tab === 'home' ? null : empty ? (
@@ -355,7 +355,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
   const [tab, setTab] = useState<PTab>('docs');
   const { collapsed, toggle } = useCollapse();
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="gap-0">
+    <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
         {p.narrow && (
           <SidebarTrigger aria-label="메뉴 열기">
@@ -382,8 +382,8 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
         </Button>
       </header>
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
-      <div className="pb-3">
-        <TabsContent value="docs">
+      <div className="flex grow flex-col pb-3">
+        <TabsContent value="docs" className="flex flex-col">
           <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} />
         </TabsContent>
         <TabsContent value="pipelines">

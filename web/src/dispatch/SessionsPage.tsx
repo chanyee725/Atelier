@@ -138,14 +138,14 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
   );
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-6 max-md:p-4">
+    <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col gap-6 p-6 max-md:p-4">
       <div className="flex flex-col gap-2">
         <AttentionStrip onOpen={onOpen} onUsage={onUsage} />
         <SummaryLine />
       </div>
 
       {sessions.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
+        <div className="flex grow flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
           <p className="font-medium">아직 세션이 없어요</p>
           <p className="max-w-md text-sm text-muted-foreground">{scope === undefined ? '파이프라인을 시작하거나 관리자 세션이 팀을 만들면 여기에 보여요.' : '이 프로젝트의 계획에서 시작하기를 누르면 여기에 보여요.'}</p>
           <div className="mt-2 flex items-center gap-2">{tools}</div>
