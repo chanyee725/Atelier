@@ -101,6 +101,24 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   assert.equal(s.settings.team.maxChildren, 4);
   assert.equal(s.settings.team.rotateLead, before.settings.team.rotateLead, 'untouched values stay');
 
+  // 3a. Auto-remove of finished teammates (#640): the switch and the grace period save together.
+  const autoRemove = team.getByRole('checkbox', { name: '일이 끝난 팀원 자동으로 지우기' });
+  const grace = team.getByRole('spinbutton', { name: /^끝난 팀원 지우기 전 기다리는 시간/ });
+  assert.equal(await autoRemove.isChecked(), true);
+  assert.equal(await grace.inputValue(), '120');
+  await grace.fill('2');
+  await team.getByRole('button', { name: '저장' }).click();
+  await team.locator('#team-autoRemoveGraceSec-error').waitFor();
+  assert.equal((await state()).settings.team.autoRemoveGraceSec, 120, 'a bad grace is not sent');
+  await grace.fill('45');
+  await autoRemove.uncheck();
+  await team.getByRole('button', { name: '저장' }).click();
+  await team.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.equal(s.settings.team.autoRemoveDone, false);
+  assert.equal(s.settings.team.autoRemoveGraceSec, 45);
+  assert.equal(s.settings.team.maxChildren, 4);
+
   // 3b. A change made elsewhere while the modal is open shows in untouched fields, and the next save does not
   // send the old value back (#615).
   const post = (body) => fetch(`${BASE}/api/settings`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: JSON.stringify(body) });

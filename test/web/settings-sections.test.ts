@@ -12,7 +12,7 @@ test('each section shows its own fields', () => {
     const f = sectionFields(s);
     return [...f.numbers.map((n) => n.id), ...f.toggles.map((t) => t.id)];
   };
-  assert.deepEqual(ids('team'), ['rotateLead', 'rotateOthers', 'maxChildren']);
+  assert.deepEqual(ids('team'), ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec', 'autoRemoveDone']);
   assert.deepEqual(ids('folders'), ['shareDeps', 'dropWorktrees']);
   assert.deepEqual(ids('stuck'), ['stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes', 'stuckEtaRatio']);
 });
@@ -40,6 +40,30 @@ test('a section sends only its changed fields, never another section edit', () =
   }
   const f = sectionSave(saved, form, 'folders');
   assert.deepEqual(f.kind === 'save' && f.patch, { shareDeps: false });
+});
+
+test('관리자와 팀 saves auto-remove: the switch and a grace of 3~3600 s (#640)', () => {
+  assert.equal(saved.autoRemoveDone, true);
+  assert.equal(saved.autoRemoveGraceSec, 120);
+  const form = teamForm(saved);
+  form.toggles.autoRemoveDone = false;
+  form.texts.autoRemoveGraceSec = '45';
+  const r = sectionSave(saved, form, 'team');
+  assert.deepEqual(r.kind === 'save' && r.patch, { autoRemoveGraceSec: 45, autoRemoveDone: false });
+  for (const bad of ['2', '3601', '']) {
+    form.texts.autoRemoveGraceSec = bad;
+    const b = sectionSave(saved, form, 'team');
+    assert.equal(b.kind, 'invalid', bad);
+    if (b.kind === 'invalid') {
+      assert.equal(b.first, 'autoRemoveGraceSec');
+      assert.match(b.message, /3~3600 사이 숫자를 넣어 주세요/);
+    }
+  }
+  form.texts.autoRemoveGraceSec = '3600';
+  assert.equal(sectionSave(saved, form, 'team').kind, 'save');
+  const reset = resetSection(form, 'team');
+  assert.equal(reset.texts.autoRemoveGraceSec, '120');
+  assert.equal(reset.toggles.autoRemoveDone, true);
 });
 
 test('an untouched section has nothing to save', () => {

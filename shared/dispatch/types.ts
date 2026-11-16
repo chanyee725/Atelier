@@ -147,6 +147,9 @@ export interface TeamSettings {
   replyStyle: boolean;
   shareDeps: boolean;
   dropWorktrees: boolean;
+  /** Remove a finished teammate after `autoRemoveGraceSec` seconds (#632). */
+  autoRemoveDone?: boolean;
+  autoRemoveGraceSec?: number;
   roleModels: Record<string, string>;
 }
 export interface Settings { guard: { enabled: boolean; five: number; seven: number }; team: TeamSettings }

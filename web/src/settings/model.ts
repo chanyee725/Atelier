@@ -177,14 +177,16 @@ export function stopEscWhileOpen(target: Pick<EventTarget, 'addEventListener' | 
 
 // 설정 page (#587, ported from standalone Dispatch's SettingsPage): the team settings Drawing's server acts on.
 // Values are saved through POST /api/settings `team`; the server checks every range again.
-export type TeamNumberId = 'rotateLead' | 'rotateOthers' | 'maxChildren' | 'stuckFails' | 'stuckSilentMinutes' | 'stuckMismatchMinutes' | 'stuckEtaRatio';
-export type TeamToggleId = 'shareDeps' | 'dropWorktrees' | 'replyStyle';
+export type TeamNumberId = 'rotateLead' | 'rotateOthers' | 'maxChildren' | 'autoRemoveGraceSec' | 'stuckFails' | 'stuckSilentMinutes' | 'stuckMismatchMinutes' | 'stuckEtaRatio';
+export type TeamToggleId = 'shareDeps' | 'dropWorktrees' | 'replyStyle' | 'autoRemoveDone';
 /** `decimal`: one decimal place, and 0 (off) or min..max (the server's ratio check). Ranges and defaults mirror server/dispatch/settings.js. */
 export type TeamNumberField = { id: TeamNumberId; label: string; unit: string; min: number; max: number; def: number; hint: string; decimal?: boolean };
 export const TEAM_NUMBERS: TeamNumberField[] = [
   { id: 'rotateLead', label: '관리자 대화 새로 시작', unit: '턴', min: 0, max: 100, def: 5, hint: '이 턴 수마다 대화를 요약해 새 세션으로 이어 가요. 0이면 이어 가지 않아요.' },
   { id: 'rotateOthers', label: '다른 역할 대화 새로 시작', unit: '턴', min: 0, max: 100, def: 10, hint: '구현자·리뷰어·테스터 등에 같은 규칙을 써요.' },
   { id: 'maxChildren', label: '관리자 한 명이 둘 수 있는 팀원', unit: '명', min: 1, max: 16, def: 8, hint: '동시에 열려 있는 팀원 수의 상한이에요.' },
+  // Auto-remove of finished teammates (#632, #640).
+  { id: 'autoRemoveGraceSec', label: '끝난 팀원 지우기 전 기다리는 시간', unit: '초', min: 3, max: 3600, def: 120, hint: '이 시간 안에 관리자가 다시 말을 걸면 지우지 않아요.' },
   // 멈춤 감지 (#624): the server's stuck checks (server/dispatch/state.js), 0 turns a check off.
   { id: 'stuckFails', label: '같은 검사가 연달아 실패', unit: '번', min: 0, max: 20, def: 3, hint: '같은 검사 명령이 이만큼 연달아 실패하면 멈춘 것으로 봐요. 0이면 끄기예요.' },
   { id: 'stuckSilentMinutes', label: '출력 없이 도는 시간', unit: '분', min: 0, max: 240, def: 10, hint: '돌고 있는 세션에 이만큼 출력이 없으면 멈춘 것으로 봐요. 0이면 끄기예요.' },
@@ -195,6 +197,7 @@ export const TEAM_TOGGLES: { id: TeamToggleId; label: string; def: boolean; hint
   { id: 'shareDeps', label: '새 작업 폴더에 node_modules 넣기', def: true, hint: '프로젝트의 node_modules를 하드링크로 넣어요. 디스크를 더 쓰지 않아요.' },
   { id: 'dropWorktrees', label: '세션을 지우면 작업 폴더도 지우기', def: true, hint: '커밋 안 한 변경이 없을 때만 지워요. 브랜치는 남아요.' },
   { id: 'replyStyle', label: '답변 스타일 지침 넣기', def: true, hint: '모든 세션의 지시에 읽기 쉬운 답변 규칙을 붙여요.' },
+  { id: 'autoRemoveDone', label: '일이 끝난 팀원 자동으로 지우기', def: true, hint: '보고가 관리자에게 가고 기다리는 질문이 없으면 지워요. 관리자는 지우지 않아요.' },
 ];
 
 export type TeamValues = Record<TeamNumberId, number> & Record<TeamToggleId, boolean> & { roleModels: Record<string, string> };
@@ -361,7 +364,7 @@ export const firstSection = (asked: unknown, remembered: unknown): SectionId => 
 export const SECTION_FIELDS: Partial<Record<SectionId, { numbers: TeamNumberId[]; toggles: TeamToggleId[]; roleModels?: true }>> = {
   general: { numbers: [], toggles: ['replyStyle'] },
   roles: { numbers: [], toggles: [], roleModels: true },
-  team: { numbers: ['rotateLead', 'rotateOthers', 'maxChildren'], toggles: [] },
+  team: { numbers: ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec'], toggles: ['autoRemoveDone'] },
   folders: { numbers: [], toggles: ['shareDeps', 'dropWorktrees'] },
   stuck: { numbers: ['stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes', 'stuckEtaRatio'], toggles: [] },
 };
