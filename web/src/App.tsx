@@ -191,7 +191,7 @@ const CanvasSlot = memo(function CanvasSlot({ session, focus, dark, handle, onFa
 });
 
 export function App() {
-  const [theme, toggleTheme, themePref, setThemePref] = useTheme();
+  const [theme, toggleTheme, themePref, setThemePref, systemTheme] = useTheme();
   const narrow = useNarrow();
   const [navOpen, setNavOpen] = useState(false);
   const [workspace, setWorkspace] = useState<string | null>(null);
@@ -812,6 +812,7 @@ export function App() {
       }}
       themePref={themePref}
       onThemePref={setThemePref}
+      systemTheme={systemTheme}
     />
   );
 
