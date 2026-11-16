@@ -16,7 +16,8 @@ import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { shownView, toCanvas } from './viewMode';
 import { createFileSession, type FilePatch, type FileSession } from './fileSession';
 import { useSession } from './useSession';
-import { type WorkspaceEvent } from './externalChange';
+import { noteTree } from './freshPaths';
+import { canApplyLive, type WorkspaceEvent } from './externalChange';
 import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
 import { RunStrip } from './run/RunStrip';
@@ -124,6 +125,8 @@ function useSettled<T>(value: T, ms: number, reset: string): T {
 const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onNotice, onShow, onShowFrame, onExportBlock, onFail }: DocSlotProps) {
   const path = useSession(session, (s) => s.path ?? '');
   const key = useSession(session, (s) => `${s.path}#${s.loadSeq}`);
+  const live = useSession(session, (s) => s.live);
+  const remount = useCallback(() => session.remount(), [session]);
   // Blocks as drawn: a new array only when a block's id, type or code changes, not when it moves.
   const blocks = useSession(session, (s) => s.file?.blocks ?? NO_BLOCKS, sameDrawing);
   // Frames and their contents: a new array only when one of those changes (not when a block or other drawing does).
@@ -151,6 +154,8 @@ const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, o
           key={key}
           // Read once when the pane starts (it is remounted per load).
           document={session.getState().file?.document}
+          live={live}
+          onLiveFail={remount}
           blocks={blocks}
           getBlocks={getBlocks}
           getCanvas={getCanvas}
@@ -226,6 +231,7 @@ export function App() {
   const refreshTree = useCallback(async () => {
     try {
       const [t, p] = await Promise.all([api.tree(), api.projects()]);
+      noteTree(t, p.projects ?? p);
       setTree(t);
       setProjects(p);
     } catch (e) {
@@ -416,7 +422,7 @@ export function App() {
         void refreshTree();
         return;
       }
-      if (session.external(e, (p) => api.readFile(p), load) === 'close') {
+      if (session.external(e, (p) => api.readFile(p), (p, f) => (canApplyLive(session.getState().file, f) ? session.applyLive(p, f) : load(p, f))) === 'close') {
         setHashPath(null);
         // Our own delete can be announced before its response arrives: that close needs no error.
         if (!removing.current) setError('열어 둔 파일이 지워졌거나 옮겨졌어요');

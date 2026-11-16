@@ -19,3 +19,13 @@ export function externalAction(e: WorkspaceEvent, openPath: string | null, dirty
   if (e.kind === 'change' && same(e.path, openPath)) return dirty ? 'refresh' : 'reload';
   return 'refresh';
 }
+
+const same_ = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/**
+ * Can an outside change of the open file be applied in place (the document pane diffs it) or must the panes restart?
+ * The canvas pane still restarts from the file, so a change to the canvas or its blocks needs the restart for now.
+ */
+export function canApplyLive(cur: { blocks?: unknown; canvas?: unknown } | null | undefined, next: { blocks?: unknown; canvas?: unknown }): boolean {
+  return !!cur && same_(cur.blocks, next.blocks) && same_(cur.canvas, next.canvas);
+}

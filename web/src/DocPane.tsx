@@ -12,6 +12,7 @@ import { SlashCommands } from './doc/SlashMenu';
 import { WikiLinks } from './doc/WikiMenu';
 import { HeadingLinks } from './doc/HeadingLinks';
 import { buildHash, fileItems, figureItems, headingItems, outlineOf, type WikiKind } from './doc/outline';
+import { applyLiveDocument, LIVE_META } from './doc/liveApply';
 import { copyText } from './doc/clipboard';
 import { renderBlock } from './canvas/render';
 import type { ImageKind } from './export/actions';
@@ -21,6 +22,10 @@ import { Button } from './components/ui/button';
 
 type Props = {
   document: unknown;
+  /** An outside change of the file to apply in place (diffed, animated); null before the first one. */
+  live: { seq: number; document: unknown } | null;
+  /** The outside change could not be applied in place: start the pane over from the file. */
+  onLiveFail: () => void;
   /** The blocks as drawn (id, type, code); a new array only when one of those changes, not when a block moves. */
   blocks: Block[];
   /** The latest blocks, positions included. */
@@ -84,7 +89,7 @@ const newId = () => `b_${Math.random().toString(36).slice(2, 10)}`;
  * Remounted per file (App keys it), so it reads `document` only when it starts. A document the
  * editor cannot read is never saved over: the pane shows an error and stays read-only.
  */
-export const DocPane = memo(function DocPane({ document, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onNotice, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock }: Props) {
+export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onNotice, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock }: Props) {
   const getBlocksRef = useRef(getBlocks);
   getBlocksRef.current = getBlocks;
   const onDocumentRef = useRef(onDocument);
@@ -213,6 +218,8 @@ export const DocPane = memo(function DocPane({ document, blocks, getBlocks, getC
     editorProps: { attributes: { class: 'doc-editor', 'aria-label': '문서 내용' } },
     onUpdate: ({ editor: e, transaction }) => {
       if (brokenRef.current) return;
+      // An outside change taken in live is already the saved file: not an edit.
+      if (transaction.getMeta(LIVE_META)) return;
       const json = e.getJSON();
       onDocumentRef.current(json);
       if (transaction.getMeta('history$')) {
@@ -223,6 +230,17 @@ export const DocPane = memo(function DocPane({ document, blocks, getBlocks, getC
   });
 
   editorRef.current = editor;
+  // Outside changes (`live.seq` grows): diff them into the editor. The first value seen at mount is already in `document`.
+  const liveSeen = useRef(live?.seq ?? 0);
+  const onLiveFailRef = useRef(onLiveFail);
+  onLiveFailRef.current = onLiveFail;
+  useEffect(() => {
+    if (!live || live.seq === liveSeen.current || !editor) return;
+    liveSeen.current = live.seq;
+    if (brokenRef.current) return;
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!applyLiveDocument(editor, live.document, reduced)) onLiveFailRef.current();
+  }, [live, editor]);
   useEffect(() => {
     if (jump) scrollToHeading(editor, jump.id);
   }, [editor, jump]);
