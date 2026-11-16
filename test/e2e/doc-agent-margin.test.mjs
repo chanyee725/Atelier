@@ -246,6 +246,48 @@ async function run(t, view) {
     await page.mouse.move(handle.x, handle.y, { steps: 4 });
     await page.mouse.up();
     await page.waitForTimeout(300);
+
+    // 4c. Across the side↔sheet boundary (#643): the text needs 360px, so the widest sheet puts the divider at
+    // edge = split left + 360 + chrome and the narrowest side layout at edge + panel. Outside that gap the divider
+    // stays under the pointer; inside it no share fits, so it snaps to the nearer end (off by at most half the panel)
+    // and the form matches the end it took.
+    const bounds = await page.evaluate(() => {
+      const host = document.querySelector('.doc-margin');
+      const pane = document.querySelector('.split-doc');
+      const split = pane.parentElement.getBoundingClientRect();
+      const chrome = Math.max(0, pane.getBoundingClientRect().width - host.getBoundingClientRect().width);
+      const panel = parseFloat(getComputedStyle(host).getPropertyValue('--doc-margin-w')) || 304;
+      return { edge: split.left + 360 + chrome, panel };
+    });
+    const at = await page.evaluate(() => { const r = document.querySelector('.split-doc').nextElementSibling.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    const { edge, panel: pw } = bounds;
+    const cases = [
+      { x: edge + pw + 10, form: 'side', want: edge + pw + 10 },
+      { x: edge + pw - 10, form: 'side', want: edge + pw },
+      { x: edge + pw * 0.75, form: 'side', want: edge + pw },
+      { x: edge + pw * 0.25, form: 'sheet', want: edge },
+      { x: edge + 10, form: 'sheet', want: edge },
+      { x: edge - 10, form: 'sheet', want: edge - 10 },
+      // and back to the right, through the gap the other way
+      { x: edge + pw * 0.25, form: 'sheet', want: edge },
+      { x: edge + pw * 0.75, form: 'side', want: edge + pw },
+      { x: edge + pw + 10, form: 'side', want: edge + pw + 10 },
+    ];
+    for (const c of cases) {
+      await page.mouse.move(c.x, at.y, { steps: 6 });
+      await page.waitForTimeout(400);
+      const d = await divider();
+      const l = await layout();
+      const seen = JSON.stringify({ ...c, d, form: l.form, edge, pw });
+      assert.equal(l.form, c.form, `the form at the boundary: ${seen}`);
+      assert.ok(Math.abs(d - c.want) <= 8, `the divider sits where expected: ${seen}`);
+      assert.ok(Math.abs(d - c.x) <= pw / 2 + 8, `never more than half the panel from the pointer: ${seen}`);
+    }
+    await page.mouse.move(at.x, at.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
     await placeCaret();
     assert.deepEqual(await caret(), mine);
   }
