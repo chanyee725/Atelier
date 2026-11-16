@@ -139,3 +139,34 @@ export function changedValues(saved: GuardSaved, next: GuardValues, follows: boo
   } else if (saved.fableFollows || next.fable !== saved.values.fable) out.fable = next.fable;
   return out;
 }
+
+/**
+ * Reads the modal's field texts into values to save. An empty Fable field means "follow the weekly value" (#563):
+ * it takes the weekly value and `follows` becomes true, instead of a range error. Any other bad field gives the
+ * message to show.
+ */
+export function readGuardTexts(texts: Record<GuardField['id'], string>, follows: boolean): { values: GuardValues; follows: boolean } | { error: string } {
+  const fields = GUARD_FIELDS.flatMap((g) => g.fields);
+  const values = {} as GuardValues;
+  const fableEmpty = !texts.fable.trim();
+  for (const f of fields) {
+    if (f.id === 'fable' && fableEmpty) continue;
+    const v = wholeIn(texts[f.id], f.min, f.max);
+    if (v === null) return { error: `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요` };
+    values[f.id] = v;
+  }
+  if (fableEmpty) values.fable = values.seven;
+  return { values, follows: follows || fableEmpty };
+}
+
+/**
+ * Stops Esc at `target` (window, capture) while `isOpen()` is true, so a listener further down (the narrow sidebar
+ * Sheet listens on document) does not also close (#552). Returns the cleanup that removes the listener (#563).
+ */
+export function stopEscWhileOpen(target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'>, isOpen: () => boolean): () => void {
+  const onKey = (e: Event) => {
+    if ((e as KeyboardEvent).key === 'Escape' && isOpen()) e.stopPropagation();
+  };
+  target.addEventListener('keydown', onKey, { capture: true });
+  return () => target.removeEventListener('keydown', onKey, { capture: true });
+}

@@ -110,6 +110,14 @@ test('설정 modal: open, change, reset, focus return, Fable follows weekly, 390
   await dialog.getByText('저장했어요.').waitFor();
   s = await state();
   assert.deepEqual([s.guard.seven, s.guard.fable], [0.7, 0.6]);
+  // 2c. Clearing the Fable field means "follow weekly" again: no range error, fable: null is sent (#563).
+  await fable.fill('');
+  assert.match(await dialog.innerText(), /주간 한도를 따라요/);
+  await dialog.getByRole('button', { name: '저장' }).click();
+  await dialog.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.deepEqual([s.guard.seven, s.guard.fable], [0.7, undefined]);
+  assert.equal(await fable.inputValue(), '70', 'the field shows the weekly value again');
 
   // 3. An out-of-range value is not sent (the browser blocks the submit), then 기본값으로 on one field.
   await five.fill('0');

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, wholeIn } from '../../web/src/settings/model.ts';
+import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, stopEscWhileOpen, wholeIn } from '../../web/src/settings/model.ts';
 
 const settings = { guard: { enabled: true, five: 0.9, seven: 0.85 }, team: { ctxHandoff: 60 } };
 
@@ -47,4 +47,51 @@ test('changedValues clears an own Fable value when it should follow weekly again
   assert.deepEqual(changedValues(pinned, { ...pinned.values, fable: 70 }, false), { fable: 70 });
   assert.equal(fableFollows({ guard: {} }), true);
   assert.equal(fableFollows({ guard: { fable: 0.6 } }), false);
+});
+
+const texts = { five: '90', seven: '85', fable: '60', handoffMTokens: '15', ctxHandoff: '70' };
+
+test('readGuardTexts: an empty Fable field follows weekly (fable: null), never a range error (#563)', () => {
+  const pinned = { values: { ...shown, fable: 60 }, fableFollows: false };
+  for (const empty of ['', '  ']) {
+    const read = readGuardTexts({ ...texts, fable: empty }, false);
+    assert.ok(!('error' in read), JSON.stringify(read));
+    assert.equal(read.follows, true);
+    assert.equal(read.values.fable, 85, 'takes the weekly value');
+    assert.deepEqual(guardPatch(changedValues(pinned, read.values, read.follows)), { guard: { fable: null } });
+  }
+  // Already following: an empty Fable field sends nothing for Fable.
+  const read = readGuardTexts({ ...texts, fable: '' }, true);
+  assert.ok(!('error' in read));
+  assert.deepEqual(changedValues({ values: shown, fableFollows: true }, read.values, read.follows), {});
+});
+
+test('readGuardTexts keeps a typed Fable value and still rejects bad values in any field', () => {
+  assert.deepEqual(readGuardTexts(texts, false), { values: { ...shown, fable: 60 }, follows: false });
+  assert.deepEqual(readGuardTexts({ ...texts, fable: '0' }, false), { error: 'Fable 주간 한도: 1~100 사이 숫자를 넣어 주세요' });
+  assert.deepEqual(readGuardTexts({ ...texts, seven: '', fable: '' }, false), { error: '주간 한도: 1~100 사이 숫자를 넣어 주세요' });
+  assert.deepEqual(readGuardTexts({ ...texts, five: '' }, true), { error: '5시간 한도: 1~100 사이 숫자를 넣어 주세요' });
+});
+
+test('stopEscWhileOpen stops Esc only while open, and its cleanup removes the listener (#563)', () => {
+  const target = new EventTarget();
+  let open = true;
+  const stop = stopEscWhileOpen(target, () => open);
+  // Reports whether the listener called stopPropagation on the event.
+  const fire = (key: string) => {
+    const e = new Event('keydown') as Event & { key: string };
+    e.key = key;
+    let stopped = false;
+    const orig = e.stopPropagation.bind(e);
+    e.stopPropagation = () => ((stopped = true), orig());
+    target.dispatchEvent(e);
+    return stopped;
+  };
+  assert.equal(fire('Escape'), true);
+  assert.equal(fire('Enter'), false);
+  open = false;
+  assert.equal(fire('Escape'), false, 'closed: Esc passes');
+  open = true;
+  stop();
+  assert.equal(fire('Escape'), false, 'after cleanup nothing listens');
 });
