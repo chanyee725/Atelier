@@ -63,6 +63,27 @@ export function blockCodeProblem(c: unknown, at = 'codeRefs'): string | null {
   return null;
 }
 
+/**
+ * For reading stored files: block code with each bad ref dropped instead of failing the whole value. An empty
+ * `symbol` (allowed before #469) is removed and the ref kept. Anything else is returned as is for
+ * {@link blockCodeProblem} to judge.
+ */
+export function salvageBlockCode(c: unknown): unknown {
+  if (!isObj(c) || !Number.isInteger(c.v) || (c.v as number) > BLOCK_CODE_VERSION || !isObj(c.nodes)) return c;
+  const nodes: Record<string, unknown> = {};
+  for (const [k, n] of Object.entries(c.nodes)) {
+    if (!isObj(n) || !Array.isArray(n.refs)) {
+      nodes[k] = n;
+      continue;
+    }
+    const refs = n.refs
+      .map((r) => (isObj(r) && r.symbol === '' ? Object.fromEntries(Object.entries(r).filter(([f]) => f !== 'symbol')) : r))
+      .filter((r, i) => refProblem(r, `refs[${i}]`) === null);
+    nodes[k] = { ...n, refs };
+  }
+  return { ...c, nodes };
+}
+
 const cleanRef = (r: CodeRef): CodeRef => {
   const o: CodeRef = { path: normalizeCodePath(r.path), start: r.start };
   if (r.end !== undefined) o.end = r.end;
