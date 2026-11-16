@@ -2,21 +2,24 @@
 // when it is hidden and notifications are on (설정 > 일반, dispatch/lib/notify.ts). Start, finish and error only;
 // progress stays in the bell's feed, where every toast can be found again. Toasts sit in one popover="manual" region
 // (no light dismiss), close themselves after a while unless hovered or focused, and never take focus.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { X } from 'lucide-react';
 import { activitySentence } from '../../../shared/dispatch/agent-activity.ts';
 import { alertsOn } from '../dispatch/lib/notify';
-import { alertRoute, MODAL_SELECTOR, type ActivityEvent } from './activity';
+import { alertRoute, MODAL_SELECTOR, nextToasts, type ActivityEvent, type ToastAction, type ToastQueue } from './activity';
 import { onNewActivity } from './store';
 import './activity.css';
 
 const SHOW_MS = 6_000;
+/** At most this many on screen at once; the rest wait their turn (none is dropped). */
 const MAX_TOASTS = 3;
 const MODAL_CHECK_MS = 400;
 /** A modal dialog is open: the page behind it is inert, so a toast could be neither read nor closed. */
 const modalOpen = () => !!document.querySelector(MODAL_SELECTOR);
 
 type Toast = { id: string; text: string; kind: ActivityEvent['kind']; color?: string };
+const reduce = (q: ToastQueue<Toast>, a: ToastAction<Toast>) => nextToasts(q, a, MAX_TOASTS);
+const EMPTY: ToastQueue<Toast> = { shown: [], waiting: [] };
 
 /** Screen readers hear the toast's text (ariaNotify where there is one, else the polite live region). */
 function announce(text: string, region: HTMLElement | null) {
@@ -30,21 +33,20 @@ function announce(text: string, region: HTMLElement | null) {
 }
 
 export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  // Toasts that came while a modal dialog was open, or while MAX_TOASTS were on screen, wait in q.waiting.
+  const [q, dispatch] = useReducer(reduce, EMPTY);
+  const toasts = q.shown;
   const box = useRef<HTMLDivElement>(null);
   const live = useRef<HTMLParagraphElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const held = useRef(false);
-  // Toasts that came while a modal dialog was open wait here (newest MAX_TOASTS) until it closes.
-  const waiting = useRef<Toast[]>([]);
-  const waitTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const open = useRef(onOpen);
   open.current = onOpen;
 
   const close = (id: string) => {
     clearTimeout(timers.current.get(id));
     timers.current.delete(id);
-    setToasts((t) => t.filter((x) => x.id !== id));
+    dispatch({ type: 'close', id, blocked: modalOpen() });
   };
   const later = (id: string) => {
     clearTimeout(timers.current.get(id));
@@ -54,19 +56,23 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
     );
   };
 
-  const show = (t: Toast) => {
-    setToasts((all) => [...all.filter((x) => x.id !== t.id), t].slice(-MAX_TOASTS));
-    later(t.id);
-    announce(t.text, live.current);
-  };
-  const showWaiting = () => {
-    if (modalOpen()) return;
-    clearInterval(waitTimer.current);
-    waitTimer.current = undefined;
-    const all = waiting.current;
-    waiting.current = [];
-    all.forEach(show);
-  };
+  // A toast that just came on screen starts its timer and is announced (once).
+  useEffect(() => {
+    for (const t of toasts) {
+      if (timers.current.has(t.id)) continue;
+      later(t.id);
+      announce(t.text, live.current);
+    }
+  }, [toasts]);
+
+  // While toasts wait, look now and then for the modal dialog to close (a Radix sheet gives no event the page can
+  // hear). Unchanged queue when there is nothing to do, so this does not re-render.
+  const hasWaiting = q.waiting.length > 0;
+  useEffect(() => {
+    if (!hasWaiting) return;
+    const t = setInterval(() => dispatch({ type: 'fill', blocked: modalOpen() }), MODAL_CHECK_MS);
+    return () => clearInterval(t);
+  }, [hasWaiting]);
 
   useEffect(
     () =>
@@ -88,21 +94,13 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
         }
         if (route !== 'toast') return;
         const toast: Toast = { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}) };
-        // Not behind a modal dialog, where it could be neither read nor closed (the bell's feed keeps it anyway).
-        if (modalOpen()) {
-          waiting.current = [...waiting.current.filter((x) => x.id !== toast.id), toast].slice(-MAX_TOASTS);
-          waitTimer.current ??= setInterval(showWaiting, MODAL_CHECK_MS);
-          return;
-        }
-        show(toast);
+        // Not behind a modal dialog, where it could be neither read nor closed: it waits until the dialog closes.
+        dispatch({ type: 'add', toast, blocked: modalOpen() });
       }),
     [],
   );
   useEffect(
-    () => () => {
-      timers.current.forEach(clearTimeout);
-      clearInterval(waitTimer.current);
-    },
+    () => () => timers.current.forEach(clearTimeout),
     [],
   );
 
