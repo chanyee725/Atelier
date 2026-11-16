@@ -41,6 +41,32 @@ export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: bool
 export const MODAL_SELECTOR =
   'dialog:modal, [data-slot="dialog-content"][data-state="open"], [data-slot="sheet-content"][data-state="open"], [role="dialog"][aria-modal="true"]';
 
+/** Toasts on screen and those waiting their turn, both oldest first. */
+export type ToastQueue<T extends { id: string }> = { shown: T[]; waiting: T[] };
+/** blocked: a modal dialog is open (MODAL_SELECTOR), so nothing new may appear behind it. */
+export type ToastAction<T> = ({ type: 'add'; toast: T } | { type: 'close'; id: string } | { type: 'fill' }) & { blocked: boolean };
+
+/**
+ * The toasts after an action. No toast is ever dropped: a new one waits, however many are waiting, and the oldest
+ * waiting ones fill the screen up to max whenever nothing modal blocks it (after an add, a close, or a modal closing).
+ * The same queue when nothing changed, so a poll that finds nothing to do does not re-render.
+ */
+export function nextToasts<T extends { id: string }>(q: ToastQueue<T>, a: ToastAction<T>, max: number): ToastQueue<T> {
+  let { shown, waiting } = q;
+  if (a.type === 'add') {
+    const id = a.toast.id;
+    if (!shown.some((t) => t.id === id) && !waiting.some((t) => t.id === id)) waiting = [...waiting, a.toast];
+  } else if (a.type === 'close' && shown.some((t) => t.id === a.id)) {
+    shown = shown.filter((t) => t.id !== a.id);
+  }
+  const room = max - shown.length;
+  if (!a.blocked && room > 0 && waiting.length) {
+    shown = [...shown, ...waiting.slice(0, room)];
+    waiting = waiting.slice(room);
+  }
+  return shown === q.shown && waiting === q.waiting ? q : { shown, waiting };
+}
+
 export type FeedItem = { id: string; text: string; when: string; unread: boolean; file: string; color?: string; kind: ActivityEvent['kind'] };
 
 /** "방금", "3분 전", "2시간 전", else the date ("11월 16일"). */
