@@ -15,8 +15,6 @@ export type ProviderMeta = {
   short: string;
   /** The CLI it logs in through, e.g. Claude Code. */
   cliName: string;
-  /** One letter for the dialog's badge. */
-  mark: string;
   /** Usage from /api/limits, read under `limits[id]` (Claude also has Fable's own weekly window). */
   usage: boolean;
   /** Reports no usage windows, only that its quota was hit (Gemini). */
@@ -28,9 +26,9 @@ export type ProviderMeta = {
 };
 
 export const PROVIDERS: readonly ProviderMeta[] = [
-  { id: 'claude', name: 'Claude', short: 'Claude', cliName: 'Claude Code', mark: 'C', usage: true },
-  { id: 'openai', name: 'OpenAI Codex', short: 'Codex', cliName: 'Codex CLI', mark: 'O', usage: true, keyLogin: true, keyLabel: 'OpenAI API 키' },
-  { id: 'gemini', name: 'Gemini', short: 'Gemini', cliName: 'Antigravity CLI (agy)', mark: 'G', usage: true, windowless: true },
+  { id: 'claude', name: 'Claude', short: 'Claude', cliName: 'Claude Code', usage: true },
+  { id: 'openai', name: 'OpenAI Codex', short: 'Codex', cliName: 'Codex CLI', usage: true, keyLogin: true, keyLabel: 'OpenAI API 키' },
+  { id: 'gemini', name: 'Gemini', short: 'Gemini', cliName: 'Antigravity CLI (agy)', usage: true, windowless: true },
 ];
 export const providerMeta = (id: string) => PROVIDERS.find((m) => m.id === id);
 /** Korean object particle for a name (Claude를, ...): 을 after a final consonant in Hangul, else 를. */
