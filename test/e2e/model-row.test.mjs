@@ -118,6 +118,28 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   assert.equal(await checked(), '시스템');
   assert.equal(await page.evaluate(() => localStorage.getItem('drawing.theme')), null, '시스템 stores nothing');
   assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.tabIndex)), [0, -1, -1, -1], 'one tab stop');
+  // #612: one theme store. 모니터링 picked in the sidebar stays through prefers-color-scheme flips, here and on the
+  // Dispatch screen (its own useTheme() caller).
+  await radio('모니터링').click();
+  const kept = async (p) => {
+    for (const scheme of ['dark', 'light']) {
+      await p.emulateMedia({ colorScheme: scheme });
+      assert.deepEqual(await p.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.classList.contains('monitor'), localStorage.getItem('drawing.theme')]), ['dark', true, 'monitor'], `kept after ${scheme}`);
+    }
+  };
+  await kept(page);
+  await page.goto(`${BASE}/dispatch`);
+  await page.waitForLoadState('networkidle');
+  await kept(page);
+  await page.goto(BASE);
+  await themes.waitFor();
+  // Forced colours: only the chosen radio takes Highlight; the others keep the system button colours.
+  await page.emulateMedia({ forcedColors: 'active' });
+  const fills = await themes.getByRole('radio').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  assert.equal(new Set(fills.slice(0, 3)).size, 1, `unchosen radios look alike: ${fills}`);
+  assert.notEqual(fills[3], fills[0], `chosen radio stands out: ${fills}`);
+  await shot('theme-forced-colors.png');
+  await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
   await radio('라이트').click();
   assert.equal(await page.getByRole('dialog').count(), 0, 'no settings dialog');
   await page.locator('body').click({ position: { x: 700, y: 400 } });
