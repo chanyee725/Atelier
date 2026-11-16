@@ -95,12 +95,14 @@ export function guardValue(id: GuardField['id'], s: { guard: { five: number; sev
   return s.team[id] || f.def;
 }
 
-/** A settings patch for the given field values (percent fields become fractions). */
-export function guardPatch(values: Partial<Record<GuardField['id'], number>>) {
-  const guard: Record<string, number> = {};
+/** A settings patch for the given field values (percent fields become fractions; `fable: null` follows weekly again). */
+export function guardPatch(values: Partial<Record<GuardField['id'], number | null>>) {
+  const guard: Record<string, number | null> = {};
   const team: Record<string, number> = {};
-  for (const [k, v] of Object.entries(values) as [GuardField['id'], number][]) {
-    if (k === 'five' || k === 'seven' || k === 'fable') guard[k] = v / 100;
+  for (const [k, v] of Object.entries(values) as [GuardField['id'], number | null][]) {
+    if (k === 'fable' && v === null) guard.fable = null;
+    else if (v === null) continue;
+    else if (k === 'five' || k === 'seven' || k === 'fable') guard[k] = v / 100;
     else team[k] = v;
   }
   return { ...(Object.keys(guard).length ? { guard } : {}), ...(Object.keys(team).length ? { team } : {}) };
@@ -111,4 +113,29 @@ export function wholeIn(input: string, min: number, max: number): number | null 
   const n = Number(input.trim());
   if (!input.trim() || !Number.isInteger(n) || n < min || n > max) return null;
   return n;
+}
+
+export type GuardValues = Record<GuardField['id'], number>;
+/** What the modal last loaded or saved: the shown values and whether Fable follows the weekly value (no own value). */
+export type GuardSaved = { values: GuardValues; fableFollows: boolean };
+
+/** True when settings have no own Fable value, so it follows the weekly one. */
+export const fableFollows = (s: { guard: { fable?: number | null } }) => s.guard.fable == null;
+
+/**
+ * The values to send: only fields that differ from what was saved, so an untouched Fable value is never pinned (#552).
+ * `follows` is whether Fable should follow the weekly value after this save: it is sent as `fable: null` when the
+ * saved state had its own value, and left out otherwise. A Fable value the user typed while it followed is sent even
+ * when it equals the value shown, since that pins it on purpose.
+ */
+export function changedValues(saved: GuardSaved, next: GuardValues, follows: boolean): Partial<Record<GuardField['id'], number | null>> {
+  const out: Partial<Record<GuardField['id'], number | null>> = {};
+  for (const id of Object.keys(next) as GuardField['id'][]) {
+    if (id === 'fable') continue;
+    if (next[id] !== saved.values[id]) out[id] = next[id];
+  }
+  if (follows) {
+    if (!saved.fableFollows) out.fable = null;
+  } else if (saved.fableFollows || next.fable !== saved.values.fable) out.fable = next.fable;
+  return out;
 }

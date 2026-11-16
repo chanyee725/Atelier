@@ -6,13 +6,17 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api, type DispatchSettings } from '../api';
 import { SidebarMenuButton } from '../components/ui/sidebar';
 import { cn } from '../lib/utils';
-import { GUARD_FIELDS, guardPatch, guardValue, wholeIn, type GuardField } from './model';
+import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, wholeIn, type GuardField, type GuardSaved, type GuardValues } from './model';
 import './limits.css';
 
 const ALL = GUARD_FIELDS.flatMap((g) => g.fields);
 type Texts = Record<GuardField['id'], string>;
 const toTexts = (s: DispatchSettings): Texts => Object.fromEntries(ALL.map((f) => [f.id, String(guardValue(f.id, s))])) as Texts;
 const defaults = (): Texts => Object.fromEntries(ALL.map((f) => [f.id, String(f.def)])) as Texts;
+const toSaved = (s: DispatchSettings): GuardSaved => ({
+  values: Object.fromEntries(ALL.map((f) => [f.id, guardValue(f.id, s)])) as GuardValues,
+  fableFollows: fableFollows(s),
+});
 
 export function SettingsEntry() {
   const [open, setOpen] = useState(false);
@@ -47,9 +51,20 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
   const [texts, setTexts] = useState<Texts>(defaults);
   const [note, setNote] = useState<{ text: string; bad?: boolean }>({ text: '' });
   const [saving, setSaving] = useState(false);
+  // What was last loaded or saved, and whether Fable follows the weekly value; only changes are sent (#552).
+  const [saved, setSaved] = useState<GuardSaved | null>(null);
+  const [follows, setFollows] = useState(true);
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
+    // Below 768px the sidebar is a Radix Sheet that listens for Esc on document (capture), so one Esc would close
+    // the Sheet too and unmount the 설정 row focus returns to (#552). Stop the key at window, before document; the
+    // dialog's own close request still runs, since it is the key's default action, not a listener.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && ref.current?.open) e.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => window.removeEventListener('keydown', onKey, { capture: true });
   }, []);
   useEffect(() => {
     let alive = true;
@@ -61,6 +76,8 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
         if (!alive) return;
         if (!s.settings) return setLoad({ kind: 'off', message: '설정을 불러오지 못했어요.' });
         setTexts(toTexts(s.settings));
+        setSaved(toSaved(s.settings));
+        setFollows(fableFollows(s.settings));
         setLoad({ kind: 'ok' });
       } catch {
         if (alive) setLoad({ kind: 'off', message: '설정을 불러오지 못했어요.' });
@@ -71,13 +88,28 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value.
   const set = (id: GuardField['id'], v: string) => {
-    setTexts((t) => ({ ...t, [id]: v }));
+    setTexts((t) => ({ ...t, [id]: v, ...(id === 'seven' && follows ? { fable: v } : {}) }));
+    if (id === 'fable') setFollows(false);
+    setNote({ text: '' });
+  };
+  const followWeekly = (t: Texts): Texts => ({ ...t, fable: t.seven });
+  const resetAll = () => {
+    setTexts(followWeekly(defaults()));
+    setFollows(true);
+    setNote({ text: '' });
+  };
+  const resetOne = (f: GuardField) => {
+    if (f.id !== 'fable') return set(f.id, String(f.def));
+    setTexts(followWeekly);
+    setFollows(true);
     setNote({ text: '' });
   };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const values: Partial<Record<GuardField['id'], number>> = {};
+    if (!saved) return;
+    const values = {} as GuardValues;
     for (const f of ALL) {
       const v = wholeIn(texts[f.id], f.min, f.max);
       if (v === null) return setNote({ text: `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요`, bad: true });
@@ -85,8 +117,10 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
     }
     setSaving(true);
     try {
-      const next = await api.saveDispatchSettings(guardPatch(values));
+      const next = await api.saveDispatchSettings(guardPatch(changedValues(saved, values, follows)));
       setTexts(toTexts(next));
+      setSaved(toSaved(next));
+      setFollows(fableFollows(next));
       setNote({ text: '저장했어요.' });
     } catch (err) {
       setNote({ text: err instanceof Error ? err.message : '저장하지 못했어요.', bad: true });
@@ -126,7 +160,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
                   <li key={f.id} className="flex flex-wrap items-end gap-x-3 gap-y-1">
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <label htmlFor={`limit-${f.id}`} className="text-xs text-muted-foreground">
-                        {f.label} ({f.unit}) · 기본값 {f.def}
+                        {f.label} ({f.unit}) · {f.id === 'fable' ? (follows ? '주간 한도를 따라요' : '기본값 주간 한도와 같음') : `기본값 ${f.def}`}
                       </label>
                       <input
                         id={`limit-${f.id}`}
@@ -146,8 +180,8 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
                     <button
                       type="button"
                       aria-label={`${f.label} 기본값으로`}
-                      disabled={texts[f.id] === String(f.def)}
-                      onClick={() => set(f.id, String(f.def))}
+                      disabled={f.id === 'fable' ? follows : texts[f.id] === String(f.def)}
+                      onClick={() => resetOne(f)}
                       className={cn(btn, 'text-muted-foreground disabled:opacity-50')}
                     >
                       기본값으로
@@ -165,7 +199,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
         </p>
         {load.kind === 'ok' && (
           <div className="flex flex-wrap justify-end gap-2">
-            <button type="button" onClick={() => setTexts(defaults())} className={cn(btn, 'border')}>
+            <button type="button" onClick={resetAll} className={cn(btn, 'border')}>
               모두 기본값으로
             </button>
             <button type="submit" disabled={saving} className={cn(btn, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 enabled:hover:text-primary-foreground disabled:opacity-50')}>
