@@ -90,7 +90,7 @@ export async function dropWorktree(root, dir, { strict = false, info = {} } = {}
     // deletes with it. Keep it when HEAD is detached or on no branch; a failed check keeps it too.
     if (await detachedOrOrphan(dir, info)) return false;
   } else st = await out(git(dir, "status", "--porcelain"));
-  if (st.split("\n").filter(Boolean).map(l => l.slice(3)).some(f => keep(f.replace(/\/$/, "")))) return false;
+  if (st.split("\n").filter(Boolean).some(l => !noiseLine(l))) return false;
   try { await git(root, "worktree", "remove", "--force", dir); return true; } catch { return false; }
 }
 
@@ -105,9 +105,17 @@ async function detachedOrOrphan(dir, info) {
   } catch { info.unknown = true; return true; }
 }
 
-const NOISE = new Set(["node_modules", ".next", ".next-prod", "dist", "coverage", ".playwright-mcp", "test-results", "playwright-report"]);
-// Build noise at any depth (web/node_modules, web/dist), not only at the top level.
-const keep = f => !f.split("/").some(seg => NOISE.has(seg));
+const NOISE = new Set(["node_modules", ".next", ".next-prod", "dist", ".playwright-mcp", "test-results", "playwright-report"]);
+const IGNORED_NOISE = new Set([...NOISE, "coverage"]);
+// Untracked files count as work unless they sit in a top-level noise folder (a linked node_modules).
+const keep = f => !NOISE.has(f.split("/")[0]);
+// Changed tracked files are always work. Only files git ignores may be noise at any depth
+// (web/node_modules, web/dist, coverage): `?? src/dist/new.js` or ` M docs/dist/x.md` is real work.
+const noiseLine = l => {
+  const f = l.slice(3).replace(/\/$/, "");
+  if (l.startsWith("!! ")) return f.split("/").some(seg => IGNORED_NOISE.has(seg));
+  return l.startsWith("?? ") && !keep(f);
+};
 const out = p => p.then(r => r.stdout, () => "");
 
 /**

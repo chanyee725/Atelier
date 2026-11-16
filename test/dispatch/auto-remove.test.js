@@ -113,6 +113,17 @@ test("a message refused while a Codex teammate runs leaves the timer armed (#635
   assert.equal(store.data.sessions.K, undefined, "removed on schedule: the message never went out");
 });
 
+test("send() stops the timer once the message is delivered (#635)", () => {
+  const { hub, finish } = makeHub();
+  finish();
+  assert.ok(hub.rt("K").autoRemove, "armed by the report");
+  const sent = [];
+  hub.deliver = (s, r, text) => { sent.push(text); }; // delivered, status untouched
+  hub.send("K", "하나 더");
+  assert.deepEqual(sent, ["하나 더"]);
+  assert.equal(hub.rt("K").autoRemove, null, "cancelled after delivery");
+});
+
 test("a pending permission or a question to the user keeps the teammate", async () => {
   const { hub, store, kid, finish } = makeHub();
   hub.rt("K").perms.set("r1", { requestId: "r1", tool: "Bash" });
@@ -271,6 +282,25 @@ test("dropWorktree strict (auto-remove) keeps ignored files and failed status; t
   writeFileSync(join(nestedEnv, "web", "dist", "a.js"), "");
   writeFileSync(join(nestedEnv, "web", ".env"), "SECRET=1");
   assert.equal(await dropWorktree(root, nestedEnv, { strict: true }), false, "a nested .env still keeps it");
+
+  // Only ignored files are noise below the top level: untracked or changed work in a dist/coverage
+  // folder that .gitignore does not cover keeps the worktree.
+  writeFileSync(join(root, ".gitignore"), ".env\nnode_modules/\n");
+  execFileSync("mkdir", ["-p", join(root, "docs", "dist")]);
+  writeFileSync(join(root, "docs", "dist", "x.md"), "v1");
+  git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "docs");
+  for (const f of [["src", "dist", "new.js"], ["packages", "x", "coverage", "report.ts"]]) {
+    const w = wt(`w-untracked-${f[0]}`);
+    execFileSync("mkdir", ["-p", join(w, ...f.slice(0, -1))]);
+    writeFileSync(join(w, ...f), "work");
+    assert.equal(await dropWorktree(root, w, { strict: true }), false, `?? ${f.join("/")} keeps it`);
+    assert.equal(await dropWorktree(root, w), false, `manual: ?? ${f.join("/")} keeps it`);
+    assert.ok(existsSync(w));
+  }
+  const changed = wt("w-changed");
+  writeFileSync(join(changed, "docs", "dist", "x.md"), "v2");
+  assert.equal(await dropWorktree(root, changed, { strict: true }), false, " M docs/dist/x.md keeps it");
+  assert.equal(await dropWorktree(root, changed), false, "manual: a changed tracked file keeps it");
 
   const broken = wt("w-broken");
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
