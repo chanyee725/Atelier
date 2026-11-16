@@ -31,6 +31,7 @@ export const PRIMARY_BTN = cn(BTN, 'bg-primary text-primary-foreground enabled:h
  */
 export function LimitsForm({ load, onRetry, labelledBy, className }: { load: SettingsLoad; onRetry: () => void; labelledBy?: string; className?: string }) {
   const settings = useDispatch((s) => s.settings) as unknown as DispatchSettings;
+  const providers = useDispatch((s) => s.providers);
   const fromStore = useMemo(() => toSaved(settings), [settings]);
   const [texts, setTexts] = useState<Texts>(() => toTexts(settings));
   const [note, setNote] = useState<{ text: string; bad?: boolean }>({ text: '' });
@@ -94,11 +95,12 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
       {(load.kind === 'loading' || load.kind === 'failed') && <LoadNote load={load} onRetry={onRetry} />}
       {off && <OffNote id={offId} status={load.status} />}
       {(load.kind === 'ok' || off) &&
-        GUARD_FIELDS.map((g) => (
-          <fieldset key={g.title} disabled={off} aria-describedby={off ? offId : undefined} className="flex flex-col gap-2 disabled:opacity-60">
+        // A provider's group shows once that provider is connected (#676); with Dispatch off every group shows read-only.
+        GUARD_FIELDS.filter((g) => !g.provider || off || (providers as Record<string, { connected?: boolean } | undefined>)[g.provider]?.connected).map((g) => (
+          <fieldset key={g.title} disabled={off} aria-describedby={off ? offId : undefined} data-provider={g.provider} className="flex flex-col gap-2 disabled:opacity-60">
             <legend className="text-sm font-medium">{g.title}</legend>
             <p className="text-xs text-muted-foreground">{g.hint}</p>
-            <ul className="flex flex-col gap-2">
+            {g.fields.length > 0 && <ul className="flex flex-col gap-2">
               {g.fields.map((f) => (
                 <li key={f.id} className="flex flex-wrap items-end gap-x-3 gap-y-1">
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -133,7 +135,7 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
                   </span>
                 </li>
               ))}
-            </ul>
+            </ul>}
           </fieldset>
         ))}
       <p role="status" className={cn('min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>

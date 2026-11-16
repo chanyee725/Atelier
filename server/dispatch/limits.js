@@ -57,8 +57,9 @@ export async function codexLimits(dir = CODEX_SESSIONS, now = Date.now()) {
         for (; end < text.length; end++) { if (text[end] === "{") depth++; else if (text[end] === "}" && --depth === 0) break; }
         const rl = JSON.parse(text.slice(start, end + 1));
         const num01 = v => (typeof v === "number" && Number.isFinite(v) ? v / 100 : 0);
-        const win = w => (w ? { label: windowLabel(w.window_minutes ?? 0), used: num01(w.used_percent), reset: typeof w.resets_at === "number" ? w.resets_at * 1000 : null } : null);
-        value = { windows: [win(rl.primary), win(rl.secondary)].filter(Boolean), plan: typeof rl.plan_type === "string" ? rl.plan_type : null, updatedAt: f.mtime };
+        // slot: which Codex guard threshold applies (primary = the short window, secondary = the weekly one).
+        const win = (w, slot) => (w ? { slot, label: windowLabel(w.window_minutes ?? 0), used: num01(w.used_percent), reset: typeof w.resets_at === "number" ? w.resets_at * 1000 : null } : null);
+        value = { windows: [win(rl.primary, "five"), win(rl.secondary, "seven")].filter(Boolean), plan: typeof rl.plan_type === "string" ? rl.plan_type : null, updatedAt: f.mtime };
       }
     }
   } catch { value = null; }

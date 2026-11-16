@@ -17,12 +17,24 @@ export const subjParticle = (name: string) => {
 export const providerName = (id: string, providers: Record<string, ProviderLike>) =>
   PROVIDERS.find((m) => m.id === id)?.name ?? (providers[id]?.name || id);
 
-/** Models grouped by provider, providers in PROVIDERS order (unknown ones after, in list order). */
-export function modelGroups(models: readonly ModelOption[], providers: Record<string, ProviderLike>): { provider: string; name: string; models: ModelOption[] }[] {
+/**
+ * Models grouped by provider, providers in PROVIDERS order (unknown ones after, in list order). Every known provider
+ * gets a group, even with no models yet (Codex lists its models only once connected), so the picker can show it.
+ * `off` is why a provider's models cannot be picked now (not connected), null when they can (#676).
+ */
+export function modelGroups(
+  models: readonly ModelOption[],
+  providers: Record<string, ProviderLike>,
+): { provider: string; name: string; models: ModelOption[]; off: string | null }[] {
   const by = new Map<string, ModelOption[]>();
   for (const m of models) by.set(m.provider, [...(by.get(m.provider) ?? []), m]);
-  const order = [...PROVIDERS.map((p) => p.id).filter((id) => by.has(id)), ...[...by.keys()].filter((id) => !PROVIDERS.some((p) => p.id === id))];
-  return order.map((provider) => ({ provider, name: providerName(provider, providers), models: by.get(provider)! }));
+  const order = [...PROVIDERS.map((p) => p.id), ...[...by.keys()].filter((id) => !PROVIDERS.some((p) => p.id === id))];
+  return order.map((provider) => ({
+    provider,
+    name: providerName(provider, providers),
+    models: by.get(provider) ?? [],
+    off: providers[provider]?.connected ? null : '연결 안 됨',
+  }));
 }
 
 /**

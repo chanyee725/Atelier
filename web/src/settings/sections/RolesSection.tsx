@@ -63,7 +63,7 @@ export default function RolesSection() {
   };
 
   return (
-    <SectionFrame title="역할별 모델" hint="역할마다 새 세션이 쓸 기본 모델이에요. 새로 여는 세션부터 적용돼요." testId="settings-section-roles">
+    <SectionFrame title="역할별 모델" hint="역할마다 새 세션이 쓸 기본 모델이에요. 연결한 모델이면 어느 것이든 고를 수 있고, 새로 여는 세션부터 적용돼요." testId="settings-section-roles">
       <LoadNote load={load} onRetry={retry} />
       {off && <OffNote id={offId} status={load.status} />}
       <form noValidate onSubmit={(e) => void submit(e)} aria-label="역할별 모델" data-testid="settings-role-models" className="flex flex-col gap-3">
@@ -99,8 +99,10 @@ export default function RolesSection() {
                     className={cn('h-8 min-w-0 max-w-full flex-1 rounded-md border bg-background px-2 text-sm aria-invalid:border-warn max-md:h-11', FOCUS)}
                   >
                     {!list.some((m) => m.id === value) && <option value={value}>{value}</option>}
+                    {/* An unconnected provider's models stay visible but cannot be picked, with the reason in the group label (#676). */}
                     {groups.map((g) => (
-                      <optgroup key={g.provider} label={g.name}>
+                      <optgroup key={g.provider} label={g.off ? `${g.name} · ${g.off}` : g.name} disabled={!!g.off}>
+                        {g.models.length === 0 && <option disabled value="">{g.off ? '연결하면 모델이 보여요' : '모델이 없어요'}</option>}
                         {g.models.map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.label}
