@@ -111,7 +111,7 @@ test('outside changes apply live: new file, new paragraphs, a growing diagram', 
   // Step 2: paragraphs and a heading are added to the open document, then text changes in place, then a block goes.
   await write('open.dpx.json', { document: docOf(head('Intro'), ...filler, head('Added heading'), para('Added by the agent, step one.')) });
   await page.getByText('Added by the agent, step one.').waitFor({ timeout: 10_000 });
-  await page.getByText('Added heading').waitFor();
+  await page.locator('.doc-editor h2', { hasText: 'Added heading' }).waitFor();
   await write('open.dpx.json', { document: docOf(head('Intro'), ...filler.slice(0, 59), head('Added heading'), para('Added by the agent, step two (changed).')) });
   await page.getByText('step two (changed)').waitFor({ timeout: 10_000 });
   await page.waitForFunction(() => !document.body.innerText.includes('step one.') && !document.body.innerText.includes('Filler line 59'), null, { timeout: 5000 });
