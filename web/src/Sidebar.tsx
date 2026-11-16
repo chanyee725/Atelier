@@ -1,9 +1,9 @@
 // App sidebar, layout B (design doc 6 §2.1, §3.1): workspace name with search and new-file icons, the views
-// (모든 파일 A, 최근 R, 보관함 B), projects with their nested sub-documents, one row per model with its connection
+// (모든 파일 A, 최근 R, 보관함 B) and the 세션 보드 link, projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -24,7 +24,7 @@ import {
 } from './components/ui/sidebar';
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
-import { openPathsFor, type Section } from './projectNav';
+import { openPathsFor, projectOf, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
 import { ActivityBell } from './activity/ActivityBell';
@@ -55,6 +55,12 @@ type Props = {
   onThemePref: (t: ThemePref) => void;
   systemTheme: Theme;
 };
+
+/** Session board URL, scoped to `folder` when given (same hash the project dashboard's link uses). */
+const boardHref = (folder: string | null) => (folder ? `/dispatch#folder=${encodeURIComponent(folder)}` : '/dispatch');
+
+/** The project in view: the picked project section, or the project holding the open document. */
+const boardFolder = (p: Pick<Props, 'section' | 'view' | 'current'>) => (p.section.kind === 'project' ? p.section.path : (projectOf(p.view, p.current)?.path ?? null));
 
 const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
 
@@ -360,6 +366,15 @@ export function Sidebar(p: Props) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
+          <SidebarMenuItem>
+            {/* The board is its own page (/dispatch, #699): it opens scoped to the project in view, else all projects. */}
+            <SidebarMenuButton asChild>
+              <a href={boardHref(boardFolder(p))} data-nav="board">
+                <LayoutGrid aria-hidden />
+                <span className="truncate">세션 보드</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
         <WorkingAgents current={p.current} onOpen={p.onOpen} titleOf={(path) => titles.get(path) ?? null} />
         <SidebarGroup className="mt-3">
