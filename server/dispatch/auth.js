@@ -1,18 +1,23 @@
 import { runCli as run, spawnCli } from "./cli.js";
 
-// Login itself is delegated to each CLI: it opens the browser OAuth flow and keeps its own credentials.
-// Dispatch never reads or stores tokens, keys, or account emails.
+// Providers as standalone Dispatch has them (issue #587): Claude (claude), OpenAI Codex (codex) and
+// Gemini (agy, the Antigravity CLI). Login itself is delegated to each CLI: it opens the browser OAuth
+// flow and keeps its own credentials. Drawing never reads or stores tokens, keys, or account emails.
 const CLI = {
+  gemini: { bin: "agy", login: ["install"], logout: null, store: "~/.gemini/antigravity-cli" },
   claude: { bin: "claude", login: ["auth", "login"], logout: ["auth", "logout"], store: "~/.claude" },
+  openai: { bin: "codex", login: ["login"], logout: ["logout"], store: "~/.codex" },
 };
+export const PROVIDER_IDS = Object.keys(CLI);
 
-const state = {
-  claude: { busy: false, url: null, error: null },
-};
+const state = Object.fromEntries(PROVIDER_IDS.map(id => [id, { busy: false, url: null, error: null }]));
 
 async function version(bin) {
   try { return (await run(bin, ["--version"], { timeout: 10000 })).stdout.trim().split("\n")[0]; } catch { return null; }
 }
+
+// agy has no status command: an installed CLI counts as logged in, as in Dispatch.
+const geminiStatus = v => ({ connected: !!v, method: v ? "Antigravity CLI (agy)" : null });
 
 async function claudeStatus() {
   try {
@@ -27,11 +32,27 @@ async function claudeStatus() {
   }
 }
 
+async function codexStatus() {
+  try {
+    const { stdout, stderr } = await run("codex", ["login", "status"], { timeout: 15000 });
+    const out = (stdout + stderr).trim();
+    const connected = /logged in/i.test(out) && !/not logged in/i.test(out);
+    const method = !connected ? null : /chatgpt/i.test(out) ? "ChatGPT 계정" : /api key/i.test(out) ? "API 키" : "로그인됨";
+    return { connected, method };
+  } catch {
+    return { connected: false, method: null };
+  }
+}
+
 export async function providerStatus() {
-  const [cv, cs] = await Promise.all([version("claude"), claudeStatus()]);
+  const [gv, cv, ov, cs, os] = await Promise.all([version("agy"), version("claude"), version("codex"), claudeStatus(), codexStatus()]);
   return {
+    gemini: { name: "Gemini", installed: !!gv, cli: gv, ...geminiStatus(gv), ...state.gemini, store: CLI.gemini.store,
+              run: "agy -p --output-format stream-json", keySupported: false },
     claude: { name: "Claude", installed: !!cv, cli: cv, ...cs, ...state.claude, store: CLI.claude.store,
               run: "claude -p --output-format stream-json", keySupported: false },
+    openai: { name: "OpenAI Codex", installed: !!ov, cli: ov, ...os, ...state.openai, store: CLI.openai.store,
+              run: "codex exec --json", keySupported: true },
   };
 }
 
@@ -68,9 +89,31 @@ export function cancelLogin(id) {
   s.proc.kill("SIGTERM");
 }
 
+// agy has no logout command (running it bare would start an interactive session): nothing to run.
 export async function logout(id) {
-  if (!CLI[id]) return;
+  if (!CLI[id]?.logout) return;
   await run(CLI[id].bin, CLI[id].logout, { timeout: 15000 }).catch(() => {});
+}
+
+/**
+ * The CLI's own API-key login (Codex only, as in Dispatch). The key goes straight to the CLI's stdin:
+ * it is not written to disk or logs, not kept after this call, and not put in an error message.
+ */
+export function loginWithKey(id, key) {
+  if (id !== "openai") return Promise.reject(Object.assign(new Error("API 키 로그인은 Codex만 지원해요"), { status: 400 }));
+  if (typeof key !== "string" || !key.trim()) return Promise.reject(Object.assign(new Error("API 키를 넣어 주세요"), { status: 400 }));
+  return new Promise((resolve, reject) => {
+    let p;
+    try { p = spawnCli("codex", ["login", "--with-api-key"], { stdio: ["pipe", "ignore", "pipe"] }); }
+    catch (e) { reject(e); return; }
+    let err = "";
+    p.stderr.on("data", d => { err = (err + d).slice(-2000); });
+    p.on("error", reject);
+    // The CLI's own error text could echo the key back: say only that it failed.
+    p.on("exit", code => (code === 0 ? resolve() : reject(new Error(`API 키 로그인이 끝나지 않았어요 (code ${code})`))));
+    p.stdin.on("error", () => {}); // a CLI that exits before reading: the exit handler reports it
+    p.stdin.end(key);
+  });
 }
 
 // Strip the child-process handle and the cancel flag before sending state to the browser.

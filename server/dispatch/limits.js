@@ -1,14 +1,84 @@
 import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-/* ---------------- Shared Claude limits ---------------- */
-// Claude windows are account-wide, so every Dispatch server on this machine reads and writes one
-// file, ~/.dispatch/limits.json, next to prefs.json and servers/. Only numbers and reset times go in
-// it — no account, email or token. Other servers (older Dispatch) may keep their own keys in it, such
-// as `gemini`: this server does not read them but keeps them untouched on write.
+// Usage limits per provider (ported from standalone Dispatch, issue #587). Claude reports its windows
+// in the stream; Codex's are read from what the codex CLI already records locally (only the limit
+// numbers are parsed, nothing else from those files is kept or sent anywhere); Gemini only says
+// "quota reached" in an error, so that flag and its reset time are kept.
+
+export const CODEX_SESSIONS = path.join(os.homedir(), ".codex", "sessions");
+
+async function newestRollout(dir, depth = 0) {
+  let best = null;
+  for (const e of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory() && depth < 4) {
+      const f = await newestRollout(p, depth + 1);
+      if (f && (!best || f.mtime > best.mtime)) best = f;
+    } else if (e.isFile() && e.name.endsWith(".jsonl")) {
+      const m = (await stat(p).catch(() => null))?.mtimeMs ?? 0;
+      if (!best || m > best.mtime) best = { path: p, mtime: m };
+    }
+  }
+  return best;
+}
+
+async function tail(file, bytes = 256 * 1024) {
+  const fh = await open(file, "r");
+  try {
+    const { size } = await fh.stat();
+    const len = Math.min(size, bytes);
+    const buf = Buffer.alloc(len);
+    await fh.read(buf, 0, len, size - len);
+    return buf.toString("utf8");
+  } finally { await fh.close(); }
+}
+
+const windowLabel = min => (min >= 40000 ? "월간" : min >= 10000 ? "주간" : min >= 1440 ? `${Math.round(min / 1440)}일` : `${Math.round(min / 60)}시간`);
+
+const codexCache = new Map(); // dir -> { at, value }
+/** Latest Codex rate limits (primary/secondary windows) from its newest session log; cached for a minute. */
+export async function codexLimits(dir = CODEX_SESSIONS, now = Date.now()) {
+  const hit = codexCache.get(dir);
+  if (hit && now - hit.at < 60_000) return hit.value;
+  let value = null;
+  try {
+    const f = await newestRollout(dir);
+    if (f) {
+      const text = await tail(f.path);
+      const i = text.lastIndexOf('"rate_limits":');
+      if (i >= 0) {
+        // Parse the object that follows: count braces from the first "{".
+        const start = text.indexOf("{", i);
+        let depth = 0, end = start;
+        for (; end < text.length; end++) { if (text[end] === "{") depth++; else if (text[end] === "}" && --depth === 0) break; }
+        const rl = JSON.parse(text.slice(start, end + 1));
+        const num01 = v => (typeof v === "number" && Number.isFinite(v) ? v / 100 : 0);
+        const win = w => (w ? { label: windowLabel(w.window_minutes ?? 0), used: num01(w.used_percent), reset: typeof w.resets_at === "number" ? w.resets_at * 1000 : null } : null);
+        value = { windows: [win(rl.primary), win(rl.secondary)].filter(Boolean), plan: typeof rl.plan_type === "string" ? rl.plan_type : null, updatedAt: f.mtime };
+      }
+    }
+  } catch { value = null; }
+  codexCache.set(dir, { at: now, value });
+  return value;
+}
+
+/** "Resets in 3h20m" / "Resets in 45m" from a Gemini quota error, as an epoch ms. */
+export function geminiResetFrom(text, now = Date.now()) {
+  const m = /resets? in\s+(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?/i.exec(text || "");
+  if (!m || (!m[1] && !m[2])) return null;
+  return now + ((+m[1] || 0) * 60 + (+m[2] || 0)) * 60_000;
+}
+export const isQuotaError = text => /RESOURCE_EXHAUSTED|quota reached|code 429/i.test(text || "");
+
+/* ---------------- Shared Claude / Gemini limits ---------------- */
+// Claude windows and the Gemini quota are account-wide, so every Dispatch server on this machine
+// reads and writes one file, ~/.dispatch/limits.json, next to prefs.json and servers/. Only numbers
+// and reset times go in it — no account, email or token. Keys this server does not know are kept
+// untouched on write.
 
 export const LIMITS_FILE = path.join(os.homedir(), ".dispatch", "limits.json");
 // fable: the weekly window the CLI reports as seven_day_overage_included (models with their own weekly
@@ -24,13 +94,21 @@ export function cleanClaude(l) {
 }
 const newer = (a, b) => (a ?? -Infinity) > (b ?? -Infinity);
 
-/** Keys this server does not know: kept as they are. */
-const extras = x => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([k]) => k !== "claude")) : {});
+/** Gemini: reached or not, when it resets, and when that was seen (`at`); null when never seen. */
+export function cleanGemini(g) {
+  if (!g || typeof g !== "object" || num(g.at) == null) return null;
+  return { reached: g.reached === true, reset: num(g.reset), at: g.at };
+}
 
-/** The Claude section with the newer timestamp wins; unknown keys are kept (b over a). */
+/** Keys this server does not know: kept as they are. */
+const KNOWN = ["claude", "gemini"];
+const extras = x => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).filter(([k]) => !KNOWN.includes(k))) : {});
+
+/** Per section, the side with the newer timestamp wins; unknown keys are kept (b over a). */
 export function mergeLimits(a, b) {
   const ca = cleanClaude(a?.claude), cb = cleanClaude(b?.claude);
-  return { ...extras(a), ...extras(b), claude: newer(cb.updatedAt, ca.updatedAt) ? cb : ca };
+  const ga = cleanGemini(a?.gemini), gb = cleanGemini(b?.gemini);
+  return { ...extras(a), ...extras(b), claude: newer(cb.updatedAt, ca.updatedAt) ? cb : ca, gemini: newer(gb?.at, ga?.at) ? gb : ga };
 }
 
 /**
@@ -44,10 +122,11 @@ export class SharedLimits extends EventEmitter {
   constructor(file = LIMITS_FILE) {
     super();
     this.file = file;
-    this.data = { claude: EMPTY_CLAUDE() };
+    this.data = { claude: EMPTY_CLAUDE(), gemini: null };
   }
 
   get claude() { return this.data.claude; }
+  get gemini() { return this.data.gemini; }
 
   async read() {
     try {
@@ -131,4 +210,5 @@ export class SharedLimits extends EventEmitter {
   // or mergeLimits (newer wins) would drop the second one.
   stamp(prev) { return Math.max(Date.now(), (prev ?? 0) + 1); }
   setClaude(l) { return this.write({ claude: { ...l, updatedAt: l.updatedAt ?? this.stamp(this.data.claude?.updatedAt) } }); }
+  setGemini(g) { return this.write({ gemini: { ...g, at: g.at ?? this.stamp(this.data.gemini?.at) } }); }
 }
