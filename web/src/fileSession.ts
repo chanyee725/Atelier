@@ -62,6 +62,8 @@ export function createFileSession(deps: Deps) {
   let reloadStopped = false;
   // An outside-change reload is already running.
   let reloading = false;
+  // Newest revision of a change event that arrived while `reloading` (null: none).
+  let pendingReload: number | null = null;
   // While a move of the open file is in flight, saves wait: a PUT now would go to the old path.
   let holds = 0;
 
@@ -135,6 +137,27 @@ export function createFileSession(deps: Deps) {
     conflicted = false;
     reloadStopped = false;
     set({ conflict: null, path: null, file: null, status: '', statusAlert: false });
+  };
+
+  // Once queued saves are done, re-read the open file and hand it to `onReload` if still clean and newer. Then run once
+  // more if a change event newer than what we now hold arrived meanwhile.
+  const reload = (p: string, read: (p: string) => Promise<DpxFile>, onReload: (p: string, f: DpxFile) => void) => {
+    reloading = true;
+    pendingReload = null;
+    let readRevision = 0;
+    void saving
+      .then(() => (dirty || state.path !== p ? null : read(p)))
+      .then((f) => {
+        if (f) readRevision = f.revision;
+        if (f && !dirty && state.path === p && f.revision > (state.file?.revision ?? 0)) onReload(p, f);
+      })
+      .catch(() => {})
+      .finally(() => {
+        reloading = false;
+        const pending = pendingReload;
+        pendingReload = null;
+        if (pending !== null && !dirty && !inFlight && state.path === p && pending > Math.max(readRevision, state.file?.revision ?? 0)) reload(p, read, onReload);
+      });
   };
 
   const flush = async () => {
@@ -223,18 +246,12 @@ export function createFileSession(deps: Deps) {
     external(e: WorkspaceEvent, read: (p: string) => Promise<DpxFile>, onReload: (p: string, f: DpxFile) => void) {
       const act = externalAction(e, state.path, dirty || inFlight);
       if (act === 'close') close();
-      else if (act === 'reload' && !reloading) {
-        const p = state.path!;
-        reloading = true;
-        void saving
-          .then(() => (dirty || state.path !== p ? null : read(p)))
-          .then((f) => {
-            if (f && !dirty && state.path === p && f.revision > (state.file?.revision ?? 0)) onReload(p, f);
-          })
-          .catch(() => {})
-          .finally(() => {
-            reloading = false;
-          });
+      else if (act === 'reload') {
+        // An event that lands while a reload runs is kept (newest revision only) and read once more afterwards, so a
+        // burst of PUTs never leaves the tab on an older revision. An event without a revision always asks again.
+        const rev = e.kind === 'change' && typeof e.revision === 'number' ? e.revision : Infinity;
+        if (reloading) pendingReload = Math.max(pendingReload ?? -Infinity, rev);
+        else reload(state.path!, read, onReload);
       }
       return act;
     },

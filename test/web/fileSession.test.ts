@@ -434,3 +434,42 @@ test('a save that gets 404 (folder deleted in another tab, event missed) drops t
   await settle();
   assert.equal(server.calls.length, 1);
 });
+
+test('a change event that arrives while a reload reads is not dropped: the file is read once more (#555)', async (t) => {
+  const { s } = setup(t);
+  const reads: number[] = [];
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = (_p: string) => new Promise<DpxFile>((ok) => gates.push(ok));
+  const reloaded: number[] = [];
+  const onReload = (p: string, f: DpxFile) => {
+    reloaded.push(f.revision);
+    s.applyLive(p, f);
+  };
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, (p) => (reads.push(2), read(p)), onReload);
+  await settle();
+  // Two more PUTs land while the first read is still running.
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, (p) => (reads.push(3), read(p)), onReload);
+  s.external({ kind: 'change', path: 'a.dpx', revision: 4 }, (p) => (reads.push(4), read(p)), onReload);
+  gates.shift()!(file({ revision: 2 }));
+  await settle();
+  // One follow-up read, not one per dropped event.
+  assert.equal(gates.length, 1);
+  gates.shift()!(file({ revision: 4 }));
+  await settle();
+  assert.deepEqual(reloaded, [2, 4]);
+  assert.equal(s.getState().file?.revision, 4);
+  assert.equal(gates.length, 0);
+});
+
+test('a dropped change event whose revision the reload already read does not read again (#555)', async (t) => {
+  const { s } = setup(t);
+  let reads = 0;
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => (reads++, new Promise<DpxFile>((ok) => gates.push(ok)));
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, read, () => {});
+  await settle();
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, read, () => {});
+  gates.shift()!(file({ revision: 3 }));
+  await settle();
+  assert.equal(reads, 1);
+});
