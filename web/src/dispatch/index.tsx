@@ -107,8 +107,9 @@ export default function DispatchApp() {
   return (
     <ScopeProvider value={ctx}>
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-1.5 max-md:px-4">
-        <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+      {/* #431/#651: one 48px row at 390px with all four tabs; phone widths tighten the spacing instead of wrapping. */}
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-1.5 max-md:px-4 max-sm:gap-x-2 max-sm:px-3">
+        <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] max-sm:gap-0.5">
           {NAV.map(n => (
             <a
               key={n.view}
@@ -116,7 +117,7 @@ export default function DispatchApp() {
               aria-current={view === n.view ? 'page' : undefined}
               onClick={e => { e.preventDefault(); go(n.view); }}
               className={cn(
-                'inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                'inline-flex h-7 shrink-0 items-center rounded-md px-2.5 max-sm:px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                 view === n.view && 'bg-muted text-foreground hover:bg-muted',
               )}
             >
@@ -124,7 +125,7 @@ export default function DispatchApp() {
             </a>
           ))}
         </nav>
-        <div className="ml-auto flex min-w-0 items-center gap-3">
+        <div className="ml-auto flex min-w-0 items-center gap-3 max-sm:gap-2">
           <PrTrackingToggle />
           <a
             href="#tv"
