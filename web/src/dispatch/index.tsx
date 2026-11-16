@@ -1,7 +1,7 @@
 // The /dispatch screen: opens the event stream and shows the session board (cards or timeline), the usage screen
-// or the always-on screen, picked by the URL hash (#timeline, #usage, #settings, #tv), with the session sheet on top.
+// or the always-on screen, picked by the URL hash (#timeline, #usage, #tv), with the session sheet on top; #settings opens the 설정 modal over the sessions screen.
 // Loaded lazily from main.tsx so the editor bundle does not carry it.
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Monitor } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { cn } from '../lib/utils';
@@ -18,10 +18,12 @@ import { SessionTimeline } from './SessionTimeline';
 import { PrTrackingToggle } from './PrTrackingToggle';
 import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
-import { SettingsPage } from '../settings/SettingsPage';
+import { AlertWatcher } from './AlertWatcher';
 import { connect, useDispatch } from './store';
 
 export { connect };
+
+const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
 const NAV: { view: View; label: string }[] = [
   { view: 'sessions', label: '세션' },
@@ -82,6 +84,13 @@ export default function DispatchApp() {
 
   const offline = ready && !online && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>;
   const sheet = <SessionSheet id={open} onClose={() => setOpen(null)} />;
+  // #settings opens the one 설정 modal over the sessions screen; closing it goes back to sessions (#624).
+  const settings = view === 'settings' && (
+    <Suspense fallback={null}>
+      <SettingsDialog onClose={() => go('sessions')} />
+    </Suspense>
+  );
+  const alerts = <AlertWatcher onOpen={setOpen} />;
 
   if (view === 'tv' && ready && !unavailable) {
     return (
@@ -90,6 +99,7 @@ export default function DispatchApp() {
         {/* Opening a tile leaves the always-on screen, so Esc in the sheet never also closes the wall view. */}
         <AlwaysOnView onExit={() => go('sessions')} onOpen={id => { go('sessions'); setOpen(id); }} />
         {sheet}
+        {alerts}
       </>
     );
   }
@@ -132,10 +142,7 @@ export default function DispatchApp() {
         {!unavailable && ready && <ProjectRail projects={projects} state={listState} scope={scope} view={hashOf(view).slice(1)} onPick={sc => go(view, sc)} />}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {listState === 'failed' && !unavailable && ready && <p role="status" className="m-0 border-b px-6 py-2 text-sm text-muted-foreground">프로젝트 목록을 불러오지 못했어요. 잠시 뒤에 다시 시도해요.</p>}
-        {unavailable && view === 'settings' ? (
-          // Dispatch off: settings still render, session sections read-only with the reason (#620).
-          <SettingsPage off />
-        ) : unavailable ? (
+        {unavailable ? (
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
           <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>
@@ -144,8 +151,6 @@ export default function DispatchApp() {
         ) : scope === null && listState === 'failed' ? (
           // Without the project list every session would look 미분류 (#522); the notice above says why.
           <p className="p-6 text-sm text-muted-foreground">프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.</p>
-        ) : view === 'settings' ? (
-          <SettingsPage />
         ) : view === 'usage' ? (
           <UsagePage />
         ) : view === 'timeline' ? (
@@ -156,6 +161,8 @@ export default function DispatchApp() {
       </main>
       </div>
       {sheet}
+      {settings}
+      {alerts}
     </div>
     </ScopeProvider>
   );

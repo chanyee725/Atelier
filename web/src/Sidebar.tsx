@@ -25,7 +25,7 @@ import {
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
-import { SettingsEntry } from './settings/LimitsSettings';
+import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
 import { ThemeSwitch } from './ThemeSwitch';
 import type { Theme, ThemePref } from './theme';

@@ -380,3 +380,27 @@ export function resyncGuardTexts(prev: GuardSaved, next: GuardSaved, texts: Reco
   if (follows && out.fable.trim()) out.fable = out.seven;
   return out;
 }
+
+/**
+ * What the session sections show (#624, #625). `status` is the shared GET /api/dispatch answer (null while loading);
+ * `ready` and `unavailable` come from the session stream store. Dispatch off on the server reads as off with its
+ * reason; the server on but the stream's state request failed reads as failed, with a retry, not as off.
+ */
+export type SettingsLoad = { kind: 'loading' } | { kind: 'off'; status: { enabled: boolean; reason?: string; message?: string } } | { kind: 'failed' } | { kind: 'ok' };
+export function settingsLoad(status: { enabled: boolean; reason?: string; message?: string } | null, ready: boolean, unavailable: boolean): SettingsLoad {
+  if (!status) return { kind: 'loading' };
+  if (!status.enabled) return { kind: 'off', status };
+  if (ready) return { kind: 'ok' };
+  return unavailable ? { kind: 'failed' } : { kind: 'loading' };
+}
+
+/**
+ * The values one section saves: the saved values with only that section's fields taken from the form, so another
+ * section's unsaved edits are never sent with it (#624). Number texts must already be read (`nums`).
+ */
+export function sectionNext(saved: TeamValues, form: TeamFormState, nums: Partial<Record<TeamNumberId, number>>, fields: { numbers: readonly TeamNumberId[]; toggles: readonly TeamToggleId[]; roleModels?: true }): TeamValues {
+  const next: TeamValues = { ...saved, roleModels: fields.roleModels ? { ...form.roleModels } : { ...saved.roleModels } };
+  for (const id of fields.numbers) if (typeof nums[id] === 'number') next[id] = nums[id]!;
+  for (const id of fields.toggles) next[id] = form.toggles[id];
+  return next;
+}
