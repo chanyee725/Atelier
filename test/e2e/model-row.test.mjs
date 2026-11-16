@@ -90,6 +90,14 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   // One row per provider id: Claude, OpenAI Codex, Gemini (#587).
   await row.first().waitFor();
   assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude', 'openai', 'gemini']);
+  // Each row shows its provider's own mark (react-icons, #621): decorative inline SVG in the row's text colour, beside
+  // the status dot; the accessible name stays the provider name and its state.
+  const marks = await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => {
+    const svg = e.querySelector('svg[data-provider-icon]');
+    return svg && [svg.getAttribute('data-provider-icon'), svg.closest('[aria-hidden="true"]') !== null, getComputedStyle(svg).fill === getComputedStyle(e).color, !!e.querySelector('[data-testid="model-row-dot"]')];
+  }));
+  assert.deepEqual(marks, [['claude', true, true, true], ['openai', true, true, true], ['gemini', true, true, true]]);
+  assert.match(await row.getAttribute('aria-label'), /^Claude /);
 
   // 1. 테마 switch (E527, from Dispatch): four icon radios, 시스템 first and checked; a click applies at once, survives a
   // reload, and arrows/Home/End move the choice with focus. 모니터링 renders dark plus html.monitor.
@@ -158,6 +166,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await row.click();
   await dialog.waitFor();
   assert.equal(await page.getByRole('dialog', { name: '모델 연결' }).count(), 1, 'named by its heading');
+  assert.equal(await dialog.locator('svg[data-provider-icon="claude"]').evaluate((s) => s.closest('[aria-hidden="true"]') !== null), true, 'the dialog shows the Claude mark, hidden from assistive tech');
   assert.match(await state.innerText(), /연결 안 됨/);
   assert.equal(await action.innerText(), '연결');
   await shot('dialog-idle-1440.png');
