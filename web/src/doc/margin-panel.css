@@ -19,10 +19,7 @@
   max-block-size: inherit;
 }
 
-/* Side: fills the 300px column (.doc-margin-aside, the pane's), a hairline against the text. */
-.margin-panel[data-form='side'] { border-inline-start: 1px solid var(--border); }
-/* Sheet: fills the bottom sheet, a hairline on top. */
-.margin-panel[data-form='sheet'] { border-block-start: 1px solid var(--border); }
+/* The hairline against the text and the scrolling are the container's (.doc-margin-aside, index.css). */
 
 /* ---- head ---- */
 .margin-head {
