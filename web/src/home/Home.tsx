@@ -207,10 +207,22 @@ const LetterBadge = ({ children }: { children: React.ReactNode }) => (
 function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   // 개요 (the dashboard, #685) opens first; the full list is one tab away.
   const [tab, setTab] = useState<DashTab>('home');
-  // Searching from 개요 shows the hits in 전체 파일.
+  // Searching from 개요 shows the hits in 전체 파일; clearing the search goes back to 개요 (#710),
+  // unless the user picked another tab meanwhile.
+  const [fromHome, setFromHome] = useState(false);
   const onSearch = (q: string) => {
     onQuery(q);
-    if (q.trim() && tab === 'home') setTab('all');
+    if (q.trim() && tab === 'home') {
+      setTab('all');
+      setFromHome(true);
+    } else if (!q.trim() && fromHome) {
+      if (tab === 'all') setTab('home');
+      setFromHome(false);
+    }
+  };
+  const onTab = (v: string) => {
+    setTab(v as DashTab);
+    setFromHome(false);
   };
   const { collapsed, toggle } = useCollapse();
   const files = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
@@ -222,7 +234,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
   const tree = (docs: ProjectDoc[], label: string) => <DocList docs={filterDocs(docs, query)} collapsed={collapsed} label={label} running={p.running} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />;
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v as DashTab)} className="shrink-0 grow gap-0">
+    <Tabs value={tab} onValueChange={onTab} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
         {p.narrow && (
           <SidebarTrigger aria-label="메뉴 열기">
@@ -267,7 +279,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
         ))}
       </div>
       <TabsContent value="home" className="flex flex-col">
-        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onCreate={() => p.onCreate('doc', null)} onTab={setTab} />
+        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onCreate={() => p.onCreate('doc', null)} onTab={onTab} />
       </TabsContent>
       {tab === 'home' ? null : empty ? (
         <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
