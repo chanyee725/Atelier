@@ -54,7 +54,9 @@ async function open(t, path, elements, blocks = []) {
   await page.goto(`${BASE}/#file=${path}`);
   await page.waitForSelector('.excalidraw canvas', { timeout: 30000 });
   await page.getByRole('button', { name: '캔버스', exact: true }).click();
-  await page.locator('.excalidraw .HintViewer, .excalidraw canvas').first().waitFor({ state: 'attached', timeout: 15000 });
+  // Wait for the scene to finish loading: Excalidraw drops its loading overlay and the canvas is on screen.
+  await page.locator('.excalidraw canvas').first().waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForFunction(() => !document.querySelector('.excalidraw .LoadingMessage'), null, { timeout: 15000 });
   return page;
 }
 
@@ -88,6 +90,7 @@ test('the pan hint shows on an empty canvas and is hidden once elements are ther
 
 test('the pan hint is hidden when a file with elements is loaded', SKIP, async (t) => {
   const page = await open(t, 'loaded', [rect('r')]);
+  await hint(page).waitFor({ state: 'hidden', ...WAIT });
   assert.equal(await shown(page), false);
 });
 
@@ -105,6 +108,7 @@ test('the pan hint is hidden for a canvas that only holds a diagram-as-code bloc
 
 test('text editing and search keep their own hints while elements are on the canvas', SKIP, async (t) => {
   const page = await open(t, 'hints', [rect('r'), { ...rect('t'), type: 'text', x: 600, y: 500, width: 60, height: 25, text: 'findme', originalText: 'findme', fontSize: 20, fontFamily: 5, textAlign: 'left', verticalAlign: 'top', containerId: null, lineHeight: 1.25, autoResize: true, index: 'a1' }]);
+  await hint(page).waitFor({ state: 'hidden', ...WAIT });
   assert.equal(await shown(page), false, 'idle: hidden');
   await page.mouse.dblclick(1000, 700); // empty area: starts a new text
   await hint(page).waitFor({ state: 'visible', ...WAIT });
@@ -116,7 +120,7 @@ test('text editing and search keep their own hints while elements are on the can
   await page.keyboard.press('Control+f');
   await page.keyboard.type('findme');
   await hint(page).waitFor({ state: 'visible', ...WAIT });
-  assert.match(await hint(page).innerText(), /escape|esc/i, 'search hint tells how to close the search');
+  assert.match(await hint(page).innerText(), /검색을 닫아요/, 'search hint tells how to close the search');
   assert.equal(await shown(page), true, 'search hint is shown while there are matches');
 });
 

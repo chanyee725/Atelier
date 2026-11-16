@@ -99,7 +99,8 @@ SOFTWARE.
 Pretendard 1.3.9 (`pretendard` npm package, https://github.com/orioncactus/pretendard) is bundled with the app. The app
 itself fetches no font from outside: every font file is a local build asset served by the Drawing server.
 
-- Copyright (c) 2021, Kil Hyung-jin (https://github.com/orioncactus/pretendard), with Reserved Font Name 'Pretendard'.
+- Copyright (c) 2021-2023, Kil Hyung-jin (https://github.com/orioncactus/pretendard), with Reserved Font Name 'Pretendard'.
+  (The license file says 2021; the font files' copyright record says 2023.)
   SIL Open Font License, Version 1.1. License text (with the copyright line): `shared/render/fonts/drawing-sans-OFL.txt`.
 - UI text: the page loads Pretendard (Latin and Hangul) through Vite from the npm package (`web/src/index.css`).
 - Block drawings and exported SVG/PNG embed modified subsets that are renamed "Drawing Sans", because modified versions
@@ -113,4 +114,5 @@ itself fetches no font from outside: every font file is a local build asset serv
 - Canvas text uses a cut-down copy of Pretendard Regular 1.3.9, renamed "Drawing Sans". File
   `web/fonts/drawing-sans-canvas.woff2`, built by `scripts/subset-canvas-font.py` (fonttools 4.68.0) from the
   `pretendard` npm package: Basic Latin, Latin-1, common punctuation, Hangul Jamo and the 2,350 KS X 1001 syllables.
+  The other 8,822 modern syllables (for example 똠, 햏, 뷁, 쌰, 펲) are not in it and are drawn by a fallback font.
   Served in place of Excalidraw's Liberation Sans file (`web/vite.config.ts`, `FONT_OVERRIDES`).

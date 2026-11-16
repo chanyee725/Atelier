@@ -112,7 +112,9 @@ test('an SVG export of a canvas with Hangul text inlines the canvas font', { ski
   const b64 = svg.slice(svg.indexOf('data:font/woff2;base64,') + 'data:font/woff2;base64,'.length).match(/^[A-Za-z0-9+/=]+/)[0];
   const bytes = Buffer.from(b64, 'base64');
   assert.equal(bytes.subarray(0, 4).toString('latin1'), 'wOF2');
-  assert.ok(bytes.length > 10_000, `the face holds the font: ${bytes.length} bytes`);
+  // Byte-for-byte our Drawing Sans subset, not Excalidraw's own Liberation face.
+  const ours = readFileSync(new URL('../../web/fonts/drawing-sans-canvas.woff2', import.meta.url));
+  assert.ok(bytes.equals(ours), `the inlined face is web/fonts/drawing-sans-canvas.woff2: ${bytes.length} vs ${ours.length} bytes`);
   assert.deepEqual(fontLogs, [], 'no font failure on the console');
   assert.deepEqual(errors, []);
 });
