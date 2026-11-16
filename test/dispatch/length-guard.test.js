@@ -13,6 +13,7 @@ function fakeHub(sessions, rts, team = {}) {
   const sent = [];
   const hub = Object.assign(Object.create(Hub.prototype), {
     live, store: { data: { sessions: Object.fromEntries(sessions.map(s => [s.id, s])), settings: { team } }, save() {} }, emit() {},
+    runBlock: () => null, // provider and model checks are covered in safety.test.js
   });
   hub.sentTo = sent;
   hub.send = (id, text) => sent.push({ id, text });
