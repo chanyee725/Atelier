@@ -33,7 +33,11 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('doc agent margin: opens beside the text while a fake session writes, follows its edits, closes after idle', { skip: SKIP, timeout: 180_000 }, async (t) => {
+test('doc agent margin (둘 다, the default view): opens beside the text while a fake session writes, follows its edits, closes after idle', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'both'));
+
+test('doc agent margin (문서 view): the same with the document alone', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'doc'));
+
+async function run(t, view) {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-docmargin-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-docmargin-home-'));
@@ -106,9 +110,11 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.goto(`${BASE}/#file=plan.dpx.json`);
   await page.locator('.doc-editor').waitFor();
-  // The document alone (the default 둘 다 leaves the text pane narrower than the side form needs).
-  await page.locator('[role="radio"], button', { hasText: /^문서$/ }).first().click();
-  await page.waitForTimeout(300);
+  // 둘 다 is the default; 문서 shows the document alone. Both are wide enough at 1600px for the side panel.
+  if (view === 'doc') {
+    await page.locator('[role="radio"], button', { hasText: /^문서$/ }).first().click();
+    await page.waitForTimeout(300);
+  }
   const intro = page.locator('.doc-editor p', { hasText: '소개 문단' });
   await intro.waitFor();
 
@@ -187,25 +193,31 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
   await panel.locator('.margin-rail').click();
   await toggle.waitFor();
 
-  if (SHOTS) {
+  // Screenshots in the default view: 1600 and 1440 wide (side panel), 820 (bottom sheet), light and dark.
+  if (SHOTS && view === 'both') {
     const shot = (n) => page.screenshot({ path: join(SHOTS, `doc-margin-${n}.png`) });
-    await page.waitForTimeout(500); // the column's width transition
-    await shot('desktop-light');
-    await page.emulateMedia({ colorScheme: 'dark' });
-    await page.waitForTimeout(150);
-    await shot('desktop-dark');
+    for (const w of [1600, 1440]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.waitForTimeout(500); // the column's width transition
+      for (const scheme of ['light', 'dark']) {
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.waitForTimeout(150);
+        await shot(`${w}-${scheme}`);
+      }
+    }
     await page.setViewportSize({ width: 820, height: 900 });
-    await panel.locator('[data-form="sheet"], .margin-sheet-bar').first().waitFor({ state: 'attached' }).catch(() => {});
+    await panel.locator('.margin-sheet-bar').waitFor({ timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(400);
-    await shot('narrow-dark-collapsed');
+    await shot('820-dark-collapsed');
     const bar = panel.locator('.margin-sheet-bar');
     if (await bar.count()) await bar.click();
     await page.waitForTimeout(400);
-    await shot('narrow-dark');
+    await shot('820-dark');
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(150);
-    await shot('narrow-light');
+    await shot('820-light');
     await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForTimeout(400);
   }
   if (await panel.count()) assert.equal(await panel.getAttribute('data-form'), 'side');
 
@@ -219,4 +231,4 @@ test('doc agent margin: opens beside the text while a fake session writes, follo
   release(3);
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);
-});
+}
