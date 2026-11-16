@@ -34,7 +34,26 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
       },
     },
     props: { decorations: (s) => key.getState(s) },
+    // A user edit while blocks fade out (#554): take them out in the same update, so the JSON the editor
+    // saves already matches the outside file instead of still holding the removed blocks.
+    appendTransaction(trs, _old, state) {
+      if (!trs.some((t) => t.docChanged && !t.getMeta(LIVE_META))) return null;
+      return exitFlush(state);
+    },
   });
+}
+
+/** The transaction that deletes every block marked `live-exit`, or null when none is. */
+function exitFlush(state: EditorState): Transaction | null {
+  const set = key.getState(state);
+  if (!set) return null;
+  const found = set.find(undefined, undefined, (s) => s.cls === 'live-exit').sort((a, b) => b.from - a.from);
+  if (!found.length) return null;
+  const tr = state.tr;
+  for (const d of found) tr.delete(d.from, d.to);
+  tr.setMeta(key, { clear: 'live-exit' } satisfies DecoMeta);
+  tr.setMeta('addToHistory', false);
+  return tr;
 }
 
 const docOf = (schema: Schema, json: unknown): PMNode | null => {
@@ -163,16 +182,9 @@ const clearTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
 function flushExits(editor: Editor) {
   const view = editor.view;
   if (!view || (view as { isDestroyed?: boolean }).isDestroyed) return;
-  const set = key.getState(view.state);
-  if (!set) return;
-  const found = set.find(undefined, undefined, (s) => s.cls === 'live-exit').sort((a, b) => b.from - a.from);
-  if (!found.length) return;
-  const tr = view.state.tr;
-  for (const d of found) tr.delete(d.from, d.to);
-  tr.setMeta(key, { clear: 'live-exit' } satisfies DecoMeta);
-  tr.setMeta('addToHistory', false);
-  tr.setMeta(LIVE_META, true);
-  view.dispatch(tr);
+  const tr = exitFlush(view.state);
+  if (!tr) return;
+  view.dispatch(tr.setMeta(LIVE_META, true));
 }
 
 const later = (map: WeakMap<object, ReturnType<typeof setTimeout>>, owner: object, ms: number, f: () => void) => {
