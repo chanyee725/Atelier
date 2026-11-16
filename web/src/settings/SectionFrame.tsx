@@ -17,11 +17,3 @@ export function SectionFrame({ title, hint, children, className, testId }: { tit
   );
 }
 
-/** A placeholder for a section another change fills in. */
-export function SectionPending({ title }: { title: string }) {
-  return (
-    <SectionFrame title={title}>
-      <p className="text-sm text-muted-foreground">준비 중이에요.</p>
-    </SectionFrame>
-  );
-}
