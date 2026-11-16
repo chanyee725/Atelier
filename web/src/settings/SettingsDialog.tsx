@@ -146,9 +146,10 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                       aria-current={current === s.id ? 'true' : undefined}
                       onClick={() => pick(s.id)}
                       className={cn(
-                        'flex h-8 w-full items-center rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors duration-[120ms] motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground',
-                        // Not by colour alone: the current item is also bold and carries a bar (WCAG 1.4.1).
-                        'aria-[current=true]:bg-muted aria-[current=true]:font-semibold aria-[current=true]:text-foreground aria-[current=true]:shadow-[inset_2px_0_0_var(--primary)]',
+                        'flex h-8 w-full items-center rounded-md px-2.5 text-left text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                        // Plain background/text state like the app's other nav, no side bar (#675). Not by colour alone:
+                        // the current item is also bold (WCAG 1.4.1).
+                        'aria-[current=true]:bg-muted aria-[current=true]:font-semibold aria-[current=true]:text-foreground',
                       )}
                     >
                       {s.label}
