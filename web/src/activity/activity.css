@@ -1,0 +1,117 @@
+/* Agent activity (E537, #654): the bell's badge and feed, and the toasts. Tokens only, so light and dark follow. */
+
+.activity-badge {
+  position: absolute;
+  inset-block-start: 1px;
+  inset-inline-end: 0;
+  min-inline-size: 15px;
+  block-size: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* The feed: placed under the bell from JS (left/top), so only the inset and margin are reset. */
+.activity-feed {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  inline-size: min(360px, calc(100vw - 16px));
+  max-block-size: min(480px, calc(100dvh - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  font-size: 13px;
+}
+.activity-feed-title { margin: 4px 8px 6px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.activity-empty { margin: 8px; color: var(--muted-foreground); }
+.activity-list { list-style: none; margin: 0; padding: 0; }
+.activity-item {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.activity-item:hover { background: var(--accent); }
+.activity-item:focus-visible,
+.activity-close:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.activity-item:not([data-unread]) .activity-text { color: var(--muted-foreground); }
+.activity-item[data-unread] .activity-text { font-weight: 500; }
+.activity-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--idle); translate: 0 -1px; }
+.activity-text { min-inline-size: 0; text-wrap: pretty; }
+.activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-kind='error'] .activity-dot { box-shadow: 0 0 0 2px var(--destructive); }
+
+/* Toasts: one region in the top layer, bottom right (bottom, full width on a narrow screen). */
+.activity-toasts {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  overflow: visible;
+  inline-size: min(360px, calc(100vw - 32px));
+}
+.activity-toasts ol { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.activity-toast {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  font-size: 13px;
+}
+.activity-close {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.activity-close:hover { background: var(--accent); color: var(--foreground); }
+.activity-close svg { inline-size: 15px; block-size: 15px; }
+@media (prefers-reduced-motion: no-preference) {
+  .activity-toast { transition: opacity 0.2s ease-out, translate 0.2s ease-out; }
+  @starting-style {
+    .activity-toast { opacity: 0; translate: 0 8px; }
+  }
+}
+@media (max-width: 480px) {
+  .activity-toasts { inset: auto 8px 8px 8px; inline-size: auto; }
+}
+@media (forced-colors: active) {
+  .activity-dot { forced-color-adjust: none; }
+  .activity-badge { border: 1px solid CanvasText; }
+}
