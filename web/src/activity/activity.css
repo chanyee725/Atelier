@@ -64,10 +64,10 @@
 .activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 [data-kind='error'] .activity-dot { box-shadow: 0 0 0 2px var(--destructive); }
 
-/* Toasts: one region in the top layer, bottom right (bottom, full width on a narrow screen). */
+/* Toasts: one region in the top layer, top right under the top bar (full width on a narrow screen). */
 .activity-toasts {
   position: fixed;
-  inset: auto 16px 16px auto;
+  inset: 52px 16px auto auto;
   margin: 0;
   padding: 0;
   border: 0;
@@ -78,9 +78,9 @@
 .activity-toasts ol { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .activity-toast {
   display: grid;
-  grid-template-columns: 8px 1fr auto;
+  grid-template-columns: 8px 1fr auto auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 10px 8px 10px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -89,6 +89,21 @@
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
   font-size: 13px;
 }
+.activity-open {
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-open:hover { background: var(--accent); }
+.activity-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.activity-toast[data-kind='error'] { border-color: color-mix(in oklab, var(--destructive) 45%, var(--border)); }
+.activity-toast[data-kind='error'] .activity-dot { background: var(--destructive); box-shadow: none; }
 .activity-close {
   display: grid;
   place-items: center;
@@ -105,11 +120,11 @@
 @media (prefers-reduced-motion: no-preference) {
   .activity-toast { transition: opacity 0.2s ease-out, translate 0.2s ease-out; }
   @starting-style {
-    .activity-toast { opacity: 0; translate: 0 8px; }
+    .activity-toast { opacity: 0; translate: 0 -8px; }
   }
 }
 @media (max-width: 480px) {
-  .activity-toasts { inset: auto 8px 8px 8px; inline-size: auto; }
+  .activity-toasts { inset: 52px 8px auto 8px; inline-size: auto; }
 }
 @media (forced-colors: active) {
   .activity-dot { forced-color-adjust: none; }

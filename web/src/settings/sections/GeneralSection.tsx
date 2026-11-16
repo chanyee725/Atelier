@@ -5,6 +5,8 @@ import { api } from '../../dispatch/store';
 import { turnAlertsOff, turnAlertsOn, useAlertStatus } from '../../dispatch/lib/notify';
 import { useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
+import { TOAST_CATEGORIES } from '../../activity/appEvents';
+import { setCategoryOn, useToastOff } from '../../activity/appToasts';
 import { useSettingsLoad } from '../context';
 import { LoadNote, OffNote, ThemeField } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
@@ -21,6 +23,8 @@ const ALERT_NOTE = {
 export default function GeneralSection() {
   const { load, retry } = useSettingsLoad();
   const alerts = useAlertStatus();
+  const toastOff = useToastOff();
+  const toastHint = useId();
   const alertsHint = useId();
   const replyHint = useId();
   const offId = useId();
@@ -66,11 +70,30 @@ export default function GeneralSection() {
               세션 알림 받기
             </label>
             <span id={alertsHint} className="text-xs text-muted-foreground">
-              {ALERT_NOTE[alerts] || '세션이 답을 기다리거나 멈추거나 한도에 닿으면 알려 줘요. 세션 화면을 열어 둔 동안만 울려요.'}
+              {ALERT_NOTE[alerts] || '세션이 답을 기다리거나 멈추거나 한도에 닿으면 알려 줘요. 이 탭이 가려져 있을 때는 아래 알림도 브라우저 알림으로 보내요.'}
             </span>
           </div>
         </div>
       </div>
+      <fieldset className="flex flex-col gap-2" aria-describedby={toastHint} data-testid="settings-toast-categories">
+        <legend className="text-sm font-medium">화면 알림</legend>
+        <span id={toastHint} className="text-xs text-muted-foreground">
+          오른쪽 위에 잠깐 보여 줘요. 오류는 닫을 때까지 남아요.
+        </span>
+        {TOAST_CATEGORIES.map((c) => (
+          <label key={c.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              {...({ switch: '' } as object)}
+              checked={!toastOff.has(c.id)}
+              onChange={(e) => setCategoryOn(c.id, e.target.checked)}
+              data-toast-category={c.id}
+              className="size-4 shrink-0 accent-primary max-md:size-5"
+            />
+            {c.label}
+          </label>
+        ))}
+      </fieldset>
       <div className="flex flex-col gap-2">
         <h4 className="text-sm font-medium">답변 스타일</h4>
         <LoadNote load={load} onRetry={retry} />

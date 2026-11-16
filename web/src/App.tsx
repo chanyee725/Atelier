@@ -11,6 +11,8 @@ import { Alert } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
+import { notifyApp } from './activity/appToasts';
+import type { EntryKind } from './activity/appEvents';
 import { asTreeNode, docPlace, newFileDir, paletteScope, shellKey, subFolderOf, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
@@ -60,6 +62,8 @@ import { PlanStrip } from './run/PlanStrip';
 import { events } from './lib/events';
 
 const NARROW = '(max-width: 767px)';
+/** A top-level folder is a project (design doc 6 §1). */
+const entryKind = (n: TreeNode): EntryKind => (n.type === 'file' ? 'doc' : n.path.includes('/') ? 'folder' : 'project');
 
 // The open file lives in the URL hash so a reload reopens it. Only the workspace-relative path is kept.
 const setHashPath = (p: string | null) => {
@@ -389,6 +393,7 @@ export function App() {
     try {
       // A pipeline plan starts from the pipeline template (E18); other kinds start empty.
       await api.createFile(p, p.split('/').pop() ?? p, kind === 'plan' ? pipelineTemplate(newBlockId()) : undefined);
+      notifyApp({ type: 'created', kind: kind === 'canvas' ? 'canvas' : 'doc', path: p });
       await refreshTree();
       if (await open(p) && kind === 'canvas') setView('canvas');
     } catch (e) {
@@ -403,6 +408,7 @@ export function App() {
     if (problem) return setError(problem);
     try {
       await api.createFolder(name);
+      notifyApp({ type: 'created', kind: 'project', path: name });
       await refreshTree();
       setSection({ kind: 'project', path: name });
     } catch (e) {
@@ -504,6 +510,9 @@ export function App() {
           await api.saveFile(dest, { ...f, title });
         }
       }
+      const dest = (r as { path?: string }).path ?? to;
+      const parent = (x: string) => x.slice(0, Math.max(0, x.lastIndexOf('/')));
+      notifyApp({ type: parent(from) === parent(dest) ? 'renamed' : 'moved', kind: entryKind(n), from, to: dest });
       await refreshTree();
       // The move worked but the new revision is unknown: the next save may ask to choose a version, so say why.
       if (readFailed) setError('옮겼어요. 다만 파일을 다시 읽지 못했어요. 저장이 안 되면 화면을 새로 고쳐 주세요');
@@ -557,6 +566,7 @@ export function App() {
       // A document's sub-documents folder (`X/`, even an empty one) goes with it, so it never lingers as a group.
       if (n.type === 'file') await api.removeFile(n.path, true);
       else await api.removeFolder(n.path);
+      notifyApp({ type: 'deleted', kind: entryKind(n), path: n.path });
       const gone = n.type === 'file' ? subFolderOf(n.path) : n.path;
       if (path && (path === n.path || path.startsWith(`${gone}/`))) closeOpenFile();
       if (section.kind === 'project' && section.path === n.path) setSection({ kind: 'all' });
@@ -821,6 +831,23 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showSection]);
 
+  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.code !== 'KeyS') return;
+      e.preventDefault();
+      const p = session.getState().path;
+      if (!p) return;
+      void session.flush().then(() => {
+        const st = session.getState();
+        if (st.path !== p) return;
+        notifyApp(st.statusAlert ? { type: 'save-failed', path: p } : { type: 'saved', path: p });
+      });
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [session]);
+
   const sidebar = (
     <Sidebar
       workspace={workspace}
@@ -849,7 +876,7 @@ export function App() {
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
-        <ActivityAlerts onOpen={openFile} />
+        <ActivityAlerts onOpen={openFile} onSession={() => window.location.assign('/dispatch')} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}

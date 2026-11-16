@@ -19,6 +19,7 @@ import { PrTrackingToggle } from './PrTrackingToggle';
 import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
 import { AlertWatcher } from './AlertWatcher';
+import { ActivityAlerts } from '../activity/ActivityAlerts';
 import { connect, useDispatch } from './store';
 
 export { connect };
@@ -90,7 +91,13 @@ export default function DispatchApp() {
       <SettingsDialog onClose={() => go('sessions')} />
     </Suspense>
   );
-  const alerts = <AlertWatcher onOpen={setOpen} />;
+  // App and agent toasts (E540, #671) share one top-right stack with the editor's; 열기 on a document goes to the editor.
+  const alerts = (
+    <>
+      <AlertWatcher onOpen={setOpen} />
+      <ActivityAlerts onOpen={p => window.location.assign(`/#file=${encodeURIComponent(p)}`)} onSession={setOpen} />
+    </>
+  );
 
   if (view === 'tv' && ready && !unavailable) {
     return (
