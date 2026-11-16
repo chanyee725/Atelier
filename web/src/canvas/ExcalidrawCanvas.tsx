@@ -24,7 +24,7 @@ import { LayoutEditOverlay, focusCanvas, type EditStart } from './LayoutEditOver
 import { RunOverlay } from './RunOverlay';
 import { MorphOverlay, MORPH_OPACITY, type Morphs } from './MorphOverlay';
 import { willMorph } from './MorphLayer';
-import { canPlace, type PlaceEl } from './runPlace';
+import { canPlace, endMorphOpacity, type PlaceEl } from './runPlace';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
 import { parse } from '../../../shared/dsl/index.ts';
@@ -429,8 +429,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       morphOpacity.current.delete(blockId);
       const xapi = apiRef.current;
       if (orig === undefined || !xapi) return;
-      const els = xapi.getSceneElementsIncludingDeleted();
-      xapi.updateScene({ elements: els.map((e) => (blockIdOf(e as unknown as SceneEl) === blockId && e.opacity === MORPH_OPACITY ? newElementWith(e, { opacity: orig }) : e)), captureUpdate: CaptureUpdateAction.NEVER });
+      const next = endMorphOpacity(xapi.getSceneElementsIncludingDeleted() as unknown as PlaceEl[], blockId, orig, (e, opacity) => newElementWith(e as unknown as ExcalidrawElement, { opacity }) as unknown as PlaceEl);
+      if (next) xapi.updateScene({ elements: next as unknown as ExcalidrawElement[], captureUpdate: CaptureUpdateAction.NEVER });
     },
     [],
   );

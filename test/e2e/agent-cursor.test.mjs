@@ -48,6 +48,10 @@ async function run(t, cpuThrottle) {
   const ws = join(repo, 'ws');
   mkdirSync(ws);
   const abs = join(ws, 'demo.dpx.json');
+  // The fake turn waits at these gates until the test has seen the phase it checks: fixed sleeps let a slow or
+  // CPU-throttled page miss the short thinking window between two edits (#531).
+  const gate = (n) => join(home, `gate-${n}`);
+  const release = (n) => writeFileSync(gate(n), '');
 
   // The agent's turn: say it edits the file, write the file (as an Edit tool would), think, edit again, finish.
   const tool = (n) => ({ type: 'assistant', message: { id: `m${n}`, content: [{ type: 'tool_use', id: `t${n}`, name: 'Edit', input: { file_path: abs, old_string: 'x', new_string: 'y' } }], usage: { input_tokens: 1, output_tokens: 1 } } });
@@ -62,18 +66,18 @@ async function run(t, cpuThrottle) {
     { $sleep: 300 },
     { $write: { file: abs, text: fileWith([r1, rect('r2', 400, 0)], 50) } }, // r2 centre: 460,30
     result(1),
-    { $sleep: 1800 },
+    { $waitFor: gate(2) }, // thinking seen and frames recorded
     tool(2),
     { $sleep: 300 },
     { $write: { file: abs, text: fileWith([r1, rect('r2', 400, 0), rect('r3', 400, 300)], 60) } }, // r3 centre: 460,330
     result(2),
-    { $sleep: 2000 },
+    { $waitFor: gate(3) }, // landed and thinking seen
     // A third edit that moves no shape (only the title): the server sends a cursor event without a place.
     tool(3),
     { $sleep: 300 },
     { $write: { file: abs, text: JSON.stringify({ ...JSON.parse(fileWith([r1, rect('r2', 400, 0), rect('r3', 400, 300)], 70)), title: 'demo 2' }) } },
     result(3),
-    { $sleep: 2500 },
+    { $waitFor: gate(4) }, // stayed on r3
     { type: 'assistant', message: { id: 'm3', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     { type: 'result', subtype: 'success', total_cost_usd: 0.001 },
   ];
@@ -166,7 +170,7 @@ async function run(t, cpuThrottle) {
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-cursor-first.png') });
 
   // Thinking near the last edit before the second edit arrives.
-  await page.locator('[data-agent-cursor][data-phase="thinking"]').waitFor({ timeout: 5000 });
+  await page.locator('[data-agent-cursor][data-phase="thinking"]').waitFor({ timeout: 10_000 });
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-cursor-thinking.png') });
 
   // Record where the cursor is drawn on every frame, so the 220 ms glide is seen whole.
@@ -185,6 +189,7 @@ async function run(t, cpuThrottle) {
     };
     requestAnimationFrame(tick);
   });
+  release(2);
 
   // The second edit: the cursor goes from r2's centre (460,30) to r3's (460,330).
   await page.locator('[data-agent-cursor][data-phase="editing"]').waitFor({ timeout: 8000 });
@@ -232,12 +237,26 @@ async function run(t, cpuThrottle) {
 
   // The edit without a place keeps the landed cursor where it is: thinking, then editing again, and no frame
   // replays the glide from its start (#254).
-  await page.locator('[data-agent-cursor][data-phase="thinking"]').waitFor({ timeout: 8000 });
-  await page.locator('[data-agent-cursor][data-phase="editing"]').waitFor({ timeout: 8000 });
+  await page.locator('[data-agent-cursor][data-phase="thinking"]').waitFor({ timeout: 10_000 });
+  // Phases drawn from here on, so a missed editing phase fails with what was shown instead of a bare timeout.
+  await page.evaluate(() => {
+    const log = (window.__phaseLog = []);
+    const tick = () => {
+      const el = document.querySelector('[data-agent-cursor]');
+      const v = el ? `${el.dataset.phase}/${el.style.visibility || 'v'}` : 'none';
+      if (log.at(-1) !== v) log.push(v);
+      if (log.length < 200) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  release(3);
+  const ed = await page.locator('[data-agent-cursor][data-phase="editing"]').waitFor({ timeout: 8000 }).then(() => true, (e) => e);
+  if (ed !== true) assert.fail(`no editing phase after the third edit; phase/visibility seen: ${JSON.stringify(await page.evaluate(() => window.__phaseLog))}`);
   await page.waitForTimeout(600);
   const after = (await page.evaluate(() => window.__cursorYs)).slice(landedAt);
   assert.ok(after.length > 0 && after.every((y) => Math.abs(y - second[1]) < 2), `stayed on r3: ${JSON.stringify(after.filter((y, i) => y !== after[i - 1]))}`);
   assert.ok(Math.abs((await at())[1] - second[1]) < 2);
+  release(4);
 
   // The session stops editing and its turn ends: the cursor goes.
   await cursor.waitFor({ state: 'detached', timeout: 15_000 });

@@ -42,7 +42,7 @@ async function openCanvas(t, file, seed) {
   const ws = join(repo, 'docs');
   mkdirSync(ws);
   const port = await freePort();
-  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const server = spawn(process.execPath, ['server/index.js', ws], { env: { ...process.env, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   server.stdout.on('data', (d) => (log += d));
   server.stderr.on('data', (d) => (log += d));
@@ -53,7 +53,8 @@ async function openCanvas(t, file, seed) {
     server.kill();
     rmSync(repo, { recursive: true, force: true });
   });
-  for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
+  // Wait for the listen line itself: a watcher warning (EMFILE poll fallback, #531) also contains 'workspace' and comes first.
+  for (let i = 0; i < 100 && !log.includes(`workspace ${ws}`); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
 
   const call = async (m, u, b) => {

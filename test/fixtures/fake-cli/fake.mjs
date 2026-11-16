@@ -4,8 +4,10 @@
 // - for a session turn, prints the JSON lines of $FAKE_CLI_SCENARIO (a JSON-lines file) or a short
 //   default reply in that CLI's stream format, then exits with $FAKE_CLI_EXIT (default 0).
 //   $FAKE_CLI_SCENARIO_<BIN> (e.g. FAKE_CLI_SCENARIO_CLAUDE) takes over for that one CLI.
-//   Two scenario lines are actions, not output: { "$sleep": ms } waits, { "$write": { file, text } } writes
-//   `text` to the absolute path `file` (a test's scratch folder), like an agent editing a file.
+//   Three scenario lines are actions, not output: { "$sleep": ms } waits, { "$write": { file, text } } writes
+//   `text` to the absolute path `file` (a test's scratch folder), like an agent editing a file, and
+//   { "$waitFor": file } waits until that file exists (up to 60 s), so a test can hold the turn until it has
+//   seen what it checks instead of racing fixed sleeps.
 // - with $FAKE_CLI_AUTH (a state file path) fakes `auth status|login|logout` (claude) and
 //   `login status|login|logout` (codex; `login --with-api-key` reads the key from stdin, keeps only
 //   that it got one, and fails on an empty key; `agy install` is agy's login): status reads the file,
@@ -56,6 +58,7 @@ function scenario(bin) {
 async function emit(lines) {
   for (const l of lines) {
     if (l.$sleep) await new Promise(r => setTimeout(r, l.$sleep));
+    else if (l.$waitFor) for (let i = 0; i < 3000 && !existsSync(l.$waitFor); i++) await new Promise(r => setTimeout(r, 20));
     else if (l.$write) writeFileSync(l.$write.file, l.$write.text);
     else process.stdout.write(JSON.stringify(l) + "\n");
   }

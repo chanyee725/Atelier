@@ -96,6 +96,8 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
       await sw.waitFor({ timeout: 10_000 });
       if (broken) await errorText.waitFor({ timeout: 10_000 });
       const m = await navFits();
+      // #431: 48px at phone width too while there is no error line (the height comes from min-h, not from padding).
+      if (!broken) assert.equal(await page.locator('header').first().evaluate((el) => el.getBoundingClientRect().height), 48, `run header height at ${width}px`);
       assert.ok(m.fits, `nav clipped at ${width}px (broken settings: ${broken}): ${JSON.stringify(m)}`);
       if (broken) {
         const box = await errorText.boundingBox();

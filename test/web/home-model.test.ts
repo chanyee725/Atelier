@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INDENT, ROW_HEIGHT, filterDocs, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
+import { INDENT, ROW_HEIGHT, filterDocs, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
 import type { ProjectDoc } from '../../web/src/api.ts';
 
 const d = (path: string, title: string, children: ProjectDoc[] = []): ProjectDoc => ({ path, name: path, title, bundle: false, createdAt: 1, modifiedAt: 2, children });
@@ -84,4 +84,12 @@ test('runningIn counts running files inside the project folder only', () => {
   const running = new Set(['pay/a.dpx.json', 'pay/a/b.dpx.json', 'payroll/c.dpx.json', 'loose.dpx.json']);
   assert.equal(runningIn({ path: 'pay' }, running), 2);
   assert.equal(runningIn({ path: 'other' }, running), 0);
+});
+
+test('loose files at the workspace root stay in the flat list with 최상위 as their place (no 미분류, #592)', () => {
+  const project = { id: 'p', path: 'p', name: 'P', icon: '', description: '', docCount: 1, modifiedAt: 0, docs: [d('p/x', 'X')] } as unknown as Parameters<typeof flatFiles>[0][number];
+  const files = flatFiles([project], [d('loose', 'Loose')]);
+  assert.deepEqual(files.map((f) => f.path).sort(), ['loose', 'p/x']);
+  assert.equal(locationOf(files.find((f) => f.path === 'loose')!), '최상위');
+  assert.equal(locationOf({ project: 'P', parent: 'X' }), 'P / X');
 });

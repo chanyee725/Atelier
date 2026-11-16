@@ -1,47 +1,39 @@
-// Sidebar model rows (design doc 6 §2.1, issues E51, E509): one row, Claude · Fable 5.2 with its 5-hour usage, a
-// status dot and its text, aligned with the nav rows. This row is where the model is connected and disconnected:
-// 연결하기 (hover/focus), 연결 중 with 취소 while a login runs, and a ⋯ menu with 연결 끊기 and 다시 확인.
-// It sends the same provider requests the old settings dialog did, which run the user's own CLI login.
-// Nothing here reads credentials or logs anything.
-import { MoreHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Sidebar model rows (E525, #570), ported from Dispatch's Sidebar provider list: one row per entry in PROVIDERS
+// (modelConnect.ts, keyed by provider id; only Claude for now, #587 adds more), each with a status dot and its text
+// (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 모델 연결 dialog for that provider
+// (ConnectDialog.tsx), where connect, cancel and disconnect happen. State comes from GET /api/state and the
+// `providers` SSE event (docs/design/model-connection-contract.md). Nothing here reads credentials or logs anything.
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './components/ui/dropdown-menu';
-import { SidebarMenu, SidebarMenuItem } from './components/ui/sidebar';
-import { useMenuState } from './lib/menuEscape';
+import { ConnectDialog } from './ConnectDialog';
+import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
+import { events } from './lib/events';
 import { cn } from './lib/utils';
+import { PROVIDERS, rowStatus, type ProviderMeta, type RowTone } from './modelConnect';
 import { MODELS_CHANGED } from './settings/context';
-import { afterSwap, leftRow } from './modelRowFocus';
-import { LOGIN_ENDED_NOTE, LOGIN_POLL_TIMEOUT_NOTE, loginUnlessClosed, oneAtATime, pollLogins, type ProviderId } from './settings/model';
-import { fiveHourWindow, limitReached, modelStatus, percent, type ModelLine, type ModelTone } from './projectNav';
+import { pollLogins } from './settings/model';
 
-const PROVIDERS = [['claude', 'Claude · Fable 5.2']] as const;
+const DOT: Record<RowTone, string> = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-destructive', off: 'bg-muted-foreground' };
 
-const DOT: Record<ModelTone, string> = { ok: 'bg-ok', warn: 'bg-warn', off: 'bg-muted-foreground' };
+export type Models = {
+  status: DispatchStatus | null;
+  /** State per provider id, as the server reports it. */
+  providers: Record<string, ProviderState>;
+  limits: ProviderLimits;
+  reload: () => Promise<void>;
+};
 
-// Small buttons at the right end of the row. Not nested in anything clickable: each is its own tab stop.
-const ACTION = 'absolute top-[3px] right-1 h-6 rounded-md bg-sidebar px-2 text-xs font-medium text-foreground outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring max-md:top-0 max-md:h-11 max-md:px-3';
-// Revealed on hover and keyboard focus-within where a pointer can hover; always shown on touch.
-const REVEAL = 'md:pointer-fine:opacity-0 md:pointer-fine:group-hover/menu-item:opacity-100 md:pointer-fine:group-focus-within/menu-item:opacity-100 md:pointer-fine:data-[state=open]:opacity-100';
-
-/** Connection and 5-hour usage per provider. Polls slowly (every 2 s while a login runs). */
-function useModels() {
+/** Provider state and usage. Live through the `providers` event; reloads on reconnect, on MODELS_CHANGED and every minute. */
+export function useModels(): Models {
   const [status, setStatus] = useState<DispatchStatus | null>(null);
   const [providers, setProviders] = useState<Record<string, ProviderState>>({});
   const [limits, setLimits] = useState<ProviderLimits>({});
-  // A login that ended without connecting and without an error of its own: say so instead of waiting forever.
-  const [note, setNote] = useState<string | null>(null);
-  const wasBusy = useRef(false);
   const reload = useCallback(async () => {
     try {
       const s = await api.dispatch();
       setStatus(s);
       if (!s.enabled) return;
       const [pv, lim] = await Promise.all([api.providers(), api.limits().catch(() => ({}))]);
-      const c = pv.claude;
-      if (wasBusy.current && !c?.busy && !c?.connected && !c?.error) setNote(LOGIN_ENDED_NOTE);
-      else if (c?.connected || c?.busy) setNote(null);
-      wasBusy.current = !!c?.busy;
       setProviders(pv);
       setLimits(lim);
     } catch {
@@ -52,166 +44,77 @@ function useModels() {
     void reload();
     const t = setInterval(reload, 60_000);
     window.addEventListener(MODELS_CHANGED, reload);
+    const offProviders = events.subscribeJson<Record<string, ProviderState>>('providers', (pv) => pv && typeof pv === 'object' && setProviders(pv));
+    const offLimits = events.subscribe('limits', () => void api.limits().then(setLimits, () => {}));
+    // After a dropped connection the events in between are lost: read the state again.
+    let first = true;
+    const offConn = events.onConnection((up) => {
+      if (up && !first) void reload();
+      if (up) first = false;
+    });
     return () => {
       clearInterval(t);
       window.removeEventListener(MODELS_CHANGED, reload);
+      offProviders();
+      offLimits();
+      offConn();
     };
   }, [reload]);
-  // While a CLI login runs, check back every 2 s until it ends; give up after 10 minutes.
+  // Fallback while a CLI login runs (the event stream may be down): check back every 2 s, give up after 10 minutes.
   const busy = Object.values(providers).some((p) => p?.busy);
-  useEffect(() => {
-    if (!busy) return;
-    return pollLogins(() => void reload(), () => setNote(LOGIN_POLL_TIMEOUT_NOTE));
-  }, [busy, reload]);
-  const lines: ModelLine[] = PROVIDERS.map(([id, name]) => {
-    const pv = providers[id];
-    const connected = !!pv?.connected;
-    return {
-      id,
-      name,
-      installed: pv?.installed ?? null,
-      connected,
-      pct: connected ? percent(fiveHourWindow(limits)?.used) : null,
-      reached: limitReached(connected, limits),
-      busy: !!pv?.busy,
-      url: typeof pv?.url === 'string' && pv.url.startsWith('https://') ? pv.url : null,
-      error: pv?.error ?? null,
-    };
-  });
-  return { status, lines, note, setNote, reload };
+  useEffect(() => (busy ? pollLogins(() => void reload(), () => {}) : undefined), [busy, reload]);
+  return { status, providers, limits, reload };
 }
 
 export function SidebarModels() {
-  const { status, lines, note, setNote } = useModels();
-  const [error, setError] = useState<string | null>(null);
-  // One request at a time: a double click before the buttons change is dropped.
-  const act = useMemo(
-    () =>
-      oneAtATime(async (what: 'connect' | 'cancel' | 'disconnect' | 'recheck', id: ProviderId) => {
-        setError(null);
-        setNote(null);
-        try {
-          if (what === 'connect') await loginUnlessClosed(id, api.providerLogin, api.providerCancel, () => false);
-          else if (what === 'cancel') await api.providerCancel(id);
-          else if (what === 'disconnect') await api.providerLogout(id);
-          else await api.providerRefresh();
-        } catch (e) {
-          setError(e instanceof Error ? e.message : '요청이 실패했어요.');
-        } finally {
-          window.dispatchEvent(new Event(MODELS_CHANGED));
-        }
-      }),
-    [setNote],
-  );
-  // The row swaps its action button (연결하기 / 취소 / ⋯ menu). If the button the user just used unmounts and focus falls to
-  // <body>, move it to the button that replaced it, and keep following the chain (연결하기 → 취소 → ⋯). Tracking ends
-  // once the user leaves the row and its ⋯ menu (focus moves outside, or a press outside), see modelRowFocus.ts.
-  const listRef = useRef<HTMLUListElement>(null);
-  const used = useRef<HTMLElement | null>(null);
-  const run = (what: 'connect' | 'cancel' | 'disconnect' | 'recheck', id: ProviderId) => {
-    const a = document.activeElement;
-    used.current = a instanceof HTMLElement && a !== document.body ? a : null; // a ⋯ menu item lives in a portal
-    void act(what, id);
-  };
-  useEffect(() => {
-    // The ⋯ menu content is portalled out of the list; it carries data-model-menu.
-    const areas = () => [listRef.current, ...document.querySelectorAll<HTMLElement>('[data-model-menu]')];
-    const onFocusOut = (e: FocusEvent) => {
-      if (used.current && leftRow('focusout', e.relatedTarget, areas())) used.current = null;
-    };
-    const onPointerDown = (e: PointerEvent) => {
-      if (used.current && leftRow('pointerdown', e.target, areas())) used.current = null;
-    };
-    document.addEventListener('focusout', onFocusOut, true);
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => {
-      document.removeEventListener('focusout', onFocusOut, true);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-    };
-  }, []);
-  const actionKey = lines.map((m) => (m.busy ? 'cancel' : m.connected ? 'menu' : 'connect')).join();
-  useEffect(() => {
-    const a = document.activeElement;
-    const step = afterSwap(used.current, a instanceof HTMLElement ? a : null, document.body, listRef.current, () =>
-      listRef.current?.querySelector<HTMLElement>('[data-testid="model-cancel"], [data-testid="model-connect"], [data-testid="model-menu"]') ?? null,
-    );
-    used.current = step.track;
-    step.focus?.focus();
-  }, [actionKey, status]);
-  if (!status) return null;
-  const on = status.enabled;
+  const models = useModels();
+  if (!models.status) return null;
   return (
-    <SidebarMenu ref={listRef} aria-label="모델 연결">
-      {lines.map((m) => {
-        const s = modelStatus(m, on);
-        const id = m.id as ProviderId;
-        const missing = m.installed === false;
-        const line = error ?? m.error ?? note ?? (missing && !m.connected ? 'CLI가 설치되지 않았어요.' : null);
-        return (
-          <SidebarMenuItem key={m.id}>
-            <div
-              title={`${m.name}: ${s.long}`}
-              className={cn(
-                'flex h-[30px] w-full min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 text-sm font-medium text-sidebar-foreground/80 max-md:h-11',
-                m.connected && 'pr-9',
-                on && !m.connected && !m.busy && !missing && 'pr-20',
-                m.busy && 'pr-16',
-              )}
-            >
-              {/* Same 17px slot as the nav icons, so names line up with 모든 파일, 최근, 보관함. */}
-              <span aria-hidden className="grid size-[17px] shrink-0 place-items-center">
-                <i className={cn('size-2 rounded-full', DOT[s.tone])} />
-              </span>
-              <span className="truncate">{m.name}</span>
-              <span className={cn('ml-auto shrink-0 text-xs tabular-nums', s.tone === 'warn' ? 'text-foreground' : 'text-muted-foreground')}>{s.text}</span>
-            </div>
-            {on && m.busy && (
-              <button type="button" data-testid="model-cancel" aria-label={`${m.name} 연결 취소`} onClick={() => run('cancel', id)} className={ACTION}>
-                취소
-              </button>
-            )}
-            {on && !m.busy && !m.connected && !missing && (
-              <button type="button" data-testid="model-connect" aria-label={`${m.name} 연결하기`} onClick={() => run('connect', id)} className={cn(ACTION, REVEAL)}>
-                연결하기
-              </button>
-            )}
-            {on && !m.busy && m.connected && (
-              <ModelMenu name={m.name} onDisconnect={() => run('disconnect', id)} onRecheck={() => run('recheck', id)} />
-            )}
-            {m.busy && m.url && (
-              <a href={m.url} target="_blank" rel="noreferrer noopener" className="block px-2 pb-1 text-xs underline">
-                로그인 페이지 열기
-              </a>
-            )}
-            {/* Always rendered, so its text changes are announced. */}
-            <p role="status" className={cn('px-2 text-xs text-destructive', line && 'pb-1')}>
-              {line}
-            </p>
-          </SidebarMenuItem>
-        );
-      })}
+    <SidebarMenu aria-label="모델 연결">
+      {PROVIDERS.map((meta) => (
+        <ModelRow key={meta.id} meta={meta} models={models} />
+      ))}
     </SidebarMenu>
   );
 }
 
-/** The ⋯ menu of a connected row: 연결 끊기 (the only way to disconnect) and 다시 확인. */
-function ModelMenu({ name, onDisconnect, onRecheck }: { name: string; onDisconnect: () => void; onRecheck: () => void }) {
-  const menu = useMenuState();
+function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const s = rowStatus(meta, models.providers[meta.id], !!models.status?.enabled, models.limits);
   return (
-    <DropdownMenu {...menu}>
-      <DropdownMenuTrigger asChild>
-        <button type="button" data-testid="model-menu" aria-label={`${name} 메뉴`} className={cn(ACTION, 'grid w-6 place-items-center px-0 max-md:w-11', REVEAL)}>
-          <MoreHorizontal aria-hidden className="size-[15px]" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent data-model-menu side="top" align="end">
-        <DropdownMenuItem className="max-md:min-h-11" onSelect={onDisconnect}>
-          연결 끊기
-        </DropdownMenuItem>
-        <DropdownMenuItem className="max-md:min-h-11" onSelect={onRecheck}>
-          다시 확인
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        ref={trigger}
+        data-testid="model-row"
+        data-provider={meta.id}
+        data-state-key={s.key}
+        aria-haspopup="dialog"
+        aria-label={`${meta.name} ${s.text}, 연결 관리`}
+        title={`${meta.name}: ${s.text}`}
+        onClick={() => setOpen(true)}
+        className="max-md:h-11"
+      >
+        {/* Same 17px slot as the nav icons, so the name lines up with 모든 파일, 최근, 보관함. */}
+        <span aria-hidden className="grid size-[17px] shrink-0 place-items-center">
+          <i className={cn('size-2 rounded-full', DOT[s.tone])} />
+        </span>
+        <span className="truncate">{meta.name}</span>
+        <span className={cn('ml-auto shrink-0 text-xs tabular-nums', s.tone === 'warn' || s.tone === 'bad' ? 'text-foreground' : 'text-muted-foreground')}>{s.text}</span>
+      </SidebarMenuButton>
+      {open && (
+        <ConnectDialog
+          meta={meta}
+          models={models}
+          onClose={() => {
+            setOpen(false);
+            // The browser returns focus to the opener on close; this covers the case where it landed on <body>.
+            requestAnimationFrame(() => {
+              if (!document.activeElement || document.activeElement === document.body) trigger.current?.focus();
+            });
+          }}
+        />
+      )}
+    </SidebarMenuItem>
   );
 }

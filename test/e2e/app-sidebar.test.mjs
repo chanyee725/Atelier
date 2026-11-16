@@ -88,7 +88,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   // Dashboard (layout B, #190): pill tabs with 프로젝트별 first shown, quick-create chips, / finds, 39px group heads, 만든 때.
   const dash = page.locator('main[data-screen="dashboard"]');
   const tabs = dash.getByRole('tablist', { name: '보기' });
-  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['전체', '최근', '프로젝트별', '미분류']);
+  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['전체', '최근', '프로젝트별']);
   assert.equal(await tabs.getByRole('tab', { name: '프로젝트별' }).getAttribute('aria-selected'), 'true');
   const chips = dash.getByRole('group', { name: '새로 만들기' }).getByRole('button');
   // Chips show the kind only; a visually hidden "새 " keeps names like "새 파이프라인 계획" for assistive tech and e2e.
@@ -106,7 +106,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   const heads = dash.locator('[data-slot="group-head"]');
   assert.deepEqual(
     (await heads.allInnerTexts()).map((s) => s.replace(/\s+/g, ' ').trim()),
-    ['결 결제 시스템 문서 3 개', '온 온보딩 개편 문서 1 개', '인 인프라 문서 0 개', '미분류 문서 1 개'],
+    ['결 결제 시스템 문서 3 개', '온 온보딩 개편 문서 1 개', '인 인프라 문서 0 개'],
   );
   assert.equal(Math.round((await heads.first().boundingBox()).height), 39);
   assert.match(await dash.locator('[data-slot="column-head"]').first().innerText(), /만든 때/);
@@ -125,6 +125,8 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await tabs.getByRole('tab', { name: '전체' }).click();
   assert.match(await dash.locator('[data-slot="column-head"]').first().innerText(), /위치/);
   assert.equal(await dash.locator('[data-doc-row]').count(), 5);
+  // A file right in the workspace root has no group (no 미분류, #592) but stays here, placed at 최상위.
+  assert.match(await dash.locator('[data-doc-row="아이디어 메모.dpx.json"]').innerText(), /최상위/);
   await tabs.getByRole('tab', { name: '프로젝트별' }).click();
   await shot(page, 'light-dash-1440');
   await page.evaluate(() => document.activeElement?.blur());

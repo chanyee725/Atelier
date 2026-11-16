@@ -27,7 +27,8 @@ export function PrTrackingToggle() {
         />
         PR·CI 추적
       </label>
-      <span id={hintId} className="sr-only">{hint}</span>
+      {/* hidden, not sr-only: aria-describedby still reads it, and browse mode does not read it a second time (#431). */}
+      <span id={hintId} hidden>{hint}</span>
       <p id={errId} aria-live="polite" className="text-xs break-words text-destructive">
         {line}
       </p>
