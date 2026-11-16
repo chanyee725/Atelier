@@ -1,7 +1,7 @@
 // Pure data helpers for the dashboard and project home (no React).
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
 
-export type DashTab = 'all' | 'recent' | 'projects' | 'unfiled';
+export type DashTab = 'all' | 'recent' | 'projects';
 
 /** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
 export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
@@ -15,8 +15,8 @@ export function allDocs(projects: ProjectInfo[], unfiled: ProjectDoc[]): Placed[
   return [...projects.flatMap((p) => walk(p.docs, p, null)), ...walk(unfiled, null, null)];
 }
 
-/** Where a file sits, for the 위치 column: "프로젝트 / 상위 문서", or 미분류 at the workspace root. */
-export const locationOf = (p: { project: string | null; parent: string | null }) => [p.project, p.parent].filter(Boolean).join(' / ') || '미분류';
+/** Where a file sits, for the 위치 column: "프로젝트 / 상위 문서", or 최상위 for a file right in the workspace root. */
+export const locationOf = (p: { project: string | null; parent: string | null }) => [p.project, p.parent].filter(Boolean).join(' / ') || '최상위';
 
 /** Docs whose title contains the query (case-insensitive); an empty query keeps everything. */
 export const matchesQuery = (title: string, query: string) => !query.trim() || title.toLowerCase().includes(query.trim().toLowerCase());
