@@ -119,22 +119,22 @@ test('agents module: the list follows edits, sessions and named outside writers'
   assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, '에이전트');
   assert.equal(m.list().length, 2);
 
-  // A named write while Otto's call is still open: the request's own name wins over the guess...
+  // A named write while Otto's call is still open: Otto keeps it, whatever name the request sends (#603 review).
   const curl = { kind: 'tool', name: 'Bash', text: 'curl -X PUT /api/file?path=P%2Fb.dpx.json' };
-  r.hub.emit('message', { id: 's1', entry: { ...curl } });
-  await sleep(5);
-  await r.change('P/b.dpx.json', rect('q', 85), { writer: 'Ext2' });
-  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, 'Ext2');
-  // ...unless it is that session's own name.
-  r.hub.emit('message', { id: 's1', entry: { ...curl } });
-  await sleep(5);
-  await r.change('P/b.dpx.json', rect('q', 87), { writer: 'Otto' });
-  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.sid, 's1');
+  for (const writer of ['lead-Otto', 'Otto']) {
+    r.hub.emit('message', { id: 's1', entry: { ...curl } });
+    await sleep(5);
+    await r.change('P/b.dpx.json', rect('q', writer.length + 80), { writer });
+    const last = r.sent.filter((s) => s.event === 'cursor').at(-1).data;
+    assert.deepEqual([last.sid, last.name], ['s1', 'Otto'], writer);
+  }
+  assert.equal(m.list().find((a) => a.sid === 's1').file, 'P/b.dpx.json');
+  assert.equal(m.list().some((a) => a.name === 'lead-Otto'), false);
 
   // The session leaves: gone from the list.
   r.hub.sessions.s1.status = 'idle';
   r.hub.emit('removed', { id: 's1' });
-  assert.deepEqual(lists().at(-1).map((a) => a.name).sort(), ['Ext', 'Ext2']);
+  assert.deepEqual(lists().at(-1).map((a) => a.name), ['Ext']);
   m.close();
   r.ctx.modules.cursor.close();
 });
