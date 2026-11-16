@@ -101,6 +101,18 @@ test("a message to the teammate, a new turn or a permission request cancels the 
   assert.equal(store.data.sessions.K, undefined);
 });
 
+test("a message refused while a Codex teammate runs leaves the timer armed (#635)", async () => {
+  const { hub, store, kid, finish } = makeHub();
+  finish();
+  // deliver refuses as it does for a running Codex or Gemini turn.
+  hub.deliver = () => { throw new Error("Codex는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요"); };
+  mock.timers.tick(60_000);
+  assert.throws(() => hub.send("K", "하나 더"), /Codex는 응답이 끝난 뒤에/);
+  mock.timers.tick(60_000);
+  await flush();
+  assert.equal(store.data.sessions.K, undefined, "removed on schedule: the message never went out");
+});
+
 test("a pending permission or a question to the user keeps the teammate", async () => {
   const { hub, store, kid, finish } = makeHub();
   hub.rt("K").perms.set("r1", { requestId: "r1", tool: "Bash" });
@@ -176,7 +188,7 @@ test("a worktree with uncommitted changes is kept and the lead is told; a clean 
   assert.equal(await hub.autoRemove("K"), true);
   assert.equal(store.data.sessions.K, undefined);
   assert.ok(existsSync(dirty), "dirty worktree kept");
-  assert.match(said(leadProc), /세션을 정리했어요\(브랜치 b-dirty\)\. 커밋 안 된 변경이나 git이 무시하는 파일이 있거나 상태를 확인하지 못해 작업 폴더 .*wt-dirty는 남겼어요/);
+  assert.match(said(leadProc), /세션을 정리했어요\(브랜치 b-dirty\)\. 커밋 안 된 변경이나 git이 무시하는 파일이 있거나 상태를 확인하지 못해 작업 폴더 wt-dirty는 남겼어요/, "project-relative path");
 
   store.data.sessions.C = { id: "C", name: "Ari", roleName: "리뷰어", parent: "L", provider: "claude", model: "claude-fable-5-2", status: "idle", usage: {}, worktree: true, cwd: clean, branch: "b-clean" };
   assert.equal(await hub.autoRemove("C"), true);
@@ -243,6 +255,7 @@ test("dropWorktree strict (auto-remove) keeps ignored files and failed status; t
   execFileSync("mkdir", ["-p", join(noise, "node_modules", "x")]);
   writeFileSync(join(noise, "node_modules", "x", "i.js"), "");
   assert.equal(await dropWorktree(root, noise, { strict: true }), true, "node_modules is noise");
+
   // Noise at any depth (#635): web/node_modules, web/dist and coverage do not keep it.
   writeFileSync(join(root, ".gitignore"), ".env\nnode_modules/\ndist/\ncoverage/\n");
   git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "ignore more");
@@ -258,7 +271,6 @@ test("dropWorktree strict (auto-remove) keeps ignored files and failed status; t
   writeFileSync(join(nestedEnv, "web", "dist", "a.js"), "");
   writeFileSync(join(nestedEnv, "web", ".env"), "SECRET=1");
   assert.equal(await dropWorktree(root, nestedEnv, { strict: true }), false, "a nested .env still keeps it");
-
 
   const broken = wt("w-broken");
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");

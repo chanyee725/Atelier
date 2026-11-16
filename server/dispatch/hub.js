@@ -601,13 +601,14 @@ export class Hub extends EventEmitter {
     const blocked = this.runBlock(s); // before anything is recorded or started
     if (blocked) throw new Error(blocked);
     const r = this.rt(id);
-    // Whoever writes to a teammate in its grace period keeps it: the auto-remove timer stops here.
-    this.cancelAutoRemove(id);
     // Notices for a lead (auto-removed teammates, kept worktrees) ride on its next message; put back if it
     // does not go out.
     const notes = r.leadNotes?.length ? r.leadNotes.splice(0) : [];
     if (notes.length) text = `${text}\n\n${notes.join("\n")}`;
     try { this.deliver(s, r, text); } catch (e) { r.leadNotes = [...notes, ...(r.leadNotes || [])]; throw e; }
+    // Whoever writes to a teammate in its grace period keeps it: the auto-remove timer stops once the
+    // message went out. A refused message (a running Codex or Gemini turn) leaves the timer armed.
+    this.cancelAutoRemove(id);
   }
 
   deliver(s, r, text) {
@@ -774,7 +775,7 @@ export class Hub extends EventEmitter {
     this.emit("removed", { id });
     // Its worktree goes too when nothing uncommitted is left in it; the branch stays.
     const dropped = gone?.worktree && this.team().dropWorktrees
-      ? new Promise(res => setTimeout(() => dropWorktree(this.root, gone.cwd, { strict, info }).then(res, () => res(false)), this.dropDelayMs))
+      ? new Promise(res => setTimeout(() => dropWorktree(this.root, gone.cwd, { strict, info }).then(res, () => res(false)), this.dropDelayMs).unref?.())
       : Promise.resolve(null);
     this.emit("tasks", this.tasks);
     this.emit("tickets", this.tickets);
@@ -827,9 +828,12 @@ export class Hub extends EventEmitter {
     const info = {};
     const dropped = this.remove(id, { strict: true, info });
     const kept = worktree && (await dropped) === false && existsSync(cwd);
-    const why = info.detached ? ` 분리된 HEAD라 worktree를 남겼어요${info.sha ? ` (커밋 ${info.sha})` : ""}. 작업 폴더는 ${cwd}예요.`
-      : info.unknown ? ` git 상태를 확인하지 못해 작업 폴더 ${cwd}는 남겼어요.`
-      : ` 커밋 안 된 변경이나 git이 무시하는 파일이 있거나 상태를 확인하지 못해 작업 폴더 ${cwd}는 남겼어요.`;
+    // The project-relative path (.dispatch/wt/<slug>) is shorter for the lead and does not spell out the home folder.
+    const rel = cwd && path.relative(this.root, cwd);
+    const where = rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : cwd;
+    const why = info.detached ? ` 분리된 HEAD라 worktree를 남겼어요${info.sha ? ` (커밋 ${info.sha})` : ""}. 작업 폴더는 ${where}예요.`
+      : info.unknown ? ` git 상태를 확인하지 못해 작업 폴더 ${where}는 남겼어요.`
+      : ` 커밋 안 된 변경이나 git이 무시하는 파일이 있거나 상태를 확인하지 못해 작업 폴더 ${where}는 남겼어요.`;
     this.notifyLead(parent, `[Dispatch] ${who} 세션을 정리했어요${branch ? `(브랜치 ${branch})` : ""}.`
       + (kept ? why : ""));
     return true;
