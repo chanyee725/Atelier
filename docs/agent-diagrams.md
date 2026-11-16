@@ -9,7 +9,7 @@ Design: `docs/design/code-linked-nodes.md` (§1 data model, §4 agent side). API
 
 ## Reference format
 
-`path[:start[-end]][#symbol]`, several separated by `;`.
+`path[:start[-end]][#symbol]`, several separated by `;`. The line range comes before `#symbol`: in `a.py#f:10` the `:10` is part of the symbol (`f:10`), not a line number; write `a.py:10#f`.
 
 - `path`: repo-relative, `/`-separated, no `..`, no leading `/`.
 - `start`, `end`: 1-based, inclusive. `end` is optional (= `start`); `end - start <= 2000`.
@@ -101,7 +101,7 @@ Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the re
 
 - `summary` and `note` are stored in the document. Write only a description of the code. Never include secrets, tokens, API keys, emails, real names or conversation text.
 - The DSL `code:` attribute works only in `flowchart` and `cloud-architecture` diagrams.
-- Paths are repo-relative with `/`; `./` segments are dropped (`./a.py` is stored as `a.py`). In the DSL `code:` attribute the first `#` starts the symbol and everything after it is the symbol (`a.ts#Class.#priv`, `a.cpp#operator/`), so paths containing `#` are not supported there. `symbol`, when given, is non-empty.
+- Paths are repo-relative with `/`; `./` segments are dropped (`./a.py` is stored as `a.py`). In the DSL `code:` attribute the first `#` starts the symbol and everything after it is the symbol (`a.ts#Class.#priv`, `a.cpp#operator/`), so paths containing `#` are not supported there. Such a path is not rejected: `a#b/c.py` is read as path `a` with symbol `b/c.py`, without a warning, so the ref points at file `a`. Use block JSON `codeRefs` for those paths. `symbol`, when given, is non-empty.
 - At most 2000 nodes per block. The file format is v5 once a block has `codeRefs`; an older server opens such files read-only.
 - Refs are keyed by node name. When you rename a node, rename its `codeRefs.nodes` key too, or the refs are orphaned.
 
