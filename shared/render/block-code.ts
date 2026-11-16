@@ -1,7 +1,7 @@
 // Per-block code references (`block.codeRefs` in `.dpx.json`), keyed by node name like `layout.items`.
 // Rules shared by the server (checks saves) and the web (merges DSL refs for display / free-form conversion).
 // Design: docs/design/code-linked-nodes.md §1.
-import { codePathProblem, MAX_CODE_NOTE, MAX_CODE_SPAN, MAX_CODE_SYMBOL, type CodeRef } from '../dsl/code-refs.ts';
+import { codePathProblem, normalizeCodePath, MAX_CODE_NOTE, MAX_CODE_SPAN, MAX_CODE_SYMBOL, type CodeRef } from '../dsl/code-refs.ts';
 
 export type { CodeRef };
 
@@ -33,7 +33,7 @@ function refProblem(r: unknown, at: string): string | null {
     if (!Number.isInteger(r.end) || (r.end as number) < (r.start as number)) return `${at}.end must be an integer >= start`;
     if ((r.end as number) - (r.start as number) > MAX_CODE_SPAN) return `${at} spans more than ${MAX_CODE_SPAN} lines`;
   }
-  if (r.symbol !== undefined && (typeof r.symbol !== 'string' || r.symbol.length > MAX_CODE_SYMBOL)) return `${at}.symbol must be a string of at most ${MAX_CODE_SYMBOL} characters`;
+  if (r.symbol !== undefined && (typeof r.symbol !== 'string' || r.symbol.length < 1 || r.symbol.length > MAX_CODE_SYMBOL)) return `${at}.symbol must be a string of 1-${MAX_CODE_SYMBOL} characters`;
   if (r.note !== undefined && (typeof r.note !== 'string' || r.note.length > MAX_CODE_NOTE)) return `${at}.note must be a string of at most ${MAX_CODE_NOTE} characters`;
   return null;
 }
@@ -64,7 +64,7 @@ export function blockCodeProblem(c: unknown, at = 'codeRefs'): string | null {
 }
 
 const cleanRef = (r: CodeRef): CodeRef => {
-  const o: CodeRef = { path: r.path, start: r.start };
+  const o: CodeRef = { path: normalizeCodePath(r.path), start: r.start };
   if (r.end !== undefined) o.end = r.end;
   if (r.symbol !== undefined) o.symbol = r.symbol;
   if (r.note !== undefined) o.note = r.note;

@@ -26,7 +26,13 @@ export function codePathProblem(p: unknown): string | null {
   if (p.includes('\0') || p.includes('\\')) return 'path must not contain NUL or backslash';
   if (p.startsWith('/') || /^[A-Za-z]:/.test(p)) return 'path must be repo-relative';
   if (p.split('/').some((s) => s === '..' || s === '')) return "path must not have '..' or empty segments";
+  if (!normalizeCodePath(p)) return 'path must name a file';
   return null;
+}
+
+/** `p` without '.' segments (`./a.py` → `a.py`); the stored form. Apply to paths that passed {@link codePathProblem}. */
+export function normalizeCodePath(p: string): string {
+  return p.includes('.') ? p.split('/').filter((s) => s !== '.').join('/') : p;
 }
 
 export interface ParsedCodeAttr {
@@ -44,10 +50,15 @@ export function parseCodeAttr(text: string): ParsedCodeAttr {
     if (!piece) continue;
     let rest = piece;
     let symbol: string | undefined;
+    // `#` starts the symbol; paths with `#` are not supported, so a second `#` or a `/` after it is reported.
     const hash = rest.indexOf('#');
     if (hash >= 0) {
       symbol = rest.slice(hash + 1).trim();
       rest = rest.slice(0, hash).trim();
+      if (symbol.includes('#') || symbol.includes('/')) {
+        problems.push(`Bad code reference '${piece}': '#' starts the symbol, paths with '#' are not supported`);
+        continue;
+      }
       if (!symbol || symbol.length > MAX_CODE_SYMBOL) {
         problems.push(`Bad symbol in code reference '${piece}'`);
         continue;
@@ -63,7 +74,7 @@ export function parseCodeAttr(text: string): ParsedCodeAttr {
     else if (!Number.isSafeInteger(start) || start < 1 || (end !== undefined && (!Number.isSafeInteger(end) || end < start || end - start > MAX_CODE_SPAN))) {
       problems.push(`Bad line range in code reference '${piece}'`);
     } else {
-      const ref: CodeRef = { path, start };
+      const ref: CodeRef = { path: normalizeCodePath(path), start };
       if (end !== undefined && end !== start) ref.end = end;
       if (symbol) ref.symbol = symbol;
       refs.push(ref);
@@ -75,7 +86,11 @@ export function parseCodeAttr(text: string): ParsedCodeAttr {
 /**
  * The diagram code without `code:` attributes, for text that leaves the app as Eraser-style diagram code
  * (Eraser's handling of unknown attributes is not verified). An attribute list left empty is removed too.
- * Uses the DSL tokenizer, so `code:` inside quoted text or comments and all other text stay byte-for-byte unchanged.
+ * Uses the DSL tokenizer, so `code:` inside quoted text or comments is kept. Text outside changed lists stays
+ * byte-for-byte unchanged; a list that keeps entries is rebuilt with `, ` between them. Edge cases follow parseAttrs
+ * where it reads the line the same way: single quotes are plain characters (`[label: 'a, code: b']` → `[label: 'a]`).
+ * Lists with no closing `]` on their line or with malformed entries (`[foo bar code: x]`) are left as written:
+ * the parser already reports them as errors.
  */
 export function stripCodeAttrs(src: string): string {
   if (!src.includes('code')) return src;
@@ -89,6 +104,7 @@ export function stripCodeAttrs(src: string): string {
     let j = i + 1;
     let close = -1;
     let entryStart = j;
+    let sawColon = false; // the current entry's `key:` colon was seen
     const endEntry = (end: number) => {
       if (end >= entryStart) {
         const k = tokens[entryStart]!;
@@ -100,6 +116,7 @@ export function stripCodeAttrs(src: string): string {
     for (; j < tokens.length; j++) {
       const k = tokens[j]!.kind;
       if (depth > 0 && stop < 0 && (k === 'comma' || k === 'rbracket')) stop = j;
+      if (k === 'colon') sawColon = true;
       const lineEnd = k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace';
       if (stop >= 0 && lineEnd) {
         // Unmatched `[` swallowed the rest of the line: restart right at the first `,`/`]` like a plain value.
@@ -120,7 +137,7 @@ export function stripCodeAttrs(src: string): string {
       if (k === 'newline' || k === 'eof' || k === 'lbrace' || k === 'rbrace') break;
       if (k === 'lbracket') {
         // A bracket right after the entry's `key:` is nested only once the key's colon was seen.
-        if (tokens[entryStart]?.kind === 'word' && tokens.slice(entryStart, j).some((t) => t.kind === 'colon')) {
+        if (tokens[entryStart]?.kind === 'word' && sawColon) {
           depth++;
           continue;
         }
@@ -129,6 +146,7 @@ export function stripCodeAttrs(src: string): string {
       if (k === 'comma' && depth === 0) {
         endEntry(j - 1);
         entryStart = j + 1;
+        sawColon = false;
       }
     }
     i = Math.max(i, j - 1);
@@ -136,9 +154,10 @@ export function stripCodeAttrs(src: string): string {
     const kept = entries.filter((e) => !e.isCode);
     const end = tokens[close]!;
     if (kept.length === 0) {
-      // Drop the whole list and the whitespace before it.
+      // Drop the whole list and the whitespace before it, unless the list starts its line (keep the indentation).
       let from = open.offset;
       while (from > 0 && (src[from - 1] === ' ' || src[from - 1] === '\t')) from--;
+      if (from === 0 || src[from - 1] === '\n') from = open.offset;
       cuts.push({ from, to: end.offset + 1, text: '' });
       continue;
     }
