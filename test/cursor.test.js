@@ -50,9 +50,9 @@ function rig() {
       dispatch: { hub },
     },
   };
-  const change = async (rel, f) => {
+  const change = async (rel, f, opts) => {
     files.set(rel, f);
-    for (const fn of listeners) fn(rel);
+    for (const fn of listeners) fn(rel, opts);
     await new Promise((r) => setTimeout(r, 5));
   };
   return { files, hub, ctx, sent, listeners, change, tick: () => new Promise((r) => setTimeout(r, 5)) };
@@ -62,8 +62,8 @@ test('cursor module: an agent edit is broadcast at the changed shape; a human-on
   const r = rig();
   const m = await setup(r.ctx);
   r.files.set('a.dpx.json', file([rect('r1', 0, 0)]));
-  // A change nobody mentioned: no cursor.
-  await r.change('a.dpx.json', file([rect('r1', 10, 0)]));
+  // A save from this page: no cursor.
+  await r.change('a.dpx.json', file([rect('r1', 10, 0)]), { app: true });
   assert.equal(r.sent.length, 0);
   r.hub.sessions.s1 = { id: 's1', name: 'Remy', role: 'impl', status: 'running' };
   r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Edit', text: '{"file_path":"/x/wt/a.dpx.json"}' } });
@@ -149,7 +149,7 @@ test('cursor module: quick changes to one file are diffed in order (#249)', asyn
   const r = rig();
   const m = await setup(r.ctx);
   r.hub.sessions.s1 = { id: 's1', name: 'Remy', role: 'impl', status: 'running' };
-  await r.change('a.dpx.json', file([rect('r1', 0, 0)])); // the reported version: r1 only
+  await r.change('a.dpx.json', file([rect('r1', 0, 0)]), { app: true }); // the reported version: r1 only
   r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Edit', text: '{"file_path":"/w/a.dpx.json"}' } });
   await r.tick();
   // Two changes back to back. The first one's read is slow, the second one's is fast: handled concurrently, the
@@ -276,7 +276,7 @@ test('cursor module: a call that left no edit does not take the next one (#390)'
   // A change nobody's open call can explain (all finished long ago) shows no cursor.
   say('a', { kind: 'tool_result', text: 'ok', error: false });
   now += 10_000;
-  await r.change(rel, file([], [block('top', 0, 0), block('bot', 0, 500)]));
+  await r.change(rel, file([], [block('top', 0, 0), block('bot', 0, 500)]), { app: true });
   assert.equal(r.sent.filter((e) => e.event === 'cursor').length, 2);
   await m.close();
 });
@@ -299,7 +299,7 @@ test('cursor module: Claude results are paired by call id, so an older still-run
   now += 10_000;
   // Edit finished 10s ago (its own change is long past): a human edit now is not Cora's. By call order the Edit
   // would have stayed "running" (the Edit's result would have closed the sleep) and been credited.
-  await r.change(rel, file([], [block('top', 0, 0, 'x > y')]));
+  await r.change(rel, file([], [block('top', 0, 0, 'x > y')]), { app: true });
   assert.equal(r.sent.filter((e) => e.event === 'cursor').length, 0);
   await m.close();
 });
@@ -342,4 +342,20 @@ test('cursor module: ids that are common path words still tell two calls apart (
   await r.change(rel, file([], [block('top', 0, 0), block('api', 0, 500, 'x > y')]));
   assert.deepEqual(r.sent.filter((e) => e.event === 'cursor').map((e) => e.data.sid), ['c']);
   await m.close();
+});
+
+test('cursor module: a write nobody on this hub made gets a generic cursor at the changed shape (#543)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  r.files.set('a.dpx.json', file([rect('r1', 0, 0)]));
+  await r.change('a.dpx.json', file([rect('r1', 0, 0)]), { app: true });
+  await r.change('a.dpx.json', file([rect('r1', 0, 0), rect('r2', 300, 300)]));
+  assert.equal(r.sent.length, 1);
+  const { at, ...rest } = r.sent[0].data;
+  assert.equal(typeof at, 'number');
+  assert.deepEqual(rest, { sid: 'outside:a.dpx.json', name: '에이전트', role: '', file: 'a.dpx.json', x: 350, y: 325 });
+  // Nothing with a place changed: no cursor.
+  await r.change('a.dpx.json', { ...file([rect('r1', 0, 0), rect('r2', 300, 300)]), title: 't' });
+  assert.equal(r.sent.length, 1);
+  m.close();
 });

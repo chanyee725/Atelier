@@ -78,7 +78,8 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
     keepalive,
     // Every non-GET /api request needs x-drawing: 1 (server/app.js); a cross-site page can't send it.
     headers: {
-      ...(method === 'GET' ? {} : { 'x-drawing': '1' }),
+      // x-drawing-client: this page's own saves, so the server shows no outside-writer cursor for them (E520).
+      ...(method === 'GET' ? {} : { 'x-drawing': '1', 'x-drawing-client': 'app' }),
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
