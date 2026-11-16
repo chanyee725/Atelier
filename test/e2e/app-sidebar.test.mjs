@@ -188,7 +188,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
   // One row per provider, named by the provider (not a model, #620), with text next to the dot. The row is a button
-  // that opens the 모델 연결 dialog (E525, #570); its name says the state and what it does. There is no settings dialog.
+  // that opens the 설정 modal at its 모델 연결 section (#624); its name says the state and what it does.
   const models = nav.getByRole('list', { name: '모델 연결' });
   await models.waitFor();
   assert.deepEqual((await models.locator('li').allInnerTexts()).map((s) => s.split('\n')[0]), ['Claude', 'OpenAI Codex', 'Gemini']);
@@ -196,14 +196,17 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   const modelRow = models.getByRole('button', { name: /^Claude (연결 안 됨|연결됨|설치 안 됨|로그인 중|.*%.*|.*한도.*), 연결 관리$/ });
   await modelRow.waitFor({ state: 'attached' });
   assert.equal(await modelRow.getAttribute('aria-haspopup'), 'dialog');
-  // Clicking the row opens the 모델 연결 dialog; nothing is connected in a scratch repo, so its action button is 연결.
+  // Clicking the row opens 설정 > 모델 연결; nothing is connected in a scratch repo, so Claude's action is 연결.
   await modelRow.click();
-  const connect = page.getByRole('dialog', { name: '모델 연결' });
-  await connect.waitFor();
-  await connect.getByRole('button', { name: '연결', exact: true }).waitFor();
+  const settings = page.getByRole('dialog', { name: '설정' });
+  await settings.waitFor();
+  const providers = settings.getByRole('region', { name: '모델 연결' });
+  await providers.waitFor();
+  assert.equal(await settings.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'page');
+  await providers.getByRole('button', { name: 'Claude 연결', exact: true }).waitFor();
   await page.keyboard.press('Escape');
-  await connect.waitFor({ state: 'hidden' });
-  assert.equal(await page.getByRole('dialog', { name: '설정' }).count(), 0);
+  await settings.waitFor({ state: 'detached' });
+  assert.equal(await modelRow.evaluate((el) => el === document.activeElement), true, 'focus returns to the model row');
   await page.close();
 
   page = await open('dark', 1440);
