@@ -35,14 +35,24 @@ const keepFocus = (e: MouseEvent) => e.preventDefault();
 
 const agentStyle = (c: MarginCard): CSSProperties => ({ '--agent': c.color || `var(--role-${c.role}, var(--idle))` }) as CSSProperties;
 
+/** The pending end of each cursor's outline, so a second click restarts it instead of being cut short by the first. */
+const flashEnds = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
 /** Outline the agent's document cursor briefly, so the jumped-to spot shows whose change it was. */
 function flashCursor(sid: string) {
   const el = document.querySelector<HTMLElement>(`[data-doc-agent-cursor="${CSS.escape(sid)}"]`);
   if (!el) return;
+  clearTimeout(flashEnds.get(el));
   el.removeAttribute('data-margin-flash');
   void el.offsetWidth; // restart on a second click
   el.setAttribute('data-margin-flash', '');
-  setTimeout(() => el.removeAttribute('data-margin-flash'), FLASH_MS);
+  flashEnds.set(
+    el,
+    setTimeout(() => {
+      flashEnds.delete(el);
+      el.removeAttribute('data-margin-flash');
+    }, FLASH_MS),
+  );
 }
 
 function Dots() {
@@ -107,11 +117,12 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
     flashCursor(card.sid);
   };
 
-  // Collapsed side panel: a slim rail with one swatch per agent; the whole rail opens it.
+  // Collapsed side panel: a slim rail with one swatch per agent; the whole rail opens it. The card list is not
+  // rendered here, so the rail has no aria-controls (it would point at nothing).
   if (form === 'side' && collapsed) {
     return (
       <div className="margin-panel" data-margin-panel="" data-form={form} data-collapsed="">
-        <button type="button" className="margin-rail" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} aria-controls={listId} title="에이전트 작업 펼치기">
+        <button type="button" className="margin-rail" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} title="에이전트 작업 펼치기">
           <ChevronRight className="margin-rail-chevron" aria-hidden="true" />
           {agents.map((c) => (
             <span key={c.sid} className="margin-rail-dot" data-phase={c.phase} style={agentStyle(c)} aria-hidden="true" />

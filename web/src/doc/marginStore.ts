@@ -20,7 +20,6 @@ import {
   nextTurnAt,
   placeOf,
   pruneIdle,
-  RAIL_W,
   readCollapsed,
   SETTLE_MS,
   type BlockInfo,
@@ -96,7 +95,8 @@ export type AgentMargin = {
   form: MarginForm;
   /** Collapsed in this form (remembered per browser). */
   collapsed: boolean;
-  /** The side form's collapse state (its width counts when picking the form). */
+  /** The side form's collapse state. DocMargin marks it on the page (`data-side-rail`), where measureRoom reads the
+   *  rail's width for the room, so the form and the Splitter's drag both count the same panel. */
   sideCollapsed: boolean;
   setCollapsed: (v: boolean) => void;
   /** Scroll the document to a change and flash it there. */
@@ -192,7 +192,7 @@ export function useAgentMargin(file: string, editor: Editor | null, room: Margin
   );
 
   const [stored, setStored] = useState(readStored);
-  const form: MarginForm = room ? formOf({ ...room, panel: stored.side ? RAIL_W : room.panel }) : 'side';
+  const form: MarginForm = room ? formOf(room) : 'side';
   const setCollapsed = useCallback(
     (v: boolean) =>
       setStored((old) => {

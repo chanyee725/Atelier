@@ -97,6 +97,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
   });
   // The hub's public session carries `activity` ({ label, since } while a turn runs a tool, else null); the stored
   // session does not, so the label is kept here.
+  let again = null;
   const onSession = (s) => {
     if (s?.id) {
       const label = typeof s.activity?.label === 'string' && s.activity.label ? s.activity.label : null;
@@ -105,7 +106,8 @@ export async function setup(ctx, { now = Date.now } = {}) {
     }
     update();
     // The pipeline links a session to its step on the same event, after this listener: look again right after.
-    setTimeout(update, 0);
+    clearTimeout(again);
+    again = setTimeout(update, 0);
   };
   const onTasks = () => update();
   const onRemoved = ({ id } = {}) => {
@@ -135,6 +137,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
     ],
     close() {
       clearInterval(timer);
+      clearTimeout(again);
       offHeld();
       hub?.off('session', onSession);
       hub?.off('removed', onRemoved);
