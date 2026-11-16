@@ -837,7 +837,7 @@ export function App() {
           {error && (
             <Alert className="flex-nowrap border-b-0 bg-muted">
               <span>{error}</span>
-              <button type="button" className="ml-auto underline" onClick={() => setError(null)}>
+              <button type="button" className="ml-auto cursor-pointer rounded-sm px-1 underline transition-colors hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" onClick={() => setError(null)}>
                 닫기
               </button>
             </Alert>

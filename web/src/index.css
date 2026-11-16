@@ -10,6 +10,9 @@
 /* Tailwind v4 borders default to currentColor; without this, `border` draws a white line in dark mode. */
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
+  /* Clickable things show a pointer (#546). In the base layer so a utility such as cursor-default still wins;
+     disabled controls keep the default cursor. */
+  :is(button, [role="button"], summary, a[href], label[for], select):not(:disabled, [aria-disabled="true"]) { cursor: pointer; }
 }
 
 /*
@@ -359,7 +362,7 @@ body {
 /* Fill the pane (flex column in 문서-only view, block in the splitter) so a short doc's empty area still reveals the button. */
 .doc-host { flex: 1 0 auto; min-height: 100%; }
 .doc-outline-wrap { position: relative; align-self: flex-end; }
-.doc-outline-btn { color: var(--muted-foreground); opacity: 0; transition: opacity 0.15s; }
+.doc-outline-btn { color: var(--muted-foreground); opacity: 0; transition: opacity 0.15s, color 0.12s ease, background-color 0.12s ease; }
 .doc-host:hover .doc-outline-btn, .doc-host:focus-within .doc-outline-btn, .doc-outline-btn[aria-expanded="true"] { opacity: 1; }
 @media (hover: none) { .doc-outline-btn { opacity: 1; } }
 .doc-outline-btn:hover { color: var(--foreground); }
@@ -375,6 +378,7 @@ body {
 .doc-h-flash { animation: doc-h-flash 1.5s ease-out; }
 @keyframes doc-h-flash { from { background: var(--muted); } to { background: transparent; } }
 .doc-wikilink { color: var(--foreground); background: var(--muted); border-radius: 4px; padding: 0 4px; cursor: pointer; text-decoration: none; }
+.doc-wikilink:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 8%); }
 .doc-wikilink.ProseMirror-selectednode { outline: 2px solid var(--primary); }
 
 /* The canvas `/` insert menu: the document's slash list with a search field on top. */
@@ -429,6 +433,12 @@ body {
 .run-layer[data-motion-inside] .run-motion { bottom: auto; top: 4px; right: 4px; margin: 0; }
 .run-motion:hover { color: var(--foreground); background: var(--accent); }
 .run-motion:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
+/* Short colour fade on the document's and overlay's own controls (#546). Colour only, so it stays on under
+   reduced motion. */
+:is(.doc-diagram-actions button, .doc-slash button, .doc-table-bar button, .doc-outline li > button, .doc-wikilink,
+  .doc-diagram-pic, .doc-h-link, .run-motion) {
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
 /* Legend (E26): weighted progress, then the agents and states present. HTML in CSS px, so it stays readable at any
    zoom. On the canvas it sits beside the picture on the side with room, clamped inside the overlay, and lets clicks
    through to the shapes under it except on its fold toggle; in the document it flows under the picture.

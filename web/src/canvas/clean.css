@@ -94,3 +94,13 @@
   gap: 0.25rem;
   padding: 0.25rem;
 }
+
+/* Hover on canvas chrome (#546): a short colour fade and a pointer on Excalidraw's own controls. The hover fills come
+   from the surface tokens above (--color-surface-mid is --muted); selected stays on the stronger --color-primary-light,
+   and disabled controls get no pointer. The fade is colour only, so it stays on under reduced motion. */
+.excalidraw.excalidraw :is(.ToolIcon__icon, .dropdown-menu-item, .zoom-button, .Island button, .excalidraw-button):not(:disabled) {
+  cursor: pointer;
+}
+.excalidraw.excalidraw :is(.ToolIcon__icon, .dropdown-menu-item, .zoom-button, .excalidraw-button) {
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
