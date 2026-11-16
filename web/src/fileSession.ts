@@ -62,8 +62,9 @@ export function createFileSession(deps: Deps) {
   let reloadStopped = false;
   // An outside-change reload is already running.
   let reloading = false;
-  // Newest revision of a change event that arrived while `reloading` (null: none).
-  let pendingReload: number | null = null;
+  // Path and newest revision of a change event that arrived while `reloading` (null: none). The path is kept because
+  // the user may open another file while the old one is still being read (#568).
+  let pendingReload: { path: string; revision: number } | null = null;
   // While a move of the open file is in flight, saves wait: a PUT now would go to the old path.
   let holds = 0;
 
@@ -156,7 +157,10 @@ export function createFileSession(deps: Deps) {
         reloading = false;
         const pending = pendingReload;
         pendingReload = null;
-        if (pending !== null && !dirty && !inFlight && state.path === p && pending > Math.max(readRevision, state.file?.revision ?? 0)) reload(p, read, onReload);
+        if (pending === null || dirty || inFlight || state.path !== pending.path) return;
+        // What this run read only counts when it read the same file.
+        const held = Math.max(pending.path === p ? readRevision : 0, state.file?.revision ?? 0);
+        if (pending.revision > held) reload(pending.path, read, onReload);
       });
   };
 
@@ -250,8 +254,10 @@ export function createFileSession(deps: Deps) {
         // An event that lands while a reload runs is kept (newest revision only) and read once more afterwards, so a
         // burst of PUTs never leaves the tab on an older revision. An event without a revision always asks again.
         const rev = e.kind === 'change' && typeof e.revision === 'number' ? e.revision : Infinity;
-        if (reloading) pendingReload = Math.max(pendingReload ?? -Infinity, rev);
-        else reload(state.path!, read, onReload);
+        // A pending event for a file that is no longer open is replaced, not merged.
+        const p = state.path!;
+        if (reloading) pendingReload = { path: p, revision: pendingReload?.path === p ? Math.max(pendingReload.revision, rev) : rev };
+        else reload(p, read, onReload);
       }
       return act;
     },
