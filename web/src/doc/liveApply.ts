@@ -77,9 +77,17 @@ type Planned = { key: number; tie: number; run: () => void };
  */
 export function planLive(state: EditorState, target: PMNode, fadeOut: boolean): { tr: Transaction; exits: number } | null {
   const doc = state.doc;
+  // Blocks still fading out from an earlier apply are already gone: they never take part in the diff
+  // (else a new block of the same type would be matched with one and deleted with it) and are deleted now.
+  const exiting = new Set((key.getState(state)?.find(undefined, undefined, (s) => s.cls === 'live-exit') ?? []).map((d) => d.from));
   const oldNodes: PMNode[] = [];
   const offsets: number[] = [];
+  const stale: { from: number; to: number }[] = [];
   doc.forEach((n, off) => {
+    if (exiting.has(off)) {
+      stale.push({ from: off, to: off + n.nodeSize });
+      return;
+    }
     oldNodes.push(n);
     offsets.push(off);
   });
@@ -89,12 +97,14 @@ export function planLive(state: EditorState, target: PMNode, fadeOut: boolean): 
     oldNodes.map((n) => n.toJSON()),
     newNodes.map((n) => n.toJSON()),
   );
-  if (!edits.length) return null;
+  if (!edits.length && !stale.length) return null;
   const tr = state.tr;
   const adds: { step: number; from: number; size: number; cls: Cls }[] = [];
   const exitAt: { step: number; from: number; to: number }[] = [];
   const posOf = (i: number) => (i < offsets.length ? offsets[i]! : doc.content.size);
-  const jobs: Planned[] = edits.map((e) => {
+  const jobs: Planned[] = stale.map((x) => ({ key: x.from, tie: 0, run: () => void tr.delete(x.from, x.to) }));
+  for (const e of edits) jobs.push(planEdit(e));
+  function planEdit(e: (typeof edits)[number]): Planned {
     if (e.op === 'insert') {
       const pos = posOf(e.before);
       return {
@@ -127,7 +137,7 @@ export function planLive(state: EditorState, target: PMNode, fadeOut: boolean): 
         if (tr.steps.length > before) adds.push({ step: before, from: pos, size: old.nodeSize, cls: 'live-touch' });
       },
     };
-  });
+  }
   // Last place first, so earlier positions stay valid; at one place the change of a block goes before an insert in front of it.
   jobs.sort((x, y) => y.key - x.key || x.tie - y.tie);
   for (const j of jobs) j.run();

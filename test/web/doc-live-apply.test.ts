@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { getSchema } from '@tiptap/core';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { docExtensions } from '../../web/src/doc/extensions.ts';
-import { planLive } from '../../web/src/doc/liveApply.ts';
+import { planLive, liveApplyPlugin } from '../../web/src/doc/liveApply.ts';
 
 const schema = getSchema(docExtensions());
 const p = (t: string) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
@@ -50,4 +50,15 @@ test('fade-out keeps the removed block until it is flushed and marks it', () => 
 test('outside changes are not undoable steps', () => {
   const r = apply(stateOf(doc(p('a'))), doc(p('a'), p('b')))!;
   assert.equal(r.tr.getMeta('addToHistory'), false);
+});
+
+test('a block still fading out is not matched with a new block of the same type (#547)', () => {
+  // [a, gone, c] -> [a, c] (gone fades) -> [a, NEW, c] before the fade ends: NEW must stay, gone must go.
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  assert.equal(r1.exits, 1);
+  const r2 = apply(r1.state, doc(p('a'), p('NEW'), p('c')), true)!;
+  assert.deepEqual(r2.state.doc.toJSON(), doc(p('a'), p('NEW'), p('c')).toJSON());
+  const exiting = liveApplyPlugin().spec.key!.getState(r2.state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  assert.equal(exiting.length, 0);
 });
