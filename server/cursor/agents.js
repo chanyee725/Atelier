@@ -17,6 +17,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
   const hub = cursor?.onHeld ? ctx.modules.dispatch?.hub ?? null : null;
   const held = new Map(); // session id -> { file, at }
   const outside = new Map(); // label -> { file, at }, insertion order = age
+  const activity = new Map(); // session id -> tool activity label of its current turn (from `session` events)
   let last = '';
 
   const sessions = () => {
@@ -29,7 +30,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
   };
   const list = (project = null) => {
     prune();
-    return buildAgents({ sessions: sessions(), held, outside, project });
+    return buildAgents({ sessions: sessions(), held, outside, project, activity });
   };
   // Sent only when the list really changed, so a session's other updates (tokens, cost) do not repeat it.
   const update = () => {
@@ -53,9 +54,19 @@ export async function setup(ctx, { now = Date.now } = {}) {
     }
     update();
   });
-  const onSession = () => update();
+  // The hub's public session carries `activity` ({ label, since } while a turn runs a tool, else null); the stored
+  // session does not, so the label is kept here.
+  const onSession = (s) => {
+    if (s?.id) {
+      const label = typeof s.activity?.label === 'string' && s.activity.label ? s.activity.label : null;
+      if (label) activity.set(s.id, label);
+      else activity.delete(s.id);
+    }
+    update();
+  };
   const onRemoved = ({ id } = {}) => {
     held.delete(id);
+    activity.delete(id);
     update();
   };
   hub?.on('session', onSession);

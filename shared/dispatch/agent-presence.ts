@@ -15,6 +15,10 @@ export interface AgentPresence {
   color?: string;
   model: string | null;
   modelLabel?: string;
+  /** Provider of the session's model: claude | openai | gemini. */
+  provider?: string;
+  /** What its current turn is doing ("코드 읽기", from the hub's tool activity); absent between turns. Memory only. */
+  activity?: string;
   /** Hub status: starting | running | waiting (only live sessions are listed). */
   status: string;
   /** Monitoring state (shared/dispatch/types.ts SessionState), null when not known yet. */
