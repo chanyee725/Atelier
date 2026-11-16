@@ -35,7 +35,7 @@ export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: bool
 /**
  * A modal dialog that makes the page behind it inert: a native one (showModal), the Radix ones in
  * components/ui/dialog.tsx and components/ui/sheet.tsx (SessionSheet, 작업 보드, the narrow sidebar), or any aria-modal
- * dialog. Toasts wait while one is open (persistent-toast-notifications).
+ * dialog. While one is open the toast region is rendered inside it (#674), the only part of the page not inert.
  * The bell's own feed is a non-modal role="dialog" popover and does not match.
  */
 export const MODAL_SELECTOR =
