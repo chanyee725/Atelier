@@ -2,14 +2,16 @@
 // section on the right. A native modal <dialog> gives the inert page, focus containment, Esc and focus return. While
 // it is open it holds the session stream open, so every section reads the same store (#625); the sections stay
 // mounted and only the chosen one shows, so unsaved edits survive switching. The chosen section id is remembered in
-// this browser. Loaded lazily from SettingsEntry and the /dispatch screen.
+// this browser. Closing it with unsaved input asks first (#638): the sections report it through markDirty, the modal
+// then takes closedby="none" and Esc, the X button and any other close request open a small confirm dialog instead.
+// Loaded lazily from SettingsEntry and the /dispatch screen.
 import { X } from 'lucide-react';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { connect, setState, useDispatch } from '../dispatch/store';
 import { cn } from '../lib/utils';
 import { SettingsContext } from './context';
 import { useDispatchStatus } from './DispatchOff';
-import { BTN } from './LimitsForm';
+import { BTN, PRIMARY_BTN } from './LimitsForm';
 import { SECTION_KEY, SECTIONS, firstSection, settingsLoad, stopEscWhileOpen, type SectionId } from './model';
 import { SECTION_COMPONENTS } from './slots';
 import './limits.css';
@@ -43,6 +45,30 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
   const status = useDispatchStatus();
   const ready = useDispatch((s) => s.ready);
   const unavailable = useDispatch((s) => s.unavailable);
+  // The parts holding unsaved input (#638), by key; only whether, never the values.
+  const [dirtyKeys, setDirtyKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const markDirty = useCallback((key: string, dirty: boolean) => {
+    setDirtyKeys((prev) => {
+      if (prev.has(key) === dirty) return prev;
+      const next = new Set(prev);
+      if (dirty) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+  const dirty = dirtyKeys.size > 0;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const confirmRef = useRef<HTMLDialogElement>(null);
+  const confirmTitleId = useId();
+  const confirmTextId = useId();
+  // Close at once when nothing is unsaved; otherwise ask in the confirm dialog (its safe button has focus).
+  const askClose = useCallback(() => {
+    const c = confirmRef.current;
+    if (!dirtyRef.current) return ref.current?.close();
+    if (c && !c.open) c.showModal();
+  }, []);
+
   const ctx = useMemo(
     () => ({
       load: settingsLoad(status, ready, unavailable),
@@ -50,8 +76,9 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
         setState({ unavailable: false });
         setAttempt((a) => a + 1);
       },
+      markDirty,
     }),
-    [status, ready, unavailable],
+    [status, ready, unavailable, markDirty],
   );
 
   useEffect(() => {
@@ -65,7 +92,19 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
     // Below 768px the sidebar is a Radix Sheet that listens for Esc on document (capture), so one Esc would close
     // the Sheet too and unmount the 설정 row focus returns to (#552). Stop the key at window, before document; the
     // dialog's own close request still runs, since it is the key's default action, not a listener.
-    return stopEscWhileOpen(window, () => !!ref.current?.open);
+    const stop = stopEscWhileOpen(window, () => !!ref.current?.open);
+    // With unsaved input, Esc asks instead of closing. closedby="none" already keeps Chrome and Firefox from closing;
+    // preventing the key also covers browsers without closedby. Esc inside the open confirm closes only the confirm.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.isComposing || !ref.current?.open || confirmRef.current?.open || !dirtyRef.current) return;
+      e.preventDefault();
+      askClose();
+    };
+    window.addEventListener('keydown', onKey, { capture: true });
+    return () => {
+      stop();
+      window.removeEventListener('keydown', onKey, { capture: true });
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,7 +113,16 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
       ref={ref}
       aria-labelledby={titleId}
       data-testid="settings-dialog"
-      onClose={onClose}
+      {...({ closedby: dirty ? 'none' : 'closerequest' } as object)}
+      // Any other close request (the back gesture, a browser without closedby) asks first too.
+      onCancel={(e) => {
+        if (e.target !== ref.current || !dirtyRef.current) return;
+        e.preventDefault();
+        askClose();
+      }}
+      onClose={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
       className="settings-dialog m-auto h-[min(680px,calc(100dvh-2rem))] w-[min(800px,calc(100vw-1rem))] max-w-none overflow-hidden rounded-lg border bg-background p-0 text-foreground shadow-md max-md:h-[calc(100dvh-1rem)]"
     >
       <SettingsContext.Provider value={ctx}>
@@ -83,7 +131,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
             <h2 id={titleId} className="text-sm font-semibold">
               설정
             </h2>
-            <button type="button" aria-label="설정 닫기" onClick={() => ref.current?.close()} className={cn(BTN, 'ml-auto px-2 text-muted-foreground')}>
+            <button type="button" aria-label="설정 닫기" onClick={askClose} className={cn(BTN, 'ml-auto px-2 text-muted-foreground')}>
               <X aria-hidden className="size-4" />
             </button>
           </header>
@@ -140,6 +188,28 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
           </div>
         </div>
       </SettingsContext.Provider>
+      <dialog
+        ref={confirmRef}
+        aria-labelledby={confirmTitleId}
+        aria-describedby={confirmTextId}
+        data-testid="settings-close-confirm"
+        className="settings-confirm m-auto w-[min(360px,calc(100vw-2rem))] max-w-none rounded-lg border bg-background p-4 text-foreground shadow-md"
+      >
+        <h2 id={confirmTitleId} className="text-sm font-semibold">
+          저장하지 않은 내용이 있어요
+        </h2>
+        <p id={confirmTextId} className="mt-1 text-sm text-muted-foreground">
+          지금 닫으면 입력한 내용이 사라져요.
+        </p>
+        <form method="dialog" className="mt-4 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={() => (confirmRef.current?.close(), ref.current?.close())} className={cn(BTN, 'border text-destructive')}>
+            닫기
+          </button>
+          <button type="submit" autoFocus className={PRIMARY_BTN}>
+            계속 수정하기
+          </button>
+        </form>
+      </dialog>
     </dialog>
   );
 }

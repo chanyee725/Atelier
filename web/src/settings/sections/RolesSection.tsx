@@ -9,7 +9,7 @@ import { api, useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
 import { ProviderIcon } from '../../ProviderIcon';
 import { useModels } from '../../SidebarModels';
-import { useSettingsLoad } from '../context';
+import { useDirtyMark, useSettingsLoad } from '../context';
 import { LoadNote, OffNote } from '../DispatchOff';
 import { PRIMARY_BTN } from '../LimitsForm';
 import { SectionFrame } from '../SectionFrame';
@@ -41,6 +41,7 @@ export default function RolesSection() {
   const groups = useMemo(() => modelGroups(list, providers), [list, providers]);
   const off = load.kind === 'off';
   const ready = load.kind === 'ok';
+  useDirtyMark('roles', ready && roleModelsPatch(saved, shown) !== null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

@@ -6,7 +6,7 @@
 import { useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
-import { useSettingsLoad } from '../context';
+import { useDirtyMark, useSettingsLoad } from '../context';
 import { LoadNote, OffNote } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
 import { BTN, PRIMARY_BTN } from '../LimitsForm';
@@ -21,7 +21,7 @@ import {
   type TeamToggleId,
   type TeamValues,
 } from '../model';
-import { resetSection, sectionFields, sectionSave, type TeamSectionId } from './sectionForm';
+import { resetSection, sectionDirty, sectionFields, sectionSave, type TeamSectionId } from './sectionForm';
 
 /**
  * One team-backed section as a form: its number fields and switches with their own 저장. Only this section's fields
@@ -51,6 +51,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
 
   const off = load.kind === 'off';
   const shown = load.kind === 'ok' || off;
+  useDirtyMark(section, load.kind === 'ok' && sectionDirty(saved, form, section));
   const { numbers, toggles } = sectionFields(section);
 
   const submit = async (e: FormEvent) => {

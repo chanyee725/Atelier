@@ -370,6 +370,15 @@ export const SECTION_FIELDS: Partial<Record<SectionId, { numbers: TeamNumberId[]
 export const pickTexts = (texts: Record<TeamNumberId, string>, ids: readonly TeamNumberId[]): Partial<Record<TeamNumberId, string>> => Object.fromEntries(ids.map((id) => [id, texts[id]]));
 
 /**
+ * Whether the guard form holds unsaved input (#638): a field that differs from the saved value as typed, or Fable
+ * following the weekly value or not against what was saved. A following Fable mirrors 주간 한도, so it is not compared.
+ */
+export function guardDirty(saved: GuardSaved, texts: Record<GuardField['id'], string>, follows: boolean): boolean {
+  if (follows !== saved.fableFollows) return true;
+  return (Object.keys(saved.values) as GuardField['id'][]).some((id) => !(id === 'fable' && follows) && (texts[id] ?? '').trim() !== String(saved.values[id]));
+}
+
+/**
  * The guard form's texts after the saved settings change from `prev` to `next` (another tab, the server's `settings`
  * event, #624): a field still showing its `prev` value follows `next`; an edited field keeps the edit. While Fable
  * follows the weekly value it mirrors the shown weekly text.

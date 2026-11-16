@@ -6,7 +6,8 @@ import { useId, useMemo, useState, type FormEvent } from 'react';
 import { api, type DispatchSettings } from '../api';
 import { useDispatch } from '../dispatch/store';
 import { cn } from '../lib/utils';
-import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, resyncGuardTexts, type GuardField, type GuardSaved, type GuardValues, type SettingsLoad } from './model';
+import { GUARD_FIELDS, changedValues, guardDirty, fableFollows, guardPatch, guardValue, readGuardTexts, resyncGuardTexts, type GuardField, type GuardSaved, type GuardValues, type SettingsLoad } from './model';
+import { useDirtyMark } from './context';
 import { LoadNote, OffNote } from './DispatchOff';
 import './limits.css';
 
@@ -45,6 +46,7 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
     if (follows === saved.fableFollows) setFollows(fromStore.fableFollows);
     setSaved(fromStore);
   }
+  useDirtyMark('limits', load.kind === 'ok' && guardDirty(saved, texts, follows));
 
   // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value, and
   // clearing it makes it follow again (#563).
