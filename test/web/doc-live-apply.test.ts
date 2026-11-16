@@ -62,3 +62,21 @@ test('a block still fading out is not matched with a new block of the same type 
   const exiting = liveApplyPlugin().spec.key!.getState(r2.state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
   assert.equal(exiting.length, 0);
 });
+
+test('a user edit during the fade-out takes the fading block out in the same update (#554)', () => {
+  // [a, gone, c] -> [a, c] (gone fades) -> the user types before the fade ends: the state the editor saves has no "gone".
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  assert.equal(r1.state.doc.childCount, 3);
+  const { state } = r1.state.applyTransaction(r1.state.tr.insertText('x', 2));
+  assert.deepEqual(state.doc.toJSON(), doc(p('ax'), p('c')).toJSON());
+  const exiting = liveApplyPlugin().spec.key!.getState(state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  assert.equal(exiting.length, 0);
+});
+
+test('a selection-only change does not flush the fade-out (#554)', () => {
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  const { state } = r1.state.applyTransaction(r1.state.tr.setSelection(TextSelection.create(r1.state.doc, 2)));
+  assert.equal(state.doc.childCount, 3);
+});
