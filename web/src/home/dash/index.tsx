@@ -7,11 +7,13 @@ import { cn } from '../../lib/utils';
 /**
  * Two halves side by side (5:5 by default) that stack below 880px of *container* width, so the split
  * follows the main pane, not the window (the sidebar takes part of the window).
+ * It grows to the bottom of its flex parent and the last card of each column takes the spare height, so a short
+ * dashboard has no empty band below the cards (#699); a long one scrolls with the page as before.
  */
 export function DashGrid({ children, className, ratio = '1fr 1fr' }: { children: ReactNode; className?: string; ratio?: string }) {
   return (
-    <div className="@container">
-      <div className={cn('dash-grid grid gap-4 p-4 @min-[880px]:[grid-template-columns:var(--dash-cols)]', className)} style={{ '--dash-cols': ratio } as React.CSSProperties}>
+    <div className="@container flex grow flex-col">
+      <div className={cn('dash-grid flex grow flex-col gap-4 p-4 *:last:grow @min-[880px]:grid @min-[880px]:[grid-template-columns:var(--dash-cols)]', className)} style={{ '--dash-cols': ratio } as React.CSSProperties}>
         {children}
       </div>
     </div>
@@ -21,7 +23,7 @@ export function DashGrid({ children, className, ratio = '1fr 1fr' }: { children:
 /** A column of cards inside one half. */
 export function DashColumn({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
   return (
-    <div className={cn('flex min-w-0 flex-col gap-4', className)} role={label ? 'region' : undefined} aria-label={label}>
+    <div className={cn('flex min-w-0 flex-col gap-4 *:last:grow', className)} role={label ? 'region' : undefined} aria-label={label}>
       {children}
     </div>
   );

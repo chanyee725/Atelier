@@ -207,7 +207,7 @@ export function UsagePage() {
   if (!days) return <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>;
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-4 p-6 max-md:p-4">
+    <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col gap-4 p-6 max-md:p-4">
       {scope !== undefined && <ProjectPanel name={scope === null ? UNFILED : names.get(scope) ?? scope} folder={scope} sessions={scoped} />}
       <div className="grid grid-cols-4 gap-3 max-xl:grid-cols-2 max-sm:grid-cols-1">
         <Stat label={scope === undefined ? '오늘' : '오늘 · 계정 전체'} value={fmtUsd(t.today)} hint="Claude API 요금으로 환산" />
