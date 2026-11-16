@@ -8,7 +8,7 @@
 // layout (side panel or bottom sheet, collapsed or not) from the document pane, which also owns the container
 // (`.doc-margin-aside`: placement, entry and exit). It never takes focus from the editor: its buttons keep focus where
 // it is on mouse down, and the panel only reacts to what the user clicks.
-import { useId, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useId, type CSSProperties, type MouseEvent } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, PanelRightClose } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { roleLabel } from '../run/overlayModel';
@@ -37,7 +37,16 @@ const keepFocus = (e: MouseEvent) => e.preventDefault();
 const agentStyle = (c: MarginCard): CSSProperties => ({ '--agent': c.color || `var(--role-${c.role}, var(--idle))` }) as CSSProperties;
 
 /** The pending end of each cursor's outline, so a second click restarts it instead of being cut short by the first. */
-const flashEnds = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+const flashEnds = new Map<HTMLElement, ReturnType<typeof setTimeout>>();
+
+/** End every outline now: the panel is going away, so no timer outlives it (#648). */
+function endFlashes() {
+  for (const [el, t] of flashEnds) {
+    clearTimeout(t);
+    el.removeAttribute('data-margin-flash');
+  }
+  flashEnds.clear();
+}
 
 /** Outline the agent's document cursor briefly, so the jumped-to spot shows whose change it was. */
 function flashCursor(sid: string) {
@@ -116,6 +125,7 @@ function Card({ card, onJump }: { card: MarginCard; onJump: (spot: DocSpot, card
 
 export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props) {
   const listId = useId();
+  useEffect(() => endFlashes, []);
   const count = agents.length;
   const title = count > 1 ? `에이전트 ${count}명이 작업 중이에요` : '에이전트가 작업 중이에요';
   const jump = (spot: DocSpot, card: MarginCard) => {
