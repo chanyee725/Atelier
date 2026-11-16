@@ -6,8 +6,11 @@
 //   $FAKE_CLI_SCENARIO_<BIN> (e.g. FAKE_CLI_SCENARIO_CLAUDE) takes over for that one CLI.
 //   Two scenario lines are actions, not output: { "$sleep": ms } waits, { "$write": { file, text } } writes
 //   `text` to the absolute path `file` (a test's scratch folder), like an agent editing a file.
+// - with $FAKE_CLI_AUTH (a state file path) fakes `auth status|login|logout`: status reads the file,
+//   login prints a fake URL, waits $FAKE_CLI_LOGIN_MS (default 300) and writes the file, or exits with
+//   $FAKE_CLI_LOGIN_EXIT without logging in; logout removes the file. Without it, status says logged in.
 // It never talks to the network and never reads credentials.
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 const DEFAULT = {
@@ -37,11 +40,32 @@ async function emit(lines) {
 }
 const finish = () => process.exit(Number(process.env.FAKE_CLI_EXIT || 0));
 
+function fakeAuth(file, sub) {
+  if (sub === "status") {
+    const loggedIn = existsSync(file);
+    process.stdout.write(JSON.stringify(loggedIn ? { loggedIn, authMethod: "claude.ai" } : { loggedIn }) + "\n");
+    return process.exit(0);
+  }
+  if (sub === "logout") { rmSync(file, { force: true }); return process.exit(0); }
+  if (sub === "login") {
+    process.stdout.write("Open this URL to log in: https://login.example.invalid/oauth?fake=1\n");
+    setTimeout(() => {
+      if (process.env.FAKE_CLI_LOGIN_EXIT) return process.exit(Number(process.env.FAKE_CLI_LOGIN_EXIT));
+      writeFileSync(file, "fake\n");
+      process.exit(0);
+    }, Number(process.env.FAKE_CLI_LOGIN_MS || 300));
+    return;
+  }
+  process.exit(1);
+}
+
 export function run(bin) {
   const args = process.argv.slice(2);
   if (process.env.FAKE_CLI_LOG) appendFileSync(process.env.FAKE_CLI_LOG, JSON.stringify({ bin, args, cwd: process.cwd() }) + "\n");
   if (args[0] === "--version") { process.stdout.write(`${bin} 0.0.0-fake\n`); return finish(); }
   const cmd = args.slice(0, 2).join(" ");
+  const auth = process.env.FAKE_CLI_AUTH;
+  if (auth && bin === "claude" && args[0] === "auth") return fakeAuth(auth, args[1]);
   const status = STATUS[bin]?.[cmd];
   if (status !== undefined) { process.stdout.write(status + "\n"); return finish(); }
 
