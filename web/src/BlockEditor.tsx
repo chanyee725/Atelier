@@ -7,6 +7,7 @@ import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { linter, lintGutter, forceLinting, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { dslLanguage, highlightFor } from './dsl/language';
 import { analyzeDiagram } from './dsl/adapter';
+import { syncSpec, userCode } from './codeSync';
 import { dslCompletionSource } from './dsl/completion';
 
 type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void };
@@ -67,7 +68,9 @@ export function BlockEditor({ code, type, dark, onChange }: Props) {
           lint,
           keymap.of([indentWithTab, ...completionKeymap, ...defaultKeymap, ...historyKeymap]),
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+            // An outside change synced in below is not a user edit: no onChange, so it is not saved back (#547).
+            const next = userCode(u);
+            if (next != null) onChangeRef.current(next);
           }),
         ],
       }),
@@ -88,7 +91,8 @@ export function BlockEditor({ code, type, dark, onChange }: Props) {
 
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== code) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: code } });
+    const spec = v && syncSpec(v.state, code);
+    if (v && spec) v.dispatch(spec);
   }, [code]);
 
   return <div ref={host} className="overflow-hidden rounded-md border border-input transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50" />;

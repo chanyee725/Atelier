@@ -1,6 +1,7 @@
 // App sidebar, layout B (design doc 6 §2.1, §3.1): workspace name with search and new-file icons, the views
 // (모든 파일 A, 최근 R, 보관함 B), projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
+import { freshClass } from './freshPaths';
 import { useEffect, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
@@ -193,7 +194,7 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
   // Indent: 9px + icon column (22px) + 15px per level (doc 6 prototype), within the row's own 8px padding.
   const pad = { paddingLeft: 9 + 22 + depth * 15 };
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem className={freshClass(n.path)}>
       <SidebarMenuButton
         style={pad}
         data-move-path={n.path}
@@ -250,7 +251,7 @@ function ProjectRow({ pr, open, toggle, p, move }: Omit<RowsProps, 'depth'> & { 
   const here = p.section.kind === 'project' && p.section.path === pr.path;
   const drop = useDropTarget({ path: pr.path, label: pr.name }, move);
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem className={freshClass(pr.path)}>
       <SidebarMenuButton
         data-move-path={pr.path}
         aria-current={here ? 'page' : undefined}

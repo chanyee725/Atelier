@@ -65,7 +65,7 @@ export async function setup(ctx) {
     async handler(req, res, _ctx, _m, url) {
       try {
         const body = method === 'GET' || method === 'DELETE' ? null : await readJson(req);
-        send(res, okStatus, await fn(url.searchParams.get('path'), body, url.searchParams));
+        send(res, okStatus, await fn(url.searchParams.get('path'), body, url.searchParams, { app: req.headers['x-drawing-client'] === 'app' }));
       } catch (e) {
         const err = toStoreError(e);
         if (!(err instanceof StoreError)) throw err;
@@ -82,7 +82,7 @@ export async function setup(ctx) {
 
   return {
     store,
-    /** fn(path, { catchUp }) on each content change of a file (catchUp: found after the watcher restarted); returns an unsubscribe function. */
+    /** fn(path, { catchUp, app }) on each content change of a file (catchUp: found after the watcher restarted); returns an unsubscribe function. */
     onChange(fn) {
       changeListeners.add(fn);
       return () => changeListeners.delete(fn);
@@ -112,14 +112,19 @@ export async function setup(ctx) {
         return { on: b.on };
       }),
       route('GET', '/api/file', (p) => store.readFile(need(p, 'path'))),
-      route('PUT', '/api/file', async (p, b) => {
+      route('PUT', '/api/file', async (p, b, _sp, from) => {
         const r = await store.writeFile(need(p, 'path'), b);
-        changed(r.path);
+        // Same as the plan patch: the store knows its own writes, so tell open tabs. A tab that saved this revision
+        // itself ignores the echo (it only reloads a strictly newer revision).
+        ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
+        changed(r.path, { app: from.app });
         return r;
       }),
-      route('POST', '/api/file', async (_p, b) => {
+      route('POST', '/api/file', async (_p, b, _sp, from) => {
         const r = await store.createFile(need(b?.path, 'path'), b);
-        changed(r.path);
+        // The store knows its own writes, so the watcher stays quiet: tell the open tabs the tree grew.
+        ctx.hub.broadcast('workspace', { kind: 'tree', path: r.path });
+        changed(r.path, { app: from.app });
         return r;
       }, 201),
       // Step-level plan edit (agents): re-read under the store lock, then announced like an outside change so an

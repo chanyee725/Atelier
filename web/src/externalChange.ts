@@ -19,3 +19,22 @@ export function externalAction(e: WorkspaceEvent, openPath: string | null, dirty
   if (e.kind === 'change' && same(e.path, openPath)) return dirty ? 'refresh' : 'reload';
   return 'refresh';
 }
+
+const same_ = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+type LiveBlock = { id?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; frameId?: unknown };
+const placeOf = (b: LiveBlock) => [b.id, b.x, b.y, b.w, b.h, b.frameId ?? null];
+
+/**
+ * Can an outside change of the open file be applied in place (panes keep their zoom, scroll and selection) or must the
+ * panes restart? In place: the same blocks (same ids) sitting where they were, with only their type, code or layout
+ * changed, and the same free-form scene. The document pane diffs its blocks; the canvas and the document previews morph
+ * the pictures. Blocks added, removed or moved, or a changed scene, still restart the panes: the canvas reads those
+ * only when it mounts, so applying them in place would drop them and its next save would write the old ones back.
+ */
+export function canApplyLive(cur: { blocks?: unknown; canvas?: unknown } | null | undefined, next: { blocks?: unknown; canvas?: unknown }): boolean {
+  if (!cur || !same_(cur.canvas, next.canvas)) return false;
+  const a = Array.isArray(cur.blocks) ? (cur.blocks as LiveBlock[]) : [];
+  const b = Array.isArray(next.blocks) ? (next.blocks as LiveBlock[]) : [];
+  return a.length === b.length && a.every((x, i) => same_(placeOf(x), placeOf(b[i]!)));
+}

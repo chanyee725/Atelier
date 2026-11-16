@@ -7,6 +7,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import { DIAGRAM_NODE, FRAME_NODE, docShapeProblem, isEmptyDoc } from './model.ts';
 import { headingsNeedingId, newHeadingId } from './outline.ts';
+import { liveApplyPlugin } from './liveApply.ts';
 
 /** Node name of a `+` link (to a file, a heading or a diagram) in the document JSON. */
 export const WIKILINK_NODE = 'wikilink';
@@ -148,6 +149,8 @@ export function docExtensions(diagram: AnyExtension = DiagramEmbed, frame: AnyEx
       link: { openOnClick: false, autolink: true, defaultProtocol: 'https' },
     }),
     HeadingId,
+    // Animation classes for outside changes applied live (liveApply.ts).
+    Extension.create({ name: 'liveApply', addProseMirrorPlugins: () => [liveApplyPlugin()] }),
     Wikilink,
     TaskList,
     TaskItem.configure({ nested: true }),

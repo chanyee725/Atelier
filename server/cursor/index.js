@@ -18,6 +18,7 @@ const SETTLE_MS = 3000; // a finished call's own edit reaches onChange well with
 const LIVE = new Set(['running', 'starting', 'waiting']);
 const DPX_RE = /[^\s"'`=?&<>|;(),]*\.dpx\.json/g;
 const EMPTY = new Map();
+const OUTSIDE_NAME = '에이전트';
 
 // Whether `text` names `id` as a whole token, so a short id ("a") does not match inside other words. A path segment
 // ("flow" in flow.dpx.json or /api/file) is not a mention: common words as ids would otherwise match every call.
@@ -133,7 +134,7 @@ export async function setup(ctx) {
     return newest(cands);
   }
 
-  async function place(rel, cands, wait) {
+  async function place(rel, cands, wait, app) {
     await wait; // a tool-time read still in flight when the change came: let it land in `pre` first
     let after;
     try { after = await read(rel); } catch { return; }
@@ -141,7 +142,14 @@ export async function setup(ctx) {
     const earlier = pre.get(rel);
     remember(seen, rel, after);
     pre.delete(rel);
-    if (!cands.length) return;
+    // No session on this hub made the change: a writer from another Dispatch or plain API calls (E520, #543). It gets
+    // a generic cursor at the changed place, per file, that fades by itself. Saves from this page (`app`) are not it.
+    if (!cands.length) {
+      if (app) return;
+      const spot = changedCentre(before ?? (earlier && changedCentre(earlier, after) ? earlier : EMPTY), after);
+      if (spot) ctx.hub.broadcast('cursor', { sid: `outside:${rel}`, name: OUTSIDE_NAME, role: '', file: rel, ...spot, at: Date.now() });
+      return;
+    }
     // From the reported version when there is one. Otherwise from the tool-time read, unless that shows no change
     // (it raced the edit and read the new version) or there is none (a new file): then from an empty canvas, so a
     // first edit or a new diagram still gets a place.
@@ -160,9 +168,9 @@ export async function setup(ctx) {
   // A watcher catch-up (it restarted after a failure, backoff up to 30s) reports edits made while it was down, so
   // the call finishing before it is no longer a sign of a read-only call: any call within ATTRIBUTE_MS can be it.
   // So read-only calls (jq, curl GET) that finished within that window also become candidates during a catch-up.
-  const onChange = (rel, { catchUp = false } = {}) => {
+  const onChange = (rel, { catchUp = false, app = false } = {}) => {
     const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS);
-    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel)));
+    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app));
     const tail = run.catch(() => {});
     queue.set(rel, tail);
     tail.then(() => { if (queue.get(rel) === tail) queue.delete(rel); });

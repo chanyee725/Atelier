@@ -243,18 +243,20 @@ function sseReader(base) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-test('external edits emit a workspace SSE event; our own saves and creates do not', async () => {
+test('external edits emit a workspace SSE event; API saves, creates and new folders announce themselves to other tabs', async () => {
   await withApp(async ({ ws, base, call }) => {
     await call('POST', '/api/file', { path: 'a' });
     const sse = sseReader(base);
     await sleep(100); // let the stream attach
     try {
-      // our own operations: silent
+      // API writes are announced (an outside writer must show live in open tabs, E520 #543); the revision lets the
+      // tab that saved it ignore its own echo
       await call('PUT', `/api/file?path=${q('a')}`, { title: 'mine', revision: 1 });
       await call('POST', '/api/file', { path: 'b' });
       await call('POST', '/api/folder', { path: 'dir' });
       await sleep(400);
-      assert.deepEqual(sse.events, []);
+      assert.deepEqual(sse.events, [{ kind: 'change', path: 'a.dpx.json', revision: 2 }, { kind: 'tree', path: 'b.dpx.json' }, { kind: 'tree', path: 'dir' }]);
+      sse.events.length = 0;
 
       // moves and deletes through the API tell other tabs
       await call('POST', '/api/move', { from: 'b', to: 'dir/b' });
@@ -264,7 +266,7 @@ test('external edits emit a workspace SSE event; our own saves and creates do no
       await call('POST', '/api/folder', { path: 'tmpdir' });
       await call('DELETE', `/api/folder?path=${q('tmpdir')}`);
       // `from` is set so a tab with a file under the folder open closes it
-      assert.equal((await sse.waitFor((e) => e.path === 'tmpdir' && e.kind === 'tree')).from, 'tmpdir');
+      assert.equal((await sse.waitFor((e) => e.path === 'tmpdir' && e.kind === 'tree' && e.from !== undefined)).from, 'tmpdir');
       await sleep(400); // the watcher then sees nothing new
       sse.events.length = 0;
 

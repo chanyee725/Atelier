@@ -1,11 +1,14 @@
 // How an embedded diagram looks in the document: the block's live picture, read-only.
 // Clicking it shows the block on the canvas, where its code is edited.
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import type { Block } from '../api';
+import type { Scene } from '../../../shared/render/index';
 import type { ImageKind } from '../export/actions';
 import { layoutSig } from '../canvas/sync';
 import { renderBlock, type BlockPicture } from '../canvas/render';
+import { MorphLayer, willMorph } from '../canvas/MorphLayer';
+import { createCoalescer } from '../lib/liveMotion';
 import { DIAGRAM_TYPES } from '../dsl/templates';
 import { RunLayer, RunLegend } from '../run/RunLayer';
 import { boardShown } from '../run/overlayModel';
@@ -26,6 +29,10 @@ export type DocCtx = {
 };
 export const DocContext = createContext<DocCtx>({ blocks: [], frameScene: [], frameBlocks: [], dark: false, onShow: () => {}, onShowFrame: () => {}, onExport: () => {} });
 
+// The picture each block showed last, so a view that is built again (the document was re-read) still animates from
+// what the user saw instead of popping to the new drawing (E520).
+const lastShown = new Map<string, BlockPicture>();
+
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
 function DiagramView({ node, selected }: ReactNodeViewProps) {
@@ -34,10 +41,57 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   const block = blocks.find((b) => b.id === id);
   const [pic, setPic] = useState<BlockPicture | null>(null);
   const theme = dark ? 'dark' : 'light';
+  // An outside code change animates old → new instead of swapping the picture (E520); a burst of pictures shows its
+  // last one once. `shown` is what the user sees now.
+  const [morph, setMorph] = useState<{ from: Scene; to: Scene; left: number; top: number; scale: number } | null>(null);
+  const shown = useRef<BlockPicture | null>(null);
+  shown.current = pic;
+  const stageRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const settle = useMemo(
+    () =>
+      createCoalescer<BlockPicture>(([p]) => {
+        const old = shown.current;
+        const s = stageRef.current;
+        const i = imgRef.current;
+        if (old?.scene && p?.scene && old.fileId !== p.fileId && s && i && willMorph(old.scene, p.scene, dark)) {
+          const a = s.getBoundingClientRect();
+          const b = i.getBoundingClientRect();
+          setMorph({ from: old.scene, to: p.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / old.width });
+        } else setMorph(null);
+        setPic(p!);
+      }),
+    [dark],
+  );
+  useEffect(() => () => settle.cancel(), [settle]);
+  const memKey = `${id}\n${theme}`;
+  const fromMemory = useRef<Scene | null>(null);
+  useLayoutEffect(() => {
+    if (!pic) return;
+    const from = fromMemory.current;
+    fromMemory.current = null;
+    const s = stageRef.current;
+    const i = imgRef.current;
+    if (from && pic.scene && s && i && willMorph(from, pic.scene, dark)) {
+      const a = s.getBoundingClientRect();
+      const b = i.getBoundingClientRect();
+      setMorph({ from, to: pic.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / pic.width });
+    }
+    lastShown.set(memKey, pic);
+    if (lastShown.size > 100) lastShown.delete(lastShown.keys().next().value!);
+  }, [pic, memKey, dark]);
   useEffect(() => {
     if (!block) return;
     let live = true;
-    void renderBlock(block, theme).then((p) => live && setPic(p));
+    void renderBlock(block, theme).then((p) => {
+      if (!live) return;
+      if (shown.current) settle.push('pic', p);
+      else {
+        const mem = lastShown.get(memKey);
+        if (mem?.scene && mem.fileId !== p.fileId) fromMemory.current = mem.scene;
+        setPic(p);
+      }
+    });
     return () => {
       live = false;
     };
@@ -48,8 +102,8 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   // The progress board sits over the picture as the button's sibling (not inside it: a button holding another button
   // is invalid and its accessible name would swallow the step labels). It follows the img as the column resizes.
   const steps = useRunSteps(block ? id : undefined);
-  const stage = useRef<HTMLDivElement>(null);
-  const img = useRef<HTMLImageElement>(null);
+  const stage = stageRef;
+  const img = imgRef;
   const [box, setBox] = useState<{ left: number; top: number; scale: number } | null>(null);
   const scene = pic?.scene;
   // The legend shows exactly when the board draws (a step links to a node), the same rule as on the canvas.
@@ -80,8 +134,9 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       {block ? (
         <div ref={stage} className="doc-diagram-stage">
           <button type="button" className="doc-diagram-pic" title="캔버스에서 보기" aria-label={`${label}, 캔버스에서 보기`} onClick={() => onShow(id)}>
-            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
+            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={morph ? { visibility: 'hidden' } : undefined} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
+          {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
           {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} />}
         </div>
       ) : (

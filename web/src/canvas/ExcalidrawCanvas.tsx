@@ -6,7 +6,7 @@ import type { AppState, ExcalidrawImperativeAPI, BinaryFileData, NormalizedZoomV
 import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import type { Block } from '../api';
-import type { BlockLayout } from '../../../shared/render/index.ts';
+import type { BlockLayout, Scene } from '../../../shared/render/index.ts';
 import { BlockEditor } from '../BlockEditor';
 import { BlockProps } from '../BlockProps';
 import { Button } from '../components/ui/button';
@@ -22,6 +22,8 @@ import { DEFAULT_EXPORT, type ExportOptions } from '../export/options';
 import { applyScene, blockIdOf, blockImageSkeleton, findCopies, freeSignature, hash, layoutSig, layoutsFromImages, liveFrames, newBlockId, picturesFor, placeBlocks, rectOf, sameDrawing, shiftForOrigin, splitScene, type PictureCache, type Rect, type SceneEl } from './sync';
 import { LayoutEditOverlay, focusCanvas, type EditStart } from './LayoutEditOverlay';
 import { RunOverlay } from './RunOverlay';
+import { MorphOverlay, MORPH_OPACITY, type Morphs } from './MorphOverlay';
+import { willMorph } from './MorphLayer';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
 import { parse } from '../../../shared/dsl/index.ts';
@@ -115,6 +117,11 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const sizes = useRef(new Map<string, BlockPicture>());
   // The picture each block shows, so a block whose code did not change is not rendered again.
   const picCache = useRef<PictureCache<BlockPicture>>(new Map());
+  // Blocks whose code changed from outside and are animating old → new (E520); their image is nearly hidden meanwhile.
+  const [morphs, setMorphs] = useState<Morphs>(new Map());
+  const morphOpacity = useRef(new Map<string, number>());
+  const darkRef = useRef(dark);
+  darkRef.current = dark;
   // The theme the pictures in `picCache` (and so on the canvas) are drawn in; a switch draws every block again.
   const shownTheme = useRef(picTheme(dark));
   const want = picTheme(dark);
@@ -408,6 +415,25 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     [],
   );
 
+  // An animation ended: the image gets its own opacity back and the overlay goes away.
+  const endMorph = useCallback(
+    (blockId: string) => {
+      setMorphs((m) => {
+        if (!m.has(blockId)) return m;
+        const n = new Map(m);
+        n.delete(blockId);
+        return n;
+      });
+      const orig = morphOpacity.current.get(blockId);
+      morphOpacity.current.delete(blockId);
+      const xapi = apiRef.current;
+      if (orig === undefined || !xapi) return;
+      const els = xapi.getSceneElementsIncludingDeleted();
+      xapi.updateScene({ elements: els.map((e) => (blockIdOf(e as unknown as SceneEl) === blockId && e.opacity === MORPH_OPACITY ? newElementWith(e, { opacity: orig }) : e)), captureUpdate: CaptureUpdateAction.NEVER });
+    },
+    [],
+  );
+
   // What the images depend on: which blocks exist and their type and code, not where they sit. Dragging a
   // block changes `blocks` on every frame; `drawn` keeps its identity then, so nothing below runs.
   const drawnRef = useRef(blocks);
@@ -430,6 +456,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       const els = api.getSceneElementsIncludingDeleted();
       const index = new Map(blocks.map((b, i) => [b.id, i]));
       const shown = new Set<string>();
+      const morphs2 = new Map<string, { from: Scene; fileId: string }>();
       let changed = false;
       const next: ExcalidrawElement[] = els.map((el) => {
         const bid = blockIdOf(el as unknown as SceneEl);
@@ -457,7 +484,15 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         // When only the layout changed, its origin stays where it was on screen, so moving a node left does not push
         // the whole block right. Code edits, resets and error pictures leave the block where it is.
         const at = shiftForOrigin(img, old, p);
-        return newElementWith(img, { fileId: p.fileId as FileId, width: p.width * scale, height: p.height * scale, ...at, customData });
+        // A code change animates (the overlay shows old → new); a layout drag, a reset or a theme switch swaps at once.
+        const animate = !layoutStale && old?.scene && p.scene && willMorph(old.scene, p.scene, darkRef.current);
+        let opacity: number | undefined;
+        if (animate) {
+          if (!morphOpacity.current.has(bid)) morphOpacity.current.set(bid, img.opacity);
+          morphs2.set(bid, { from: old!.scene!, fileId: p.fileId });
+          opacity = MORPH_OPACITY;
+        }
+        return newElementWith(img, { fileId: p.fileId as FileId, width: p.width * scale, height: p.height * scale, ...at, customData, ...(opacity !== undefined ? { opacity } : {}) });
       });
       const missing = blocks.filter((b) => !shown.has(b.id));
       if (missing.length) {
@@ -468,6 +503,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         );
         next.push(...restoreElements(skeletons, null));
       }
+      if (morphs2.size) setMorphs((m) => new Map([...m, ...morphs2]));
       if (changed) api.updateScene({ elements: next, captureUpdate: CaptureUpdateAction.NEVER });
       // A comment edit keeps the same picture (no scene change) but gives it a new anchor: the overlay needs it.
       else refreshFrame();
@@ -980,6 +1016,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           setEditing(b.id);
         }}
       />
+      {api && wrap.current && <MorphOverlay api={api} wrap={wrap.current} morphs={morphs} pictureOf={pictureOf} dark={dark} onDone={endMorph} />}
       {api && wrap.current && <RunOverlay api={api} wrap={wrap.current} pictureOf={pictureOf} hide={edit?.blockId ?? null} />}
       {api && wrap.current && (
         <CodeBadges api={api} wrap={wrap.current} codeOf={codeOf} pictureOf={pictureOf} hide={edit?.blockId ?? null} version={codeVersion} active={codeTarget} onOpen={openCode} />
