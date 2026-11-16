@@ -27,6 +27,12 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
       init: () => DecorationSet.empty,
       apply(tr, set) {
         let next = tr.docChanged ? set.map(tr.mapping, tr.doc) : set;
+        // The user edited inside a fading block (#567): they keep it, so it stops fading and is not flushed
+        // (deleting it outside history would drop the undo step of their typing).
+        if (tr.docChanged && !tr.getMeta(LIVE_META)) {
+          const kept = next.find(undefined, undefined, (s) => s.cls === 'live-exit').filter((d) => touchedBy(tr, d.from, d.to));
+          if (kept.length) next = next.remove(kept);
+        }
         const m = tr.getMeta(key) as DecoMeta | undefined;
         if (m?.clear) next = next.remove(next.find(undefined, undefined, (s) => s.cls === m.clear));
         if (m?.add?.length) next = next.add(tr.doc, m.add.map((a) => Decoration.node(a.from, a.to, { class: a.cls }, { cls: a.cls })));
@@ -41,6 +47,23 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
       return exitFlush(state);
     },
   });
+}
+
+/** Whether a change of `tr` lands strictly inside the block at [from, to) of `tr.doc`. */
+function touchedBy(tr: Transaction, from: number, to: number): boolean {
+  const maps = tr.mapping.maps;
+  let hit = false;
+  maps.forEach((map, i) => {
+    if (hit) return;
+    const rest = tr.mapping.slice(i + 1);
+    map.forEach((_a, _b, start, end) => {
+      if (hit) return;
+      const s = rest.map(start, -1);
+      const e = rest.map(end, 1);
+      if (s > from && e < to) hit = true;
+    });
+  });
+  return hit;
 }
 
 /** The transaction that deletes every block marked `live-exit`, or null when none is. */
