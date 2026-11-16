@@ -7,6 +7,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useId } from 'react';
 import type { ProjectDoc, RecentFile } from '../api';
 import { cn } from '../lib/utils';
+import { AgentTag } from './AgentPanel';
+import type { AgentPresence } from './agents';
 import { INDENT, ROW_HEIGHT, locationOf, relativeTime, runningBelow, subCount } from './model';
 
 /** Left padding of a row (17px at the top level, as in the group head). */
@@ -79,6 +81,8 @@ type Props = {
   label: string;
   /** Files with a run going now: their row gets a 실행 중 badge (a folded parent shows one for its sub-documents). */
   running?: ReadonlySet<string>;
+  /** Agent sessions holding a file now (project home): their tags sit on that row. */
+  holders?: ReadonlyMap<string, AgentPresence[]>;
 };
 type ItemProps = Omit<Props, 'docs' | 'label'> & { doc: ProjectDoc; depth: number };
 
@@ -107,11 +111,12 @@ export function DocList({ docs, label, ...rest }: Props) {
   );
 }
 
-function DocItem({ doc, depth, collapsed, onOpen, onToggle, onDelete, showCreated = true, running }: ItemProps) {
+function DocItem({ doc, depth, collapsed, onOpen, onToggle, onDelete, showCreated = true, running, holders }: ItemProps) {
   const listId = useId();
   const expandable = doc.children.length > 0;
   const expanded = expandable && !collapsed.has(doc.path);
   const subs = subCount(doc);
+  const held = holders?.get(doc.path) ?? [];
   const self = !!running?.has(doc.path);
   const below = expandable && !expanded && !!running && runningBelow(doc, running);
   const folded = expandable && !expanded && (
@@ -148,6 +153,15 @@ function DocItem({ doc, depth, collapsed, onOpen, onToggle, onDelete, showCreate
             {folded}
             {self && <RunningBadge />}
             {below && !self && <RunningBadge below />}
+            {held.length > 0 && (
+              <span className="ml-1 flex min-w-0 shrink items-center gap-1 overflow-hidden" data-held-by={held.map((a) => a.name).join(',')}>
+                <span className="sr-only">작업 중인 에이전트 </span>
+                {held.slice(0, 3).map((a) => (
+                  <AgentTag key={a.sid} agent={a} size="sm" className="-mt-1" />
+                ))}
+                {held.length > 3 && <span className="text-xs text-muted-foreground tabular-nums">+{held.length - 3}</span>}
+              </span>
+            )}
           </button>
         )}
         <Times created={doc.createdAt} modified={doc.modifiedAt} showCreated={showCreated} />
@@ -156,7 +170,7 @@ function DocItem({ doc, depth, collapsed, onOpen, onToggle, onDelete, showCreate
       {expanded && (
         <ul role="list" id={listId} aria-label={`${doc.title} 하위 문서`} className="m-0 list-none p-0">
           {doc.children.map((c) => (
-            <DocItem key={c.path} doc={c} depth={depth + 1} collapsed={collapsed} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete} showCreated={showCreated} running={running} />
+            <DocItem key={c.path} doc={c} depth={depth + 1} collapsed={collapsed} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete} showCreated={showCreated} running={running} holders={holders} />
           ))}
         </ul>
       )}

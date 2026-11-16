@@ -12,7 +12,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ColumnHead, DocList, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
-import { CHORD_MS, RECENT_LIMIT, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
+import { AgentPanel } from './AgentPanel';
+import { agentsIn, holdersByFile } from './agents';
+import { useAgents } from './useAgents';
+import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -333,6 +336,10 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
   const [tab, setTab] = useState<PTab>('docs');
   const { collapsed, toggle } = useCollapse();
   const docs = filterDocs(project.docs, query);
+  const live = useAgents();
+  const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
+  const holders = useMemo(() => holdersByFile(Array.isArray(agents) ? agents : []), [agents]);
+  const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -362,20 +369,31 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
       </header>
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="pb-3">
-        <TabsContent value="docs">
-          {project.docs.length === 0 ? (
-            <Empty>
-              <FilePlus2 className="mx-auto mb-2 size-5" aria-hidden />
-              이 프로젝트에는 아직 문서가 없어요. 새 문서를 만들어 보세요.
-            </Empty>
-          ) : docs.length === 0 ? (
-            <Empty>맞는 문서가 없어요</Empty>
-          ) : (
-            <>
-              <ColumnHead />
-              <DocList docs={docs} collapsed={collapsed} label={`${project.name} 문서`} running={p.running} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />
-            </>
-          )}
+        <TabsContent value="docs" className="@container">
+          {/* Wide: the documents, and the agents at work beside them; narrow: the agents first, above the list. */}
+          <div className="grid @min-[880px]:grid-cols-[minmax(0,1fr)_300px]">
+            <AgentPanel
+              agents={agents}
+              titleOf={(f) => titles.get(f)}
+              onOpen={p.onOpen}
+              className="border-b @min-[880px]:sticky @min-[880px]:top-0 @min-[880px]:order-2 @min-[880px]:self-start @min-[880px]:border-b-0 @min-[880px]:border-l"
+            />
+            <div className="min-w-0 @min-[880px]:order-1">
+              {project.docs.length === 0 ? (
+                <Empty>
+                  <FilePlus2 className="mx-auto mb-2 size-5" aria-hidden />
+                  이 프로젝트에는 아직 문서가 없어요. 새 문서를 만들어 보세요.
+                </Empty>
+              ) : docs.length === 0 ? (
+                <Empty>맞는 문서가 없어요</Empty>
+              ) : (
+                <>
+                  <ColumnHead />
+                  <DocList docs={docs} collapsed={collapsed} label={`${project.name} 문서`} running={p.running} holders={holders} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />
+                </>
+              )}
+            </div>
+          </div>
         </TabsContent>
         <TabsContent value="pipelines">
           <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>
