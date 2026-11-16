@@ -187,13 +187,13 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.keyboard.press('b');
   await page.getByRole('dialog').waitFor();
   await page.keyboard.press('Escape');
-  // One model row, with text next to the dot (nothing is connected in a scratch repo). The row is a button that opens
-  // the 모델 연결 dialog (E525, #570); its name says the state and what it does. There is no settings dialog.
+  // One row per provider, named by the provider (not a model, #620), with text next to the dot. The row is a button
+  // that opens the 모델 연결 dialog (E525, #570); its name says the state and what it does. There is no settings dialog.
   const models = nav.getByRole('list', { name: '모델 연결' });
   await models.waitFor();
-  assert.deepEqual((await models.locator('li').allInnerTexts()).map((s) => s.split('\n')[0]), ['Claude · Fable 5.2']);
-  for (const s of await models.locator('li').allInnerTexts()) assert.match(s, /연결 안 됨|연결됨|%|한도/);
-  const modelRow = models.getByRole('button', { name: /^Claude · Fable 5\.2 .+, 연결 관리$/ });
+  assert.deepEqual((await models.locator('li').allInnerTexts()).map((s) => s.split('\n')[0]), ['Claude', 'OpenAI Codex', 'Gemini']);
+  for (const s of await models.locator('li').allInnerTexts()) assert.match(s, /연결 안 됨|연결됨|설치 안 됨|로그인 중|%|한도/);
+  const modelRow = models.getByRole('button', { name: /^Claude (연결 안 됨|연결됨|설치 안 됨|로그인 중|.*%.*|.*한도.*), 연결 관리$/ });
   await modelRow.waitFor({ state: 'attached' });
   assert.equal(await modelRow.getAttribute('aria-haspopup'), 'dialog');
   assert.equal(await page.getByRole('dialog', { name: '설정' }).count(), 0);
