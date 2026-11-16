@@ -1,4 +1,4 @@
-// Shared body of the fake agent CLIs (claude.mjs; gh.mjs has its own). A fake:
+// Shared body of the fake agent CLIs (claude.mjs, codex.mjs, agy.mjs; gh.mjs has its own). A fake:
 // - appends { bin, args, cwd } as one JSON line to $FAKE_CLI_LOG (so a test can prove the fake ran);
 // - answers the status commands the server uses (--version, auth status, login status);
 // - for a session turn, prints the JSON lines of $FAKE_CLI_SCENARIO (a JSON-lines file) or a short
@@ -6,9 +6,12 @@
 //   $FAKE_CLI_SCENARIO_<BIN> (e.g. FAKE_CLI_SCENARIO_CLAUDE) takes over for that one CLI.
 //   Two scenario lines are actions, not output: { "$sleep": ms } waits, { "$write": { file, text } } writes
 //   `text` to the absolute path `file` (a test's scratch folder), like an agent editing a file.
-// - with $FAKE_CLI_AUTH (a state file path) fakes `auth status|login|logout`: status reads the file,
+// - with $FAKE_CLI_AUTH (a state file path) fakes `auth status|login|logout` (claude) and
+//   `login status|login|logout` (codex; `login --with-api-key` reads the key from stdin, keeps only
+//   that it got one, and fails on an empty key; `agy install` is agy's login): status reads the file,
 //   login prints a fake URL, waits $FAKE_CLI_LOGIN_MS (default 300) and writes the file, or exits with
 //   $FAKE_CLI_LOGIN_EXIT without logging in; logout removes the file. Without it, status says logged in.
+// - codex exec / agy -p take the prompt as an argument (no stdin): one turn, then exit.
 // It never talks to the network and never reads credentials.
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -19,10 +22,28 @@ const DEFAULT = {
     { type: "assistant", message: { id: "fake-msg-1", content: [{ type: "text", text: "fake reply" }], usage: { input_tokens: 10, output_tokens: 5 } } },
     { type: "result", subtype: "success", total_cost_usd: 0.001 },
   ],
+  codex: [
+    { type: "thread.started", thread_id: "fake-codex-thread" },
+    { type: "item.completed", item: { type: "agent_message", text: "fake reply" } },
+    { type: "turn.completed", usage: { input_tokens: 10, cached_input_tokens: 2, output_tokens: 5 } },
+  ],
+  agy: [
+    { event: "init", conversation_id: "fake-agy-conversation" },
+    { event: "step_update", step_update: { step_type: "agent_response", text_delta: "fake reply", usage: { input_tokens: 10, output_tokens: 5 } } },
+    { event: "result", result: { status: "OK", response: "fake reply" } },
+  ],
 };
+
+// `codex debug models`: the catalog shape the server reads (only "list" models are offered).
+const CODEX_MODELS = { models: [
+  { slug: "gpt-fake-codex", display_name: "GPT Fake Codex", visibility: "list", priority: 1,
+    supported_reasoning_levels: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }], default_reasoning_level: "medium", context_window: 272000 },
+  { slug: "gpt-fake-hidden", display_name: "Hidden", visibility: "hide", priority: 2 },
+] };
 
 const STATUS = {
   claude: { "auth status": JSON.stringify({ loggedIn: true, authMethod: "claude.ai" }) },
+  codex: { "login status": "Logged in using ChatGPT", "debug models": JSON.stringify(CODEX_MODELS) },
 };
 
 function scenario(bin) {
@@ -40,11 +61,23 @@ async function emit(lines) {
 }
 const finish = () => process.exit(Number(process.env.FAKE_CLI_EXIT || 0));
 
-function fakeAuth(file, sub) {
+function fakeAuth(file, sub, bin = "claude", rest = []) {
   if (sub === "status") {
     const loggedIn = existsSync(file);
-    process.stdout.write(JSON.stringify(loggedIn ? { loggedIn, authMethod: "claude.ai" } : { loggedIn }) + "\n");
+    if (bin === "codex") process.stdout.write(loggedIn ? "Logged in using ChatGPT\n" : "Not logged in\n");
+    else process.stdout.write(JSON.stringify(loggedIn ? { loggedIn, authMethod: "claude.ai" } : { loggedIn }) + "\n");
     return process.exit(0);
+  }
+  if (sub === "login" && rest[0] === "--with-api-key") {
+    // The key arrives on stdin; the fake keeps only the fact that one came (never the key itself).
+    let key = "";
+    process.stdin.on("data", d => { key += d; });
+    process.stdin.on("end", () => {
+      if (!key.trim()) { process.stderr.write("Error: no API key on stdin\n"); return process.exit(1); }
+      writeFileSync(file, "fake-key-login\n");
+      process.exit(0);
+    });
+    return;
   }
   if (sub === "logout") { rmSync(file, { force: true }); return process.exit(0); }
   if (sub === "login") {
@@ -66,8 +99,14 @@ export function run(bin) {
   const cmd = args.slice(0, 2).join(" ");
   const auth = process.env.FAKE_CLI_AUTH;
   if (auth && bin === "claude" && args[0] === "auth") return fakeAuth(auth, args[1]);
+  if (auth && bin === "codex" && args[0] === "login") return fakeAuth(auth, args[1] === "status" ? "status" : "login", "codex", args.slice(1));
+  if (auth && bin === "codex" && args[0] === "logout") return fakeAuth(auth, "logout", "codex");
+  if (auth && bin === "agy" && args[0] === "install") return fakeAuth(auth, "login", "agy");
   const status = STATUS[bin]?.[cmd];
   if (status !== undefined) { process.stdout.write(status + "\n"); return finish(); }
+
+  // codex exec / agy -p: the prompt is an argument and stdin is closed. One turn, then exit.
+  if (bin === "codex" || bin === "agy") return emit(scenario(bin)).then(finish);
 
   // claude -p --input-format stream-json: one turn per user line on stdin, alive until stdin ends.
   // Turns are played one after another, so a scenario's $sleep holds back the next turn's lines too.

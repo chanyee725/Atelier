@@ -76,9 +76,9 @@ test("cli: refuses anything outside the allowlist, and any shell", async () => {
 });
 
 test("cli: a real agent CLI or gh never starts under npm test", async () => {
-  // An executable named claude (or gh) in a folder without the fake marker counts as real.
+  // An executable named claude, codex, agy or gh in a folder without the fake marker counts as real.
   const dir = tmp("drawing-real-cli-");
-  for (const bin of ["claude", "gh"]) {
+  for (const bin of ["claude", "codex", "agy", "gh"]) {
     writeFileSync(path.join(dir, bin), `#!${process.execPath}\nprocess.exit(0);\n`);
     chmodSync(path.join(dir, bin), 0o755);
     const env = { ...process.env, PATH: dir };
@@ -90,19 +90,21 @@ test("cli: a real agent CLI or gh never starts under npm test", async () => {
   await assert.rejects(runCli("gh", ["--version"], { env: { ...process.env, PATH: tmp("drawing-empty-bin-") } }), e => e.code === "ECLIDENIED");
 });
 
-test("cli: the real seam runs the fake claude from a marked folder; codex and agy are refused", async () => {
+test("cli: the real seam runs each fake agent CLI from a marked folder; others are refused", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const env = { ...process.env, ...bin.env };
-  const { stdout } = await runCli("claude", ["--version"], { env });
-  assert.equal(stdout.trim(), "claude 0.0.0-fake");
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
-  // Codex and Gemini (agy) are gone from the allow list: no spawn path, even with a fake on PATH.
-  for (const name of ["codex", "agy"]) {
-    assert.throws(() => spawnCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
-    await assert.rejects(runCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
+  for (const name of ["claude", "codex", "agy"]) {
+    const { stdout } = await runCli(name, ["--version"], { env });
+    assert.equal(stdout.trim(), `${name} 0.0.0-fake`);
   }
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"], "a refused CLI never started");
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude", "codex", "agy"]);
+  // A CLI outside the list never starts, even with a same-named file on PATH.
+  for (const name of ["gemini", "sh", "node"]) {
+    assert.throws(() => spawnCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
+  }
+  // No shell, for any CLI.
+  assert.throws(() => spawnCli("codex", ["--version"], { env, shell: true }), e => e.code === "ECLIDENIED");
   // git is not an agent CLI: it runs from the normal PATH.
   assert.match((await runCli("git", ["--version"])).stdout, /^git version/);
   assert.equal(readdirSync(bin.dir).includes(FAKE_MARKER), true);
