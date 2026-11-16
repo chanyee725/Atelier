@@ -473,3 +473,44 @@ test('a dropped change event whose revision the reload already read does not rea
   await settle();
   assert.equal(reads, 1);
 });
+
+test('a change event for another file opened while the old file reloads is not dropped (#568)', async (t) => {
+  const { s } = setup(t);
+  const gates: { p: string; ok: (f: DpxFile) => void }[] = [];
+  const read = (p: string) => new Promise<DpxFile>((ok) => gates.push({ p, ok }));
+  const reloaded: [string, number][] = [];
+  const onReload = (p: string, f: DpxFile) => {
+    reloaded.push([p, f.revision]);
+    s.applyLive(p, f);
+  };
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, onReload);
+  await settle();
+  assert.equal(gates.length, 1);
+  // The user opens b.dpx while a.dpx is still being read; then b.dpx changes on disk.
+  s.load('b.dpx', file({ revision: 5 }));
+  s.external({ kind: 'change', path: 'b.dpx', revision: 6 }, read, onReload);
+  gates.shift()!.ok(file({ revision: 2 }));
+  await settle();
+  // a.dpx's read is not applied (b.dpx is open); b.dpx is read once more.
+  assert.equal(gates.length, 1);
+  assert.equal(gates[0].p, 'b.dpx');
+  gates.shift()!.ok(file({ revision: 6, title: 'b6' }));
+  await settle();
+  assert.deepEqual(reloaded, [['b.dpx', 6]]);
+  assert.equal(s.getState().path, 'b.dpx');
+  assert.equal(s.getState().file?.title, 'b6');
+});
+
+test('a change event for another file that is not newer than its loaded revision does not read again (#568)', async (t) => {
+  const { s } = setup(t);
+  let reads = 0;
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => (reads++, new Promise<DpxFile>((ok) => gates.push(ok)));
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, () => {});
+  await settle();
+  s.load('b.dpx', file({ revision: 6 }));
+  s.external({ kind: 'change', path: 'b.dpx', revision: 6 }, read, () => {});
+  gates.shift()!(file({ revision: 2 }));
+  await settle();
+  assert.equal(reads, 1);
+});
