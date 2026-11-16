@@ -38,7 +38,10 @@ test('rowStatus: text and tone; connected shows 5-hour usage or 한도 도달', 
 });
 
 test('metaLine never shows more than CLI version and login method', () => {
-  assert.equal(metaLine(C, undefined), 'Claude Code CLI로 로그인해요');
+  assert.equal(metaLine(C, undefined), 'Claude Code로 로그인해요');
+  // cliName already says CLI where it is one: never 'Codex CLI CLI' (#639).
+  for (const m of PROVIDERS) assert.doesNotMatch(metaLine(m, undefined), /CLI CLI/);
+  assert.equal(metaLine(providerMeta('openai')!, undefined), 'Codex CLI로 로그인해요');
   assert.equal(metaLine(C, P({ installed: false })), 'Claude Code 필요');
   assert.equal(metaLine(C, P({ cli: '2.1.0 (Claude Code)', cliLoggedIn: true, method: '구독 계정 (claude.ai)' })), '2.1.0 (Claude Code) · 구독 계정 (claude.ai)');
   assert.equal(metaLine(C, P({ cli: '2.1.0', cliLoggedIn: false })), '2.1.0 · CLI 로그인 안 됨');
