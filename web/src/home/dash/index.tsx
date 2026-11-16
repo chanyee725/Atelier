@@ -44,13 +44,19 @@ type CardProps = {
   flush?: boolean;
   /** data-card attribute, for tests and screenshots. */
   id?: string;
+  /**
+   * Share of a <DashColumn>'s height (flex-grow from a zero basis), e.g. 5, 3 and 2 for a 5:3:2 split (#720).
+   * The card never gets shorter than its content, so a full card pushes the split instead of clipping rows.
+   */
+  grow?: number;
 };
 
 /** A titled panel. The header is part of the card; rows inside use <CardRow>. */
-export function Card({ title, count, actions, hint, children, className, flush, id }: CardProps) {
+export function Card({ title, count, actions, hint, children, className, flush, id, grow }: CardProps) {
   const headId = useId();
+  const share = grow === undefined ? undefined : { flex: `${grow} 1 0%`, minBlockSize: 'fit-content' };
   return (
-    <section aria-labelledby={headId} data-card={id} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground', className)}>
+    <section aria-labelledby={headId} data-card={id} style={share} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground', className)}>
       <CardHeader id={headId} title={title} count={count} actions={actions} hint={hint} />
       <div className={flush ? undefined : 'px-4 py-3'}>{children}</div>
     </section>
@@ -78,6 +84,50 @@ export function CardList({ children, label }: { children: ReactNode; label?: str
     <ul aria-label={label} className="m-0 list-none divide-y p-0">
       {children}
     </ul>
+  );
+}
+
+/**
+ * Items as a grid of n rows × 3 columns in a flush card (#720). The columns follow the card's own width (a container
+ * query), not the window: 3 from 26rem, 2 from 18rem, 1 below that (a phone-width card).
+ */
+export function CardGrid({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <div className="@container">
+      <ul aria-label={label} className="m-0 grid list-none grid-cols-1 gap-2 p-2 @min-[18rem]:grid-cols-2 @min-[26rem]:grid-cols-3">
+        {children}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * One cell of a <CardGrid>: icon and main line on top, then the muted second line, then the meta line. Same props as
+ * <CardRow>; `onClick` or `href` makes the whole tile the target.
+ */
+export function CardTile({ icon, title, sub, meta, onClick, href, className, data }: { icon?: ReactNode; title: ReactNode; sub?: ReactNode; meta?: ReactNode; onClick?: () => void; href?: string; className?: string; data?: string }) {
+  const body = (
+    <>
+      <span className="flex min-w-0 items-center gap-2">
+        {icon && <span aria-hidden className="grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3.5">{icon}</span>}
+        <span className="min-w-0 truncate text-sm">{title}</span>
+      </span>
+      {sub && <span className="block truncate text-xs text-muted-foreground">{sub}</span>}
+      {meta && <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground tabular-nums">{meta}</span>}
+    </>
+  );
+  const cls = 'grid h-full w-full min-w-0 content-start gap-1 rounded-md border px-3 py-2 text-left';
+  const hit = 'hover:bg-accent/60 focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
+  return (
+    <li data-row={data} className={cn('min-w-0', className)}>
+      {href ? (
+        <a href={href} target="_blank" rel="noreferrer" className={cn(cls, hit, 'text-inherit no-underline')}>{body}</a>
+      ) : onClick ? (
+        <button type="button" onClick={onClick} className={cn(cls, hit)}>{body}</button>
+      ) : (
+        <div className={cls}>{body}</div>
+      )}
+    </li>
   );
 }
 
