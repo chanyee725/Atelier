@@ -7,7 +7,7 @@
 // layout (side panel or bottom sheet, collapsed or not) from the document pane, which also owns the container
 // (`.doc-margin-aside`: placement, entry and exit). It never takes focus from the editor: its buttons keep focus where
 // it is on mouse down, and the panel only reacts to what the user clicks.
-import { useId, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, PanelRightClose } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { roleLabel } from '../run/overlayModel';
@@ -36,23 +36,32 @@ const keepFocus = (e: MouseEvent) => e.preventDefault();
 const agentStyle = (c: MarginCard): CSSProperties => ({ '--agent': c.color || `var(--role-${c.role}, var(--idle))` }) as CSSProperties;
 
 /** The pending end of each cursor's outline, so a second click restarts it instead of being cut short by the first. */
-const flashEnds = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+type FlashEnds = Map<HTMLElement, ReturnType<typeof setTimeout>>;
 
 /** Outline the agent's document cursor briefly, so the jumped-to spot shows whose change it was. */
-function flashCursor(sid: string) {
+function flashCursor(ends: FlashEnds, sid: string) {
   const el = document.querySelector<HTMLElement>(`[data-doc-agent-cursor="${CSS.escape(sid)}"]`);
   if (!el) return;
-  clearTimeout(flashEnds.get(el));
+  clearTimeout(ends.get(el));
   el.removeAttribute('data-margin-flash');
   void el.offsetWidth; // restart on a second click
   el.setAttribute('data-margin-flash', '');
-  flashEnds.set(
+  ends.set(
     el,
     setTimeout(() => {
-      flashEnds.delete(el);
+      ends.delete(el);
       el.removeAttribute('data-margin-flash');
     }, FLASH_MS),
   );
+}
+
+/** End every pending outline now (the panel is going away). */
+function endFlashes(ends: FlashEnds) {
+  for (const [el, t] of ends) {
+    clearTimeout(t);
+    el.removeAttribute('data-margin-flash');
+  }
+  ends.clear();
 }
 
 function Dots() {
@@ -112,9 +121,14 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
   const listId = useId();
   const count = agents.length;
   const title = count > 1 ? `에이전트 ${count}명이 작업 중이에요` : '에이전트가 작업 중이에요';
+  const flashEnds = useRef<FlashEnds>(new Map());
+  useEffect(() => {
+    const ends = flashEnds.current;
+    return () => endFlashes(ends);
+  }, []);
   const jump = (spot: DocSpot, card: MarginCard) => {
     onJump?.(spot);
-    flashCursor(card.sid);
+    flashCursor(flashEnds.current, card.sid);
   };
 
   // Collapsed side panel: a slim rail with one swatch per agent; the whole rail opens it. The card list is not
