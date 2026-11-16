@@ -177,7 +177,7 @@ function AheadBehind({ ahead, behind, base }: { ahead: number; behind: number; b
     <span className="inline-flex items-center gap-2 font-mono tabular-nums">
       <span className="sr-only">{`${base}보다 커밋 ${ahead}개 앞, ${behind}개 뒤`}</span>
       <span aria-hidden className={ahead > 0 ? 'text-foreground' : undefined} title={`${base}보다 ${ahead}개 앞`}>↑{ahead}</span>
-      <span aria-hidden className={behind > 0 ? 'text-warn' : undefined} title={`${base}보다 ${behind}개 뒤`}>↓{behind}</span>
+      <span aria-hidden className={behind > 0 ? 'text-[color-mix(in_oklch,var(--warn)_65%,var(--foreground))]' : undefined} title={`${base}보다 ${behind}개 뒤`}>↓{behind}</span>
     </span>
   );
 }
