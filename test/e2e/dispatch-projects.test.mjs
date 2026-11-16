@@ -101,6 +101,10 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.getByText(a1, { exact: true }).waitFor();
     await page.getByText(b1, { exact: true }).waitFor();
     await page.getByText(u1, { exact: true }).waitFor();
+    // The model tag names the provider by its display name, not the raw id (#521).
+    const tag = cards.filter({ hasText: a1 }).locator('[data-provider]');
+    assert.equal(await tag.getAttribute('data-provider'), 'claude');
+    assert.equal(await tag.innerText(), 'Claude');
 
     at('pick a project');
     await rail.getByRole('link', { name: /알파/ }).click();

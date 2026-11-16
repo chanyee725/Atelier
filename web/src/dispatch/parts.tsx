@@ -10,7 +10,7 @@ import type { SessionState } from './types';
 export function ModelTag({ provider, label, className }: { provider: string; label: string; className?: string }) {
   return (
     <Badge variant="secondary" title={label} className={cn('max-w-full min-w-0 shrink gap-1 rounded-md px-1.5 font-normal', className)}>
-      <span className="shrink-0 font-semibold">{providerName(provider)}</span>
+      <span data-provider={provider} className="shrink-0 font-semibold">{providerName(provider)}</span>
       <span className="truncate text-muted-foreground">{label}</span>
     </Badge>
   );
