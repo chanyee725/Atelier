@@ -6,7 +6,7 @@ import { hashWith, openCounts, type Scope } from './lib/folder.ts';
 import { useDispatch } from './store';
 import type { ProjectInfo } from '../api';
 
-const item = 'flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-7';
+const item = 'flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-md px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none forced-colors:focus-visible:outline-2 forced-colors:focus-visible:outline-solid forced-colors:focus-visible:outline-offset-1 forced-colors:focus-visible:outline-[CanvasText] max-md:h-7';
 
 export function ProjectRail({ projects, state, scope, view, onPick }: {
   projects: ProjectInfo[]; state: 'loading' | 'ready' | 'failed'; scope: Scope; view: string; onPick: (s: Scope) => void;
@@ -16,6 +16,7 @@ export function ProjectRail({ projects, state, scope, view, onPick }: {
   const counted = state === 'ready'; // before the first list every session would count as 미분류
   const total = [...counts.values()].reduce((a, b) => a + b, 0);
   // The picked entry is told apart by weight and an edge bar as well as colour, and by Highlight under forced colours.
+  // Forced colours drop the focus ring (a box-shadow), so focus gets its own CanvasText outline just outside the item (#524).
   const entries: { key: string; label: string; value: Scope; count: number }[] = [
     { key: 'all', label: '전체', value: undefined, count: total },
     // A linked project the list has not named yet still shows, picked.
