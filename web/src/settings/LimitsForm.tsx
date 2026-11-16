@@ -1,10 +1,12 @@
 // Usage-limit and session-length guard form (E509c), shared by the 설정 modal and the 설정 page (#587). Values are
 // saved through POST /api/settings; the server keeps them in range, and the guards cannot be switched off here
-// (every field has a minimum above 0). Only changed fields are sent (#552).
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { api, type DispatchSettings } from '../api';
+// (every field has a minimum above 0). Only changed fields are sent (#552). With Dispatch off the fields still show,
+// read-only with their defaults and one line saying why (#620).
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
+import { api, type DispatchSettings, type DispatchStatus } from '../api';
 import { cn } from '../lib/utils';
 import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, type GuardField, type GuardSaved, type GuardValues } from './model';
+import { OffNote } from './DispatchOff';
 import './limits.css';
 
 const ALL = GUARD_FIELDS.flatMap((g) => g.fields);
@@ -20,7 +22,7 @@ const toSaved = (s: DispatchSettings): GuardSaved => ({
 export const BTN = 'h-8 rounded-md px-3 text-sm transition-colors duration-[120ms] motion-reduce:transition-none enabled:hover:bg-accent enabled:hover:text-foreground max-md:h-11';
 export const PRIMARY_BTN = cn(BTN, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 enabled:hover:text-primary-foreground disabled:opacity-50');
 
-type Load = { kind: 'loading' } | { kind: 'off'; message: string } | { kind: 'ok' };
+type Load = { kind: 'loading' } | { kind: 'off'; status: DispatchStatus } | { kind: 'failed'; message: string } | { kind: 'ok' };
 
 /**
  * The guard form. `header` goes first inside the form (the modal's title and close button, the page's heading);
@@ -39,16 +41,16 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
     void (async () => {
       try {
         const d = await api.dispatch();
-        if (!d.enabled) return alive && setLoad({ kind: 'off', message: d.message ?? '이 서버에선 한도를 바꿀 수 없어요.' });
+        if (!d.enabled) return alive && setLoad({ kind: 'off', status: d });
         const s = await api.dispatchState();
         if (!alive) return;
-        if (!s.settings) return setLoad({ kind: 'off', message: '설정을 불러오지 못했어요.' });
+        if (!s.settings) return setLoad({ kind: 'failed', message: '설정을 불러오지 못했어요.' });
         setTexts(toTexts(s.settings));
         setSaved(toSaved(s.settings));
         setFollows(fableFollows(s.settings));
         setLoad({ kind: 'ok' });
       } catch {
-        if (alive) setLoad({ kind: 'off', message: '설정을 불러오지 못했어요.' });
+        if (alive) setLoad({ kind: 'failed', message: '설정을 불러오지 못했어요.' });
       }
     })();
     return () => {
@@ -94,14 +96,17 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
     }
   };
 
+  const offId = useId();
+  const off = load.kind === 'off';
   return (
     <form onSubmit={(e) => void submit(e)} aria-labelledby={labelledBy} data-testid="limits-form" className={cn('limits-form flex flex-col gap-4', className)}>
       {header}
       {load.kind === 'loading' && <p className="text-sm text-muted-foreground">불러오는 중이에요…</p>}
-      {load.kind === 'off' && <p className="text-sm text-muted-foreground">{load.message}</p>}
-      {load.kind === 'ok' &&
+      {load.kind === 'failed' && <p className="text-sm text-muted-foreground">{load.message}</p>}
+      {off && <OffNote id={offId} status={load.status} />}
+      {(load.kind === 'ok' || off) &&
         GUARD_FIELDS.map((g) => (
-          <fieldset key={g.title} className="flex flex-col gap-2">
+          <fieldset key={g.title} disabled={off} aria-describedby={off ? offId : undefined} className="flex flex-col gap-2 disabled:opacity-60">
             <legend className="text-sm font-medium">{g.title}</legend>
             <p className="text-xs text-muted-foreground">{g.hint}</p>
             <ul className="flex flex-col gap-2">
@@ -120,7 +125,7 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
                       min={f.min}
                       max={f.max}
                       required={f.id !== 'fable'}
-                      autoFocus={autoFocus && g === GUARD_FIELDS[0] && i === 0}
+                      autoFocus={autoFocus && !off && g === GUARD_FIELDS[0] && i === 0}
                       value={texts[f.id]}
                       onChange={(e) => set(f.id, e.target.value)}
                       className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums max-md:h-11"
