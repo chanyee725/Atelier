@@ -26,7 +26,8 @@ const HOLD_START_MS = 30_000;
 // An outside writer that named itself keeps the file this long: its unnamed writes keep that name (#653).
 const OUTSIDE_HOLD_MS = 2 * 60_000;
 const MAX_SCRIPTS = 20;
-const SCRIPT_RE = /(?:^|[\s"'=/])([\w.-]+\.(?:sh|bash|py|mjs|cjs|js|ts|rb|pl))\b/g;
+// Helper scripts an agent writes to save a file; not every source file a Write or Edit names (index.js, app.ts).
+const SCRIPT_RE = /(?:^|[\s"'=/])([\w.-]+\.(?:sh|bash|py|mjs|cjs))\b/g;
 const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFetch', 'WebSearch']);
 const DPX_RE = /[^\s"'`=?&<>|;(),]*\.dpx\.json/g;
 const EMPTY = new Map();
@@ -273,7 +274,7 @@ export async function setup(ctx) {
     return newest(cands);
   }
 
-  async function place(rel, cands, wait, app, writer, sid = null) {
+  async function place(rel, cands, wait, { app, writer, sid }) {
     await wait; // a tool-time read still in flight when the change came: let it land in `pre` first
     let after;
     try { after = await read(rel); } catch { return; }
@@ -323,11 +324,11 @@ export async function setup(ctx) {
     // `live`: the page keeps this cursor until the session ends or moves on (a `gone` event), it does not fade.
     const e = { sid: s.id, name: s.name, role: s.role, ...color, file: rel, ...(at ?? {}), live: true, ...(status ? { status } : {}), at: now };
     const last = lastCursor.get(s.id);
-    lastCursor.set(s.id, { ...e, ...(at ? {} : last?.file === rel ? pick2(last) : {}) });
+    lastCursor.set(s.id, { ...e, ...(at ? {} : last?.file === rel ? placeFields(last) : {}) });
     ctx.hub.broadcast('cursor', e);
   }
   // The place fields of a cursor event, for the replay to a page that connects later.
-  const pick2 = (e) => ({ ...(e.x !== undefined ? { x: e.x, y: e.y } : {}), ...(e.doc ? { doc: e.doc } : {}) });
+  const placeFields = (e) => ({ ...(e.x !== undefined ? { x: e.x, y: e.y } : {}), ...(e.doc ? { doc: e.doc } : {}) });
   // What part of the file a change was in: a diagram (a place on the canvas or an embedded diagram), a table, text.
   function targetOf(at, after) {
     if (at.x !== undefined && !at.doc) return 'diagram';
@@ -343,7 +344,7 @@ export async function setup(ctx) {
   // So read-only calls (jq, curl GET) that finished within that window also become candidates during a catch-up.
   const onChange = (rel, { catchUp = false, app = false, sid = null, writer = null } = {}) => {
     const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS, { app, sid, writer });
-    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app, writer, sid));
+    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), { app, writer, sid }));
     const tail = run.catch(() => {});
     queue.set(rel, tail);
     tail.then(() => { if (queue.get(rel) === tail) queue.delete(rel); });
@@ -374,8 +375,13 @@ export async function setup(ctx) {
       clearTimeout(ending.get(ps.id));
       ending.delete(ps.id);
       refresh(ps.id);
-    } else if (!ending.has(ps.id) && (recent.has(ps.id) || shown.has(ps.id))) {
-      ending.set(ps.id, setTimeout(end, END_GRACE_MS, ps.id));
+    } else {
+      // The turn ended (done, stopped, failed, crashed): a call with no result yet will never get one. Close it now,
+      // so it neither keeps a status label nor takes later writes as a running call; its own edit still counts for
+      // SETTLE_MS like any finished call's (#656).
+      const now = Date.now();
+      for (const c of recent.get(ps.id) ?? []) if (c.done === null) c.done = now;
+      if (!ending.has(ps.id) && (recent.has(ps.id) || shown.has(ps.id))) ending.set(ps.id, setTimeout(end, END_GRACE_MS, ps.id));
     }
   };
   const onRemoved = ({ id }) => {
