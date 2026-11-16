@@ -100,11 +100,33 @@ test('설정 page: link from the modal, save team settings and a role model, lim
   assert.equal(s.roles.find((r) => r.id === role.id).model, other.id);
   assert.equal(s.settings.team.rotateLead, before.settings.team.rotateLead, 'untouched values stay');
 
-  // 3. A bad value is not sent; saving with nothing changed says so.
+  // 2b. A change made elsewhere while the page is open shows in untouched fields, and the next save does not
+  // send the old value back (#615).
+  const post = (body) => fetch(`${BASE}/api/settings`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: JSON.stringify(body) });
+  await maxChildren.fill('4');
+  const rotateLead = team.getByRole('spinbutton', { name: /^관리자 대화 새로 시작/ });
+  await rotateLead.fill('3'); // in-progress edit, not saved yet
+  assert.ok((await post({ team: { maxChildren: 6, rotateLead: 9 } })).ok);
+  await page.waitForFunction(() => document.querySelector('#team-maxChildren')?.value === '6');
+  assert.equal(await rotateLead.inputValue(), '3', 'the in-progress edit stays');
+  await rotateLead.fill('9');
+  await team.getByRole('button', { name: '저장' }).click();
+  await team.getByText('바뀐 게 없어요.').waitFor();
+  assert.ok((await post({ team: { maxChildren: 4 } })).ok);
+  await page.waitForFunction(() => document.querySelector('#team-maxChildren')?.value === '4');
+
+  // 3. A bad value is not sent: the Korean message shows under the field (no browser bubble) and the field gets
+  // focus; saving with nothing changed says so.
   await maxChildren.fill('0');
   await team.getByRole('button', { name: '저장' }).click();
+  await team.locator('#team-maxChildren-error').waitFor();
+  assert.equal(await maxChildren.getAttribute('aria-invalid'), 'true');
+  assert.match(await maxChildren.getAttribute('aria-describedby'), /team-maxChildren-error/);
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'team-maxChildren');
   assert.equal((await state()).settings.team.maxChildren, 4);
   await maxChildren.fill('4');
+  assert.equal(await team.locator('#team-maxChildren-error').count(), 0, 'the message clears once fixed');
+  assert.equal(await maxChildren.getAttribute('aria-invalid'), 'false');
   await team.getByRole('button', { name: '저장' }).click();
   await team.getByText('바뀐 게 없어요.').waitFor();
 

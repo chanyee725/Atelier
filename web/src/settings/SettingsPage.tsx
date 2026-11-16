@@ -2,13 +2,13 @@
 // model, per-provider usage and the usage-limit and session-length guards (the same form as the sidebar 설정 modal).
 // Team values are saved through POST /api/settings `team`; the server checks every range again. Status and numbers
 // only: no account, email or token is read here.
-import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { cn } from '../lib/utils';
 import { Meter } from '../dispatch/parts';
 import { pct, until } from '../dispatch/lib/format.ts';
 import { api, useDispatch } from '../dispatch/store';
 import { LimitsForm, BTN, PRIMARY_BTN } from './LimitsForm';
-import { TEAM_NUMBERS, TEAM_TOGGLES, readTeamNumbers, teamPatch, teamValues, usageGroups, type TeamNumberId, type TeamToggleId, type TeamValues, type UsageEntry } from './model';
+import { TEAM_NUMBERS, TEAM_TOGGLES, readTeamNumbers, resyncTeamForm, savedAfterSave, teamForm, teamNumberErrors, teamPatch, teamValues, usageGroups, type TeamFormState, type TeamNumberId, type TeamValues, type UsageEntry } from './model';
 
 function Section({ title, hint, children, labelledBy }: { title: string; hint?: string; children: ReactNode; labelledBy?: string }) {
   const own = useId();
@@ -26,9 +26,6 @@ function Section({ title, hint, children, labelledBy }: { title: string; hint?: 
   );
 }
 
-type NumTexts = Record<TeamNumberId, string>;
-const numTexts = (v: TeamValues): NumTexts => Object.fromEntries(TEAM_NUMBERS.map((f) => [f.id, String(v[f.id])])) as NumTexts;
-
 /** Team numbers, switches and each role's default model, saved together with one 저장 button. */
 function TeamForm() {
   const titleId = useId();
@@ -39,11 +36,22 @@ function TeamForm() {
   const fromStore = useMemo(() => teamValues(team as unknown as Record<string, unknown>, roles), [team, roles]);
   // What was last loaded or saved; only changes against it are sent.
   const [saved, setSaved] = useState<TeamValues>(fromStore);
-  const [texts, setTexts] = useState<NumTexts>(() => numTexts(fromStore));
-  const [toggles, setToggles] = useState<Record<TeamToggleId, boolean>>(() => Object.fromEntries(TEAM_TOGGLES.map((f) => [f.id, fromStore[f.id]])) as Record<TeamToggleId, boolean>);
-  const [roleModels, setRoleModels] = useState<Record<string, string>>(fromStore.roleModels);
+  const [form, setForm] = useState<TeamFormState>(() => teamForm(fromStore));
+  const { texts, toggles, roleModels } = form;
+  // Per-field messages from the last 저장 (the browser's own bubbles are off: the form is noValidate, #615).
+  const [errors, setErrors] = useState<Partial<Record<TeamNumberId, string>>>({});
   const [note, setNote] = useState<{ text: string; bad?: boolean }>({ text: '' });
   const [saving, setSaving] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Saved values changed elsewhere (sidebar 설정 modal, another tab, the server's settings event): follow them in
+  // the fields the user has not edited and keep the edits (#615). Adjusted during render, as React suggests for
+  // state derived from changing props.
+  const [seen, setSeen] = useState(fromStore);
+  if (seen !== fromStore) {
+    setSeen(fromStore);
+    setForm((f) => resyncTeamForm(saved, fromStore, f));
+    setSaved(fromStore);
+  }
 
   const byProvider = useMemo(() => {
     const out = new Map<string, typeof models>();
@@ -53,15 +61,25 @@ function TeamForm() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    const bad = teamNumberErrors(texts);
+    setErrors(bad);
     const nums = readTeamNumbers(texts);
-    if ('error' in nums) return setNote({ text: nums.error, bad: true });
+    if ('error' in nums) {
+      // Focus the first bad field so its message is read out with it.
+      const first = TEAM_NUMBERS.find((f) => bad[f.id]);
+      if (first) formRef.current?.querySelector<HTMLInputElement>(`#team-${first.id}`)?.focus();
+      return setNote({ text: nums.error, bad: true });
+    }
     const next: TeamValues = { ...nums, ...toggles, roleModels };
     const patch = teamPatch(saved, next);
     if (!patch) return setNote({ text: '바뀐 게 없어요.' });
     setSaving(true);
     try {
-      await api('POST', '/api/settings', { team: patch });
-      setSaved(next);
+      const res = await api<{ team?: Record<string, unknown> }>('POST', '/api/settings', { team: patch });
+      // Take what the server now holds; fields left as sent follow it, later edits stay.
+      const now = savedAfterSave(res?.team, next);
+      setSaved(now);
+      setForm((f) => resyncTeamForm(next, now, f));
       setNote({ text: '저장했어요.' });
     } catch (err) {
       setNote({ text: err instanceof Error ? err.message : '저장하지 못했어요.', bad: true });
@@ -72,7 +90,7 @@ function TeamForm() {
 
   return (
     <Section title="팀" hint="새로 여는 세션부터 적용돼요." labelledBy={titleId}>
-      <form onSubmit={(e) => void submit(e)} aria-labelledby={titleId} data-testid="team-form" className="flex flex-col gap-4">
+      <form ref={formRef} noValidate onSubmit={(e) => void submit(e)} aria-labelledby={titleId} data-testid="team-form" className="flex flex-col gap-4">
         <fieldset className="flex flex-col gap-3">
           <legend className="mb-1 text-sm font-medium">대화와 팀원</legend>
           {TEAM_NUMBERS.map((f) => (
@@ -89,17 +107,26 @@ function TeamForm() {
                 min={f.min}
                 max={f.max}
                 required
-                aria-describedby={`team-${f.id}-hint`}
+                aria-invalid={errors[f.id] ? true : false}
+                aria-describedby={errors[f.id] ? `team-${f.id}-hint team-${f.id}-error` : `team-${f.id}-hint`}
                 value={texts[f.id]}
                 onChange={(e) => {
-                  setTexts((t) => ({ ...t, [f.id]: e.target.value }));
+                  const v = e.target.value;
+                  setForm((s) => ({ ...s, texts: { ...s.texts, [f.id]: v } }));
+                  // Clear the field's message as soon as it is fixed; new ones only show on 저장.
+                  if (errors[f.id] && !teamNumberErrors({ ...texts, [f.id]: v })[f.id]) setErrors((x) => ({ ...x, [f.id]: undefined }));
                   setNote({ text: '' });
                 }}
-                className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums max-md:h-11"
+                className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums aria-invalid:border-destructive max-md:h-11"
               />
               <span id={`team-${f.id}-hint`} className="text-xs text-muted-foreground">
                 {f.hint} {f.min}~{f.max} 사이
               </span>
+              {errors[f.id] && (
+                <span id={`team-${f.id}-error`} className="text-xs text-destructive">
+                  {errors[f.id]}
+                </span>
+              )}
             </div>
           ))}
         </fieldset>
@@ -115,7 +142,8 @@ function TeamForm() {
                 aria-describedby={`team-${f.id}-hint`}
                 checked={toggles[f.id]}
                 onChange={(e) => {
-                  setToggles((t) => ({ ...t, [f.id]: e.target.checked }));
+                  const v = e.target.checked;
+                  setForm((s) => ({ ...s, toggles: { ...s.toggles, [f.id]: v } }));
                   setNote({ text: '' });
                 }}
                 className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
@@ -145,7 +173,7 @@ function TeamForm() {
                 value={roleModels[r.id] ?? r.model}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setRoleModels((m) => ({ ...m, [r.id]: v }));
+                  setForm((s) => ({ ...s, roleModels: { ...s.roleModels, [r.id]: v } }));
                   setNote({ text: '' });
                 }}
                 className="h-8 min-w-0 max-w-full rounded-md border bg-background px-2 text-sm max-md:h-11"
