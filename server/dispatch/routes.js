@@ -123,7 +123,8 @@ export function routeTable(d) {
     ["POST", /^\/api\/providers\/(claude)\/login$/, async ([id]) => {
       if (!d.providers()[id]?.cliLoggedIn) await d.refreshProviders();
       if (d.providers()[id]?.cliLoggedIn) { d.setEnabled(id, true); await d.refreshProviders(); return { ok: true, connected: true }; }
-      d.login(id, d.refreshProviders, ok => ok && d.setEnabled(id, true));
+      if (d.providers()[id]?.installed === false) throw fail(400, "Claude CLI를 찾지 못했어요. 설치한 뒤 다시 눌러 주세요");
+      d.login(id, () => d.refreshProviders().catch(e => console.error("dispatch providers:", e.code ?? e.name)), ok => ok && d.setEnabled(id, true));
       return { ok: true, connected: false };
     }],
     ["POST", /^\/api\/providers\/(claude)\/cancel$/, async ([id]) => { d.cancelLogin(id); return { ok: true }; }],

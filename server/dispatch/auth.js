@@ -39,7 +39,7 @@ export async function providerStatus() {
 export function login(id, onChange, onDone = () => {}) {
   const cli = CLI[id];
   if (!cli || state[id].busy) return;
-  Object.assign(state[id], { busy: true, url: null, error: null });
+  Object.assign(state[id], { busy: true, url: null, error: null, cancelled: false });
   onChange();
   let p;
   try { p = spawnCli(cli.bin, cli.login, { stdio: ["ignore", "pipe", "pipe"] }); }
@@ -52,7 +52,9 @@ export function login(id, onChange, onDone = () => {}) {
   p.stderr.on("data", scan);
   p.on("error", e => { Object.assign(state[id], { busy: false, error: e.message }); onChange(); });
   p.on("exit", code => {
-    Object.assign(state[id], { busy: false, url: null, error: code === 0 ? null : `로그인이 끝나지 않았어요 (code ${code})` });
+    // A cancel ends the login on purpose: no error to show.
+    const error = code === 0 || state[id].cancelled ? null : `로그인이 끝나지 않았어요 (code ${code})`;
+    Object.assign(state[id], { busy: false, url: null, error, proc: null, cancelled: false });
     onDone(code === 0);
     onChange();
   });
@@ -60,7 +62,10 @@ export function login(id, onChange, onDone = () => {}) {
 }
 
 export function cancelLogin(id) {
-  state[id]?.proc?.kill("SIGTERM");
+  const s = state[id];
+  if (!s?.busy || !s.proc) return;
+  s.cancelled = true;
+  s.proc.kill("SIGTERM");
 }
 
 export async function logout(id) {
@@ -68,9 +73,9 @@ export async function logout(id) {
   await run(CLI[id].bin, CLI[id].logout, { timeout: 15000 }).catch(() => {});
 }
 
-// Strip the child-process handle before sending state to the browser.
+// Strip the child-process handle and the cancel flag before sending state to the browser.
 export function publicStatus(s) {
   const out = {};
-  for (const [k, v] of Object.entries(s)) { const { proc, ...rest } = v; out[k] = rest; }
+  for (const [k, v] of Object.entries(s)) { const { proc, cancelled, ...rest } = v; out[k] = rest; }
   return out;
 }
