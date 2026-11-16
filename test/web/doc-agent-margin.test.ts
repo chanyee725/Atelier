@@ -12,10 +12,11 @@ import {
   editSentence,
   formOf,
   formWithRail,
-  RAIL_W,
   dividerAt,
   shareAt,
   CANVAS_MIN,
+  DOC_SHARE,
+  RAIL_W,
   TEXT_MIN,
   freezePlace,
   IDLE_MS,
@@ -179,19 +180,22 @@ test('ago, stepOf, blocksOfJson, formOf, readCollapsed', () => {
     [{ type: 'heading', text: '가나', level: 2 }, { type: 'diagram', text: '' }, { type: 'bulletList', text: 'i' }],
   );
   assert.deepEqual(blocksOfJson(null), []);
-  // 문서 view: the column's own width.
-  const doc = (box: number) => ({ box, share: null, chrome: 0, panel: 304 });
+  // 문서 view: the column's own width; the text takes 6 of 10 parts beside the panel (E537, #654).
+  const doc = (box: number) => ({ box, share: null, chrome: 0, rail: false });
   assert.equal(formOf(doc(1336)), 'side');
-  assert.equal(formOf(doc(664)), 'side');
-  assert.equal(formOf(doc(663)), 'sheet');
+  assert.equal(formOf(doc(600)), 'side');
+  assert.equal(formOf(doc(599)), 'sheet');
   assert.equal(formOf(doc(390)), 'sheet');
-  // 둘 다 at a 1024px window: the split is 760px past the sidebar; side would leave 26px of text, so a sheet.
-  assert.equal(formOf({ box: 760, share: 0.45, chrome: 0, panel: 304 }), 'sheet');
-  // 1440px window, 50/50: 1176px split; the canvas keeps 430, the text 442 beside the panel.
-  assert.equal(formOf({ box: 1176, share: 0.5, chrome: 0, panel: 304 }), 'side');
+  // 둘 다 at a 1024px window: the split is 760px past the sidebar; the canvas keeps 430, leaving 198px of text: a sheet.
+  assert.equal(formOf({ box: 760, share: 0.45, chrome: 0, rail: false }), 'sheet');
+  // 1440px window, 50/50: 1176px split; the pane would be 980 (×5/3) but stops at 746 for the canvas; text 447.
+  assert.equal(formOf({ box: 1176, share: 0.5, chrome: 0, rail: false }), 'side');
+  assert.equal(dividerAt({ box: 1176, share: 0.5, chrome: 0, rail: false }), 746);
+  // 1600px wide, 35%: pane 1336*.35*5/3 = 779.3, text = 6/10 of it = the split share.
+  assert.ok(Math.abs(dividerAt({ box: 1336, share: 0.35, chrome: 0, rail: false }) - (1336 * 0.35) / 0.6) < 1e-6);
   // The rail (collapsed side panel) needs far less.
-  assert.equal(formOf({ box: 900, share: 0.5, chrome: 0, panel: 44 }), 'side');
-  assert.equal(formOf({ box: 900, share: 0.3, chrome: 0, panel: 44 }), 'sheet');
+  assert.equal(formOf({ box: 900, share: 0.5, chrome: 0, rail: true }), 'side');
+  assert.equal(formOf({ box: 900, share: 0.3, chrome: 0, rail: true }), 'sheet');
   assert.deepEqual(readCollapsed(null), { side: false, sheet: true });
   assert.deepEqual(readCollapsed('{"side":true}'), { side: true, sheet: true });
   assert.deepEqual(readCollapsed('{"side":"x","sheet":false}'), { side: false, sheet: false });
@@ -221,13 +225,42 @@ test('marginCard: the pipeline step and tool activity from the live list, model 
   assert.deepEqual([bare.model, bare.provider, bare.sub], [null, null, null], 'no live entry: no step, model or provider');
 });
 
+test('status line (#654): cursor event status first, then presence statusLabel, else worked out from the change kind', async () => {
+  const { marginCard, cardStatus } = await import('../../web/src/doc/agentMargin.ts');
+  const blocks: BlockInfo[] = [H('02. 화면 지도'), P('본문'), { type: 'diagram', text: '' }];
+  let m: MarginMap = new Map();
+  m = applyMarginEvent(m, ev({ index: 2, offset: 0 }), 0, 1);
+  const a = m.get('s1')!;
+  const live = { status: 'running', state: 'working', statusLabel: '코드 읽는 중…' };
+  assert.equal(marginCard(a, live, 100, blocks, '표 작성 중…').status, '표 작성 중…');
+  assert.equal(marginCard(a, live, 100, blocks).status, '코드 읽는 중…');
+  assert.equal(marginCard(a, { status: 'running' }, 100, blocks).status, '다이어그램 생각 중…');
+  assert.equal(marginCard(a, { status: 'running', state: 'waiting' }, 100_000, blocks).status, '대기 중');
+  assert.equal(cardStatus({ phase: 'thinking', kind: 'text' }), '글 작성 중…');
+  assert.equal(cardStatus({ phase: 'thinking', live: { status: 'idle' } }), '생각 중', 'not working: the phase label');
+});
+
+test('applyStatus (#654): cursor and cursor-status events keep the latest label; gone or null drops it', async () => {
+  const { applyStatus } = await import('../../web/src/doc/agentMargin.ts');
+  let s: ReadonlyMap<string, string> = new Map();
+  s = applyStatus(s, { sid: 's1', status: '글 작성 중…' });
+  assert.equal(s.get('s1'), '글 작성 중…');
+  assert.equal(applyStatus(s, { sid: 's1', status: '글 작성 중…' }), s, 'same label: same map');
+  assert.equal(applyStatus(s, { sid: 's1', file: 'a' }), s, 'no status field: unchanged');
+  assert.equal(applyStatus(s, { sid: 's1', status: null }).has('s1'), false);
+  assert.equal(applyStatus(s, { sid: 's1', gone: true }).has('s1'), false);
+});
+
 test('shareAt keeps the split divider under the pointer while the margin shows, and the text and canvas their minimums', () => {
   for (const room of [
-    { box: 1176, chrome: 0, panel: 304 },
-    { box: 1336, chrome: 12, panel: 264 },
-    { box: 760, chrome: 0, panel: 304 },
-    { box: 900, chrome: 0, panel: 44 },
+    { box: 1176, chrome: 0, rail: false },
+    { box: 1336, chrome: 12, rail: false },
+    { box: 1600, chrome: 0, rail: false },
+    { box: 760, chrome: 0, rail: false },
+    { box: 900, chrome: 0, rail: true },
   ]) {
+    // Across the jump from the widest sheet to the narrowest side layout the divider snaps, half that jump at most.
+    const gap = room.rail ? RAIL_W : TEXT_MIN / DOC_SHARE + room.chrome - (TEXT_MIN + DOC_SHARE * room.chrome);
     let last = -Infinity;
     for (let x = 0.2 * room.box; x <= 0.8 * room.box; x += 3) {
       const share = shareAt(room, x);
@@ -236,43 +269,69 @@ test('shareAt keeps the split divider under the pointer while the margin shows, 
       assert.ok(d >= last - 0.01, `the divider only moves with the pointer: ${JSON.stringify({ room, x, d, last })}`);
       last = d;
       const off = Math.abs(d - x);
-      // Under the pointer, except past the canvas minimum (it stops) or across the panel's own width (it snaps).
-      assert.ok(off < 0.01 || x > room.box - CANVAS_MIN || off <= room.panel / 2 + 0.5, `${JSON.stringify({ room, x, d })}`);
+      // Under the pointer, except past the canvas minimum (it stops) or across the panel's appearance (it snaps).
+      assert.ok(off < 0.01 || x > room.box - CANVAS_MIN || off <= gap / 2 + 0.5, `${JSON.stringify({ room, x, d })}`);
       if (formOf(r) === 'side') {
-        assert.ok(d - room.panel - room.chrome >= TEXT_MIN - 0.01, 'the text keeps its minimum');
+        const text = room.rail ? d - room.chrome - RAIL_W : (d - room.chrome) * DOC_SHARE;
+        assert.ok(text >= TEXT_MIN - 0.01, 'the text keeps its minimum');
         assert.ok(room.box - d >= CANVAS_MIN - 0.01, 'the canvas keeps its minimum');
       }
     }
   }
 });
 
+// #658: a drag that reaches the canvas minimum and comes back leaves the share it started with, so the pane is as
+// wide as before when the margin closes; the divider sits at the same place either way.
+test('shareAt keeps the starting share while the pane sits at the canvas minimum', () => {
+  const room = { box: 1300, chrome: 0, rail: false };
+  const start = 0.5; // 0.5 × 1300 / 0.6 > 1300 - 430: the side pane is clamped at the canvas minimum
+  for (const x of [room.box - CANVAS_MIN, room.box - CANVAS_MIN + 50, room.box - 20]) {
+    const share = shareAt(room, x, start);
+    assert.equal(share, start);
+    assert.equal(dividerAt({ ...room, share }), dividerAt({ ...room, share: shareAt(room, x) }));
+  }
+  // Below the minimum, or with a smaller starting share, the pointer decides as before.
+  assert.equal(shareAt(room, 700, start), shareAt(room, 700));
+  assert.equal(shareAt(room, room.box - 20, 0.3), shareAt(room, room.box - 20));
+  // The rail too.
+  const rail = { ...room, rail: true };
+  assert.equal(shareAt(rail, rail.box - 20, 0.75), 0.75);
+});
+
 // #643: DocMargin and the Splitter read the collapsed side panel from one place, the host's `data-side-rail`.
 test('measureRoom reads the rail from data-side-rail only', async () => {
   const { measureRoom } = await import('../../web/src/doc/marginRoom.ts');
-  const g = globalThis as { getComputedStyle?: unknown };
-  const saved = g.getComputedStyle;
-  g.getComputedStyle = () => ({ getPropertyValue: (n: string) => (n === '--doc-margin-w' ? '304px' : '') });
-  try {
-    const host = (rail: boolean) =>
+  const host = (rail: boolean) =>
       ({
         getBoundingClientRect: () => ({ width: 900 }),
         hasAttribute: (n: string) => rail && n === 'data-side-rail',
         closest: () => null,
       }) as unknown as HTMLElement;
-    assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, panel: 304 });
-    assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, panel: 44 });
-    // DocMargin measures the open panel whatever the attribute says (#648).
-    assert.deepEqual(measureRoom(host(true), false), { box: 900, share: null, chrome: 0, panel: 304 });
-  } finally {
-    g.getComputedStyle = saved;
-  }
+  assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, rail: false });
+  assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, rail: true });
+  // DocMargin measures the open panel whatever the attribute says (#648).
+  assert.deepEqual(measureRoom(host(true), false), { box: 900, share: null, chrome: 0, rail: false });
+});
+
+// E536 (#653): a live session's card stays past IDLE_MS until `gone`; another file lets it go.
+test('a live agent stays in the margin while its session works', () => {
+  let m = applyMarginEvent(new Map(), ev({ index: 0, offset: 0 }, { live: true }), 0, 1);
+  assert.equal(agentsOf(m, 'a.dpx.json', 10 * IDLE_MS).length, 1);
+  assert.equal(pruneIdle(m, 10 * IDLE_MS), m);
+  assert.equal(nextTurnAt(agentsOf(m, 'a.dpx.json', WRITING_MS + 1), WRITING_MS + 1), Infinity);
+  // Same stay after a long pause: the change list continues.
+  m = applyMarginEvent(m, ev({ index: 3, offset: 0 }, { live: true }), 5 * IDLE_MS, 2);
+  assert.equal(m.get('s1')!.edits.length, 2);
+  m = applyMarginEvent(m, ev(undefined, { file: 'b.dpx.json', live: true }), 6 * IDLE_MS, 3);
+  assert.equal(agentsOf(m, 'a.dpx.json', 7 * IDLE_MS).length, 0);
+  assert.equal(applyMarginEvent(m, { sid: 's1', gone: true } as never, 0, 4).size, 0);
 });
 
 // #648: the form counts the collapsed rail in the same render as the collapse, from the open panel's room.
 test('formWithRail: the rail fits where the open panel does not', () => {
-  const room = { box: TEXT_MIN + 200, share: null, chrome: 0, panel: 304 };
+  const room = { box: TEXT_MIN + 200, share: null, chrome: 0, rail: false };
   assert.equal(formWithRail(room, false), 'sheet');
   assert.equal(formWithRail(room, true), 'side');
   assert.equal(formWithRail({ ...room, box: TEXT_MIN + RAIL_W - 1 }, true), 'sheet');
-  assert.equal(formWithRail(room, true), formOf({ ...room, panel: RAIL_W }));
+  assert.equal(formWithRail(room, true), formOf({ ...room, rail: true }));
 });

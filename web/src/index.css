@@ -516,8 +516,14 @@ body {
   padding: 1px 7px; border-radius: 6px; background: var(--agent); color: #fff;
   font: 600 12px/16px var(--font-sans); box-shadow: var(--shadow-pop);
 }
+/* The status (E536) is one line: it truncates with an ellipsis rather than growing the tag over the drawing. */
+/* max-content: the tag sits in the 16px cursor box, whose width would otherwise squeeze the status. */
+.agent-cursor-tag { inline-size: max-content; max-inline-size: 240px; }
+.agent-cursor-name { flex: none; }
+.agent-cursor-status { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; opacity: 0.9; }
 .agent-cursor-dots { display: none; gap: 2px; }
-.agent-cursor[data-phase='thinking'] .agent-cursor-dots { display: inline-flex; }
+/* A live cursor sits on the page for minutes: with a status the dots stay off (no endless animation). */
+.agent-cursor[data-phase='thinking']:not([data-status]) .agent-cursor-dots { display: inline-flex; }
 .agent-cursor-dots span { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: 0.7; }
 @media (prefers-reduced-motion: no-preference) {
   .agent-cursor-dots span { animation: agent-think 1s ease-in-out infinite alternate; }
@@ -565,30 +571,30 @@ body {
 @keyframes live-row-enter { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .live-row-enter { animation-name: live-fade; animation-duration: 0.12s; } }
 
-/* E532 (#622): the document's agent margin. Wide: a sticky column beside the text (the text slides left, FLIP in
-   doc/DocMargin.tsx); narrow: a sticky bottom sheet under it. A flex sibling of the text, never over it. The panel
-   itself (cards, list) is margin-panel.css. Entry via @starting-style; exit via [data-closing], then unmounted.
-   In the 둘 다 view the document pane takes the panel's width from the canvas (:has below), so the text keeps its
-   column and the panel sits in a right margin of its own. */
-:root { --doc-margin-w: 304px; }
-@media (width < 1536px) { :root { --doc-margin-w: 264px; } }
+/* E532 (#622), E537 (#654): the document's agent margin. Wide: a sticky column beside the text, document 6 : panel 4
+   of the row (the text slides left, FLIP in doc/DocMargin.tsx); narrow: a sticky bottom sheet under it. A flex
+   sibling of the text, never over it. The panel itself (cards, list) is margin-panel.css. Entry via @starting-style;
+   exit via [data-closing], then unmounted. In the 둘 다 view the document pane widens by 5/3 (:has below) so the text
+   keeps its split share, up to the canvas minimum (doc/agentMargin.ts sidePane); collapsed, it widens by the rail. */
 .split-doc { width: var(--split); }
-.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted]) { width: min(calc(var(--split) + var(--doc-margin-w)), calc(100% - 430px)); }
+.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted]) { width: min(calc(var(--split) * 5 / 3), calc(100% - 430px)); }
 .split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted] > .doc-margin-aside[data-collapsed]) { width: min(calc(var(--split) + 44px), calc(100% - 430px)); }
 .doc-margin { display: flex; align-items: flex-start; min-height: 100%; }
 .doc-margin-main { flex: 1 1 auto; min-width: 0; }
+.doc-margin[data-form='side'][data-margin-mounted] > .doc-margin-main { flex: 6 1 0; }
 .doc-margin-aside {
-  flex: none; position: sticky; top: 0; width: var(--doc-margin-w); max-height: var(--doc-margin-view-h, 100dvh); overflow: auto; overscroll-behavior: contain;
+  flex: 4 1 0; min-width: 0; position: sticky; top: 0; max-height: var(--doc-margin-view-h, 100dvh); overflow: auto; overscroll-behavior: contain;
   border-inline-start: 1px solid var(--border); background: var(--background);
   opacity: 1; translate: 0;
-  transition: opacity 0.24s ease-out, translate 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: opacity 0.24s ease-out, translate 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), flex-grow 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.doc-margin-aside[data-collapsed] { width: 44px; }
+.doc-margin-aside[data-collapsed] { flex: none; width: 44px; }
+.doc-margin[data-form='side'] > .doc-margin-main:has(+ .doc-margin-aside[data-collapsed]) { flex: 1 1 auto; }
 @starting-style { .doc-margin-aside { opacity: 0; translate: 16px 0; } }
 .doc-margin-aside[data-closing] { opacity: 0; translate: 16px 0; }
 .doc-margin[data-form='sheet'] { flex-direction: column; align-items: stretch; }
 .doc-margin[data-form='sheet'] .doc-margin-aside {
-  top: auto; bottom: 0; width: auto; max-height: calc(var(--doc-margin-view-h, 100dvh) * 0.45);
+  flex: none; top: auto; bottom: 0; width: auto; max-height: calc(var(--doc-margin-view-h, 100dvh) * 0.45);
   border-inline-start: 0; border-top: 1px solid var(--border);
 }
 @starting-style { .doc-margin[data-form='sheet'] .doc-margin-aside { opacity: 0; translate: 0 16px; } }

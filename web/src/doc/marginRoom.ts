@@ -2,27 +2,25 @@
 // Splitter (keeping the divider under the pointer). Both read the same numbers, so they agree on the layout: the
 // collapsed side panel is read from the one place that says so, DocMargin's `data-side-rail` attribute (DocMargin
 // itself measures the open panel and counts the rail from its own state, so the form follows in the same render).
-import { RAIL_W, type MarginRoom } from './agentMargin.ts';
-
-const PANEL_W = 304;
+import type { MarginRoom } from './agentMargin.ts';
 
 /**
  * The room around a `.doc-margin` element. While DocMargin marks it `data-side-rail` (the side panel is collapsed),
- * the panel counts as the rail; `rail = false` measures the open panel whatever the attribute says. In the 둘 다 view the document pane is the closest `.split-doc` (its `--split` is the
+ * the panel is the rail; else it takes 4 of the row's 10 parts (E537, #654). `rail = false` measures the open panel
+ * whatever the attribute says. In the 둘 다 view the document pane is the closest `.split-doc` (its `--split` is the
  * share).
  */
 export function measureRoom(host: HTMLElement, rail = host.hasAttribute('data-side-rail')): MarginRoom {
   const own = host.getBoundingClientRect().width;
-  const panel = rail ? RAIL_W : parseFloat(getComputedStyle(host).getPropertyValue('--doc-margin-w')) || PANEL_W;
   const pane = host.closest<HTMLElement>('.split-doc');
   const split = pane?.parentElement;
-  if (!pane || !split) return { box: own, share: null, chrome: 0, panel };
+  if (!pane || !split) return { box: own, share: null, chrome: 0, rail };
   const share = parseFloat(pane.style.getPropertyValue('--split')) / 100;
   return {
     box: split.getBoundingClientRect().width,
     share: Number.isFinite(share) ? share : 0.5,
     chrome: Math.max(0, pane.getBoundingClientRect().width - own),
-    panel,
+    rail,
   };
 }
 

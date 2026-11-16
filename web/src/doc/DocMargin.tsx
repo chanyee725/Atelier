@@ -85,9 +85,9 @@ export function DocMargin({ file, children }: Props) {
     if (!el) return;
     const scroller = scrollerOf(el);
     const update = () => {
-      // The open panel's width: useAgentMargin counts a collapsed side panel as its rail in the same render.
+      // The open panel's room: useAgentMargin counts a collapsed side panel as its rail in the same render.
       const next = measureRoom(el, false);
-      setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.panel === next.panel ? old : next));
+      setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.rail === next.rail ? old : next));
       lefts.current = measure();
       if (scroller) el.style.setProperty('--doc-margin-view-h', `${scroller.clientHeight}px`);
     };

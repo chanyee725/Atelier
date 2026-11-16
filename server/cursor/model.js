@@ -12,12 +12,28 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFe
  */
 export function mentionsFile(entry, rel) {
   if (!entry || entry.kind !== 'tool' || typeof entry.text !== 'string' || READ_TOOLS.has(entry.name)) return false;
-  for (const needle of new Set([rel, encodeURIComponent(rel)])) {
-    let i = entry.text.indexOf(needle);
+  return textMentions(entry.text, rel);
+}
+
+const EXT = '.dpx.json';
+/**
+ * Whether `text` names workspace file `rel` on a path boundary: as written, URL-encoded, partly encoded (Python's
+ * quote() keeps "/"), each also without the `.dpx.json` the API adds itself (`/api/file?path=analysis/robot`, #653).
+ */
+export function textMentions(text, rel) {
+  if (typeof text !== 'string' || !rel) return false;
+  const enc = encodeURIComponent(rel);
+  const forms = [rel, enc, enc.replace(/%2F/gi, '/')];
+  const bare = rel.endsWith(EXT) ? forms.map((f) => f.slice(0, -EXT.length)) : [];
+  for (const needle of new Set([...forms, ...bare])) {
+    // Without the extension the name must end there too ("robot" is not "robot2" or "robot.md").
+    const open = bare.includes(needle) && !forms.includes(needle);
+    let i = text.indexOf(needle);
     while (i !== -1) {
-      const before = i === 0 ? '' : entry.text[i - 1];
-      if (before === '' || /[\s/"'=:]/.test(before)) return true;
-      i = entry.text.indexOf(needle, i + 1);
+      const before = i === 0 ? '' : text[i - 1];
+      const after = text.slice(i + needle.length, i + needle.length + EXT.length);
+      if ((before === '' || /[\s/"'=:]/.test(before)) && (!open || after === EXT || !/^[\w\-.%/]/.test(after))) return true;
+      i = text.indexOf(needle, i + 1);
     }
   }
   return false;
@@ -134,4 +150,19 @@ export function changedDocSpot(before = [], after = []) {
   let s = 0;
   while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
   return { index, offset: a.length - s };
+}
+
+/**
+ * The section a document change landed in (E537, #654): the text of the nearest non-empty heading at or above block
+ * `index` in `blocks` (docBlocksOf), clipped to 60 characters; null above the first heading or without a place.
+ */
+export function sectionAt(blocks = [], index) {
+  if (!Number.isInteger(index) || index < 0) return null;
+  for (let i = Math.min(index, blocks.length - 1); i >= 0; i--) {
+    const b = blocks[i];
+    if (b?.type !== 'heading') continue;
+    const t = String(b.text ?? '').replace(/\s+/g, ' ').trim();
+    if (t) return [...t].slice(0, 60).join('');
+  }
+  return null;
 }

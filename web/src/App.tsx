@@ -10,6 +10,7 @@ import { CHORD_MS, chord, folderPrefix } from './home/model';
 import { Alert } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
+import { ActivityAlerts } from './activity/ActivityAlerts';
 import { asTreeNode, docPlace, newFileDir, paletteScope, shellKey, subFolderOf, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
@@ -24,9 +25,9 @@ import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
 import { RunStrip } from './run/RunStrip';
 import { onRunEvent, reloadRun, watchRun } from './run/runData';
-import { applyCursorEvent, clearCursors } from './canvas/cursorStore';
-import { applyDocCursorEvent, clearDocCursors } from './doc/docCursorStore';
-import type { CursorEvent } from './canvas/agentCursor';
+import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from './canvas/cursorStore';
+import { applyDocCursorEvent, applyDocCursorStatusEvent, clearDocCursors } from './doc/docCursorStore';
+import type { CursorEvent, CursorStatusEvent } from './canvas/agentCursor';
 import type { RunEvent } from './run/runModel';
 // The run view (E22) loads when it is first shown.
 const RunView = lazy(() => import('./run/RunView'));
@@ -45,7 +46,7 @@ import { HistoryDialog } from './HistoryDialog';
 import { TrashDialog } from './TrashDialog';
 import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
-import { displayName } from './Sidebar';
+import { displayName } from './docTitles';
 import {
   ArrowUpRight, Circle, Clock, Columns2, Copy, CopyPlus, Delete, Diamond, Eraser, File, FilePlus, FileText, Hand, ImageDown, Layers, FolderClosed,
   Maximize, Minus, Moon, MousePointer2, Move, PanelLeft, PanelRight, Pencil, Redo2, RotateCcw, Scan, Shapes, Square,
@@ -445,7 +446,13 @@ export function App() {
       applyCursorEvent(e);
       applyDocCursorEvent(e);
     });
-    // Events missed while the stream was down: read the run again. Cursors from before the gap are stale.
+    // A session's status label changed (E536): the tag text only, the cursor stays where it is.
+    const offStatus = events.subscribeJson<CursorStatusEvent>('cursor-status', (e) => {
+      applyCursorStatusEvent(e);
+      applyDocCursorStatusEvent(e);
+    });
+    // Events missed while the stream was down: read the run again. Cursors from before the gap are stale; the server
+    // sends the cursors of sessions still at work to the new connection (live cursors only leave on `gone`).
     const offOpen = events.onConnection((online) => {
       if (!online) return;
       clearCursors();
@@ -456,6 +463,7 @@ export function App() {
       offWorkspace();
       offRun();
       offCursor();
+      offStatus();
       offOpen();
     };
   }, [session, load, refreshTree]);
@@ -841,6 +849,7 @@ export function App() {
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
+        <ActivityAlerts onOpen={openFile} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}

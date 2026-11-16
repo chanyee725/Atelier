@@ -6,6 +6,7 @@ import * as dispatch from './dispatch/index.js';
 import * as pipeline from './pipeline/index.js';
 import * as cursor from './cursor/index.js';
 import * as agents from './cursor/agents.js';
+import * as activity from './cursor/activity.js';
 import * as code from './code/index.js';
 
 export const modules = [
@@ -20,6 +21,8 @@ export const modules = [
   { name: 'cursor', setup: cursor.setup },
   // Live agent list (E528): who works in which project and the file each one holds, GET + `agents` SSE (memory only).
   { name: 'agents', setup: agents.setup },
+  // Agent activity log (E537): start / progress / finish / error events, GET + `activity` SSE, .drawing/activity.json.
+  { name: 'activity', setup: activity.setup },
   // Read-only code window for feature-linked nodes (E504b): GET /api/code in the git project holding the workspace.
   { name: 'code', setup: code.setup },
 ];

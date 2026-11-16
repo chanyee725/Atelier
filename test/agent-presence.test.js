@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildAgents, cleanSessionLabel, LABEL_MAX, projectOf } from '../server/cursor/presence.js';
+import { buildAgents, cleanSessionLabel, LABEL_MAX, projectOf, sessionIdOf } from '../server/cursor/presence.js';
 import * as cursor from '../server/cursor/index.js';
 import * as agents from '../server/cursor/agents.js';
 import * as workspace from '../server/workspace/index.js';
@@ -13,6 +13,11 @@ import { createApp } from '../server/app.js';
 import { newFile } from '../server/workspace/model.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('sessionIdOf: a session id from DRAWING_SESSION only (#656)', () => {
+  assert.equal(sessionIdOf(' 1A2B3C4D-0000-4000-8000-00000000abcd '), '1a2b3c4d-0000-4000-8000-00000000abcd');
+  for (const v of ['Otto', '', undefined, ['x'], '1a2b3c4d-0000-4000-8000-00000000abcdx', '1a2b3c4d00004000800000000000abcd']) assert.equal(sessionIdOf(v), null);
+});
 
 test('cleanSessionLabel: short plain text only', () => {
   assert.equal(cleanSessionLabel('Otto'), 'Otto');
@@ -89,6 +94,30 @@ test('agents module: activity follows the hub session events and clears between 
   r.ctx.modules.cursor.close();
 });
 
+test('buildAgents: statusLabel from the cursor module status (#654), absent when null', () => {
+  const sessions = [{ id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' }, { id: 's2', name: 'Cal', role: 'lead', model: 'm', status: 'running' }];
+  const statusOf = (sid) => (sid === 's1' ? '다이어그램 작성 중…' : null);
+  const [a, b] = buildAgents({ sessions, statusOf }).sort((x, y) => x.sid.localeCompare(y.sid));
+  assert.equal(a.statusLabel, '다이어그램 작성 중…');
+  assert.equal('statusLabel' in b, false);
+});
+
+test('agents module: statusLabel follows cursor.onStatus', async () => {
+  const r = rig();
+  let label = null;
+  const fns = new Set();
+  r.ctx.modules.cursor = { onHeld: () => () => {}, statusOf: () => label, onStatus: (fn) => (fns.add(fn), () => fns.delete(fn)) };
+  const m = await agents.setup(r.ctx);
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' };
+  r.hub.emit('session', r.hub.sessions.s1);
+  assert.equal('statusLabel' in m.list()[0], false);
+  label = '글 작성 중…';
+  for (const fn of fns) fn({ sid: 's1', status: label });
+  assert.equal(r.sent.filter((s) => s.event === 'agents').at(-1).data.agents[0].statusLabel, '글 작성 중…');
+  m.close();
+  assert.equal(fns.size, 0, 'close unsubscribes');
+});
+
 test('buildAgents: the pipeline step title, trimmed and capped', () => {
   const sessions = [{ id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' }, { id: 's2', name: 'Cal', role: 'lead', model: 'm', status: 'running' }];
   const stepOf = (s) => (s.id === 's1' ? '  화면 지도 그리기 ' : '   ');
@@ -159,7 +188,7 @@ test('agents module: the list follows edits, sessions and named outside writers'
 
   // First snapshot on connect.
   const got = [];
-  await r.attachers[0]((ev, data) => got.push({ ev, data }));
+  for (const fn of r.attachers) await fn((ev, data) => got.push({ ev, data }));
   assert.deepEqual(got, [{ ev: 'agents', data: { agents: [] } }]);
 
   r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running', state: 'working', folder: 'P' };
@@ -172,7 +201,8 @@ test('agents module: the list follows edits, sessions and named outside writers'
   await r.change('P/a.dpx.json', rect('r', 50));
   assert.deepEqual(lists().at(-1).map((a) => [a.name, a.file]), [['Otto', 'P/a.dpx.json']]);
 
-  // A repeated session update with nothing new is not sent again.
+  // A repeated session update with nothing new is not sent again (the first one may bring the status label up to date).
+  r.hub.emit('session', r.hub.sessions.s1);
   const n = lists().length;
   r.hub.emit('session', r.hub.sessions.s1);
   assert.equal(lists().length, n);
@@ -186,8 +216,12 @@ test('agents module: the list follows edits, sessions and named outside writers'
   assert.deepEqual(m.list('P').map((a) => a.name).sort(), ['Ext', 'Otto']);
   assert.deepEqual(m.list('Q'), []);
 
-  // An unnamed outside write keeps the generic cursor and is not listed.
+  // An unnamed outside write of the file a named writer just wrote keeps that name (#653); of another file it gets
+  // the generic cursor and is not listed.
   await r.change('P/b.dpx.json', rect('q', 90));
+  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, 'Ext');
+  r.files.set('P/c.dpx.json', rect('z', 0));
+  await r.change('P/c.dpx.json', rect('z', 40));
   assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, '에이전트');
   assert.equal(m.list().length, 2);
 
@@ -246,8 +280,28 @@ test('x-drawing-session over HTTP: cleaned label on the cursor and in GET /api/w
     f.canvas.elements = [{ id: 'r', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }];
     res = await fetch(`${base}/api/file?path=${path}`, { method: 'PUT', headers: h, body: JSON.stringify({ ...f, revision }) });
     assert.equal(res.status, 200);
+    let rev = (await res.json()).revision;
     await sleep(50);
-    const cur = seen.filter((s) => s.ev === 'cursor').at(-1)?.data;
+    const lastCursor = () => seen.filter((s) => s.ev === 'cursor').at(-1)?.data;
+    assert.equal(lastCursor()?.name, 'bNova/b');
+    // Writes with no x-drawing-session (#656): the same file within two minutes keeps the name; another file is
+    // the generic agent.
+    const plain = { 'x-drawing': '1', 'content-type': 'application/json' };
+    f.canvas.elements[0].x = 40;
+    res = await fetch(`${base}/api/file?path=${path}`, { method: 'PUT', headers: plain, body: JSON.stringify({ ...f, revision: rev }) });
+    assert.equal(res.status, 200);
+    rev = (await res.json()).revision;
+    await sleep(50);
+    assert.equal(lastCursor()?.name, 'bNova/b');
+    const g = newFile();
+    res = await fetch(`${base}/api/file`, { method: 'POST', headers: plain, body: JSON.stringify({ ...g, path: 'Proj/b.dpx.json' }) });
+    assert.equal(res.status, 201);
+    g.canvas.elements = [{ id: 'q', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }];
+    res = await fetch(`${base}/api/file?path=${encodeURIComponent('Proj/b.dpx.json')}`, { method: 'PUT', headers: plain, body: JSON.stringify({ ...g, revision: (await res.json()).revision }) });
+    assert.equal(res.status, 200);
+    await sleep(50);
+    assert.deepEqual([lastCursor()?.name, lastCursor()?.file], ['에이전트', 'Proj/b.dpx.json']);
+    const cur = seen.filter((s) => s.ev === 'cursor' && s.data.file === 'Proj/a.dpx.json').at(-1)?.data;
     assert.equal(cur?.name, 'bNova/b');
     const body = await (await fetch(`${base}/api/workspace/agents?project=Proj`)).json();
     assert.deepEqual(body.agents.map((a) => [a.name, a.file, a.outside]), [['bNova/b', 'Proj/a.dpx.json', true]]);

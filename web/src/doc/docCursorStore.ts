@@ -1,7 +1,7 @@
 // Live agent cursors in the document (E529) for the whole page, fed by the same `cursor` events as the canvas
 // cursors (canvas/cursorStore.ts). Memory only.
 import { useSyncExternalStore } from 'react';
-import type { CursorEvent } from '../canvas/agentCursor.ts';
+import { applyStatus, type CursorEvent, type CursorStatusEvent } from '../canvas/agentCursor.ts';
 import { now } from '../canvas/cursorStore.ts';
 import { applyDocCursor, pruneDocGone, type DocCursor } from './docCursor.ts';
 
@@ -23,6 +23,11 @@ export function applyDocCursorEvent(e: CursorEvent) {
   // Pruned here too: the layer prunes only while its file is open, so cursors of other files would linger.
   const t = now();
   set(pruneDocGone(applyDocCursor(cursors, e, t), t));
+}
+
+/** One `cursor-status` event: the status label changes, the place and phase stay (E536). */
+export function applyDocCursorStatusEvent(e: CursorStatusEvent) {
+  set(applyStatus(cursors, e));
 }
 
 /** Drop cursors that have faded out. */

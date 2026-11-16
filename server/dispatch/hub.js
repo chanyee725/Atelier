@@ -7,7 +7,7 @@ import { ownGitEnv, spawnCli } from "./cli.js";
 import { redact, redactDeep } from "./redact.js";
 import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
-import { CHILD_PROMPT, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
+import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
 import { replyStyle } from "./style.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
@@ -63,7 +63,9 @@ const RESUME_TEXT = "[Dispatch] 서버가 재시작되어 직전 턴이 중간�
 // Browser tools in team sessions run headless, each in its own throwaway profile, so checks never pop
 // windows on the user's screen or steer another session's tab. A session can still opt out via its own env.
 const SESSION_ENV = { PLAYWRIGHT_MCP_HEADLESS: "true", PLAYWRIGHT_MCP_ISOLATED: "true" };
-const sessionEnv = () => ({ ...SESSION_ENV, ...ownGitEnv() });
+// DRAWING_SESSION: the session's id, sent back as `x-drawing-session` on its workspace API writes so its cursor is
+// credited for certain, not guessed (#656).
+const sessionEnv = s => ({ ...SESSION_ENV, ...ownGitEnv(), DRAWING_SESSION: s.id });
 const isOpenStatus = st => !["done", "error"].includes(st);
 const clip = (s, n = 2000) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
 
@@ -1088,7 +1090,7 @@ export class Hub extends EventEmitter {
       : "";
     // The role prompt is not saved (state.json keeps metadata only): after a restart it comes from the role.
     const prompt = s.prompt ?? effectiveRoles(this.roles, this.store, this.models).find(r => r.id === s.role)?.prompt;
-    return [prompt, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
+    return [prompt, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
   start(s, prompt) {
@@ -1154,7 +1156,7 @@ export class Hub extends EventEmitter {
       command: process.execPath, args: [MCP_SCRIPT], env: this.mcpEnv(s) } } }),
       "--allowedTools", "mcp__dispatch");
     // DISPATCH_URL / DISPATCH_SESSION let the plugin's length hook (hooks/long-session.mjs) find this session.
-    const proc = this.spawnCli("claude", args, { cwd: s.cwd, env: { ...sessionEnv(), DISPATCH_URL: `http://127.0.0.1:${this.port}`, DISPATCH_SESSION: s.id }, stdio: ["pipe", "pipe", "pipe"] });
+    const proc = this.spawnCli("claude", args, { cwd: s.cwd, env: { ...sessionEnv(s), DISPATCH_URL: `http://127.0.0.1:${this.port}`, DISPATCH_SESSION: s.id }, stdio: ["pipe", "pipe", "pipe"] });
     s._costBase = s.cost;
     this.attach(s, proc);
     onJsonLines(proc.stdout, m => this.onClaude(s, m));
@@ -1262,7 +1264,7 @@ export class Hub extends EventEmitter {
     // Codex has no system-prompt flag in exec mode, so the role prompt leads the first turn.
     const system = this.systemPrompt(s);
     args.push(first && system ? `[역할]\n${system}\n\n[작업]\n${prompt}` : prompt);
-    const proc = this.spawnCli("codex", args, { cwd: s.cwd, env: sessionEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    const proc = this.spawnCli("codex", args, { cwd: s.cwd, env: sessionEnv(s), stdio: ["ignore", "pipe", "pipe"] });
     this.attach(s, proc);
     onJsonLines(proc.stdout, m => this.onCodex(s, m));
     this.touch(s, { status: "running", error: null });
@@ -1325,7 +1327,7 @@ export class Hub extends EventEmitter {
     if (s.effort) args.push("--effort", s.effort);
     if (s.providerSessionId) args.push("--conversation", s.providerSessionId);
     // Same environment as Claude/Codex (headless Playwright, own git env), plus the MCP variables.
-    const env = { ...sessionEnv(), ...this.mcpEnv(s) };
+    const env = { ...sessionEnv(s), ...this.mcpEnv(s) };
     const proc = this.spawnCli("agy", args, { cwd: s.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     this.attach(s, proc);
     onJsonLines(proc.stdout, m => this.onGemini(s, m));

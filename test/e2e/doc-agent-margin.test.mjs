@@ -1,6 +1,6 @@
 // Headless check of the document agent margin (E532, #622): a fake Claude session writes a document in steps; the
 // margin opens beside the text (the document shifts left), its card names the session and says what it is doing,
-// the line follows the next edit, a recent change jumps to its block, and the margin closes after the agent idles.
+// the line follows the next edit, a recent change jumps to its block, the margin stays while the session works (E536, #653) and closes when it ends.
 // The user's caret and focus stay where they were the whole time.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_SHOTS=<dir> also saves light/dark x desktop/narrow screenshots there.
@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fakeCliBin } from '../fixtures/fake-cli/index.mjs';
 import { which } from '../../server/dispatch/cli.js';
-import { CANVAS_MIN, TEXT_MIN } from '../../web/src/doc/agentMargin.ts';
+import { CANVAS_MIN, DOC_SHARE, TEXT_MIN } from '../../web/src/doc/agentMargin.ts';
 
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const SHOTS = process.env.DRAW_SHOTS;
@@ -34,7 +34,7 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('doc agent margin (둘 다, the default view): opens beside the text while a fake session writes, follows its edits, closes after idle', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'both'));
+test('doc agent margin (둘 다, the default view): opens beside the text while a fake session writes, follows its edits, closes when the session ends', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'both'));
 
 test('doc agent margin (문서 view): the same with the document alone', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'doc'));
 
@@ -71,7 +71,7 @@ async function run(t, view) {
     { $sleep: 300 },
     { $write: { file: abs, text: fileWith(step2, 60) } },
     result(2),
-    { $waitFor: gate(3) }, // the margin closed after idle
+    { $waitFor: gate(3) }, // the margin stayed past the idle time
     { type: 'assistant', message: { id: 'm9', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     { type: 'result', subtype: 'success', total_cost_usd: 0.001 },
   ];
@@ -157,8 +157,8 @@ async function run(t, view) {
   assert.ok(name);
   release(1);
 
-  // 1. The margin opens beside the text and the card names the session. 문서: the text column shifts left. 둘 다: the
-  // document pane takes the panel's width from the canvas, so the text stays where it was.
+  // 1. The margin opens beside the text and the card names the session; text and panel split the row 6:4 (E537).
+  // 문서: the text column shifts left. 둘 다: the document pane widens (×5/3, up to the canvas minimum) into the canvas.
   const panel = page.locator('[data-margin-panel]');
   await panel.waitFor({ timeout: 15_000 });
   assert.equal(await panel.getAttribute('data-form'), 'side');
@@ -171,11 +171,15 @@ async function run(t, view) {
   const x1 = await textX();
   if (view === 'doc') assert.ok(x1 < x0 - 20, `the text moved left: ${x0} → ${x1}`);
   else {
-    assert.ok(Math.abs(x1 - x0) <= 6, `the text kept its place: ${x0} → ${x1}`);
     const w1 = await widths();
-    assert.ok(w1.pane - w0.pane > 200 && w1.pane - w0.pane < 320, `the document pane widened by the panel: ${JSON.stringify([w0, w1])}`);
-    assert.ok(w0.canvas - w1.canvas > 200, `the canvas gave the room: ${JSON.stringify([w0, w1])}`);
+    assert.ok(w1.pane - w0.pane > 200, `the document pane widened by the panel: ${JSON.stringify([w0, w1])}`);
+    assert.ok(w0.canvas - w1.canvas > 200 && w1.canvas >= 420, `the canvas gave the room, down to its minimum (less the divider): ${JSON.stringify([w0, w1])}`);
   }
+  const row = await page.evaluate(() => {
+    const w = (sel) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0;
+    return { host: w('.doc-margin'), main: w('.doc-margin-main'), aside: w('.doc-margin-aside') };
+  });
+  assert.ok(Math.abs(row.main - row.host * 0.6) <= 2 && Math.abs(row.aside - row.host * 0.4) <= 2, `text and panel split 6:4: ${JSON.stringify(row)}`);
   // The panel never covers the text.
   const [pb, ib] = await Promise.all([panel.boundingBox(), intro.boundingBox()]);
   assert.ok(ib.x + ib.width <= pb.x + 1, `text ${JSON.stringify(ib)} clear of panel ${JSON.stringify(pb)}`);
@@ -223,7 +227,7 @@ async function run(t, view) {
       await page.waitForTimeout(400);
       const l = await layout();
       if (l.form === 'side') {
-        assert.ok(l.main >= TEXT_MIN, `${w}px: the text keeps ${TEXT_MIN}px beside the panel: ${JSON.stringify(l)}`);
+        assert.ok(l.main >= TEXT_MIN, `${w}px: the text keeps TEXT_MIN beside the panel: ${JSON.stringify(l)}`);
         assert.ok(l.canvas >= CANVAS_MIN - 10, `${w}px: the canvas keeps its room: ${JSON.stringify(l)}`);
       } else assert.ok(l.main >= l.host - 1, `${w}px: the sheet leaves the text its whole column: ${JSON.stringify(l)}`);
       if (w <= 1100) assert.equal(l.form, 'sheet', `${w}px: no room beside the text, a sheet: ${JSON.stringify(l)}`);
@@ -248,19 +252,18 @@ async function run(t, view) {
     await page.mouse.up();
     await page.waitForTimeout(300);
 
-    // 4c. Across the side↔sheet boundary (#643): the text needs TEXT_MIN, so the widest sheet puts the divider at
-    // edge = split left + TEXT_MIN + chrome and the narrowest side layout at edge + panel. Outside that gap the divider
-    // stays under the pointer; inside it no share fits, so it snaps to the nearer end (off by at most half the panel)
-    // and the form matches the end it took.
-    const bounds = await page.evaluate((textMin) => {
+    // 4c. Across the side↔sheet boundary (#643): the text needs TEXT_MIN (360px), so the widest sheet puts the divider
+    // at edge = split left + TEXT_MIN + DOC_SHARE × chrome and the narrowest side layout (text DOC_SHARE of the row) at
+    // split left + TEXT_MIN / DOC_SHARE + chrome = edge + pw. Outside that gap the divider stays under the pointer;
+    // inside it no share fits, so it snaps to the nearer end (off by at most half the gap) and the form matches the
+    // end it took. TEXT_MIN and DOC_SHARE come from web/src/doc/agentMargin.ts, so the test follows them.
+    const bounds = await page.evaluate(({ min, share }) => {
       const host = document.querySelector('.doc-margin');
       const pane = document.querySelector('.split-doc');
       const split = pane.parentElement.getBoundingClientRect();
       const chrome = Math.max(0, pane.getBoundingClientRect().width - host.getBoundingClientRect().width);
-      const panel = parseFloat(getComputedStyle(host).getPropertyValue('--doc-margin-w'));
-      return { edge: split.left + textMin + chrome, panel };
-    }, TEXT_MIN);
-    assert.ok(bounds.panel > 0, `the panel's width is set: ${JSON.stringify(bounds)}`);
+      return { edge: split.left + min + share * chrome, panel: min / share - min + (1 - share) * chrome };
+    }, { min: TEXT_MIN, share: DOC_SHARE });
     const at = await page.evaluate(() => { const r = document.querySelector('.split-doc').nextElementSibling.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
     await page.mouse.move(at.x, at.y);
     await page.mouse.down();
@@ -348,6 +351,45 @@ async function run(t, view) {
     assert.deepEqual(await caret(), mine);
   }
 
+  // 4d. 문서 view (#648): the collapsed rail takes far less room than the open panel, so a narrow column holds the
+  // rail beside the text but not the panel. Opening the rail there measures again at once: the form turns to sheet.
+  if (view === 'doc') {
+    const state = () => page.evaluate(() => {
+      const host = document.querySelector('.doc-margin');
+      return { form: host?.getAttribute('data-form'), rail: host?.hasAttribute('data-side-rail') ?? false };
+    });
+    await panel.locator('.margin-toggle').click();
+    await panel.locator('.margin-rail').waitFor();
+    assert.deepEqual(await state(), { form: 'side', rail: true });
+    // The narrowest window that still keeps the rail beside the text.
+    let narrowest = null;
+    for (let w = 1600; w >= 400; w -= 20) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.waitForTimeout(150);
+      if ((await state()).form !== 'side') break;
+      narrowest = w;
+    }
+    assert.ok(narrowest && narrowest > 400, `the rail gives way to the sheet somewhere above 400px: ${narrowest}`);
+    await page.setViewportSize({ width: narrowest, height: 900 });
+    await page.waitForTimeout(300);
+    assert.deepEqual(await state(), { form: 'side', rail: true }, `${narrowest}px with the rail`);
+    const room = await page.evaluate(() => {
+      const host = document.querySelector('.doc-margin');
+      return host.getBoundingClientRect().width;
+    });
+    await panel.locator('.margin-rail').click();
+    await page.waitForFunction(() => document.querySelector('.doc-margin')?.getAttribute('data-form') === 'sheet', null, { timeout: 5_000 });
+    assert.deepEqual(await state(), { form: 'sheet', rail: false }, `${narrowest}px with the panel open (row ${room}px)`);
+    const l = await page.evaluate(() => ({ host: document.querySelector('.doc-margin').getBoundingClientRect().width, main: document.querySelector('.doc-margin-main').getBoundingClientRect().width }));
+    assert.ok(l.main >= l.host - 1, `the sheet leaves the text its whole column: ${JSON.stringify(l)}`);
+    // Wide again: the open panel goes back beside the text.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForFunction(() => document.querySelector('.doc-margin')?.getAttribute('data-form') === 'side', null, { timeout: 5_000 });
+    assert.deepEqual(await state(), { form: 'side', rail: false });
+    await placeCaret();
+    assert.deepEqual(await caret(), mine);
+  }
+
   // Screenshots in the default view: 1600 and 1440 wide (side panel), 700 (bottom sheet, under 768), light and dark.
   if (SHOTS && view === 'both') {
     const shot = (n) => page.screenshot({ path: join(SHOTS, `doc-margin-${n}.png`) });
@@ -380,18 +422,23 @@ async function run(t, view) {
   }
   if (await panel.count()) assert.equal(await panel.getAttribute('data-form'), 'side');
 
-  // 5. No more edits: after the idle time the margin closes and the text moves back.
-  await panel.waitFor({ state: 'detached', timeout: 40_000 }).catch(async () => {
-    assert.ok(!(await panel.isVisible()), 'the margin closed after idle');
+  // 5. No more edits: the session still works, so its card stays past the idle time (IDLE_MS = 20 s, E536). When the
+  // session ends the margin closes and the text moves back.
+  const shown = await panel.isVisible();
+  await page.waitForTimeout(22_000);
+  if (shown) assert.ok(await panel.isVisible(), 'the margin stayed while the session works');
+  release(3);
+  await panel.waitFor({ state: 'detached', timeout: 20_000 }).catch(async () => {
+    assert.ok(!(await panel.isVisible()), 'the margin closed when the session ended');
   });
   await page.waitForTimeout(500);
   const x2 = await textX();
-  assert.ok(Math.abs(x2 - x0) <= 2, `the text came back: ${x0} → ${x2}`);
+  // The drags above end at the canvas minimum, which keeps the share they started with (#658): back where it was.
+  assert.ok(Math.abs(x2 - x0) <= 2 && (await page.locator('.doc-margin-aside').count()) === 0, `the text came back: ${x0} → ${x2}`);
   if (view === 'both') {
     const w2 = await widths();
     assert.ok(Math.abs(w2.pane - w0.pane) <= 2 && Math.abs(w2.canvas - w0.canvas) <= 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
   }
-  release(3);
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);
 }

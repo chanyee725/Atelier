@@ -1,7 +1,7 @@
 // E56 live agent cursor: position and interpolation model.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCursor, easeOut, nextPhaseAt, FADE_AFTER_MS, FADE_MS, MOVE_MS, moving, phaseOf, positionAt, pruneGone, THINK_MS, toScreen, type Cursor } from '../../web/src/canvas/agentCursor.ts';
+import { applyCursor, applyStatus, easeOut, nextPhaseAt, FADE_AFTER_MS, FADE_MS, MOVE_MS, moving, phaseOf, positionAt, pruneGone, THINK_MS, toScreen, type Cursor } from '../../web/src/canvas/agentCursor.ts';
 
 const ev = (x?: number, y?: number, extra = {}) => ({ sid: 's1', name: 'Remy', role: 'impl', file: 'a.dpx.json', ...(x === undefined ? {} : { x, y }), ...extra });
 
@@ -146,4 +146,43 @@ test('an event without a place after a landed glide does not restart the glide (
   // A new place still glides on from where it was drawn.
   m = applyCursorDrawn(m, clocks, ev(0, 600), t + 20, false);
   assert.deepEqual(m.get('s1')!.from, { x: 0, y: 300 });
+});
+
+// E536 (#653): a live session's cursor stays put between edits, carries a status, and leaves only on `gone`.
+test('a live cursor thinks but never fades; gone removes it', () => {
+  const m = applyCursor(new Map(), ev(10, 10, { live: true, status: '다이어그램 작성 중…' }), 0, false);
+  const c = m.get('s1')!;
+  assert.equal(c.live, true);
+  assert.equal(c.status, '다이어그램 작성 중…');
+  assert.equal(phaseOf(c, THINK_MS + 1), 'thinking');
+  assert.equal(phaseOf(c, 10 * 60_000), 'thinking');
+  assert.equal(nextPhaseAt(c, THINK_MS + 1), Infinity);
+  assert.equal(pruneGone(m, 10 * 60_000), m);
+  assert.equal(applyCursor(m, { sid: 's1', gone: true }, 10 * 60_000, false).size, 0);
+});
+
+test('cursor-status changes only the label; the place and the phase stay', () => {
+  const m = applyCursor(new Map(), ev(10, 10, { live: true, status: '글 작성 중…' }), 0, false);
+  const next = applyStatus(m, { sid: 's1', status: '코드 읽는 중…' });
+  const c = next.get('s1')!;
+  assert.equal(c.status, '코드 읽는 중…');
+  assert.equal(c.editAt, 0);
+  assert.equal(c.moveAt, m.get('s1')!.moveAt);
+  assert.equal(applyStatus(next, { sid: 's1', status: '코드 읽는 중…' }), next, 'same label: same map');
+  assert.equal(applyStatus(next, { sid: 'other', status: 'x' }), next, 'unknown session: nothing');
+  assert.equal(applyStatus(next, { sid: 's1', status: null }).get('s1')!.status, '');
+  // An edit event without a status keeps the label; one with a status replaces it.
+  assert.equal(applyCursor(next, ev(20, 20), 100, false).get('s1')!.status, '코드 읽는 중…');
+  assert.equal(applyCursor(next, ev(20, 20, { status: '표 작성 중…' }), 100, false).get('s1')!.status, '표 작성 중…');
+});
+
+test('a live cursor left behind (another file, or a doc-only edit) stops being live and fades', () => {
+  const m = applyCursor(new Map(), ev(10, 10, { live: true }), 0, false);
+  const other = applyCursor(m, { sid: 's1', file: 'b.dpx.json', live: true }, 60_000, false).get('s1')!;
+  assert.equal(other.live, false);
+  assert.equal(phaseOf(other, 60_000), 'fading');
+  assert.equal(phaseOf(other, 60_000 + FADE_MS), 'gone');
+  const docOnly = applyCursor(m, { ...ev(), doc: { index: 0, offset: 0 }, live: true } as never, 500, false).get('s1')!;
+  assert.equal(docOnly.live, false);
+  assert.equal(docOnly.editAt, 0, 'a recent cursor keeps its own fade time');
 });

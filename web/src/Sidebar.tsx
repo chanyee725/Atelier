@@ -2,7 +2,7 @@
 // (모든 파일 A, 최근 R, 보관함 B), projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -27,11 +27,12 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
+import { ActivityBell } from './activity/ActivityBell';
+import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
 import type { Theme, ThemePref } from './theme';
+import { displayName, titlesOf } from './docTitles';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
-
-export const displayName = (n: { name: string; title?: string }) => n.title || n.name.replace(/\.dpx\.json$/, '');
 
 type Props = {
   workspace: string | null;
@@ -324,6 +325,7 @@ export function Sidebar(p: Props) {
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
   const projects = p.view?.projects ?? [];
+  const titles = useMemo(() => titlesOf(p.view), [p.view]);
   return (
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
@@ -333,6 +335,7 @@ export function Sidebar(p: Props) {
           </span>
           <span className="truncate text-sm font-semibold">{p.workspace ?? 'Drawing'}</span>
         </div>
+        <ActivityBell className={ICON_BUTTON} onOpen={p.onOpen} />
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />
         </button>
@@ -352,6 +355,7 @@ export function Sidebar(p: Props) {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
+        <WorkingAgents current={p.current} onOpen={p.onOpen} titleOf={(path) => titles.get(path) ?? null} />
         <SidebarGroup className="mt-3">
           <SidebarGroupLabel>프로젝트</SidebarGroupLabel>
           <SidebarGroupAction aria-label="새 프로젝트" title="새 프로젝트" onClick={p.onNewProject}>

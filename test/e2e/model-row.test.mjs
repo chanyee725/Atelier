@@ -169,7 +169,7 @@ test('model row and 설정 > 모델 연결: connect, cancel, reload, disconnect 
   await dialog.waitFor();
   assert.equal(await page.getByRole('dialog', { name: '설정' }).count(), 1, 'named by its heading');
   await dialog.getByRole('region', { name: '모델 연결' }).waitFor();
-  assert.equal(await dialog.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'page');
+  assert.equal(await dialog.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'true');
   assert.equal(await entry.locator('svg[data-provider-icon="claude"]').evaluate((s) => s.closest('[aria-hidden="true"]') !== null), true, 'the entry shows the Claude mark, hidden from assistive tech');
   assert.match(await state.innerText(), /연결 안 됨/);
   assert.equal(await action.innerText(), '연결');
