@@ -11,6 +11,7 @@ import { SidebarMenu, SidebarMenuItem } from './components/ui/sidebar';
 import { useMenuState } from './lib/menuEscape';
 import { cn } from './lib/utils';
 import { MODELS_CHANGED } from './settings/context';
+import { afterSwap, leftRow } from './modelRowFocus';
 import { LOGIN_ENDED_NOTE, LOGIN_POLL_TIMEOUT_NOTE, loginUnlessClosed, oneAtATime, pollLogins, type ProviderId } from './settings/model';
 import { fiveHourWindow, limitReached, modelStatus, percent, type ModelLine, type ModelTone } from './projectNav';
 
@@ -103,8 +104,8 @@ export function SidebarModels() {
     [setNote],
   );
   // The row swaps its action button (연결하기 / 취소 / ⋯ menu). If the button the user just used unmounts and focus falls to
-  // <body>, move it to the button that replaced it, and keep following the chain (연결하기 → 취소 → ⋯). Focus is only
-  // moved when that exact button was removed; if the user went elsewhere, we stop tracking.
+  // <body>, move it to the button that replaced it, and keep following the chain (연결하기 → 취소 → ⋯). Tracking ends
+  // once the user leaves the row and its ⋯ menu (focus moves outside, or a press outside), see modelRowFocus.ts.
   const listRef = useRef<HTMLUListElement>(null);
   const used = useRef<HTMLElement | null>(null);
   const run = (what: 'connect' | 'cancel' | 'disconnect' | 'recheck', id: ProviderId) => {
@@ -112,21 +113,30 @@ export function SidebarModels() {
     used.current = a instanceof HTMLElement && a !== document.body ? a : null; // a ⋯ menu item lives in a portal
     void act(what, id);
   };
+  useEffect(() => {
+    // The ⋯ menu content is portalled out of the list; it carries data-model-menu.
+    const areas = () => [listRef.current, ...document.querySelectorAll<HTMLElement>('[data-model-menu]')];
+    const onFocusOut = (e: FocusEvent) => {
+      if (used.current && leftRow('focusout', e.relatedTarget, areas())) used.current = null;
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (used.current && leftRow('pointerdown', e.target, areas())) used.current = null;
+    };
+    document.addEventListener('focusout', onFocusOut, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('focusout', onFocusOut, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, []);
   const actionKey = lines.map((m) => (m.busy ? 'cancel' : m.connected ? 'menu' : 'connect')).join();
   useEffect(() => {
-    const prev = used.current;
-    if (!prev || prev.isConnected) return;
     const a = document.activeElement;
-    if (a && a !== document.body) {
-      // Radix hands focus back to the ⋯ button after a menu item; follow it so its own swap is covered too.
-      used.current = listRef.current?.contains(a) && a instanceof HTMLElement ? a : null;
-      return;
-    }
-    const next = listRef.current?.querySelector<HTMLElement>('[data-testid="model-cancel"], [data-testid="model-connect"], [data-testid="model-menu"]');
-    if (next) {
-      next.focus();
-      used.current = next;
-    }
+    const step = afterSwap(used.current, a instanceof HTMLElement ? a : null, document.body, listRef.current, () =>
+      listRef.current?.querySelector<HTMLElement>('[data-testid="model-cancel"], [data-testid="model-connect"], [data-testid="model-menu"]') ?? null,
+    );
+    used.current = step.track;
+    step.focus?.focus();
   }, [actionKey, status]);
   if (!status) return null;
   const on = status.enabled;
@@ -194,7 +204,7 @@ function ModelMenu({ name, onDisconnect, onRecheck }: { name: string; onDisconne
           <MoreHorizontal aria-hidden className="size-[15px]" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end">
+      <DropdownMenuContent data-model-menu side="top" align="end">
         <DropdownMenuItem className="max-md:min-h-11" onSelect={onDisconnect}>
           연결 끊기
         </DropdownMenuItem>
