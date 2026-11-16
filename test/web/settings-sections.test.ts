@@ -122,3 +122,13 @@ test('sectionDirty sees only this section\'s unsaved input, valid or not (#638)'
   const back = { ...form, texts: { ...form.texts, maxChildren: ` ${saved.maxChildren} ` } };
   assert.equal(sectionDirty(saved, back, 'team'), false, 'typing the saved value back is not an edit');
 });
+
+test('auto-remove off leaves the grace period as it is, like standalone Dispatch: still sent and still unsaved input (#638)', () => {
+  const form = teamForm({ ...saved, autoRemoveDone: false });
+  const off = { ...saved, autoRemoveDone: false };
+  assert.equal(sectionDirty(off, form, 'team'), false);
+  form.texts.autoRemoveGraceSec = '300';
+  assert.equal(sectionDirty(off, form, 'team'), true);
+  const r = sectionSave(off, form, 'team');
+  assert.deepEqual(r.kind === 'save' && r.patch, { autoRemoveGraceSec: 300 });
+});

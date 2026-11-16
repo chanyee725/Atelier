@@ -205,7 +205,13 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
           <button type="button" onClick={() => (confirmRef.current?.close(), ref.current?.close())} className={cn(BTN, 'border text-destructive')}>
             닫기
           </button>
-          <button type="submit" autoFocus className={PRIMARY_BTN}>
+          <button
+            // React's autoFocus only focuses on mount, it is not the HTML attribute showModal reads; set the attribute
+            // so the confirm opens on the safe button, never on 닫기.
+            ref={(el) => el?.setAttribute('autofocus', '')}
+            type="submit"
+            className={PRIMARY_BTN}
+          >
             계속 수정하기
           </button>
         </form>
