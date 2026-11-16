@@ -6,7 +6,7 @@ import type { AppState, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/t
 import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { Scene } from '../../../shared/render/index.ts';
 import { MorphLayer } from './MorphLayer';
-import { placeRuns, samePlaced, type Pic, type PlaceEl, type Placed } from './runPlace';
+import { placeRuns, samePlaced, unplaced, type Pic, type PlaceEl, type Placed } from './runPlace';
 
 /** A block whose picture is turning from `from` into the one now on the canvas. */
 export type Morphs = ReadonlyMap<string, { from: Scene; fileId: string }>;
@@ -37,6 +37,9 @@ export function MorphOverlay({ api, wrap, morphs, pictureOf, dark, onDone }: Pro
       if (!last) return;
       const next = placeRuns(last.els as readonly PlaceEl[], last.st, wrap.getBoundingClientRect(), morphs, pictureOf, null);
       setPlaced((old) => (samePlaced(old, next) ? old : next));
+      // A block that cannot be placed (rotated, hidden or gone mid-play) gets no layer, so nothing would end its
+      // morph and its image would stay at MORPH_OPACITY: end it now (#556).
+      for (const b of unplaced(morphs.keys(), next)) onDone(b);
     };
     const queue = (els: readonly ExcalidrawElement[], st: AppState) => {
       last = { els, st };
@@ -50,7 +53,7 @@ export function MorphOverlay({ api, wrap, morphs, pictureOf, dark, onDone }: Pro
       if (frame.current) cancelAnimationFrame(frame.current);
       frame.current = 0;
     };
-  }, [api, wrap, morphs, pictureOf]);
+  }, [api, wrap, morphs, pictureOf, onDone]);
   if (!placed.length) return null;
   return (
     <div className="pointer-events-none absolute inset-0 z-[3] overflow-hidden" data-morph-overlay="">
