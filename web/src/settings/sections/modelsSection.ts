@@ -34,7 +34,7 @@ export function roleChoice(model: string, models: readonly ModelOption[], provid
   if (!m) return { provider: null, warn: '목록에 없는 모델이에요. 다른 모델을 골라 주세요.' };
   if (!providers[m.provider]?.connected) {
     const name = providerName(m.provider, providers);
-    return { provider: m.provider, warn: `${name}${subjParticle(name)} 연결되지 않았어요. 위에서 연결하거나 다른 모델을 골라 주세요.` };
+    return { provider: m.provider, warn: `${name}${subjParticle(name)} 연결되지 않았어요. 모델 연결에서 연결하거나 다른 모델을 골라 주세요.` };
   }
   return { provider: m.provider, warn: null };
 }
