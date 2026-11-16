@@ -1,10 +1,10 @@
-// Model connection state for the sidebar rows and the 모델 연결 dialog (E525, #570), ported from Dispatch's
-// ConnectDialog/Sidebar/ProviderLimits. Everything is keyed by a provider id: PROVIDERS lists the rows the sidebar
-// shows, and state, requests and copy are looked up by that id. Only Claude is listed for now; #587 adds Codex and
-// Gemini by adding entries here. Pure, so node --test can check it.
+// Model connection state for the sidebar rows and the 모델 연결 dialog (E525, #570; all providers #587), ported from
+// Dispatch's ConnectDialog/Sidebar/ProviderLimits. Everything is keyed by a provider id: PROVIDERS lists the rows the
+// sidebar shows (Claude, OpenAI Codex, Gemini, as in Dispatch), and state, requests, copy and usage are looked up by
+// that id. Pure, so node --test can check it.
 // Server contract: docs/design/model-connection-contract.md. Status only: no account, email or token reaches here.
 import type { LimitWindow, ProviderLimits, ProviderState } from './api';
-import { modelStatus, percent, fiveHourWindow, limitReached, type ModelTone } from './projectNav.ts';
+import { modelStatus, percent, type ModelTone } from './projectNav.ts';
 
 /** What the UI needs to know about one provider. `id` is the server's provider id (/api/providers/<id>/...). */
 export type ProviderMeta = {
@@ -17,11 +17,21 @@ export type ProviderMeta = {
   cliName: string;
   /** One letter for the dialog's badge. */
   mark: string;
-  /** Usage windows from /api/limits (only Claude reports them so far). */
+  /** Usage from /api/limits, read under `limits[id]` (Claude also has Fable's own weekly window). */
   usage: boolean;
+  /** Reports no usage windows, only that its quota was hit (Gemini). */
+  windowless?: boolean;
+  /** The CLI can log in with an API key (POST /api/providers/<id>/key; Codex only, as in Dispatch). */
+  keyLogin?: boolean;
+  /** What the key field asks for, e.g. OpenAI API 키. */
+  keyLabel?: string;
 };
 
-export const PROVIDERS: readonly ProviderMeta[] = [{ id: 'claude', name: 'Claude · Fable 5.2', short: 'Claude', cliName: 'Claude Code', mark: 'C', usage: true }];
+export const PROVIDERS: readonly ProviderMeta[] = [
+  { id: 'claude', name: 'Claude', short: 'Claude', cliName: 'Claude Code', mark: 'C', usage: true },
+  { id: 'openai', name: 'OpenAI Codex', short: 'Codex', cliName: 'Codex CLI', mark: 'O', usage: true, keyLogin: true, keyLabel: 'OpenAI API 키' },
+  { id: 'gemini', name: 'Gemini', short: 'Gemini', cliName: 'Antigravity CLI (agy)', mark: 'G', usage: true, windowless: true },
+];
 export const providerMeta = (id: string) => PROVIDERS.find((m) => m.id === id);
 /** Korean object particle for a name (Claude를, ...): 을 after a final consonant in Hangul, else 를. */
 export const objParticle = (name: string) => {
@@ -49,8 +59,9 @@ export function rowStatus(meta: ProviderMeta, p: ProviderState | undefined, enab
   if (key === 'missing') return { key, text: '설치 안 됨', tone: 'bad' };
   if (key === 'busy') return { key, text: '로그인 중', tone: 'warn' };
   if (key === 'connected') {
-    const lim = meta.usage ? limits : {};
-    const s = modelStatus({ id: meta.id, name: meta.name, installed: true, connected: true, pct: percent(fiveHourWindow(lim)?.used), reached: limitReached(true, lim) }, true);
+    const u = providerUsage(meta, limits);
+    const five = u.windows.find((w) => w.label === '5시간') ?? null;
+    const s = modelStatus({ id: meta.id, name: meta.name, installed: true, connected: true, pct: percent(five?.used), reached: u.reached }, true);
     return { key, text: s.text, tone: s.tone };
   }
   return { key, text: '연결 안 됨', tone: 'off' };
@@ -70,6 +81,12 @@ export function actionFor(key: ConnectKey): Action | null {
 }
 export const ACTION_TEXT: Record<Action, string> = { connect: '연결', cancel: '취소', disconnect: '해제', recheck: '다시 확인' };
 
+/** The API-key field shows only where Dispatch shows it: installed, not connected, no login running, CLI not logged in. */
+export const keyLoginShown = (meta: ProviderMeta, p: ProviderState | undefined, enabled: boolean) =>
+  !!meta.keyLogin && enabled && !!p && p.installed === true && !p.connected && !p.busy && !p.cliLoggedIn;
+/** The CLI logout button: only while the CLI itself is logged in (it ends the CLI's login on this machine too). */
+export const cliLogoutShown = (p: ProviderState | undefined, enabled: boolean) => enabled && !!p && p.installed === true && !p.busy && !!p.cliLoggedIn;
+
 /** Second line under the name: CLI version and how it is logged in. Never an account name. */
 export function metaLine(meta: ProviderMeta, p: ProviderState | undefined): string {
   if (!p || p.installed == null) return `${meta.cliName} CLI로 로그인해요`;
@@ -88,15 +105,36 @@ export function doneText(meta: ProviderMeta, action: Action, res: { connected?: 
   if (action === 'disconnect') return '연결을 해제했어요. CLI 로그인은 남아요.';
   return null;
 }
+export const keyDoneText = (meta: ProviderMeta, res: { connected?: boolean } | null) => (res?.connected ? connectedText(meta) : `${meta.short} 키를 넘겼지만 아직 연결되지 않았어요.`);
+export const cliLogoutText = (meta: ProviderMeta) => `${meta.cliName}에서도 로그아웃했어요.`;
 
 export type LimitRow = { label: string; pct: number | null; reset: number | null };
-/** Usage rows for the dialog: the account windows, then Fable's own weekly window (Dispatch ProviderLimits).
- *  Null for a provider that reports no usage yet. */
-export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { claude: LimitRow[]; fable: LimitRow[] | null } | null {
+
+/**
+ * This provider's usage from /api/limits, read under its own id (PR #598 review: never Claude's numbers on another row).
+ * Claude: account windows, plus Fable's own weekly window once reported. Codex: its CLI's windows. Gemini reports no
+ * windows, only that the quota was hit and when it clears.
+ */
+export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { windows: LimitWindow[]; extra: LimitWindow[]; reached: boolean; reset: number | null } {
+  if (!meta.usage) return { windows: [], extra: [], reached: false, reset: null };
+  const entry = (limits as Record<string, { windows?: LimitWindow[]; reached?: boolean; reset?: number | null } | null | undefined>)[meta.id];
+  const windows = Array.isArray(entry?.windows) ? entry.windows : [];
+  const extra = meta.id === 'claude' ? (limits.fable?.windows ?? []) : [];
+  const flagged = !!entry?.reached;
+  const reached = flagged || [...windows, ...extra].some((w) => (percent(w.used) ?? 0) >= 100);
+  return { windows, extra, reached, reset: flagged ? (entry?.reset ?? null) : null };
+}
+
+/** Usage rows for the dialog (Dispatch ProviderLimits): this provider's windows, then Claude's Fable weekly window
+ *  (`fable`, Claude only; null until reported). Null for a provider that reports no usage. */
+export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { main: LimitRow[]; fable: LimitRow[] | null; reached: boolean; reset: number | null } | null {
   if (!meta.usage) return null;
+  const u = providerUsage(meta, limits);
   const row = (w: LimitWindow, prefix = ''): LimitRow => ({ label: prefix + w.label, pct: percent(w.used), reset: w.reset ?? null });
   return {
-    claude: (limits.claude?.windows ?? []).map((w) => row(w)),
-    fable: limits.fable ? limits.fable.windows.map((w) => row(w, 'Fable ')) : null,
+    main: u.windows.map((w) => row(w)),
+    fable: meta.id === 'claude' && limits.fable ? limits.fable.windows.map((w) => row(w, 'Fable ')) : null,
+    reached: u.reached,
+    reset: u.reset,
   };
 }
