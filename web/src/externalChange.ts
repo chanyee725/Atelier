@@ -20,7 +20,27 @@ export function externalAction(e: WorkspaceEvent, openPath: string | null, dirty
   return 'refresh';
 }
 
-const same_ = (a: unknown, b: unknown) => a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/**
+ * Deep equality of JSON-like values that ignores object key order (a writer that reorders keys has not changed
+ * anything, so it must not restart the panes, #557). `undefined` and `null` count as the same, as in JSON.
+ */
+export function sameJson(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const y = b as unknown[];
+    return a.length === y.length && a.every((v, i) => sameJson(v, y[i]));
+  }
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  // Keys whose value is undefined are dropped by JSON, so they do not count.
+  const kx = Object.keys(x).filter((k) => x[k] !== undefined);
+  const ky = Object.keys(y).filter((k) => y[k] !== undefined);
+  return kx.length === ky.length && kx.every((k) => Object.hasOwn(y, k) && sameJson(x[k], y[k]));
+}
+const same_ = sameJson;
 
 type LiveBlock = { id?: unknown; x?: unknown; y?: unknown; w?: unknown; h?: unknown; frameId?: unknown };
 const placeOf = (b: LiveBlock) => [b.id, b.x, b.y, b.w, b.h, b.frameId ?? null];
