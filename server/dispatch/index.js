@@ -7,14 +7,14 @@
 // drawing tool works on its own and GET /api/dispatch says why.
 import path from "node:path";
 import { ownGitEnv, runCli } from "./cli.js";
-import { cancelLogin, login, logout, providerStatus, publicStatus } from "./auth.js";
+import { cancelLogin, login, loginWithKey, logout, PROVIDER_IDS, providerStatus, publicStatus } from "./auth.js";
 import { Burn } from "./burn.js";
 import { Store } from "./dispatch-store.js";
 import { currentBranch } from "./git.js";
 import { Hub } from "./hub.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
 import { SharedLimits } from "./limits.js";
-import { staticModels } from "./models.js";
+import { codexModels, staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
@@ -30,22 +30,22 @@ export async function gitTop(dir) {
 }
 
 /** Every provider "not checked yet": what the UI shows before a provider is connected. */
-const UNCHECKED = Object.fromEntries(["claude"].map(id => [id, { installed: null, connected: false, busy: false, url: null, error: null }]));
+const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: null, connected: false, busy: false, url: null, error: null }]));
 
 /**
  * Starts Dispatch for the project at `root`. `deps` replaces the parts that start CLIs or touch the
- * home folder, so tests run with fakes: { providerStatus, limitsFile, login, logout, cancelLogin,
- * spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
+ * home folder, so tests run with fakes: { providerStatus, codexModels, limitsFile, login, loginWithKey,
+ * logout, cancelLogin, spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
  */
 export async function createDispatch({ root, broadcast, port, deps = {} }) {
-  const dep = { providerStatus, login, logout, cancelLogin, ...deps };
+  const dep = { providerStatus, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
   const store = new Store(root);
   await store.load();
   const models = staticModels();
-  // Claude limits live in ~/.dispatch/limits.json, shared by every server.
+  // Claude limits and the Gemini quota live in ~/.dispatch/limits.json, shared by every server.
   const limits = new SharedLimits(...(dep.limitsFile ? [dep.limitsFile] : []));
-  await limits.load({ claude: store.data.limits }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
-  // geminiQuota (saved by an older version) is dropped: Gemini is gone.
+  await limits.load({ claude: store.data.limits, gemini: store.data.geminiQuota }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
+  // Per-project copies saved by an older version: merged into the shared file above, then dropped.
   if ("limits" in store.data || "geminiQuota" in store.data) { delete store.data.limits; delete store.data.geminiQuota; store.save(); }
   const hub = new Hub({ root, store, models, roles: ROLES, port, limits, spawnCli: dep.spawnCli });
 
@@ -62,9 +62,16 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
   let providers = decorate(UNCHECKED);
   // Set by close(): a login that ends later must not save state or broadcast on a closed server.
   let closed = false;
+  let codexLoaded = false;
   async function refreshProviders() {
     if (closed) return;
     providers = decorate(await dep.providerStatus());
+    // Codex publishes its model list through its own CLI: asked once, only after OpenAI Codex is connected here.
+    if (providers.openai?.connected && !codexLoaded) {
+      codexLoaded = true;
+      const add = (await dep.codexModels()).filter(m => !models.some(x => x.id === m.id));
+      if (add.length) { models.push(...add); broadcast("models", models); }
+    }
     broadcast("providers", providers);
   }
   const setEnabled = (id, on) => {
@@ -123,7 +130,7 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
   const d = {
     root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs,
     providers: () => providers, refreshProviders, setEnabled,
-    login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin,
+    login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
   };
 
   const timers = [];
@@ -147,8 +154,8 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     },
     async close() {
       closed = true;
-      // A running `claude auth login` must not outlive the server (it could still log the CLI in).
-      await Promise.resolve(dep.cancelLogin("claude")).catch(() => {});
+      // A running CLI login must not outlive the server (it could still log the CLI in).
+      await Promise.all(PROVIDER_IDS.map(id => Promise.resolve(dep.cancelLogin(id)).catch(() => {})));
       for (const t of timers) clearInterval(t);
       hub.stopAll();
       await store.close().catch(() => {});

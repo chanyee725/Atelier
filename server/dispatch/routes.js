@@ -7,6 +7,7 @@ import { patchGuard, patchTeam, teamSettings } from "./settings.js";
 const MAX_BODY = 1e6;
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
+const CLI_NAMES = { claude: "Claude CLI", openai: "Codex CLI", gemini: "Antigravity CLI(agy)" };
 
 /** Message text must say something: an empty send used to wake a session with a blank turn. */
 const required = text => {
@@ -120,16 +121,16 @@ export function routeTable(d) {
       return { ok: true };
     }],
     // Already logged in on this machine → just connect; otherwise run the CLI's browser login first.
-    ["POST", /^\/api\/providers\/(claude)\/login$/, async ([id]) => {
+    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/login$/, async ([id]) => {
       if (!d.providers()[id]?.cliLoggedIn) await d.refreshProviders();
       if (d.providers()[id]?.cliLoggedIn) { d.setEnabled(id, true); await d.refreshProviders(); return { ok: true, connected: true }; }
-      if (d.providers()[id]?.installed === false) throw fail(400, "Claude CLI를 찾지 못했어요. 설치한 뒤 다시 눌러 주세요");
+      if (d.providers()[id]?.installed === false) throw fail(400, `${CLI_NAMES[id]}를 찾지 못했어요. 설치한 뒤 다시 눌러 주세요`);
       d.login(id, () => d.refreshProviders().catch(e => console.error("dispatch providers:", e.code ?? e.name)), ok => ok && d.setEnabled(id, true));
       return { ok: true, connected: false };
     }],
-    ["POST", /^\/api\/providers\/(claude)\/cancel$/, async ([id]) => { await d.cancelLogin(id); return { ok: true }; }],
+    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/cancel$/, async ([id]) => { await d.cancelLogin(id); return { ok: true }; }],
     // Disconnects from Drawing only; the CLI stays logged in unless `cli: true` is passed.
-    ["POST", /^\/api\/providers\/(claude)\/logout$/, async ([id], b) => {
+    ["POST", /^\/api\/providers\/(claude|openai|gemini)\/logout$/, async ([id], b) => {
       // A login still running would connect again when it finishes.
       await d.cancelLogin(id);
       d.setEnabled(id, false);
@@ -137,7 +138,15 @@ export function routeTable(d) {
       await d.refreshProviders();
       return { ok: true };
     }],
-    // No API-key route: a key would pass through this server. Use the Claude CLI in a terminal.
+    // Codex's own API-key login (as in Dispatch). The key goes straight to `codex login --with-api-key`'s
+    // stdin: it is never logged, saved, put in state.json or echoed back in an error.
+    ["POST", /^\/api\/providers\/(openai)\/key$/, async ([id], b) => {
+      await d.cancelLogin(id);
+      await d.loginWithKey(id, typeof b?.key === "string" ? b.key.trim() : "");
+      d.setEnabled(id, true);
+      await d.refreshProviders();
+      return { ok: true, connected: !!d.providers()[id]?.connected };
+    }],
     ["POST", /^\/api\/providers\/refresh$/, async () => { await d.refreshProviders(); return d.providers(); }],
   ];
 }

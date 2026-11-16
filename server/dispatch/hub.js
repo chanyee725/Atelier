@@ -9,8 +9,7 @@ import { enterStage } from "./tasks.js";
 import { CHILD_PROMPT, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
 import { replyStyle } from "./style.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
-import { SharedLimits } from "./limits.js";
-import { FABLE_ID } from "./models.js";
+import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
 import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
 import { AGENT_COLORS, pickColor } from "./colors.js";
@@ -18,13 +17,27 @@ import { deriveFolder } from "./session-folder.js";
 
 const badRequest = msg => Object.assign(new Error(msg), { status: 400 });
 
-// Only Claude (Fable 5.2) runs. A session saved by an older version with another provider stays
-// readable, but nothing may start for it.
+// Providers that run, as in standalone Dispatch (issue #587). A session saved with any other provider
+// stays readable, but nothing may start for it.
+export const PROVIDERS = ["claude", "openai", "gemini"];
 export const UNSUPPORTED_MODEL = "이 세션은 지원하지 않는 모델이에요";
+export const PROVIDER_NAMES = { claude: "Claude", openai: "OpenAI Codex", gemini: "Gemini" };
 
-// Refuse a mode that is unknown. Modes: manual, acceptEdits, auto, plan (never bypassPermissions).
+// codex exec and agy -p run headless with no way to ask before a tool call, so neither can honour
+// manual (ask before every tool): it is refused, never run looser.
+const HEADLESS_PERMS = ["acceptEdits", "auto", "plan"];
+// agy's own names for the modes it is given (never --dangerously-skip-permissions).
+export const AGY_MODES = { acceptEdits: "accept-edits", auto: "auto", plan: "plan" };
+// Codex's sandbox per mode: plan reads only; acceptEdits and auto write inside the worktree only.
+export const CODEX_SANDBOX = { acceptEdits: "workspace-write", auto: "workspace-write", plan: "read-only" };
+
+// Refuse a mode that is unknown or that the provider would run looser than chosen.
+// Modes: manual, acceptEdits, auto, plan (never bypassPermissions).
 export function checkPerm(provider, perm) {
   if (!PERMS.includes(perm)) throw badRequest("알 수 없는 권한 모드예요");
+  if ((provider === "openai" || provider === "gemini") && !HEADLESS_PERMS.includes(perm)) {
+    throw badRequest(`${PROVIDER_NAMES[provider]}는 수동 승인(manual) 모드를 쓸 수 없어요. acceptEdits·auto·plan 중에서 골라 주세요`);
+  }
   return perm;
 }
 
@@ -110,7 +123,7 @@ export class Hub extends EventEmitter {
     this.roles = roles;
     // The port is known only once the server listens: a number or a getter.
     this.portOf = typeof port === "function" ? port : () => port;
-    // Claude limits are account-wide: shared by every server via ~/.dispatch/limits.json.
+    // Claude limits and the Gemini quota are account-wide: shared by every server via ~/.dispatch/limits.json.
     this.shared = limits || new SharedLimits();
     this.shared.on("change", () => { this.emit("limits", this.currentLimits()); this.checkTickets(); });
     this.live = new Map(); // id -> { proc, transcript, perms, seenMsgIds }
@@ -134,8 +147,8 @@ export class Hub extends EventEmitter {
     for (const s of Object.values(store.data.sessions)) {
       // Sessions from before cursor colours (E56) get theirs now, saved so a restart does not pick another.
       if (!AGENT_COLORS.includes(s.color)) { s.color = pickColor(this.sessions.map(x => x.color)); colored = true; }
-      // A saved session of a provider that no longer runs stays readable but never resumes: not interrupted, done.
-      if (s.provider !== "claude") {
+      // A saved session of a provider that does not run stays readable but never resumes: not interrupted, done.
+      if (!PROVIDERS.includes(s.provider)) {
         if (s.status !== "done" || s.interrupted) colored = true;
         s.status = "done"; s.interrupted = false;
         continue;
@@ -202,7 +215,7 @@ export class Hub extends EventEmitter {
 
   touch(s, patch = {}) {
     // A turn that ends by asking its reader something leaves the session waiting on a person, not resting.
-    // Only on a real change of status: a session can touch idle again when the process exits, after
+    // Only on a real change of status: Codex/Gemini touch idle again when the process exits, after
     // reportToParent() has cleared lastText, and that must not wipe the question.
     if (patch.status && patch.status !== s.status && !("asksUser" in patch)) {
       patch.asksUser = patch.status === "idle" && asksUser(this.live.get(s.id)?.lastText);
@@ -316,9 +329,20 @@ export class Hub extends EventEmitter {
     return l;
   }
 
-  /** Limits for the top bar: the Claude windows, and Fable's own weekly window once a Fable turn reported it. */
+  setGeminiQuota(text) {
+    this.shared.setGemini({ reached: true, reset: geminiResetFrom(text) })
+      .catch(e => console.error("limits:", e.message))
+      .finally(() => this.emit("limits", this.currentLimits()));
+  }
+
+  /**
+   * Limits per provider for the top bar: Claude windows (and Fable's own weekly window once a Fable
+   * turn reported it), Codex windows, Gemini reached/ok.
+   */
   async providerLimits(now = Date.now()) {
     const c = this.currentLimits(now);
+    const g = this.shared.gemini;
+    const geminiReached = !!g?.reached && (!g.reset || g.reset > now);
     return {
       claude: { windows: [
         { label: "5시간", used: c.five, reset: c.fiveReset },
@@ -326,6 +350,9 @@ export class Hub extends EventEmitter {
       ] },
       // Shown on its own once a Fable turn has reported it; null until then.
       fable: c.fable == null ? null : { windows: [{ label: "Fable 주간", used: c.fable, reset: c.fableReset }] },
+      // ~/.codex/sessions is read only once the user has connected OpenAI Codex in Drawing.
+      openai: this.isConnected("openai") ? await codexLimits() : null,
+      gemini: { reached: geminiReached, reset: geminiReached ? g.reset ?? null : null },
     };
   }
 
@@ -467,29 +494,30 @@ export class Hub extends EventEmitter {
     if (!total) throw new Error("만들 세션이 없어요");
     const gate = parent && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
-    // Every session runs claude-fable-5-2. A model named by an older plan step, an old role override or a
-    // lead that passes an old id is mapped to it, not refused; the requested id is recorded nowhere here.
-    const model = this.models.find(m => m.id === FABLE_ID);
-    if (!model) throw new Error(`알 수 없는 모델: ${FABLE_ID}`);
-    if (!this.isConnected(model.provider)) throw new Error("Claude가 Dispatch에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.");
-    // A mapped item whose effort the Fable list does not have (an old plan's "minimal", "none") runs at the default.
-    const mappedFrom = new Map();
-    items = items.map(it => {
-      if (!it.model || it.model === FABLE_ID) return it;
-      const mapped = { ...it, model: FABLE_ID, effort: model.efforts.includes(it.effort) ? it.effort : null };
-      mappedFrom.set(mapped, String(it.model).slice(0, 60));
-      return mapped;
-    });
+    const roles = effectiveRoles(this.roles, this.store, this.models);
+    // The model of an item: its own, else its role's. Unknown models and roles are refused before anything starts.
+    const modelOf = it => {
+      const id = it.model || roles.find(r => r.id === it.role)?.model;
+      const model = this.models.find(m => m.id === id);
+      if (!model) throw badRequest(`알 수 없는 모델: ${String(id ?? "").slice(0, 60)}`);
+      return model;
+    };
+    for (const it of items) {
+      if (!roles.some(r => r.id === it.role)) throw badRequest(`알 수 없는 역할: ${it.role}`);
+      const { provider } = modelOf(it);
+      if (!this.isConnected(provider)) throw new Error(`${PROVIDER_NAMES[provider] ?? provider}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`);
+    }
     // A folder is a top-level workspace folder that exists; without one the session inherits its parent's.
     const top = await this.resolveFolder(folder, parent);
     // Check every item's mode and effort before anything starts, so a bad item makes nothing.
     for (const it of items) {
-      const role = effectiveRoles(this.roles, this.store, this.models).find(r => r.id === it.role);
-      if (!role) continue; // reported below
+      const role = roles.find(r => r.id === it.role);
+      const model = modelOf(it);
       checkPerm(model.provider, it.perm || role.perm);
       checkEffort(model, it.effort);
     }
-    const blocked = this.guardCheck(total);
+    // The limit gauges come from Claude, so they only gate Claude sessions.
+    const blocked = items.some(it => modelOf(it).provider === "claude") && this.guardCheck(total);
     if (blocked) throw new Error(blocked);
     if (parent) {
       const active = this.sessions.filter(s => s.parent === parent && !["done", "error"].includes(s.status)).length;
@@ -499,8 +527,8 @@ export class Hub extends EventEmitter {
 
     const made = [];
     for (const it of items) {
-      const role = effectiveRoles(this.roles, this.store, this.models).find(r => r.id === it.role);
-      if (!role) throw new Error(`알 수 없는 역할: ${it.role}`);
+      const role = roles.find(r => r.id === it.role);
+      const model = modelOf(it);
       for (let k = 0; k < (it.n || 1); k++) {
         const n = ++this.store.data.seq;
         const slug = `${role.id}-${n}`;
@@ -524,11 +552,10 @@ export class Hub extends EventEmitter {
         this.push(s, { kind: "user", text: first, label: parent ? "관리자 지시" : "공통 프롬프트" });
         this.touch(s);
         this.start(s, first);
-        made.push(mappedFrom.has(it) ? { s, from: mappedFrom.get(it) } : { s });
+        made.push(s);
       }
     }
-    // mappedFrom: the model the caller asked for, when it was not claude-fable-5-2 (shown to the lead, not saved).
-    return made.map(({ s, from }) => ({ ...this.publicSession(s), ...(from && { mappedFrom: from }) }));
+    return made.map(s => this.publicSession(s));
   }
 
   /** The folder a new session gets: the asked-for top folder (must exist, else 400), else the parent's, else null. */
@@ -563,7 +590,7 @@ export class Hub extends EventEmitter {
     const s = this.get(id);
     if (!s) throw new Error("세션이 없어요");
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
-    if (s.provider !== "claude") throw new Error(UNSUPPORTED_MODEL); // before anything is recorded or started
+    if (!PROVIDERS.includes(s.provider)) throw new Error(UNSUPPORTED_MODEL); // before anything is recorded or started
     const r = this.rt(id);
     // A pending length-guard note is attached here and cleared only on a path that delivers the message.
     const pend = s.longPending;
@@ -575,6 +602,10 @@ export class Hub extends EventEmitter {
       r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
       sent();
       this.touch(s, { status: "running" });
+    } else if (s.provider === "openai" && r.proc) {
+      throw new Error("Codex는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
+    } else if (s.provider === "gemini" && r.proc) {
+      throw new Error("Gemini는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
     } else {
       this.start(s, text);
     }
@@ -729,6 +760,7 @@ export class Hub extends EventEmitter {
   }
 
   // Claude: a live process switches at once through the control protocol; otherwise the next turn starts with it.
+  // Codex and Gemini: the new mode (sandbox / --mode) applies from the next turn.
   setPerm(id, perm) {
     const s = this.get(id), r = this.live.get(id);
     if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
@@ -772,7 +804,7 @@ export class Hub extends EventEmitter {
   // Resume every session a restart cut off mid-turn, once its provider is connected.
   resumeInterrupted() {
     for (const s of this.sessions) {
-      if (!s.interrupted || !this.isConnected(s.provider) || this.paused) continue; // paused: the ticket resumes it
+      if (!s.interrupted || !PROVIDERS.includes(s.provider) || !this.isConnected(s.provider) || this.paused) continue; // paused: the ticket resumes it
       if (this.holdTeam?.(s.parent ?? s.id)) continue; // a stopped plan: 이어서 하기 resumes it
       s.interrupted = false;
       try { this.send(s.id, RESUME_TEXT); } catch { /* resumes on the next message instead */ }
@@ -902,7 +934,7 @@ export class Hub extends EventEmitter {
 
   // A child's turn ended: hand its last answer to the lead, so a lead that went idle wakes up instead of
   // waiting to poll. Children have no Dispatch tools of their own to report with.
-  // A report waits in pendingReport until it reaches a lead: a session attached later, or a lead
+  // A report waits in pendingReport until it reaches a lead: a session attached later, or a Codex lead
   // busy mid-turn, gets it from setParent() or the watchdog.
   reportToParent(s) {
     const r = this.live.get(s.id);
@@ -953,7 +985,7 @@ export class Hub extends EventEmitter {
     // Last gate before a CLI starts: a session saved with a mode or effort that is no longer
     // allowed (older state, a hand-edited file) stops with an error instead of running looser.
     try {
-      if (s.provider !== "claude") throw new Error(UNSUPPORTED_MODEL); // refuse before any spawn
+      if (!PROVIDERS.includes(s.provider)) throw new Error(UNSUPPORTED_MODEL); // refuse before any spawn
       checkPerm(s.provider, s.perm);
       if (s.effort) checkEffort({ efforts: this.models.find(m => m.id === s.model)?.efforts || EFFORT_WORDS }, s.effort);
     } catch (e) {
@@ -962,7 +994,9 @@ export class Hub extends EventEmitter {
       return;
     }
     try {
-      this.startClaude(s, prompt);
+      if (s.provider === "claude") this.startClaude(s, prompt);
+      else if (s.provider === "gemini") this.startGemini(s, prompt);
+      else this.startCodex(s, prompt);
     } catch (e) {
       // spawnCli refused (not an allowed CLI, or a real CLI under npm test): nothing started.
       this.push(s, { kind: "error", text: e.message });
@@ -1088,6 +1122,142 @@ export class Hub extends EventEmitter {
         if (m.is_error) this.push(s, { kind: "error", text: clip(m.result || m.subtype, 400) });
         this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
         this.reportToParent(s);
+        break;
+      }
+    }
+  }
+
+  startCodex(s, prompt) {
+    // checkPerm (in start) already refused manual; the sandbox never runs looser than the mode.
+    const sandbox = CODEX_SANDBOX[s.perm];
+    if (!sandbox) throw badRequest("알 수 없는 권한 모드예요");
+    const first = !s.providerSessionId;
+    const args = ["exec", ...(first ? [] : ["resume", s.providerSessionId]), "--json", "--skip-git-repo-check",
+      "-m", s.model, "-c", `sandbox_mode="${sandbox}"`];
+    if (s.effort) args.push("-c", `model_reasoning_effort="${checkEffort({ efforts: EFFORT_WORDS }, s.effort)}"`);
+    {
+      const env = Object.entries(this.mcpEnv(s)).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(",");
+      args.push("-c", `mcp_servers.dispatch.command=${JSON.stringify(process.execPath)}`,
+        "-c", `mcp_servers.dispatch.args=[${JSON.stringify(MCP_SCRIPT)}]`,
+        "-c", `mcp_servers.dispatch.env={${env}}`,
+        "-c", `mcp_servers.dispatch.default_tools_approval_mode="approve"`);
+    }
+    // Codex has no system-prompt flag in exec mode, so the role prompt leads the first turn.
+    const system = this.systemPrompt(s);
+    args.push(first && system ? `[역할]\n${system}\n\n[작업]\n${prompt}` : prompt);
+    const proc = this.spawnCli("codex", args, { cwd: s.cwd, env: sessionEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    this.attach(s, proc);
+    onJsonLines(proc.stdout, m => this.onCodex(s, m));
+    this.touch(s, { status: "running", error: null });
+  }
+
+  onCodex(s, m) {
+    switch (m.type) {
+      case "thread.started":
+        this.touch(s, { providerSessionId: m.thread_id });
+        break;
+      case "item.completed": {
+        const it = m.item || {};
+        if (it.type === "agent_message") { this.push(s, { kind: "assistant", text: it.text }); s.last = redact(clip(it.text, 400)); this.rt(s.id).lastText = it.text; }
+        else if (it.type === "command_execution") {
+          // Codex reports a command only once it has finished: the tool entry is final (no result follows it, so
+          // nothing may pair a later result with it) and carries the outcome itself.
+          this.push(s, { kind: "tool", name: "shell", text: clip(it.command, 600), final: true, error: typeof it.exit_code === "number" && it.exit_code !== 0 });
+          if (it.aggregated_output) this.push(s, { kind: "tool_result", text: clip(it.aggregated_output, 1500), error: it.exit_code !== 0, final: true });
+          const key = typeof it.exit_code === "number" && checkKey(it.command);
+          if (key) this.noteCheck(s, { key, kind: activityOf("shell", it.command) }, it.exit_code === 0);
+        } else if (it.type === "file_change") this.push(s, { kind: "tool", name: "edit", text: clip((it.changes || []).map(c => `${c.kind} ${c.path}`).join("\n"), 600), final: true });
+        else if (it.type === "mcp_tool_call") this.push(s, { kind: "tool", name: `${it.server}.${it.tool}`, text: clip(JSON.stringify(it.arguments), 600), final: true, error: it.status === "failed" });
+        else if (it.type === "error") this.push(s, { kind: "system", text: clip(it.message, 400) });
+        this.touch(s);
+        break;
+      }
+      case "turn.completed": {
+        const u = m.usage || {};
+        const cached = u.cached_input_tokens || 0;
+        const delta = { input: Math.max(0, (u.input_tokens || 0) - cached), output: (u.output_tokens || 0),
+          cacheRead: cached, cacheWrite: u.cache_write_input_tokens || 0 };
+        for (const k in delta) s.usage[k] += delta[k];
+        s.ctx = (u.input_tokens || 0) + (u.output_tokens || 0); this.checkCtx(s); this.checkLong(s);
+        this.store.addDaily(s.model, s.role, delta);
+        this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
+        this.reportToParent(s);
+        break;
+      }
+      case "turn.failed":
+        this.push(s, { kind: "error", text: clip(m.error?.message, 400) });
+        this.touch(s, { status: "error", error: clip(m.error?.message, 300) });
+        break;
+      case "error":
+        this.push(s, { kind: "error", text: clip(m.message, 400) });
+        break;
+    }
+  }
+
+  startGemini(s, prompt) {
+    // agy has no approval channel in headless mode: checkPerm (in start) refused manual, and the other
+    // modes map to agy's own --mode. --dangerously-skip-permissions is never passed (CLAUDE.md: no
+    // bypass, refuse instead). If agy cannot run a tool headless in a mode, the turn fails and says so.
+    const mode = AGY_MODES[s.perm];
+    if (!mode) throw badRequest("알 수 없는 권한 모드예요");
+    const first = !s.providerSessionId;
+    const system = this.systemPrompt(s);
+    const textPrompt = first && system ? `[역할]\n${system}\n\n[작업]\n${prompt}` : prompt;
+    const args = ["-p", textPrompt, "--output-format", "stream-json", "--model", s.model, "--mode", mode];
+    if (s.effort) args.push("--effort", s.effort);
+    if (s.providerSessionId) args.push("--conversation", s.providerSessionId);
+    // Same environment as Claude/Codex (headless Playwright, own git env), plus the MCP variables.
+    const env = { ...sessionEnv(), ...this.mcpEnv(s) };
+    const proc = this.spawnCli("agy", args, { cwd: s.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    this.attach(s, proc);
+    onJsonLines(proc.stdout, m => this.onGemini(s, m));
+    this.touch(s, { status: "running", error: null });
+  }
+
+  onGemini(s, m) {
+    switch (m.event) {
+      case "init":
+        if (m.conversation_id) this.touch(s, { providerSessionId: m.conversation_id });
+        break;
+      case "step_update": {
+        const su = m.step_update || {};
+        if (su.step_type === "agent_response") {
+          if (su.text_delta && su.text_delta.trim()) {
+            this.push(s, { kind: "assistant", text: su.text_delta });
+            s.last = redact(clip(su.text_delta, 400));
+            this.rt(s.id).lastText = su.text_delta;
+          }
+          if (su.usage) {
+            const u = su.usage;
+            const delta = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_tokens || 0, cacheWrite: 0 };
+            for (const k in delta) s.usage[k] += delta[k];
+            s.ctx = delta.input + delta.output; this.checkCtx(s); this.checkLong(s);
+            this.store.addDaily(s.model, s.role, delta);
+          }
+        } else if (su.step_type === "tool") {
+          if (su.state === "ACTIVE") {
+            this.push(s, { kind: "tool", name: su.tool_name, text: clip(JSON.stringify(su.tool_info?.parameters || {}), 600) });
+          } else if (su.state === "DONE") {
+            this.push(s, { kind: "tool_result", text: clip(su.tool_info?.output || "", 1500), error: false });
+          }
+        }
+        this.touch(s);
+        break;
+      }
+      case "result": {
+        const res = m.result || {};
+        if (res.response && res.response.trim()) {
+          s.last = redact(clip(res.response, 400));
+          this.rt(s.id).lastText = res.response;
+        }
+        if (res.status === "ERROR") {
+          if (isQuotaError(res.error)) this.setGeminiQuota(res.error);
+          this.push(s, { kind: "error", text: clip(res.error || "Turn failed", 400) });
+          this.touch(s, { status: "error", error: clip(res.error || "Turn failed", 300) });
+        } else {
+          this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
+          this.reportToParent(s);
+        }
         break;
       }
     }
