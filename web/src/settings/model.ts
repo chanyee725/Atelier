@@ -302,3 +302,17 @@ export function usageGroups(limits: Record<string, UsageEntry>, providers: Recor
   }
   return out;
 }
+
+/**
+ * Why session settings cannot change while Dispatch is off on this server, and what to do, in one line (#620).
+ * `reason` is the server's code from GET /api/dispatch (server/dispatch/project.js OFF_MESSAGES). Messages that
+ * already say what to do are used as they are; the server's message is the fallback for codes this list lacks.
+ */
+export function offReason(status: { reason?: string; message?: string } | null | undefined): string {
+  const r = status?.reason;
+  if (r === 'not-git') return '작업 공간이 git 저장소 밖이라 실행 기능이 꺼져 있어요. git 저장소 안의 폴더로 서버를 다시 열면 바꿀 수 있어요.';
+  if (r === 'no-workspace') return '작업 공간이 없어서 실행 기능이 꺼져 있어요. 작업 공간 폴더를 정해 서버를 다시 열면 바꿀 수 있어요.';
+  if (r === 'unsafe') return '프로젝트의 .dispatch 폴더가 심볼릭 링크라서 실행 기능이 꺼져 있어요. 링크를 지우고 서버를 다시 시작해 주세요.';
+  const m = typeof status?.message === 'string' ? status.message.trim() : '';
+  return m || '이 서버에선 실행 기능이 꺼져 있어요. 실행 기능이 켜진 서버에서 바꿀 수 있어요.';
+}

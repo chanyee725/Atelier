@@ -142,6 +142,10 @@ test('설정 page: link from the modal, save team settings and a role model, lim
   await limits.getByText('저장했어요.').waitFor();
   assert.equal((await state()).settings.guard.five, 0.8);
   await page.getByRole('region', { name: '모델별 사용량' }).waitFor();
+  // Dispatch on: nothing is read-only, and the theme choice is there too (#620).
+  assert.equal(await settings.getAttribute('data-dispatch'), 'on');
+  assert.equal(await page.getByTestId('settings-off-note').count(), 0);
+  await page.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-page-1440.png'), fullPage: true });
 
   // 5. Narrow width: nothing overflows sideways.

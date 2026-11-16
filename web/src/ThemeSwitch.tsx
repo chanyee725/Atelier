@@ -17,7 +17,8 @@ export const THEME_CHOICES: { id: ThemePref; label: string; icon: LucideIcon }[]
 
 const NEXT: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
 
-export function ThemeSwitch({ pref, onPref, system }: { pref: ThemePref; onPref: (t: ThemePref) => void; system: Theme }) {
+/** `labelledBy`: name the group by a visible heading instead of 테마 (the 설정 dialog and page, #620). */
+export function ThemeSwitch({ pref, onPref, system, labelledBy, className }: { pref: ThemePref; onPref: (t: ThemePref) => void; system: Theme; labelledBy?: string; className?: string }) {
   const group = useRef<HTMLDivElement>(null);
   const pick = (i: number) => {
     const n = THEME_CHOICES.length;
@@ -34,7 +35,15 @@ export function ThemeSwitch({ pref, onPref, system }: { pref: ThemePref; onPref:
     e.preventDefault();
   };
   return (
-    <div ref={group} role="radiogroup" aria-label="테마" data-testid="theme-switch" onKeyDown={onKey} className="mx-2 mb-1 flex gap-0.5 rounded-lg bg-muted p-0.5">
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-label={labelledBy ? undefined : '테마'}
+      aria-labelledby={labelledBy}
+      data-testid="theme-switch"
+      onKeyDown={onKey}
+      className={cn('mx-2 mb-1 flex gap-0.5 rounded-lg bg-muted p-0.5', className)}
+    >
       {THEME_CHOICES.map(({ id, label, icon: Icon }) => {
         const on = pref === id;
         return (

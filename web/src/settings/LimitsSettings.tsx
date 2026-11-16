@@ -1,10 +1,12 @@
 // 설정 row and modal (E509c): edit the usage-limit and session-length guards. A native modal <dialog> gives the inert
 // page, focus containment, Esc and focus return to the 설정 row. The form itself is LimitsForm, shared with the
-// 설정 page (#587), which the modal links to for team settings, models and per-provider usage.
+// 설정 page (#587), which the modal links to for team settings, models and per-provider usage. The theme choice sits
+// below it; with Dispatch off the form shows read-only with the reason (#620).
 import { Settings } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { SidebarMenuButton } from '../components/ui/sidebar';
 import { cn } from '../lib/utils';
+import { ThemeField } from './DispatchOff';
 import { BTN, LimitsForm } from './LimitsForm';
 import { stopEscWhileOpen } from './model';
 import './limits.css';
@@ -71,6 +73,10 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
           </header>
         }
       />
+      {/* Not tied to sessions, so it works with Dispatch off too (#620). */}
+      <div className="border-t p-4">
+        <ThemeField />
+      </div>
     </dialog>
   );
 }
