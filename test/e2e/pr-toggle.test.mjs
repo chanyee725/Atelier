@@ -80,7 +80,7 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
 
   // 0. The sidebar has 테마 and the 설정 row (E509c, limits only); the old dialog with the PR toggle is gone.
   await page.goto(BASE);
-  await page.getByRole('button', { name: '테마', exact: true }).waitFor();
+  await page.getByRole('button', { name: /^테마/ }).waitFor();
   await page.getByRole('button', { name: '설정', exact: true }).waitFor();
   assert.equal(await page.getByRole('dialog').count(), 0);
 
