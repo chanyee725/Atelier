@@ -77,6 +77,8 @@ test('설정 modal: open, change, reset, focus return, Fable follows weekly, 390
   // 1. Open: focus moves into the modal, defaults shown, saved values loaded.
   await entry.click();
   await dialog.waitFor();
+  // The modal opens on 일반; 사용 한도 holds the guard form (#624).
+  await dialog.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '사용 한도' }).click();
   await five.waitFor();
   assert.equal(await five.inputValue(), '90');
   assert.match(await dialog.innerText(), /기본값 90/);
@@ -150,12 +152,14 @@ test('설정 modal: open, change, reset, focus return, Fable follows weekly, 390
   await drawer.waitFor();
   await entry.click();
   await dialog.waitFor();
+  await five.waitFor(); // it reopens on the remembered section, 사용 한도
   const box = await dialog.boundingBox();
   assert.ok(box && box.x >= 0 && box.x + box.width <= 390, `fits 390px: ${JSON.stringify(box)}`);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'limits-modal-390.png') });
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
-  await page.waitForTimeout(300);
+  // Focus goes back to 설정 one frame after close; by then a drawer that wrongly took the Esc would be closing too.
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'settings-trigger');
   assert.equal(await drawer.isVisible(), true, 'the drawer stays open after one Esc');
   assert.equal(await entry.evaluate((el) => el === document.activeElement), true, 'focus returns to 설정 in the drawer');
   await page.keyboard.press('Escape');

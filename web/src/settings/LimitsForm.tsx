@@ -1,12 +1,13 @@
-// Usage-limit and session-length guard form (E509c), shared by the 설정 modal and the 설정 page (#587). Values are
+// Usage-limit and session-length guard form (E509c), in the 설정 modal's 사용 한도 section (#624). Values are
 // saved through POST /api/settings; the server keeps them in range, and the guards cannot be switched off here
 // (every field has a minimum above 0). Only changed fields are sent (#552). With Dispatch off the fields still show,
 // read-only with their defaults and one line saying why (#620).
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react';
-import { api, type DispatchSettings, type DispatchStatus } from '../api';
+import { useId, useMemo, useState, type FormEvent } from 'react';
+import { api, type DispatchSettings } from '../api';
+import { useDispatch } from '../dispatch/store';
 import { cn } from '../lib/utils';
-import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, type GuardField, type GuardSaved, type GuardValues } from './model';
-import { OffNote } from './DispatchOff';
+import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, resyncGuardTexts, type GuardField, type GuardSaved, type GuardValues, type SettingsLoad } from './model';
+import { LoadNote, OffNote } from './DispatchOff';
 import './limits.css';
 
 const ALL = GUARD_FIELDS.flatMap((g) => g.fields);
@@ -22,41 +23,28 @@ const toSaved = (s: DispatchSettings): GuardSaved => ({
 export const BTN = 'h-8 rounded-md px-3 text-sm transition-colors duration-[120ms] motion-reduce:transition-none enabled:hover:bg-accent enabled:hover:text-foreground max-md:h-11';
 export const PRIMARY_BTN = cn(BTN, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 enabled:hover:text-primary-foreground disabled:opacity-50');
 
-type Load = { kind: 'loading' } | { kind: 'off'; status: DispatchStatus } | { kind: 'failed'; message: string } | { kind: 'ok' };
-
 /**
- * The guard form. `header` goes first inside the form (the modal's title and close button, the page's heading);
- * `labelledBy` names the form. `autoFocus` puts focus on the first field once loaded (the modal).
+ * The guard form, in the 설정 modal's 사용 한도 section. Values come from the session stream store (the modal holds
+ * the stream open), so there is no request of its own (#625); `load` says whether they are in, off or failed.
+ * Saved values that change elsewhere (another tab, the server's settings event) follow in fields not edited (#575).
  */
-export function LimitsForm({ header, labelledBy, autoFocus = false, className }: { header?: ReactNode; labelledBy?: string; autoFocus?: boolean; className?: string }) {
-  const [load, setLoad] = useState<Load>({ kind: 'loading' });
-  const [texts, setTexts] = useState<Texts>(defaults);
+export function LimitsForm({ load, onRetry, labelledBy, className }: { load: SettingsLoad; onRetry: () => void; labelledBy?: string; className?: string }) {
+  const settings = useDispatch((s) => s.settings) as unknown as DispatchSettings;
+  const fromStore = useMemo(() => toSaved(settings), [settings]);
+  const [texts, setTexts] = useState<Texts>(() => toTexts(settings));
   const [note, setNote] = useState<{ text: string; bad?: boolean }>({ text: '' });
   const [saving, setSaving] = useState(false);
   // What was last loaded or saved, and whether Fable follows the weekly value; only changes are sent (#552).
-  const [saved, setSaved] = useState<GuardSaved | null>(null);
-  const [follows, setFollows] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    void (async () => {
-      try {
-        const d = await api.dispatch();
-        if (!d.enabled) return alive && setLoad({ kind: 'off', status: d });
-        const s = await api.dispatchState();
-        if (!alive) return;
-        if (!s.settings) return setLoad({ kind: 'failed', message: '설정을 불러오지 못했어요.' });
-        setTexts(toTexts(s.settings));
-        setSaved(toSaved(s.settings));
-        setFollows(fableFollows(s.settings));
-        setLoad({ kind: 'ok' });
-      } catch {
-        if (alive) setLoad({ kind: 'failed', message: '설정을 불러오지 못했어요.' });
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const [saved, setSaved] = useState<GuardSaved>(fromStore);
+  const [follows, setFollows] = useState(() => fableFollows(settings));
+  // Adjusted during render, as React suggests for state derived from changing props.
+  const [seen, setSeen] = useState(fromStore);
+  if (seen !== fromStore) {
+    setSeen(fromStore);
+    setTexts((t) => resyncGuardTexts(saved, fromStore, t, follows));
+    if (follows === saved.fableFollows) setFollows(fromStore.fableFollows);
+    setSaved(fromStore);
+  }
 
   // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value, and
   // clearing it makes it follow again (#563).
@@ -79,7 +67,7 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
   };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!saved) return;
+    if (load.kind !== 'ok') return;
     const read = readGuardTexts(texts, follows);
     if ('error' in read) return setNote({ text: read.error, bad: true });
     setSaving(true);
@@ -100,9 +88,7 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
   const off = load.kind === 'off';
   return (
     <form onSubmit={(e) => void submit(e)} aria-labelledby={labelledBy} data-testid="limits-form" className={cn('limits-form flex flex-col gap-4', className)}>
-      {header}
-      {load.kind === 'loading' && <p className="text-sm text-muted-foreground">불러오는 중이에요…</p>}
-      {load.kind === 'failed' && <p className="text-sm text-muted-foreground">{load.message}</p>}
+      {(load.kind === 'loading' || load.kind === 'failed') && <LoadNote load={load} onRetry={onRetry} />}
       {off && <OffNote id={offId} status={load.status} />}
       {(load.kind === 'ok' || off) &&
         GUARD_FIELDS.map((g) => (
@@ -110,11 +96,11 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
             <legend className="text-sm font-medium">{g.title}</legend>
             <p className="text-xs text-muted-foreground">{g.hint}</p>
             <ul className="flex flex-col gap-2">
-              {g.fields.map((f, i) => (
+              {g.fields.map((f) => (
                 <li key={f.id} className="flex flex-wrap items-end gap-x-3 gap-y-1">
                   <div className="flex min-w-0 flex-1 flex-col gap-1">
                     <label htmlFor={`limit-${f.id}`} className="text-xs text-muted-foreground">
-                      {f.label} ({f.unit}) · {f.id === 'fable' ? (follows ? '주간 한도를 따라요' : '기본값 주간 한도와 같음') : `기본값 ${f.def}`}
+                      {f.label} ({f.unit}) · {f.id === 'fable' ? (follows ? '비워 두면 주간 한도를 따라요' : '따로 정했어요 · 비우면 주간 한도를 따라요') : `기본값 ${f.def}`}
                     </label>
                     <input
                       id={`limit-${f.id}`}
@@ -125,8 +111,7 @@ export function LimitsForm({ header, labelledBy, autoFocus = false, className }:
                       min={f.min}
                       max={f.max}
                       required={f.id !== 'fable'}
-                      autoFocus={autoFocus && !off && g === GUARD_FIELDS[0] && i === 0}
-                      value={texts[f.id]}
+                                            value={texts[f.id]}
                       onChange={(e) => set(f.id, e.target.value)}
                       className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums max-md:h-11"
                     />

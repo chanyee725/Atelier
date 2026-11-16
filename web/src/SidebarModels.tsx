@@ -1,18 +1,19 @@
 // Sidebar model rows (E525, #570), ported from Dispatch's Sidebar provider list: one row per entry in PROVIDERS
 // (modelConnect.ts, keyed by provider id; only Claude for now, #587 adds more), each with a status dot and its text
-// (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 모델 연결 dialog for that provider
-// (ConnectDialog.tsx), where connect, cancel and disconnect happen. State comes from GET /api/state and the
+// (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 설정 modal at 모델 연결
+// (settings/sections/ProvidersSection.tsx), where connect, cancel and disconnect happen (#624). State comes from GET /api/state and the
 // `providers` SSE event (docs/design/model-connection-contract.md). Nothing here reads credentials or logs anything.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
-import { ConnectDialog } from './ConnectDialog';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
 import { events } from './lib/events';
 import { cn } from './lib/utils';
 import { PROVIDERS, rowStatus, type ProviderMeta, type RowTone } from './modelConnect';
 import { ProviderIcon } from './ProviderIcon';
 import { MODELS_CHANGED } from './settings/context';
+import { SettingsModal, closeTo } from './settings/SettingsEntry';
 import { pollLogins } from './settings/model';
+import { createModelsStore } from './settings/modelsStore';
 
 const DOT: Record<RowTone, string> = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-destructive', off: 'bg-muted-foreground' };
 
@@ -24,47 +25,30 @@ export type Models = {
   reload: () => Promise<void>;
 };
 
+// One shared subscription for every reader (#616): the first reader starts it, the last one stops it.
+const store = createModelsStore({
+  dispatch: api.dispatch,
+  providers: api.providers,
+  limits: api.limits,
+  onProviders: (fn) => events.subscribeJson<Record<string, ProviderState>>('providers', fn),
+  onLimits: (fn) => events.subscribe('limits', fn),
+  onConnection: (fn) => events.onConnection(fn),
+  onChanged: (fn) => {
+    window.addEventListener(MODELS_CHANGED, fn);
+    return () => window.removeEventListener(MODELS_CHANGED, fn);
+  },
+  every: (fn, ms) => {
+    const t = setInterval(fn, ms);
+    return () => clearInterval(t);
+  },
+  // Fallback while a CLI login runs: check back every 2 s, give up after 10 minutes.
+  pollLogins: (load) => pollLogins(load, () => {}),
+});
+
 /** Provider state and usage. Live through the `providers` event; reloads on reconnect, on MODELS_CHANGED and every minute. */
 export function useModels(): Models {
-  const [status, setStatus] = useState<DispatchStatus | null>(null);
-  const [providers, setProviders] = useState<Record<string, ProviderState>>({});
-  const [limits, setLimits] = useState<ProviderLimits>({});
-  const reload = useCallback(async () => {
-    try {
-      const s = await api.dispatch();
-      setStatus(s);
-      if (!s.enabled) return;
-      const [pv, lim] = await Promise.all([api.providers(), api.limits().catch(() => ({}))]);
-      setProviders(pv);
-      setLimits(lim);
-    } catch {
-      setStatus({ enabled: false });
-    }
-  }, []);
-  useEffect(() => {
-    void reload();
-    const t = setInterval(reload, 60_000);
-    window.addEventListener(MODELS_CHANGED, reload);
-    const offProviders = events.subscribeJson<Record<string, ProviderState>>('providers', (pv) => pv && typeof pv === 'object' && setProviders(pv));
-    const offLimits = events.subscribe('limits', () => void api.limits().then(setLimits, () => {}));
-    // After a dropped connection the events in between are lost: read the state again.
-    let first = true;
-    const offConn = events.onConnection((up) => {
-      if (up && !first) void reload();
-      if (up) first = false;
-    });
-    return () => {
-      clearInterval(t);
-      window.removeEventListener(MODELS_CHANGED, reload);
-      offProviders();
-      offLimits();
-      offConn();
-    };
-  }, [reload]);
-  // Fallback while a CLI login runs (the event stream may be down): check back every 2 s, give up after 10 minutes.
-  const busy = Object.values(providers).some((p) => p?.busy);
-  useEffect(() => (busy ? pollLogins(() => void reload(), () => {}) : undefined), [busy, reload]);
-  return { status, providers, limits, reload };
+  const snap = useSyncExternalStore(store.subscribe, store.get);
+  return useMemo(() => ({ ...snap, reload: store.reload }), [snap]);
 }
 
 export function SidebarModels() {
@@ -106,19 +90,7 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
           {s.text}
         </span>
       </SidebarMenuButton>
-      {open && (
-        <ConnectDialog
-          meta={meta}
-          models={models}
-          onClose={() => {
-            setOpen(false);
-            // The browser returns focus to the opener on close; this covers the case where it landed on <body>.
-            requestAnimationFrame(() => {
-              if (!document.activeElement || document.activeElement === document.body) trigger.current?.focus();
-            });
-          }}
-        />
-      )}
+      {open && <SettingsModal section="providers" onClose={closeTo(trigger, () => setOpen(false))} />}
     </SidebarMenuItem>
   );
 }
