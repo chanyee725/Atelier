@@ -73,10 +73,13 @@ export function login(id, onChange, onDone = () => {}) {
   };
   p.stdout.on("data", scan);
   p.stderr.on("data", scan);
-  // A spawn failure (no exit follows) ends the login too; the raw message stays out of the UI.
-  p.on("error", () => {
+  // A spawn failure (no pid, and no exit follows) ends the login too; the raw message stays out of the UI.
+  // Any other child error (a failed kill, say) leaves the login running: its exit still ends it.
+  p.on("error", e => {
     if (state[id].proc !== p) return;
-    Object.assign(state[id], { busy: false, url: null, error: START_FAILED, proc: null, cancelled: false });
+    if (p.pid !== undefined) { console.error("dispatch login:", e.code ?? e.name); return; }
+    const error = state[id].cancelled ? null : START_FAILED;
+    Object.assign(state[id], { busy: false, url: null, error, proc: null, cancelled: false });
     onChange();
   });
   p.on("exit", code => {
@@ -93,13 +96,15 @@ export function login(id, onChange, onDone = () => {}) {
 
 /**
  * Stops a running login: SIGTERM, then SIGKILL after `killAfterMs` for a CLI that ignores it.
- * Resolves once the login process has exited (at once when none is running).
+ * Resolves once the login process has exited (at once when none is running, or when it never
+ * started: a failed spawn has no pid and emits `error` instead of `exit`).
  */
 export function cancelLogin(id, killAfterMs = 3000) {
   const s = state[id];
   const p = s?.proc;
   if (!s?.busy || !p) return Promise.resolve();
   s.cancelled = true;
+  if (p.pid === undefined) return Promise.resolve();
   return new Promise(resolve => {
     if (p.exitCode !== null || p.signalCode !== null) return resolve();
     const timer = setTimeout(() => p.kill("SIGKILL"), killAfterMs);
@@ -107,6 +112,9 @@ export function cancelLogin(id, killAfterMs = 3000) {
     p.kill("SIGTERM");
   });
 }
+
+/** Test seam: the running login process of a provider, or null. */
+export const loginProcForTest = id => state[id]?.proc ?? null;
 
 // agy has no logout command (running it bare would start an interactive session): nothing to run.
 export async function logout(id) {

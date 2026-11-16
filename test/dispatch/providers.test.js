@@ -9,8 +9,9 @@ import { join } from 'node:path';
 import { createApp } from '../../server/app.js';
 import * as workspace from '../../server/workspace/index.js';
 import * as dispatch from '../../server/dispatch/index.js';
-import { cancelLogin } from '../../server/dispatch/auth.js';
+import { cancelLogin, login, loginProcForTest } from '../../server/dispatch/auth.js';
 import { fakeCliBin, until } from '../fixtures/fake-cli/index.mjs';
+import { FAKE_MARKER } from '../../server/dispatch/cli.js';
 
 const W = { 'content-type': 'application/json', 'x-drawing': '1' };
 const ORIGINAL = { ...process.env };
@@ -243,6 +244,49 @@ test('cancel kills a login that ignores SIGTERM', async () => {
     assert.equal(p.connected, false);
   } finally {
     await s.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/** A marked fake bin folder whose `claude` cannot start (its interpreter does not exist): spawn emits `error`, never `exit`. */
+function brokenClaudeBin() {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-login-broken-'));
+  writeFileSync(join(dir, 'claude'), '#!/nonexistent/interpreter\n', { mode: 0o755 });
+  writeFileSync(join(dir, FAKE_MARKER), '');
+  return dir;
+}
+
+test('#590 cancel right after a login that fails to spawn resolves at once and shows no error', async () => {
+  const dir = brokenClaudeBin();
+  process.env = { ...ORIGINAL, PATH: dir };
+  try {
+    let done = null;
+    login('claude', () => {}, (ok) => { done = ok; });
+    const t0 = Date.now();
+    await Promise.race([cancelLogin('claude', 60_000), new Promise((_, rej) => setTimeout(() => rej(new Error('cancelLogin hung')), 2000))]);
+    assert.ok(Date.now() - t0 < 2000);
+    await until(() => loginProcForTest('claude') === null);
+    assert.equal(done, null, 'a spawn failure is not a finished login');
+  } finally {
+    process.env = ORIGINAL;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('#590 a child error after spawn (e.g. a failed kill) keeps the login; its exit still ends it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-login-err-'));
+  process.env = { ...ORIGINAL, ...withFake(dir, { FAKE_CLI_LOGIN_MS: '200' }) };
+  try {
+    let done = null;
+    login('claude', () => {}, (ok) => { done = ok; });
+    const p = loginProcForTest('claude');
+    assert.ok(p?.pid);
+    p.emit('error', Object.assign(new Error('kill EPERM'), { code: 'EPERM' }));
+    assert.equal(loginProcForTest('claude'), p, 'still the running login');
+    await until(() => done !== null);
+    assert.equal(done, true, 'onDone ran on exit');
+  } finally {
+    process.env = ORIGINAL;
     rmSync(dir, { recursive: true, force: true });
   }
 });
