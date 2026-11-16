@@ -59,7 +59,7 @@ export default function GeneralSection() {
             checked={alerts === 'on'}
             disabled={alerts === 'unsupported' || alerts === 'denied'}
             onChange={(e) => void (e.target.checked ? turnAlertsOn() : turnAlertsOff())}
-            className="mt-0.5 shrink-0 accent-primary"
+            className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
           />
           <div className="flex min-w-0 flex-col gap-0.5">
             <label htmlFor="settings-alerts" className="text-sm">
@@ -84,7 +84,7 @@ export default function GeneralSection() {
             checked={reply}
             disabled={!ready || pending !== null}
             onChange={(e) => void setReply(e.target.checked)}
-            className="mt-0.5 shrink-0 accent-primary"
+            className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
           />
           <div className="flex min-w-0 flex-col gap-0.5">
             <label htmlFor="settings-reply-style" className="text-sm">
