@@ -383,7 +383,7 @@ export function Sidebar(p: Props) {
       </p>
       <SidebarFooter>
         <SidebarModels />
-        <SidebarMenu>
+        <SidebarMenu className="mt-3">
           <SidebarMenuItem>
             <SettingsEntry />
           </SidebarMenuItem>
