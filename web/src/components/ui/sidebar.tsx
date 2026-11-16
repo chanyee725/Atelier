@@ -14,7 +14,7 @@ const MOBILE_QUERY = '(max-width: 767px)';
 // Sidebar colours. The shell and sidebar sit on --sidebar; the inset panel stays on --background.
 const C = {
   bg: 'bg-sidebar text-sidebar-foreground',
-  hover: 'hover:bg-accent hover:text-foreground',
+  hover: 'cursor-pointer transition-colors hover:bg-accent hover:text-foreground',
   active: 'aria-[current=page]:bg-muted aria-[current=page]:text-foreground',
   border: 'border-sidebar-border',
 };
