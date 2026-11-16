@@ -182,7 +182,7 @@ function AnswerCard({ s, onPick }: { s: Session; onPick: (text: string) => void 
   const q = questionOf(text ?? s.last);
   if (!q) return null;
   return (
-    <section aria-label="답할 것" className="mx-6 mt-3 rounded-xl border border-warn/60 bg-warn/5 p-3">
+    <section aria-label="답할 것" className="mx-(--overlay-x) mt-3 rounded-xl border border-warn/60 bg-warn/5 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-warn">
         <MessageCircleQuestion aria-hidden className="size-3.5" />
         답할 것
@@ -244,7 +244,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     <div
       ref={box}
       onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
-      className="flex h-full flex-col gap-4 overflow-y-auto px-6 py-5 [&>*]:shrink-0"
+      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body [&>*]:shrink-0"
     >
       {!entries && <p className="text-sm text-muted-foreground">대화를 불러오는 중이에요…</p>}
       {entries?.length === 0 && (
@@ -271,7 +271,7 @@ function Info({ s }: { s: Session }) {
   ];
   const usage: [string, number][] = [['입력', s.usage.input], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite], ['출력', s.usage.output]];
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto px-6 py-5 text-sm">
+    <div className="flex h-full flex-col gap-6 overflow-y-auto overlay-body text-sm">
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2.5">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
@@ -310,9 +310,9 @@ function Composer({ s, text, setText, inputRef, report }: { s: Session; text: st
     if (await report(api('POST', `/api/sessions/${encodeURIComponent(s.id)}/message`, { text: v }))) setText('');
     setBusy(false);
   };
-  if (!canRun(s)) return <p role="note" className="border-t px-6 py-4 text-sm text-muted-foreground">{READ_ONLY_NOTICE}</p>;
+  if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-sm text-muted-foreground">{READ_ONLY_NOTICE}</p>;
   return (
-    <div className="flex items-end gap-2 border-t p-4">
+    <div className="overlay-foot flex items-end gap-2 border-t">
       <Textarea
         ref={inputRef}
         value={text}
@@ -355,7 +355,7 @@ export function SessionSheet({ id, onClose }: { id: string | null; onClose: () =
       <SheetContent side="right" showCloseButton className="w-full gap-0 bg-background p-0 sm:max-w-2xl">
         {s && (
           <>
-            <SheetHeader className="gap-2 border-b px-6 pt-5 pb-4">
+            <SheetHeader className="gap-2 border-b">
               <div className="flex items-center gap-2.5 pr-8">
                 <SheetTitle className="truncate text-lg">{s.name}</SheetTitle>
                 <StatusBadge state={stateOf(s)} />
@@ -384,7 +384,7 @@ export function SessionSheet({ id, onClose }: { id: string | null; onClose: () =
             {error && <Alert variant="destructive">{error}</Alert>}
             <AnswerCard s={s} onPick={pick} />
             <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
-              <TabsList className="mx-6 mt-3">
+              <TabsList className="mx-(--overlay-x) mt-3">
                 <TabsTrigger value="chat">대화</TabsTrigger>
                 <TabsTrigger value="diff">변경사항</TabsTrigger>
                 <TabsTrigger value="info">정보</TabsTrigger>

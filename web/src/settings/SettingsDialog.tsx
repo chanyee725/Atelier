@@ -127,7 +127,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
     >
       <SettingsContext.Provider value={ctx}>
         <div className="flex h-full min-h-0 flex-col">
-          <header className="flex shrink-0 items-center gap-2 border-b px-4 py-2">
+          <header className="overlay-head flex shrink-0 items-center gap-2 border-b">
             <h2 id={titleId} className="text-sm font-semibold">
               설정
             </h2>
@@ -158,7 +158,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 ))}
               </ul>
             </nav>
-            <div className="hidden shrink-0 border-b px-4 py-2 max-md:block">
+            <div className="hidden shrink-0 border-b px-(--overlay-x) py-2 max-md:block">
               <label htmlFor={selectId} className="sr-only">
                 설정 항목
               </label>
@@ -176,7 +176,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 ))}
               </select>
             </div>
-            <div className="settings-dialog-body min-h-0 min-w-0 flex-1 overflow-y-auto p-5 max-md:p-4">
+            <div className="settings-dialog-body overlay-body min-h-0 min-w-0 flex-1 overflow-y-auto">
               {SECTIONS.map((s) => {
                 const Section = SECTION_COMPONENTS[s.id];
                 return (
@@ -196,7 +196,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
         aria-labelledby={confirmTitleId}
         aria-describedby={confirmTextId}
         data-testid="settings-close-confirm"
-        className="settings-confirm m-auto w-[min(360px,calc(100vw-2rem))] max-w-none rounded-lg border bg-background p-4 text-foreground shadow-md"
+        className="settings-confirm m-auto w-[min(360px,calc(100vw-2rem))] max-w-none overlay-box rounded-lg border bg-background text-foreground shadow-md"
       >
         <h2 id={confirmTitleId} className="text-sm font-semibold">
           저장하지 않은 내용이 있어요
@@ -204,7 +204,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
         <p id={confirmTextId} className="mt-1 text-sm text-muted-foreground">
           지금 닫으면 입력한 내용이 사라져요.
         </p>
-        <form method="dialog" className="mt-4 flex flex-wrap justify-end gap-2">
+        <form method="dialog" className="mt-5 flex flex-wrap justify-end gap-2">
           <button type="button" onClick={() => (confirmRef.current?.close(), ref.current?.close())} className={cn(BTN, 'border text-destructive')}>
             닫기
           </button>

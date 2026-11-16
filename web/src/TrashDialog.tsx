@@ -65,15 +65,15 @@ export function TrashDialog({ onClose, onRestored }: Props) {
             닫기
           </Button>
         </DialogHeader>
-        <DialogDescription id="trash-note" className="px-4 py-2">
+        <DialogDescription id="trash-note" className="px-(--overlay-x) py-2">
           지운 파일은 30일 동안 보관해요. 버전 기록도 함께 돌아와요.
         </DialogDescription>
         {message && (
-          <p role="alert" className="bg-muted px-4 py-2 text-sm">
+          <p role="alert" className="bg-muted px-(--overlay-x) py-2 text-sm">
             {message}
           </p>
         )}
-        <ul className="min-h-0 flex-1 overflow-auto border-t p-1.5" aria-label="지운 파일">
+        <ul className="min-h-0 flex-1 overflow-auto border-t px-1.5 pt-1.5 pb-(--menu-end)" aria-label="지운 파일">
           {items === null && <li className={hint}>불러오는 중이에요…</li>}
           {items?.length === 0 && <li className={hint}>최근에 지운 파일이 없어요</li>}
           {items?.map((i) => (

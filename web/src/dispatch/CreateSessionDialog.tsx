@@ -76,12 +76,12 @@ export function CreateSessionDialog({ folder, onClose, onCreated }: { folder?: s
         className="flex max-h-[calc(100dvh-2rem)] flex-col"
         onSubmit={e => { e.preventDefault(); if (!busy) void submit(); }}
       >
-        <header className="border-b px-5 pt-4 pb-3">
+        <header className="overlay-head border-b">
           <h2 id={titleId} className="text-base font-semibold">새 세션</h2>
           {project.name && <p className="mt-0.5 truncate text-xs text-muted-foreground"><span className="font-medium text-foreground">{project.name}</span>에서 실행돼요</p>}
         </header>
 
-        <div className="flex min-h-0 flex-col gap-5 overflow-y-auto px-5 py-4">
+        <div className="overlay-body flex min-h-0 flex-col gap-5 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <label htmlFor={promptId} className="text-sm font-medium">공통 프롬프트</label>
             <Textarea id={promptId} autoFocus value={prompt} onChange={e => setPrompt(e.target.value)} rows={4}
@@ -165,7 +165,7 @@ export function CreateSessionDialog({ folder, onClose, onCreated }: { folder?: s
           {error && <p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t px-5 py-3 max-md:flex-col max-md:items-stretch">
+        <footer className="flex items-center justify-between gap-3 overlay-foot border-t max-md:flex-col max-md:items-stretch">
           <p className="truncate text-sm text-muted-foreground tabular-nums">{count ? `${count}개 세션: ${summary(rows, models)}` : '만들 세션이 없어요'}</p>
           <div className="flex shrink-0 justify-end gap-2">
             <Button variant="ghost" onClick={() => ref.current?.close()}>취소</Button>

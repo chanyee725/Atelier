@@ -77,7 +77,7 @@ export function DiffView({ s }: { s: Session }) {
     ? `${diff.base ?? '기본 브랜치'}에 병합된 이 브랜치의 커밋`
     : diff.base ? `${diff.base}에서 갈라진 뒤 바뀐 것 (커밋 + 커밋 안 한 변경)` : '커밋 안 한 변경';
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto px-6 py-5 [&>*]:shrink-0">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto overlay-body [&>*]:shrink-0">
       <div className="flex items-center gap-3 text-sm">
         <span className="font-medium tabular-nums">파일 {diff.files}개</span>
         <span className="text-ok tabular-nums">+{diff.add}</span>

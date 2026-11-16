@@ -28,7 +28,7 @@
   max-block-size: min(480px, calc(100dvh - 16px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px;
+  padding: var(--menu-pad) var(--menu-pad) var(--menu-end);
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--popover);

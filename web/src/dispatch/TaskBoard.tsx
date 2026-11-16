@@ -51,7 +51,7 @@ function Board({ tasks }: { tasks: BoardTask[] }) {
   const [doneExpanded, setDoneExpanded] = useState(false);
   const groups = groupByStage(tasks);
   return (
-    <div data-board className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 pt-0">
+    <div data-board className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-(--overlay-x) pb-(--overlay-end)">
       {STAGES.map(s => {
         const { shown, more } = visibleTasks(s.id, groups[s.id], doneExpanded);
         return (
@@ -94,7 +94,7 @@ export function TaskBoardButton() {
             <SheetTitle>작업 보드</SheetTitle>
             <SheetDescription>관리자가 적어 둔 작업을 단계별로 보여줘요.</SheetDescription>
           </SheetHeader>
-          {tasks.length === 0 && <p className="px-4 pb-2 text-sm text-muted-foreground">아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</p>}
+          {tasks.length === 0 && <p className="px-(--overlay-x) pb-2 text-sm text-muted-foreground">아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</p>}
           <Board tasks={tasks} />
         </SheetContent>
       </Sheet>
