@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Scene } from '../../shared/render/index.ts';
-import { placeRuns, samePlaced, type PlaceEl, type PlaceView } from '../../web/src/canvas/runPlace.ts';
+import { canPlace, placeRuns, samePlaced, unplaced, type PlaceEl, type PlaceView } from '../../web/src/canvas/runPlace.ts';
 import { clearRuns, runStepsFor, setRunSteps, setStill } from '../../web/src/run/runStore.ts';
 import * as store from '../../web/src/run/runStore.ts';
 import { FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
@@ -78,4 +78,20 @@ test('runStore: setStill with the same value does not notify', () => {
   assert.equal(calls, 1);
   setStill(false);
   unsub();
+});
+
+// #556: a morph only plays where placeRuns puts a layer; anything it skips must not be left at MORPH_OPACITY.
+test('canPlace: same skip rules as placeRuns for the element itself', () => {
+  assert.equal(canPlace(img('e1', 'b1')), true);
+  assert.equal(canPlace(img('e1', 'b1', { angle: 0.3 })), false);
+  assert.equal(canPlace(img('e1', 'b1', { opacity: 0 })), false);
+  assert.equal(canPlace(img('e1', 'b1', { isDeleted: true })), false);
+  assert.equal(canPlace(img('e1', 'b1', { type: 'rectangle' })), false);
+  assert.equal(canPlace(img('e1', 'b1', { width: 0 })), false);
+});
+
+test('unplaced: morph blocks with no placed layer are reported, placed ones are not', () => {
+  const placed = placeRuns([img('e1', 'b1'), img('e2', 'b2', { angle: 0.3 })], view, wrap, runs, pictureOf, null);
+  assert.deepEqual(unplaced(runs, placed), ['b2']);
+  assert.deepEqual(unplaced(new Set(['b1']), placed), []);
 });
