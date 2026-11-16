@@ -215,10 +215,62 @@ export function readTeamNumbers(texts: Record<TeamNumberId, string>): Record<Tea
   const out = {} as Record<TeamNumberId, number>;
   for (const f of TEAM_NUMBERS) {
     const v = wholeIn(texts[f.id], f.min, f.max);
-    if (v === null) return { error: `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요` };
+    if (v === null) return { error: teamNumberError(f) };
     out[f.id] = v;
   }
   return out;
+}
+
+const teamNumberError = (f: (typeof TEAM_NUMBERS)[number]) => `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요`;
+
+/**
+ * Each bad number field's message, keyed by field, in field order (the 설정 page shows these under the fields
+ * instead of the browser's own bubble, #615). Empty when every field is fine.
+ */
+export function teamNumberErrors(texts: Record<TeamNumberId, string>): Partial<Record<TeamNumberId, string>> {
+  const out: Partial<Record<TeamNumberId, string>> = {};
+  for (const f of TEAM_NUMBERS) if (wholeIn(texts[f.id], f.min, f.max) === null) out[f.id] = teamNumberError(f);
+  return out;
+}
+
+/** What the team form shows: number fields as typed text, the switches and each role's chosen model. */
+export type TeamFormState = { texts: Record<TeamNumberId, string>; toggles: Record<TeamToggleId, boolean>; roleModels: Record<string, string> };
+
+/** The form for saved values, nothing edited. */
+export function teamForm(v: TeamValues): TeamFormState {
+  return {
+    texts: Object.fromEntries(TEAM_NUMBERS.map((f) => [f.id, String(v[f.id])])) as Record<TeamNumberId, string>,
+    toggles: Object.fromEntries(TEAM_TOGGLES.map((f) => [f.id, v[f.id]])) as Record<TeamToggleId, boolean>,
+    roleModels: { ...v.roleModels },
+  };
+}
+
+/**
+ * The form after the saved values change from `prev` to `next` (another tab, the sidebar 설정 modal, the server's
+ * `settings` event or a save's answer, #615): a field still showing its `prev` value follows `next`; a field the user
+ * edited keeps the edit. Roles that are new take their saved model.
+ */
+export function resyncTeamForm(prev: TeamValues, next: TeamValues, form: TeamFormState): TeamFormState {
+  const texts = { ...form.texts };
+  for (const f of TEAM_NUMBERS) if (texts[f.id] === String(prev[f.id])) texts[f.id] = String(next[f.id]);
+  const toggles = { ...form.toggles };
+  for (const f of TEAM_TOGGLES) if (toggles[f.id] === prev[f.id]) toggles[f.id] = next[f.id];
+  const roleModels: Record<string, string> = {};
+  for (const [role, model] of Object.entries(next.roleModels)) {
+    const shown = form.roleModels[role];
+    roleModels[role] = shown === undefined || shown === prev.roleModels[role] ? model : shown;
+  }
+  return { texts, toggles, roleModels };
+}
+
+/**
+ * The saved values after a save: numbers and switches from the server's answer (its `team`), role models as sent
+ * (the server keeps them in the snapshot's roles, which arrive separately). No answer: what was sent.
+ */
+export function savedAfterSave(answerTeam: Record<string, unknown> | undefined, sent: TeamValues): TeamValues {
+  if (!answerTeam) return sent;
+  const fromAnswer = teamValues(answerTeam, []);
+  return { ...fromAnswer, roleModels: { ...sent.roleModels } };
 }
 
 // Per-provider usage (#587, ported from Dispatch's ProviderLimits): GET /api/limits answers one entry per provider
