@@ -55,6 +55,8 @@ type Props = {
   onShowFrame: (frameId: string) => void;
   /** Export one embedded diagram. */
   onExportBlock: (block: Block, kind: ImageKind) => void;
+  /** The editor once it exists, and null when the pane goes (the agent margin reads the blocks, E532). */
+  onEditor?: (editor: Editor | null) => void;
 };
 
 /** Scroll to a heading by its link id (or by its place in the outline) and flash it. */
@@ -90,7 +92,7 @@ const newId = () => `b_${Math.random().toString(36).slice(2, 10)}`;
  * Remounted per file (App keys it), so it reads `document` only when it starts. A document the
  * editor cannot read is never saved over: the pane shows an error and stays read-only.
  */
-export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onNotice, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock }: Props) {
+export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onNotice, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock, onEditor }: Props) {
   const getBlocksRef = useRef(getBlocks);
   getBlocksRef.current = getBlocks;
   const onDocumentRef = useRef(onDocument);
@@ -231,6 +233,7 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
   });
 
   editorRef.current = editor;
+  useEffect(() => (onEditor?.(editor), () => onEditor?.(null)), [editor, onEditor]);
   // Outside changes (`live.seq` grows): diff them into the editor. The first value seen at mount is already in `document`.
   const liveSeen = useRef(live?.seq ?? 0);
   const onLiveFailRef = useRef(onLiveFail);
