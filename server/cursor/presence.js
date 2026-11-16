@@ -23,6 +23,16 @@ export function cleanSessionLabel(raw) {
   return out || null;
 }
 
+/**
+ * The `x-drawing-session` header when it carries a session id (the `DRAWING_SESSION` value a session started by this
+ * Drawing gets, #656): the lowercased id, else null. A session id is never shown as a label.
+ */
+export function sessionIdOf(raw) {
+  if (typeof raw !== 'string') return null;
+  const v = raw.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v.toLowerCase() : null;
+}
+
 /** Project (top-level folder) of a workspace-relative path; null for a loose file in the root. */
 export function projectOf(rel) {
   if (typeof rel !== 'string') return null;
