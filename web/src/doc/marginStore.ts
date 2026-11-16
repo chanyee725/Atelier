@@ -10,27 +10,22 @@ import { parseAgents, type AgentPresence } from '../home/agents';
 import type { DocSpot } from './docCursor.ts';
 import {
   agentsOf,
-  ago,
   applyMarginEvent,
   blocksOfJson,
-  changeLabel,
   clearFile,
   COLLAPSE_KEY,
-  doingLines,
   formOf,
+  marginCard,
   freezePlace,
-  marginPhase,
   nextTurnAt,
-  PHASE_LABEL,
   placeOf,
   pruneIdle,
   readCollapsed,
   SETTLE_MS,
   type BlockInfo,
-  type EditPlace,
   type MarginForm,
   type MarginMap,
-  type MarginPhase,
+  type MarginCard,
 } from './agentMargin.ts';
 
 type Snap = { map: MarginMap; presence: readonly AgentPresence[] };
@@ -89,37 +84,7 @@ export const applyMarginCursor = (e: CursorEvent) => put({ map: applyMarginEvent
 
 // ---- the hook ----
 
-export type MarginChange = {
-  id: string;
-  /** "02. 화면 지도 · 다이어그램". */
-  label: string;
-  /** "방금", "12초 전". */
-  ago: string;
-  at: number;
-  spot: DocSpot;
-};
-
-export type MarginCard = {
-  sid: string;
-  name: string;
-  role: string;
-  roleName?: string;
-  /** `#rrggbb`, or '' (use the role colour). */
-  color: string;
-  /** Model label for display ("Opus 5.5"), null when not known. */
-  model: string | null;
-  /** claude | openai | gemini, null when not known (ProviderIcon takes it as is). */
-  provider: string | null;
-  phase: MarginPhase;
-  /** "쓰는 중", "생각 중", "기다리는 중". */
-  phaseLabel: string;
-  /** What it is doing right now, one sentence (the accent line). */
-  doing: string;
-  /** The step it works on, or what it just changed; null when nothing to add. */
-  sub: string | null;
-  /** Recent changes, newest first (at most 5). */
-  changes: MarginChange[];
-};
+export type { MarginCard, MarginChange } from './agentMargin.ts';
 
 export type AgentMargin = {
   /** Agents editing this document now, in the order they came. */
@@ -142,7 +107,7 @@ const readStored = () => {
   }
 };
 
-/** Scroll to `spot` in the editor and flash its block (`.doc-margin-flash`), without touching focus or selection. */
+/** Scroll to `spot` in the editor and flash its block, without touching focus or selection. */
 export function jumpTo(editor: Editor | null, spot: DocSpot) {
   const view = editor?.view;
   if (!view || (view as { isDestroyed?: boolean }).isDestroyed) return;
@@ -155,10 +120,9 @@ export function jumpTo(editor: Editor | null, spot: DocSpot) {
   if (!(el instanceof HTMLElement)) return;
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   el.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
-  el.classList.remove('doc-margin-flash');
-  void el.offsetWidth;
-  el.classList.add('doc-margin-flash');
-  setTimeout(() => el.classList.remove('doc-margin-flash'), 1600);
+  // Web Animations, not a class: ProseMirror's DOM observer strips attributes it did not render. A colour fade, not
+  // a movement, so it plays under reduced motion too.
+  el.animate?.([{ backgroundColor: 'color-mix(in oklab, var(--ring) 28%, transparent)' }, { backgroundColor: 'transparent' }], { duration: 1600, easing: 'ease-out' });
 }
 
 /**
@@ -217,30 +181,7 @@ export function useAgentMargin(file: string, editor: Editor | null, width: numbe
 
   const agents = useMemo(
     () =>
-      mine.map((a): MarginCard => {
-        const live = presence.find((p) => p.sid === a.sid) ?? null;
-        const phase = marginPhase(a, now, live);
-        const placeOfEdit = (e: (typeof a.edits)[number]): EditPlace | null => e.place ?? placeOf(blocks, e.spot);
-        const latest = a.edits[0] ? placeOfEdit(a.edits[0]) : null;
-        const lines = doingLines({ phase, place: latest, step: null, tool: live?.activity ?? null });
-        return {
-          sid: a.sid,
-          name: a.name || live?.name || '',
-          role: a.role || live?.role || '',
-          ...(live?.roleName && { roleName: live.roleName }),
-          color: a.color || live?.color || '',
-          model: live?.modelLabel || live?.model || null,
-          provider: live?.provider || null,
-          phase,
-          phaseLabel: PHASE_LABEL[phase],
-          doing: lines.main,
-          sub: lines.sub,
-          changes: a.edits.flatMap((e) => {
-            const p = placeOfEdit(e);
-            return p ? [{ id: e.id, label: changeLabel(p), ago: ago(now - e.at), at: e.at, spot: e.spot }] : [];
-          }),
-        };
-      }),
+      mine.map((a) => marginCard(a, presence.find((p) => p.sid === a.sid) ?? null, now, blocks)),
     [mine, presence, now, blocks],
   );
 

@@ -1,7 +1,8 @@
 // E529 (#619): agent cursors in the document — the event model, the place-to-position mapping and the glide.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getSchema } from '@tiptap/core';
+import { createDocument, getSchema } from '@tiptap/core';
+import { withTrailingParagraph } from '../../web/src/doc/model.ts';
 import { docExtensions } from '../../web/src/doc/extensions.ts';
 import { applyDocCursor, docPos, DOC_MOVE_MS, glideAt, gliding, nextGlide, pruneDocGone, SETTLE_MS, type DocCursor } from '../../web/src/doc/docCursor.ts';
 import { FADE_AFTER_MS, FADE_MS } from '../../web/src/canvas/agentCursor.ts';
@@ -24,6 +25,8 @@ test('applyDocCursor: a doc place creates and moves the cursor; no place keeps i
   m = applyDocCursor(m, ev(), 500);
   assert.equal(m.get('s1')!.moveAt, 100);
   assert.equal(m.get('s1')!.editAt, 500);
+  // An edit on the canvas only does not keep the document cursor writing (#627).
+  assert.equal(applyDocCursor(m, ev(undefined, { x: 5, y: 6 }), 700), m);
   m = applyDocCursor(m, ev({ index: 2, offset: 0 }), 900);
   assert.deepEqual(m.get('s1')!.spot, { index: 2, offset: 0 });
   // Two sessions, two cursors.
@@ -91,4 +94,44 @@ test('nextGlide: first place snaps, a new place glides, a late reflow or reduced
   const red = nextGlide(g, c, { x: 200, y: 0 }, 1100, true);
   assert.deepEqual(glideAt(red, 1100, true), { x: 200, y: 0 });
   assert.equal(gliding(red, 1100, true), false);
+});
+
+test('server block index matches the editor children through the editor load path (tables, embeds, trailing paragraph)', () => {
+  // As DocPane opens a file: withTrailingParagraph, then TipTap's content check against the real schema.
+  const load = (j: unknown) => createDocument(withTrailingParagraph(j) as never, schema, undefined, { errorOnInvalidContent: true });
+  const cell = (t: string, type = 'tableCell') => ({ type, content: [p(t)] });
+  const table = (a: string, b: string) => ({
+    type: 'table',
+    content: [
+      { type: 'tableRow', content: [cell('Name', 'tableHeader'), cell('Note', 'tableHeader')] },
+      { type: 'tableRow', content: [cell(a), cell(b)] },
+    ],
+  });
+  const diagram = { type: 'diagram', attrs: { blockId: 'b1' } };
+  const frame = { type: 'frameEmbed', attrs: { frameId: 'f1', name: 'Frame' } };
+  const rule = { type: 'horizontalRule' };
+  const base = [h('Plan'), diagram, table('x', 'y'), frame, rule];
+  const cases: Array<[unknown[], unknown[], string]> = [
+    // Text typed into a table cell: the caret is right after it, inside the table.
+    [[...base, p('end')], [h('Plan'), diagram, table('x', 'y and more'), frame, rule, p('end')], 'NameNotexy and more'],
+    // A paragraph after the embeds and the rule: they do not shift the index.
+    [[...base, p('end')], [...base, p('end, then more')], 'end, then more'],
+    // The last block is not a paragraph: the editor appends one, which comes after every server index.
+    [[...base], [...base, h('Next')], 'Next'],
+  ];
+  for (const [before, after, upTo] of cases) {
+    const spot = changedDocSpot(docBlocksOf({ document: json(...before) }), docBlocksOf({ document: json(...after) }))!;
+    const d = load(json(...after));
+    assert.ok(d.childCount >= after.length, 'the editor never drops top-level blocks');
+    for (let i = 0; i < after.length; i++) assert.equal(d.child(i).type.name, (after[i] as { type: string }).type, `block ${i} keeps its place`);
+    const at = docPos(d, spot)!;
+    let start = 0;
+    for (let i = 0; i < spot.index; i++) start += d.child(i).nodeSize;
+    assert.equal(d.textBetween(start, at.pos), upTo);
+  }
+  // An embed changed in place: its block is the place (an atom, no text).
+  const spot = changedDocSpot(docBlocksOf({ document: json(...base) }), docBlocksOf({ document: json(h('Plan'), { ...diagram, attrs: { blockId: 'b2' } }, table('x', 'y'), frame, rule) }))!;
+  assert.deepEqual(spot, { index: 1, offset: 0 });
+  const d = load(json(h('Plan'), { ...diagram, attrs: { blockId: 'b2' } }, table('x', 'y'), frame, rule));
+  assert.deepEqual(docPos(d, spot), { pos: d.child(0).nodeSize, atom: true });
 });

@@ -40,7 +40,9 @@ const spotOf = (v: unknown): DocSpot | null => {
 
 /**
  * Apply one `cursor` event; returns a new map (or the same one when nothing changed). An event with a document place
- * moves (or creates) the session's cursor; one without keeps a cursor of the same file alive; `gone` removes it.
+ * moves (or creates) the session's cursor; one with neither a document nor a canvas place keeps a cursor of the same
+ * file alive; `gone` removes it. A canvas-only edit (`x`/`y`, no `doc`) leaves the document cursor alone, so it fades
+ * out while the agent works on the canvas instead of looking like it is still writing there.
  */
 export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: CursorEvent, now: number): ReadonlyMap<string, DocCursor> {
   if (!e || typeof e.sid !== 'string') return cursors;
@@ -54,7 +56,7 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
   const spot = spotOf(e.doc);
   const file = e.file ?? old?.file ?? '';
   if (!spot) {
-    if (!old || old.file !== file) return cursors;
+    if (!old || old.file !== file || (Number.isFinite(e.x) && Number.isFinite(e.y))) return cursors;
     return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now });
   }
   return new Map(cursors).set(e.sid, {
@@ -80,6 +82,9 @@ export function pruneDocGone(cursors: ReadonlyMap<string, DocCursor>, now: numbe
  * The editor position of a document place: inside top-level block `index` (clamped to the last block), after
  * `offset` characters of its text nodes (clamped to its end; counted like server/cursor/model.js `blockText`).
  * `atom`: the block holds no text (an embedded diagram, a rule): the position is the block itself.
+ * The server counts blocks in the saved JSON; the editor's top-level children are the same blocks in the same order
+ * (TipTap's content check refuses a document it would have to rewrite: DocPane shows it as broken, without cursors),
+ * plus at most a trailing paragraph after the last one (withTrailingParagraph), so an index never shifts.
  */
 export function docPos(doc: PMNode, spot: DocSpot): { pos: number; atom: boolean } | null {
   if (!doc.childCount) return null;

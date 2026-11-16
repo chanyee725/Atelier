@@ -301,6 +301,83 @@ export function blocksOfJson(doc: unknown): BlockInfo[] {
   });
 }
 
+// ---- the card ----
+
+/** What the live agent list (shared/dispatch/agent-presence.ts) adds to a card. */
+export type LiveAgent = {
+  name?: string;
+  role?: string;
+  roleName?: string;
+  color?: string;
+  model?: string | null;
+  modelLabel?: string;
+  provider?: string;
+  status?: string;
+  state?: string | null;
+  activity?: string;
+  step?: string;
+};
+
+export type MarginChange = {
+  id: string;
+  /** "02. 화면 지도 · 다이어그램". */
+  label: string;
+  /** "방금", "12초 전". */
+  ago: string;
+  at: number;
+  spot: DocSpot;
+};
+
+export type MarginCard = {
+  sid: string;
+  name: string;
+  role: string;
+  roleName?: string;
+  /** `#rrggbb`, or '' (use the role colour). */
+  color: string;
+  /** Model label for display ("Opus 5.5"), null when not known. */
+  model: string | null;
+  /** claude | openai | gemini, null when not known (ProviderIcon takes it as is). */
+  provider: string | null;
+  phase: MarginPhase;
+  /** "쓰는 중", "생각 중", "기다리는 중". */
+  phaseLabel: string;
+  /** What it is doing right now, one sentence (the accent line). */
+  doing: string;
+  /** The step it works on, or what it just changed; null when nothing to add. */
+  sub: string | null;
+  /** Recent changes, newest first (at most 5). */
+  changes: MarginChange[];
+};
+
+/**
+ * One agent's card at `now`: state, what it is doing (its latest change in `blocks`, its tool activity, the pipeline
+ * step it works on) and its recent changes. Frozen words win over the document as it is now.
+ */
+export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, blocks: readonly BlockInfo[]): MarginCard {
+  const phase = marginPhase(a, now, live);
+  const placeOfEdit = (e: MarginEdit): EditPlace | null => e.place ?? placeOf(blocks, e.spot);
+  const latest = a.edits[0] ? placeOfEdit(a.edits[0]) : null;
+  const lines = doingLines({ phase, place: latest, step: live?.step ?? null, tool: live?.activity ?? null });
+  return {
+    sid: a.sid,
+    name: a.name || live?.name || '',
+    role: a.role || live?.role || '',
+    ...(live?.roleName && { roleName: live.roleName }),
+    color: a.color || live?.color || '',
+    model: live?.modelLabel || live?.model || null,
+    provider: live?.provider || null,
+    phase,
+    phaseLabel: PHASE_LABEL[phase],
+    doing: lines.main,
+    sub: lines.sub,
+    changes: a.edits.flatMap((e) => {
+      const p = placeOfEdit(e);
+      return p ? [{ id: e.id, label: changeLabel(p), ago: ago(now - e.at), at: e.at, spot: e.spot }] : [];
+    }),
+  };
+}
+
 // ---- layout ----
 
 /** Container width (px) from which the margin sits beside the document; narrower, it is a bottom sheet. */
