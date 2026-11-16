@@ -89,6 +89,8 @@ export function watchAppEvents() {
   const sessions = new Map<string, SessionMsg>();
   let providers: ProviderMsg | null = null;
   const runs = new Map<string, string>();
+  // Runs that started before this moment were already going when the page opened: no 시작했어요 for them.
+  const openedAt = Date.now();
   const prs = new Map<string, string>();
   const emit = (list: AppEvent[]) => list.forEach(notifyApp);
 
@@ -120,7 +122,7 @@ export function watchAppEvents() {
   events.subscribe('settings', () => notifyApp({ type: 'settings-saved' }));
   events.subscribeJson<Parameters<typeof runEvents>[2]>('run', (e) => {
     if (!e || typeof e.file !== 'string' || typeof e.runId !== 'string') return;
-    emit(runEvents(runs, prs, e));
+    emit(runEvents(runs, prs, e, openedAt));
   });
   let first = true;
   events.onConnection((online) => {

@@ -3,8 +3,11 @@
 // progress stays in the bell's feed, where every toast can be found again. App events (E540, #671: files, sessions,
 // models, settings, runs; activity/appToasts.ts) share the same stack. Toasts sit in one popover="manual" region at the
 // top right (no light dismiss); info closes itself after a while unless hovered or focused, errors stay until closed;
-// they never take focus.
-import { useEffect, useReducer, useRef } from 'react';
+// they never take focus. While a modal dialog is open (설정), the same region is rendered inside it (#674): everything
+// outside a modal is inert, so a toast there could be neither read nor closed, and waiting until it closes hid
+// 설정을 저장했어요 until it no longer helped.
+import { useEffect, useReducer, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import type { AppToast, ToastTarget } from './appEvents';
 import { categoryOn, onAppToast, setToastOpener, watchAppEvents } from './appToasts';
@@ -18,8 +21,11 @@ const SHOW_MS = 6_000;
 /** At most this many on screen at once; the rest wait their turn (none is dropped). */
 const MAX_TOASTS = 3;
 const MODAL_CHECK_MS = 400;
-/** A modal dialog is open: the page behind it is inert, so a toast could be neither read nor closed. */
-const modalOpen = () => !!document.querySelector(MODAL_SELECTOR);
+/** The topmost open modal dialog (the last in document order, e.g. a confirm inside 설정), else null. */
+const modalHost = (): HTMLElement | null => {
+  const all = document.querySelectorAll<HTMLElement>(MODAL_SELECTOR);
+  return all.length ? all[all.length - 1] : null;
+};
 
 type Toast = { id: string; text: string; kind: ActivityEvent['kind'] | 'info'; color?: string; persist?: boolean; target?: ToastTarget };
 let seq = 0;
@@ -49,6 +55,10 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   // Toasts that came while a modal dialog was open, or while MAX_TOASTS were on screen, wait in q.waiting.
   const [q, dispatch] = useReducer(reduce, EMPTY);
   const toasts = q.shown;
+  // Where the region lives: inside the open modal dialog (the rest of the page is inert), else in place.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  // Where focus was before it moved into a toast, to go back to when the last one is closed.
+  const before = useRef<HTMLElement | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const live = useRef<HTMLParagraphElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -62,7 +72,7 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   const close = (id: string) => {
     clearTimeout(timers.current.get(id));
     timers.current.delete(id);
-    dispatch({ type: 'close', id, blocked: modalOpen() });
+    dispatch({ type: 'close', id, blocked: false });
   };
   const later = (id: string) => {
     clearTimeout(timers.current.get(id));
@@ -84,14 +94,15 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
     }
   }, [toasts]);
 
-  // While toasts wait, look now and then for the modal dialog to close (a Radix sheet gives no event the page can
-  // hear). Unchanged queue when there is nothing to do, so this does not re-render.
-  const hasWaiting = q.waiting.length > 0;
+  // While toasts are on screen, look now and then for a modal dialog opening or closing (a Radix sheet gives no event
+  // the page can hear) and move the region along. Same element → no re-render.
+  const showing = toasts.length > 0;
   useEffect(() => {
-    if (!hasWaiting) return;
-    const t = setInterval(() => dispatch({ type: 'fill', blocked: modalOpen() }), MODAL_CHECK_MS);
+    if (!showing) return;
+    setHost(modalHost());
+    const t = setInterval(() => setHost(modalHost()), MODAL_CHECK_MS);
     return () => clearInterval(t);
-  }, [hasWaiting]);
+  }, [showing]);
 
   useEffect(
     () =>
@@ -113,22 +124,26 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
         }
         if (route !== 'toast' || !categoryOn('agents')) return;
         const toast: Toast = { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}), ...(e.kind === 'error' ? { persist: true } : {}), target: { file: e.file } };
-        // Not behind a modal dialog, where it could be neither read nor closed: it waits until the dialog closes.
-        dispatch({ type: 'add', toast, blocked: modalOpen() });
+        setHost(modalHost());
+        dispatch({ type: 'add', toast, blocked: false });
       }),
     [],
   );
   useEffect(() => {
     watchAppEvents();
     setToastOpener((t) => t.target && go(t.target));
-    return onAppToast((t) => dispatch({ type: 'add', toast: fromApp(t), blocked: modalOpen() }));
+    return onAppToast((t) => {
+      setHost(modalHost());
+      dispatch({ type: 'add', toast: fromApp(t), blocked: false });
+    });
   }, []);
   useEffect(
     () => () => timers.current.forEach(clearTimeout),
     [],
   );
 
-  // The region is in the top layer only while it has toasts.
+  // The region is in the top layer only while it has toasts. A move into or out of a modal dialog makes a new element,
+  // shown again here; shown after the dialog, it sits above it.
   useEffect(() => {
     const el = box.current;
     if (!el?.showPopover) return;
@@ -138,7 +153,7 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
     // A hidden region gets no mouseleave or blur: closing the last toast under the pointer must not keep the next
     // ones open for good.
     if (!toasts.length) held.current = false;
-  }, [toasts.length]);
+  }, [toasts.length, host]);
 
   // Closing the focused toast moves focus to the next one, else back to the page.
   const dismiss = (id: string, e: React.MouseEvent) => {
@@ -146,10 +161,17 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
     const next = (li?.nextElementSibling ?? li?.previousElementSibling)?.querySelector<HTMLElement>('button');
     close(id);
     if (next) next.focus();
-    else (document.querySelector<HTMLElement>('[data-activity-bell]') ?? document.body).focus();
+    else {
+      // Back where focus was, if it is still there and not made inert by a modal; else the bell, else the page.
+      const back = before.current;
+      before.current = null;
+      const ok = (el: HTMLElement | null) => !!el && el.isConnected && !el.closest('[inert]') && (!host || host.contains(el));
+      const bell = document.querySelector<HTMLElement>('[data-activity-bell]');
+      (ok(back) ? back! : ok(bell) ? bell! : (host ?? document.body)).focus();
+    }
   };
 
-  return (
+  const region = (
     <>
       <p ref={live} className="sr-only" aria-live="polite" />
       <div
@@ -161,7 +183,11 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
         data-activity-toasts=""
         onMouseEnter={() => (held.current = true)}
         onMouseLeave={() => (held.current = false)}
-        onFocus={() => (held.current = true)}
+        onFocus={(e) => {
+          held.current = true;
+          const from = e.relatedTarget as HTMLElement | null;
+          if (from && !e.currentTarget.contains(from)) before.current = from;
+        }}
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) held.current = false;
         }}
@@ -195,4 +221,6 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
       </div>
     </>
   );
+  // Inside the modal, the live region (fallback when there is no ariaNotify) is not inert either.
+  return host ? createPortal(region, host) : region;
 }

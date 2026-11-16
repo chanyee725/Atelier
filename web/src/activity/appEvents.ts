@@ -174,17 +174,31 @@ export function providerEvents(prev: Record<string, ProviderLike>, next: Record<
   return out;
 }
 
-type RunLike = { file: string; runId: string; run?: { state?: string; endedAt?: number | null }; session?: { sid: string; pr?: { number: number; state: string | null } | null } };
+type RunLike = {
+  file: string;
+  runId: string;
+  run?: { state?: string; startedAt?: number | null; endedAt?: number | null };
+  session?: { sid: string; pr?: { number: number; state: string | null } | null };
+};
 
-/** What one `run` SSE event means, given what this page saw of that run before (`seen`: runId → state). */
-export function runEvents(seen: Map<string, string>, prs: Map<string, string>, e: RunLike): AppEvent[] {
+/** A run first seen running counts as started here only when it started this close to (or after) the page opened. */
+export const RUN_START_SLACK_MS = 5_000;
+
+/**
+ * What one `run` SSE event means, given what this page saw of that run before (`seen`: runId → state). `since`: when
+ * the page started watching. A run first seen mid-way (it started before the page opened and was paused and resumed,
+ * or just reported a step) is only remembered: it says nothing until it ends.
+ */
+export function runEvents(seen: Map<string, string>, prs: Map<string, string>, e: RunLike, since = -Infinity): AppEvent[] {
   const out: AppEvent[] = [];
   const st = e.run?.state;
   if (st) {
     const was = seen.get(e.runId);
     seen.set(e.runId, st);
     const live = st === 'running' || st === 'paused';
-    if (live && was === undefined && !e.run?.endedAt) out.push({ type: 'run-started', file: e.file, runId: e.runId });
+    const at = e.run?.startedAt;
+    const fresh = typeof at === 'number' && at >= since - RUN_START_SLACK_MS;
+    if (st === 'running' && was === undefined && fresh && !e.run?.endedAt) out.push({ type: 'run-started', file: e.file, runId: e.runId });
     else if (!live && was !== undefined && (was === 'running' || was === 'paused'))
       out.push({ type: 'run-ended', file: e.file, runId: e.runId, failed: st === 'failed' || st === 'error' });
   }
