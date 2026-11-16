@@ -592,7 +592,8 @@ export class Hub extends EventEmitter {
     const s = this.get(id);
     if (!s) throw new Error("세션이 없어요");
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
-    if (!PROVIDERS.includes(s.provider)) throw new Error(UNSUPPORTED_MODEL); // before anything is recorded or started
+    const blocked = this.runBlock(s); // before anything is recorded or started
+    if (blocked) throw new Error(blocked);
     const r = this.rt(id);
     // A pending length-guard note is attached here and cleared only on a path that delivers the message.
     const pend = s.longPending;
@@ -611,6 +612,18 @@ export class Hub extends EventEmitter {
     } else {
       this.start(s, text);
     }
+  }
+
+  /**
+   * Why a saved session cannot run now, or null: its provider is unsupported or no longer connected
+   * in Drawing, or its model is not in the model list (a disconnected provider, or a model that is gone).
+   */
+  runBlock(s) {
+    if (!PROVIDERS.includes(s.provider)) return UNSUPPORTED_MODEL;
+    const name = PROVIDER_NAMES[s.provider];
+    if (!this.isConnected(s.provider)) return `${name}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`;
+    if (!this.models.some(m => m.id === s.model && m.provider === s.provider)) return `${String(s.model ?? "").slice(0, 60)} 모델을 지금은 쓸 수 없어요. ${name} 연결과 모델 목록을 확인하세요.`;
+    return null;
   }
 
   /** Idle (between turns) and past the turn budget, or over the context guard, since its CLI session started. */
@@ -806,7 +819,8 @@ export class Hub extends EventEmitter {
   // Resume every session a restart cut off mid-turn, once its provider is connected.
   resumeInterrupted() {
     for (const s of this.sessions) {
-      if (!s.interrupted || !PROVIDERS.includes(s.provider) || !this.isConnected(s.provider) || this.paused) continue; // paused: the ticket resumes it
+      // Not runnable yet (provider not connected, model list not loaded): stays interrupted for a later try.
+      if (!s.interrupted || this.runBlock(s) || this.paused) continue; // paused: the ticket resumes it
       if (this.holdTeam?.(s.parent ?? s.id)) continue; // a stopped plan: 이어서 하기 resumes it
       s.interrupted = false;
       try { this.send(s.id, RESUME_TEXT); } catch { /* resumes on the next message instead */ }
@@ -987,7 +1001,8 @@ export class Hub extends EventEmitter {
     // Last gate before a CLI starts: a session saved with a mode or effort that is no longer
     // allowed (older state, a hand-edited file) stops with an error instead of running looser.
     try {
-      if (!PROVIDERS.includes(s.provider)) throw new Error(UNSUPPORTED_MODEL); // refuse before any spawn
+      const blocked = this.runBlock(s); // refuse before any spawn
+      if (blocked) throw new Error(blocked);
       checkPerm(s.provider, s.perm);
       if (s.effort) checkEffort({ efforts: this.models.find(m => m.id === s.model)?.efforts || EFFORT_WORDS }, s.effort);
     } catch (e) {
