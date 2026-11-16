@@ -51,7 +51,9 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
 
   const off = load.kind === 'off';
   const shown = load.kind === 'ok' || off;
-  useDirtyMark(section, load.kind === 'ok' && sectionDirty(saved, form, section));
+  // Unsaved input counts in every load state: a stream that drops (failed) or reconnects (loading) mid-edit leaves the
+  // input on screen, so closing must still ask (#644).
+  useDirtyMark(section, sectionDirty(saved, form, section));
   const { numbers, toggles } = sectionFields(section);
 
   const submit = async (e: FormEvent) => {

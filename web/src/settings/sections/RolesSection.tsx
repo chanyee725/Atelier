@@ -41,7 +41,8 @@ export default function RolesSection() {
   const groups = useMemo(() => modelGroups(list, providers), [list, providers]);
   const off = load.kind === 'off';
   const ready = load.kind === 'ok';
-  useDirtyMark('roles', ready && roleModelsPatch(saved, shown) !== null);
+  // In every load state: a dropped or reconnecting stream keeps the picks on screen (#644).
+  useDirtyMark('roles', roleModelsPatch(saved, shown) !== null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
