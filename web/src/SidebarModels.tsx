@@ -4,7 +4,8 @@
 // (settings/sections/ProvidersSection.tsx), where connect, cancel and disconnect happen (#624).
 // Hovering or focusing a row shows its usage limits (SidebarUsageCard, #698). State comes from GET /api/state and the
 // `providers` SSE event (docs/design/model-connection-contract.md). Nothing here reads credentials or logs anything.
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
 import { events } from './lib/events';
@@ -71,13 +72,31 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
   const s = rowStatus(meta, models.providers[meta.id], !!models.status?.enabled, models.limits);
   // Usage card on hover and keyboard focus (#698); the click still opens 모델 연결.
   const card = useUsageCard();
-  // While 모델 연결 is open, and for one frame after it closes, row events are not new interest in the card (#704):
-  // the native <dialog> returns focus to the row on Esc (closeTo() as a fallback), and the dialog sits inside this
-  // <li> in the DOM, so a pointer anywhere over the modal fires the row's pointerenter. Cleared after closeTo's own
-  // focus frame; real hover or focus moves after that still open the card.
-  const returning = useRef(false);
+  // Row events right after 모델 연결 closes are not new interest in the card (#704, #708). The modal is portalled to
+  // <body>, so the pointer over it is never over this row in the DOM; React still bubbles portal events through its
+  // tree, so the row ignores them while the modal is open. After it closes:
+  // - focus: the native <dialog> returns focus to the row (closeTo() as a fallback), so focus is ignored until the
+  //   frame after closeTo's own focus frame;
+  // - pointer: a pointer resting on the row gets a synthetic pointerenter after the layout change, so hover counts only
+  //   once the pointer really moves over the row (a pointermove with movement).
+  const focusGate = useRef(false);
+  const pointerGate = useRef(false);
+  const frame = useRef(0);
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(frame.current);
+      focusGate.current = false;
+      pointerGate.current = false;
+    },
+    [],
+  );
   const hover = {
-    onPointerEnter: (e: React.PointerEvent) => !returning.current && card.hover.onPointerEnter(e),
+    onPointerEnter: (e: React.PointerEvent) => !open && !pointerGate.current && card.hover.onPointerEnter(e),
+    onPointerMove: (e: React.PointerEvent) => {
+      if (open || !pointerGate.current || (e.movementX === 0 && e.movementY === 0)) return;
+      pointerGate.current = false;
+      card.hover.onPointerEnter(e);
+    },
     onPointerLeave: card.hover.onPointerLeave,
   };
   const cardId = `usage-card-${meta.id}`;
@@ -93,11 +112,13 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         aria-describedby={card.open ? cardId : undefined}
         {...card.trigger}
         onFocus={(e) => {
-          if (!returning.current) card.trigger.onFocus(e);
+          if (!open && !focusGate.current) card.trigger.onFocus(e);
         }}
         onClick={() => {
           card.close();
-          returning.current = true;
+          cancelAnimationFrame(frame.current);
+          focusGate.current = true;
+          pointerGate.current = true;
           setOpen(true);
         }}
         className="max-md:h-11"
@@ -113,17 +134,20 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         </span>
       </SidebarMenuButton>
       {card.open && !open && <SidebarUsageCard id={meta.id} meta={meta} anchor={trigger} hover={card.hover} statusText={s.text} />}
-      {open && (
-        <SettingsModal
-          section="providers"
-          onClose={() => {
-            closeTo(trigger, () => setOpen(false))();
-            requestAnimationFrame(() => {
-              returning.current = false;
-            });
-          }}
-        />
-      )}
+      {open &&
+        createPortal(
+          <SettingsModal
+            section="providers"
+            onClose={() => {
+              closeTo(trigger, () => setOpen(false))();
+              cancelAnimationFrame(frame.current);
+              frame.current = requestAnimationFrame(() => {
+                focusGate.current = false;
+              });
+            }}
+          />,
+          document.body,
+        )}
     </SidebarMenuItem>
   );
 }
