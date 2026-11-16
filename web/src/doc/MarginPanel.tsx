@@ -1,6 +1,7 @@
 // Agent activity margin of the document view (E532, issue #622): one card per agent session editing the open
-// document — who it is (session name, role colour, model, provider mark), its state, what it is doing right now in
-// plain words, and its recent changes as a time-ordered list. A change jumps to its block in the document and
+// document — who it is (session name, role colour, model, provider mark), a status line ("다이어그램 작성 중…", E537),
+// what it works on now in plain words, and its recent steps as a timeline. Two cards a row when the panel is wide
+// (a container query, margin-panel.css). A change jumps to its block in the document and
 // flashes it (and the agent's cursor, doc/DocAgentCursors.tsx) in the agent's colour.
 //
 // Presentational: the cards come from the margin store (doc/marginStore.ts, model in doc/agentMargin.ts) and the
@@ -67,42 +68,47 @@ function Dots() {
 
 function Card({ card, onJump }: { card: MarginCard; onJump: (spot: DocSpot, card: MarginCard) => void }) {
   const name = card.name || card.roleName || roleLabel(card.role);
+  const stepsId = useId();
   return (
     <li className="margin-card" data-margin-card={card.sid} data-phase={card.phase} style={agentStyle(card)}>
       <div className="margin-who">
         <span className="margin-swatch" aria-hidden="true" />
         <span className="margin-name">{name}</span>
-        <span className="margin-phase" data-margin-phase={card.phase}>
-          {card.phase !== 'waiting' && <Dots />}
-          {card.phaseLabel}
-        </span>
+        {(card.model || card.provider) && (
+          <span className="margin-model">
+            <ProviderIcon provider={card.provider} />
+            {card.model}
+          </span>
+        )}
       </div>
-      {(card.model || card.provider || card.name) && (
-        <div className="margin-meta">
-          {card.name && card.role && <span>{card.roleName || roleLabel(card.role)}</span>}
-          {(card.model || card.provider) && (
-            <span className="margin-model">
-              <ProviderIcon provider={card.provider} />
-              {card.model}
-            </span>
-          )}
-        </div>
-      )}
-      <p className="margin-doing" data-margin-doing="">
-        {card.doing}
+      {card.name && card.role && <div className="margin-meta">{card.roleName || roleLabel(card.role)}</div>}
+      <p className="margin-status" data-margin-status="" data-margin-phase={card.phase}>
+        {card.phase !== 'waiting' && <Dots />}
+        <span>{card.status}</span>
       </p>
-      {card.sub && <p className="margin-sub">{card.sub}</p>}
+      <div className="margin-now">
+        <span className="margin-label">지금</span>
+        <p className="margin-doing" data-margin-doing="">
+          {card.doing}
+        </p>
+        {card.sub && <p className="margin-sub">{card.sub}</p>}
+      </div>
       {card.changes.length > 0 && (
-        <ol className="margin-changes" aria-label={`${name}의 최근 변경`}>
-          {card.changes.map((c) => (
-            <li key={c.id}>
-              <button type="button" className="margin-change" data-margin-change={c.id} onMouseDown={keepFocus} onClick={() => onJump(c.spot, card)}>
-                <span className="margin-change-label">{c.label}</span>
-                <span className="margin-change-ago">{c.ago}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+        <div className="margin-steps">
+          <span className="margin-label" id={stepsId}>
+            최근 단계
+          </span>
+          <ol className="margin-changes" aria-labelledby={stepsId}>
+            {card.changes.map((c) => (
+              <li key={c.id}>
+                <button type="button" className="margin-change" data-margin-change={c.id} onMouseDown={keepFocus} onClick={() => onJump(c.spot, card)} title="이 위치로 이동">
+                  <span className="margin-change-label">{c.label}</span>
+                  <span className="margin-change-ago">{c.ago}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </li>
   );
@@ -145,7 +151,7 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
               ))}
             </span>
             <span className="margin-title">{title}</span>
-            <span className="margin-sheet-doing">{agents[0]?.doing}</span>
+            <span className="margin-sheet-doing">{agents[0]?.status}</span>
             <ChevronUp className="margin-toggle-icon" aria-hidden="true" />
           </button>
         ) : (

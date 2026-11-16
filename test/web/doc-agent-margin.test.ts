@@ -224,6 +224,32 @@ test('marginCard: the pipeline step and tool activity from the live list, model 
   assert.deepEqual([bare.model, bare.provider, bare.sub], [null, null, null], 'no live entry: no step, model or provider');
 });
 
+test('status line (#654): cursor event status first, then presence statusLabel, else worked out from the change kind', async () => {
+  const { marginCard, cardStatus } = await import('../../web/src/doc/agentMargin.ts');
+  const blocks: BlockInfo[] = [H('02. 화면 지도'), P('본문'), { type: 'diagram', text: '' }];
+  let m: MarginMap = new Map();
+  m = applyMarginEvent(m, ev({ index: 2, offset: 0 }), 0, 1);
+  const a = m.get('s1')!;
+  const live = { status: 'running', state: 'working', statusLabel: '코드 읽는 중…' };
+  assert.equal(marginCard(a, live, 100, blocks, '표 작성 중…').status, '표 작성 중…');
+  assert.equal(marginCard(a, live, 100, blocks).status, '코드 읽는 중…');
+  assert.equal(marginCard(a, { status: 'running' }, 100, blocks).status, '다이어그램 생각 중…');
+  assert.equal(marginCard(a, { status: 'running', state: 'waiting' }, 100_000, blocks).status, '대기 중');
+  assert.equal(cardStatus({ phase: 'thinking', kind: 'text' }), '글 작성 중…');
+  assert.equal(cardStatus({ phase: 'thinking', live: { status: 'idle' } }), '생각 중', 'not working: the phase label');
+});
+
+test('applyStatus (#654): cursor and cursor-status events keep the latest label; gone or null drops it', async () => {
+  const { applyStatus } = await import('../../web/src/doc/agentMargin.ts');
+  let s: ReadonlyMap<string, string> = new Map();
+  s = applyStatus(s, { sid: 's1', status: '글 작성 중…' });
+  assert.equal(s.get('s1'), '글 작성 중…');
+  assert.equal(applyStatus(s, { sid: 's1', status: '글 작성 중…' }), s, 'same label: same map');
+  assert.equal(applyStatus(s, { sid: 's1', file: 'a' }), s, 'no status field: unchanged');
+  assert.equal(applyStatus(s, { sid: 's1', status: null }).has('s1'), false);
+  assert.equal(applyStatus(s, { sid: 's1', gone: true }).has('s1'), false);
+});
+
 test('shareAt keeps the split divider under the pointer while the margin shows, and the text and canvas their minimums', () => {
   for (const room of [
     { box: 1176, chrome: 0, rail: false },

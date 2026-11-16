@@ -5,6 +5,7 @@
 // `node --test`. Memory only: nothing here is stored, and no transcript is read.
 import { cursorColor, type CursorEvent } from '../canvas/agentCursor.ts';
 import type { DocSpot } from './docCursor.ts';
+import { agentStatus, type AgentTarget } from '../../../shared/dispatch/agent-status.ts';
 
 /** No edit to the file for this long: the agent leaves the margin (and with the last one the margin closes). */
 export const IDLE_MS = 20_000;
@@ -49,6 +50,23 @@ const spotOf = (v: unknown): DocSpot | null => {
   if (!Number.isInteger(index) || !Number.isInteger(offset) || (index as number) < 0 || (offset as number) < 0) return null;
   return { index: index as number, offset: offset as number };
 };
+
+/** Session id -> its latest status label from `cursor` / `cursor-status` events (#653). Memory only. */
+export type Statuses = ReadonlyMap<string, string>;
+/** A cursor event as #653 sends it: `status` on edits, and `cursor-status` { sid, status } between them. */
+export type StatusEvent = CursorEvent & { status?: string | null };
+/** The status map after one event (the same map when nothing changed). */
+export function applyStatus(map: Statuses, e: StatusEvent | null | undefined): Statuses {
+  if (!e || typeof e.sid !== 'string' || !e.sid) return map;
+  if (e.gone || e.status === null) {
+    if (!map.has(e.sid)) return map;
+    const next = new Map(map);
+    next.delete(e.sid);
+    return next;
+  }
+  if (typeof e.status !== 'string' || !e.status || map.get(e.sid) === e.status) return map;
+  return new Map(map).set(e.sid, e.status.slice(0, 40));
+}
 
 /**
  * Apply one `cursor` event (returns the same map when nothing changed). A document place adds a change (or updates
@@ -316,6 +334,8 @@ export type LiveAgent = {
   state?: string | null;
   activity?: string;
   step?: string;
+  /** Short status label the server worked out (presence `statusLabel`, shared/dispatch/agent-status.ts). */
+  statusLabel?: string;
 };
 
 export type MarginChange = {
@@ -342,7 +362,9 @@ export type MarginCard = {
   phase: MarginPhase;
   /** "쓰는 중", "생각 중", "기다리는 중". */
   phaseLabel: string;
-  /** What it is doing right now, one sentence (the accent line). */
+  /** The status line: "다이어그램 작성 중…", "대기 중" (shared/dispatch/agent-status.ts); the phase label as a last resort. */
+  status: string;
+  /** What it is doing right now and where (its current target), one sentence. */
   doing: string;
   /** The step it works on, or what it just changed; null when nothing to add. */
   sub: string | null;
@@ -350,11 +372,28 @@ export type MarginCard = {
   changes: MarginChange[];
 };
 
+/** The agent-status target of a change's block kind: a diagram, a table, else the document text. */
+export const statusTarget = (kind: EditKind | null | undefined): AgentTarget =>
+  kind == null ? null : kind === 'diagram' || kind === 'frame' ? 'diagram' : kind === 'table' ? 'table' : 'doc';
+
+/**
+ * The status line of a card (E537, #654): the cursor event's `status` first, then the live list's `statusLabel`, else
+ * worked out from the hub status and the kind of its latest change (no tool known here).
+ */
+export function cardStatus(input: { phase: MarginPhase; event?: string | null; live?: LiveAgent | null; kind?: EditKind | null }): string {
+  const { phase, event, live, kind } = input;
+  if (event) return event;
+  if (live?.statusLabel) return live.statusLabel;
+  const hub = phase === 'waiting' ? 'waiting' : live?.status ?? 'running';
+  return agentStatus({ status: hub, tool: null, target: statusTarget(kind) }) ?? PHASE_LABEL[phase];
+}
+
 /**
  * One agent's card at `now`: state, what it is doing (its latest change in `blocks`, its tool activity, the pipeline
- * step it works on) and its recent changes. Frozen words win over the document as it is now.
+ * step it works on) and its recent changes. Frozen words win over the document as it is now. `status`: the latest
+ * status label from its cursor events (null when none came).
  */
-export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, blocks: readonly BlockInfo[]): MarginCard {
+export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, blocks: readonly BlockInfo[], status: string | null = null): MarginCard {
   const phase = marginPhase(a, now, live);
   const placeOfEdit = (e: MarginEdit): EditPlace | null => e.place ?? placeOf(blocks, e.spot);
   const latest = a.edits[0] ? placeOfEdit(a.edits[0]) : null;
@@ -369,6 +408,7 @@ export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, 
     provider: live?.provider || null,
     phase,
     phaseLabel: PHASE_LABEL[phase],
+    status: cardStatus({ phase, event: status, live, kind: latest?.kind }),
     doing: lines.main,
     sub: lines.sub,
     changes: a.edits.flatMap((e) => {
