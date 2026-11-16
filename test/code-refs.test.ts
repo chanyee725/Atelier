@@ -174,3 +174,40 @@ test('unmatched [ in an unquoted value ends at the first , or ] like a plain val
   assert.equal(a.attrs?.color, 'red');
   assert.deepEqual(diagnostics.filter((d) => d.severity === 'error'), []);
 });
+
+test("'.' path segments are dropped, the first '#' starts the symbol, empty symbol is rejected in block JSON (#469)", () => {
+  const r = parseCodeAttr('./a.py:3; a/./b.py#f; .; a.ts#Class.#priv; a.cpp:4#operator/; Foo.ts#bar#baz; a.py#');
+  assert.deepEqual(r.refs, [
+    { path: 'a.py', start: 3 },
+    { path: 'a/b.py', start: 1, symbol: 'f' },
+    { path: 'a.ts', start: 1, symbol: 'Class.#priv' },
+    { path: 'a.cpp', start: 4, symbol: 'operator/' },
+    { path: 'Foo.ts', start: 1, symbol: 'bar#baz' },
+  ]);
+  assert.equal(r.problems.length, 2);
+  assert.match(r.problems[0]!, /'\.'.*path must name a file/);
+  assert.match(r.problems[1]!, /Bad symbol/);
+  // the same refs are valid in block JSON
+  assert.equal(blockCodeProblem({ v: 1, nodes: { A: { refs: r.refs } } }), null);
+  const ok = { v: 1, nodes: { A: { refs: [{ path: './src/./a.py', start: 1 }] } } };
+  assert.equal(blockCodeProblem(ok), null);
+  assert.deepEqual(cleanBlockCode(ok as BlockCode).nodes.A!.refs, [{ path: 'src/a.py', start: 1 }]);
+  assert.match(blockCodeProblem({ v: 1, nodes: { A: { refs: [{ path: '.', start: 1 }] } } })!, /must name a file/);
+  assert.match(blockCodeProblem({ v: 1, nodes: { A: { refs: [{ path: 'a.py', start: 1, symbol: '' }] } } })!, /symbol must be a string of 1-/);
+});
+
+test('stripCodeAttrs edge cases are pinned (#473, #479)', async () => {
+  const { stripCodeAttrs } = await import('../shared/dsl/code-refs.ts');
+  // Single quotes are plain characters, as in parseAttrs (which reads code: "b'").
+  assert.equal(stripCodeAttrs("A [label: 'a, code: b']"), "A [label: 'a]");
+  // No closing ] on the line, malformed entries: left as written (the parser reports an error).
+  assert.equal(stripCodeAttrs('A [color: red, code: x\nB'), 'A [color: red, code: x\nB');
+  assert.equal(stripCodeAttrs('A [foo bar code: x]'), 'A [foo bar code: x]');
+  // A rebuilt list joins kept entries with ', '; their own text is kept.
+  assert.equal(stripCodeAttrs('A [color:red ,  code: x,icon:  y]'), 'A [color:red, icon:  y]');
+  // A list alone on its line keeps the indentation; after a node name the space before it goes too.
+  assert.equal(stripCodeAttrs('g {\n  [code: x]\n}'), 'g {\n  \n}');
+  assert.equal(stripCodeAttrs('  A  [code: x]'), '  A');
+  // Unbalanced nested brackets the parser also rejects (#479): current output pinned.
+  assert.equal(stripCodeAttrs('A [code: a[[b], color: red]'), 'A, color: red]');
+});
