@@ -338,14 +338,11 @@ async function run(t, view) {
   });
   await page.waitForTimeout(500);
   const x2 = await textX();
-  // 둘 다: the drags above end at the canvas minimum, where the share under the pointer is smaller than the one the
-  // pane started with (the 6:4 pane is clamped there), so the text comes back near, not exactly at, where it was.
-  if (view === 'doc') assert.ok(Math.abs(x2 - x0) <= 2, `the text came back: ${x0} → ${x2}`);
-  else assert.ok(Math.abs(x2 - x0) <= 60 && (await page.locator('.doc-margin-aside').count()) === 0, `the text came back: ${x0} → ${x2}`);
+  // The drags above end at the canvas minimum, which keeps the share they started with (#658): back where it was.
+  assert.ok(Math.abs(x2 - x0) <= 2 && (await page.locator('.doc-margin-aside').count()) === 0, `the text came back: ${x0} → ${x2}`);
   if (view === 'both') {
     const w2 = await widths();
-    // (Not exactly w0: see above, the drag that ended at the canvas minimum set a smaller share.)
-    assert.ok(w2.canvas >= w0.canvas - 2 && w2.pane <= w0.pane + 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
+    assert.ok(Math.abs(w2.pane - w0.pane) <= 2 && Math.abs(w2.canvas - w0.canvas) <= 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
   }
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);

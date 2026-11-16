@@ -279,6 +279,24 @@ test('shareAt keeps the split divider under the pointer while the margin shows, 
   }
 });
 
+// #658: a drag that reaches the canvas minimum and comes back leaves the share it started with, so the pane is as
+// wide as before when the margin closes; the divider sits at the same place either way.
+test('shareAt keeps the starting share while the pane sits at the canvas minimum', () => {
+  const room = { box: 1300, chrome: 0, rail: false };
+  const start = 0.5; // 0.5 × 1300 / 0.6 > 1300 - 430: the side pane is clamped at the canvas minimum
+  for (const x of [room.box - CANVAS_MIN, room.box - CANVAS_MIN + 50, room.box - 20]) {
+    const share = shareAt(room, x, start);
+    assert.equal(share, start);
+    assert.equal(dividerAt({ ...room, share }), dividerAt({ ...room, share: shareAt(room, x) }));
+  }
+  // Below the minimum, or with a smaller starting share, the pointer decides as before.
+  assert.equal(shareAt(room, 700, start), shareAt(room, 700));
+  assert.equal(shareAt(room, room.box - 20, 0.3), shareAt(room, room.box - 20));
+  // The rail too.
+  const rail = { ...room, rail: true };
+  assert.equal(shareAt(rail, rail.box - 20, 0.75), 0.75);
+});
+
 // #643: DocMargin and the Splitter read the collapsed side panel from one place, the host's `data-side-rail`.
 test('measureRoom reads the rail from data-side-rail only', async () => {
   const { measureRoom } = await import('../../web/src/doc/marginRoom.ts');
