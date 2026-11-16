@@ -46,7 +46,7 @@ import { HistoryDialog } from './HistoryDialog';
 import { TrashDialog } from './TrashDialog';
 import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
-import { displayName } from './Sidebar';
+import { displayName } from './docTitles';
 import {
   ArrowUpRight, Circle, Clock, Columns2, Copy, CopyPlus, Delete, Diamond, Eraser, File, FilePlus, FileText, Hand, ImageDown, Layers, FolderClosed,
   Maximize, Minus, Moon, MousePointer2, Move, PanelLeft, PanelRight, Pencil, Redo2, RotateCcw, Scan, Shapes, Square,
