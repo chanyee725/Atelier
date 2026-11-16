@@ -46,7 +46,21 @@ export type ProjectsView = { projects: Project[]; loose: DocNode[] };
 
 /** Model connection summary for the sidebar (Dispatch routes; GET only, nothing here starts a CLI). */
 export type DispatchStatus = { enabled: boolean; reason?: string; message?: string };
-export type ProviderState = { installed: boolean | null; connected: boolean; busy?: boolean; url?: string | null; error?: string | null };
+/** docs/design/model-connection-contract.md. installed null = not checked yet. Never carries an account name or token. */
+export type ProviderState = {
+  installed: boolean | null;
+  connected: boolean;
+  busy?: boolean;
+  url?: string | null;
+  error?: string | null;
+  name?: string;
+  /** `claude --version` first line. */
+  cli?: string | null;
+  /** The CLI itself is logged in on this machine (independent of the Drawing connection). */
+  cliLoggedIn?: boolean;
+  /** How the CLI is logged in, e.g. 구독 계정 (claude.ai). */
+  method?: string | null;
+};
 export type LimitWindow = { label: string; used: number | null; reset?: number | null };
 export type ProviderLimits = {
   claude?: { windows: LimitWindow[] } | null;
