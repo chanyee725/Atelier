@@ -72,7 +72,7 @@ test('cursor module: an agent edit is broadcast at the changed shape; a human-on
   assert.deepEqual(r.sent.map((s) => s.event), ['cursor']);
   const { at, ...rest } = r.sent[0].data;
   assert.equal(typeof at, 'number');
-  assert.deepEqual(rest, { sid: 's1', name: 'Remy', role: 'impl', file: 'a.dpx.json', x: 350, y: 325 });
+  assert.deepEqual(rest, { sid: 's1', name: 'Remy', role: 'impl', file: 'a.dpx.json', x: 350, y: 325, live: true, status: '다이어그램 작성 중…' });
   // A change with no shape moved keeps the cursor alive without a place.
   await r.change('a.dpx.json', { ...file([rect('r1', 10, 0), rect('r2', 300, 300)]), title: 't' });
   assert.equal('x' in r.sent[1].data, false);
@@ -404,7 +404,7 @@ test('cursor module: a document edit carries the doc place; a canvas-only edit d
   await r.tick();
   await r.change('d.dpx.json', docFile(head('Plan'), para('step one')));
   const { at, ...rest } = r.sent[0].data;
-  assert.deepEqual(rest, { sid: 's1', name: 'Otto', role: 'impl', file: 'd.dpx.json', doc: { index: 1, offset: 8 } });
+  assert.deepEqual(rest, { sid: 's1', name: 'Otto', role: 'impl', file: 'd.dpx.json', doc: { index: 1, offset: 8 }, live: true, status: '글 작성 중…' });
   await r.change('d.dpx.json', { ...docFile(head('Plan'), para('step one')), canvas: { elements: [rect('r1', 0, 0)] } });
   assert.equal('doc' in r.sent[1].data, false);
   assert.equal(r.sent[1].data.x, 50);
@@ -420,5 +420,114 @@ test('cursor module: an outside writer of the document gets a doc place too (#61
   const last = r.sent.filter((e) => e.event === 'cursor').at(-1).data;
   assert.equal(last.name, 'Cal');
   assert.deepEqual(last.doc, { index: 0, offset: 2 });
+  m.close();
+});
+
+// E536 (#653): a session on this hub keeps its own name on every edit, however it writes.
+function clock(t) {
+  const real = Date.now;
+  let off = 0;
+  Date.now = () => real() + off;
+  t.after(() => { Date.now = real; });
+  return (ms) => { off += ms; };
+}
+const paras = (n) => ({ document: { type: 'doc', content: Array.from({ length: n }, (_, i) => ({ type: 'paragraph', content: [{ type: 'text', text: `p${i}` }] })) }, canvas: { elements: [] }, blocks: [] });
+
+test('cursor module: extensionless and partly encoded /api/file paths, five writes over 30 s, keep the name (#653)', async (t) => {
+  const later = clock(t);
+  const r = rig();
+  const m = await setup(r.ctx);
+  const rel = 'Sim-Studio/07-서버-데이터-저장.dpx.json';
+  r.files.set(rel, paras(1));
+  r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' };
+  const paths = [
+    'Sim-Studio/07-서버-데이터-저장', // as typed, no extension
+    encodeURIComponent('Sim-Studio/07-서버-데이터-저장'),
+    encodeURIComponent('Sim-Studio/07-서버-데이터-저장').replace(/%2F/g, '/'), // python quote() keeps "/"
+    rel,
+    'Sim-Studio/07-서버-데이터-저장',
+  ];
+  for (const [i, p] of paths.entries()) {
+    later(6000);
+    const id = `c${i}`;
+    r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', callId: id, text: JSON.stringify({ command: `curl -sf -X PUT "http://127.0.0.1:4001/api/file?path=${p}" -H 'x-drawing: 1' --data-binary @/tmp/n.json` }) } });
+    await r.tick();
+    await r.change(rel, paras(i + 2));
+    r.hub.emit('message', { id: 's1', entry: { kind: 'tool_result', callId: id, text: 'ok' } });
+  }
+  const names = r.sent.filter((s) => s.event === 'cursor' && !s.data.status_only).map((s) => s.data.name);
+  assert.deepEqual(names, ['Jude', 'Jude', 'Jude', 'Jude', 'Jude']);
+  m.close();
+});
+
+test('cursor module: a saved script run later (bash save.sh) or a call that does not name the file keeps the name (#653)', async (t) => {
+  const later = clock(t);
+  const r = rig();
+  const m = await setup(r.ctx);
+  const rel = 'analysis/robot.dpx.json';
+  r.files.set(rel, paras(1));
+  r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' };
+  const call = async (id, name, text, n) => {
+    r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name, callId: id, text } });
+    await r.tick();
+    if (n) await r.change(rel, paras(n));
+    r.hub.emit('message', { id: 's1', entry: { kind: 'tool_result', callId: id, text: 'ok' } });
+  };
+  await call('w', 'Write', JSON.stringify({ file_path: '/tmp/jude/save.sh', content: 'set -e\nURL="http://127.0.0.1:4001/api/file?path=analysis/robot"\ncurl -sf "$URL" > /tmp/r.json\n' }));
+  later(20_000);
+  await call('b1', 'Bash', JSON.stringify({ command: 'bash /tmp/jude/save.sh' }), 2);
+  later(20_000);
+  await call('b2', 'Bash', JSON.stringify({ command: 'cd /tmp/jude && bash save.sh' }), 3);
+  later(70_000); // past ATTRIBUTE_MS since the script was written
+  await call('b3', 'Bash', JSON.stringify({ command: 'bash save.sh' }), 4);
+  // A helper whose name says nothing about the file, after the session already edited it.
+  later(10_000);
+  await call('b4', 'Bash', JSON.stringify({ command: 'node put.mjs' }), 5);
+  const names = r.sent.filter((s) => s.event === 'cursor' && s.data.x === undefined && s.data.doc).map((s) => s.data.name);
+  assert.deepEqual(names, ['Jude', 'Jude', 'Jude', 'Jude']);
+  m.close();
+});
+
+test('cursor module: status label follows the running call; page saves are never the agent\'s; replay on attach (#653)', async () => {
+  const r = rig();
+  const attach = [];
+  r.ctx.hub.onAttach = (fn) => attach.push(fn);
+  const m = await setup(r.ctx);
+  const rel = 'd.dpx.json';
+  r.files.set(rel, paras(1));
+  r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' };
+  const seen = [];
+  m.onStatus((e) => seen.push(e.status));
+  const say = (entry) => r.hub.emit('message', { id: 's1', entry });
+  say({ kind: 'tool', name: 'Bash', callId: 'a', text: JSON.stringify({ command: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d' -d @/tmp/x.json` }) });
+  await r.tick();
+  await r.change(rel, paras(2));
+  say({ kind: 'tool_result', callId: 'a', text: 'ok' });
+  assert.equal(m.statusOf('s1'), '글 작성 중…');
+  say({ kind: 'tool', name: 'Read', callId: 'b', text: '{"file_path":"/x/server/a.js"}' });
+  assert.equal(m.statusOf('s1'), '코드 읽는 중…');
+  const st = r.sent.filter((s) => s.event === 'cursor-status').map((s) => s.data);
+  assert.deepEqual(st.at(-1), { sid: 's1', status: '코드 읽는 중…' });
+  // A save from the page while the agent's call runs stays the user's.
+  say({ kind: 'tool_result', callId: 'b', text: 'ok' });
+  say({ kind: 'tool', name: 'Bash', callId: 'c', text: JSON.stringify({ command: 'node helper.mjs' }) });
+  const before = r.sent.filter((s) => s.event === 'cursor').length;
+  await r.change(rel, paras(3), { app: true });
+  assert.equal(r.sent.filter((s) => s.event === 'cursor').length, before);
+  // A page that connects now gets the cursor at its last place, with the status.
+  const got = [];
+  for (const fn of attach) fn((ev, data) => got.push({ ev, data }));
+  assert.equal(got.length, 1);
+  assert.equal(got[0].data.name, 'Jude');
+  assert.equal(got[0].data.live, true);
+  assert.deepEqual(got[0].data.doc, { index: 1, offset: 2 });
+  assert.equal(got[0].data.status, '작업 중…');
+  // Waiting for a permission: 대기 중. Ended: gone, status null.
+  r.hub.sessions.s1.status = 'waiting';
+  r.hub.emit('session', r.hub.sessions.s1);
+  assert.equal(m.statusOf('s1'), '대기 중');
+  r.hub.emit('removed', { id: 's1' });
+  assert.equal(seen.at(-1), null);
+  assert.deepEqual(r.sent.at(-1).data, { sid: 's1', gone: true });
   m.close();
 });
