@@ -74,18 +74,19 @@ export function DocMargin({ file, children }: Props) {
     });
   }, [mounted, closing, m.form, sideCollapsed]);
 
-  // Container width (side panel or bottom sheet); a resize also refreshes the FLIP's "before".
+  // Viewport width picks side panel or bottom sheet (the 둘 다 view widens the document pane for the panel); a
+  // resize of the column also refreshes the FLIP's "before".
   useLayoutEffect(() => {
     const el = host.current;
-    if (!el) return;
-    setWidth(el.getBoundingClientRect().width);
-    if (typeof ResizeObserver !== 'function') return;
-    const ro = new ResizeObserver(([e]) => {
-      setWidth(e.contentRect.width);
-      lefts.current = measure();
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
+    const onWin = () => setWidth(window.innerWidth);
+    onWin();
+    window.addEventListener('resize', onWin);
+    const ro = el && typeof ResizeObserver === 'function' ? new ResizeObserver(() => (lefts.current = measure())) : null;
+    if (el) ro?.observe(el);
+    return () => {
+      window.removeEventListener('resize', onWin);
+      ro?.disconnect();
+    };
   }, []);
 
   // While it fades out, the panel keeps showing who was there.
@@ -93,7 +94,7 @@ export function DocMargin({ file, children }: Props) {
   if (m.open) last.current = m.agents;
   const onToggle = useCallback(() => m.setCollapsed(!m.collapsed), [m]);
   return (
-    <div ref={host} className="doc-margin" data-form={m.form} data-margin-open={mounted && !closing ? '' : undefined}>
+    <div ref={host} className="doc-margin" data-form={m.form} data-margin-open={mounted && !closing ? '' : undefined} data-margin-mounted={mounted ? '' : undefined}>
       <div ref={main} className="doc-margin-main">
         {children(onEditor)}
       </div>

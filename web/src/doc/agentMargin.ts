@@ -380,8 +380,11 @@ export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, 
 
 // ---- layout ----
 
-/** Container width (px) from which the margin sits beside the document; narrower, it is a bottom sheet. */
-export const SIDE_MIN = 1040;
+/**
+ * Viewport width (px) from which the margin sits beside the document, in the 문서 and the 둘 다 view alike (the split
+ * gives the document pane the panel's width from the canvas, index.css); narrower (phone widths) it is a bottom sheet.
+ */
+export const SIDE_MIN = 768;
 export type MarginForm = 'side' | 'sheet';
 export const formOf = (width: number): MarginForm => (width >= SIDE_MIN ? 'side' : 'sheet');
 
