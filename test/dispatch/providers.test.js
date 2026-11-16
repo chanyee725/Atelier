@@ -3,12 +3,13 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../server/app.js';
 import * as workspace from '../../server/workspace/index.js';
 import * as dispatch from '../../server/dispatch/index.js';
+import { cancelLogin } from '../../server/dispatch/auth.js';
 import { fakeCliBin, until } from '../fixtures/fake-cli/index.mjs';
 
 const W = { 'content-type': 'application/json', 'x-drawing': '1' };
@@ -49,11 +50,13 @@ async function start(env) {
   };
   const claude = async () => (await (await fetch(`${base}/api/state`)).json()).providers.claude;
   const stop = async () => {
-    await app.close();
+    if (!closed) await app.close();
     rmSync(pub, { recursive: true, force: true });
     rmSync(root, { recursive: true, force: true });
   };
-  return { base, post, claude, stop, root };
+  let closed = false;
+  const close = async () => { closed = true; await app.close(); };
+  return { base, post, claude, stop, close, root };
 }
 
 const withFake = (dir, extra = {}) => ({
@@ -175,5 +178,71 @@ test('claude not installed: login answers 400 and installed turns false', async 
   } finally {
     await s.stop();
     rmSync(empty, { recursive: true, force: true });
+  }
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const enabledOnDisk = (root) => {
+  const file = join(root, '.dispatch', 'state.json');
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).settings?.enabled?.claude : undefined;
+};
+
+test('server close cancels a running login: the CLI never logs in and nothing is saved after close', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e525-auth-'));
+  const s = await start(withFake(dir, { FAKE_CLI_LOGIN_MS: '1500' }));
+  try {
+    await s.post('/api/providers/claude/login');
+    await until(async () => (await s.claude()).busy);
+    await s.close();
+    // The fake would write auth-state at 1.5 s if it were still alive.
+    await sleep(2000);
+    assert.equal(existsSync(join(dir, 'auth-state')), false, 'login child gone');
+    assert.notEqual(enabledOnDisk(s.root), true, 'no connect saved after close');
+  } finally {
+    await s.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('logout during a running login cancels it, so it does not connect when it would have finished', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e525-auth-'));
+  const s = await start(withFake(dir, { FAKE_CLI_LOGIN_MS: '1500' }));
+  try {
+    await s.post('/api/providers/claude/login');
+    await until(async () => (await s.claude()).busy);
+    assert.deepEqual((await s.post('/api/providers/claude/logout')).body, { ok: true });
+    const out = await s.claude();
+    assert.equal(out.busy, false, 'login stopped before logout answers');
+    assert.equal(out.error, null);
+    await sleep(2000);
+    const later = await s.claude();
+    assert.equal(later.connected, false);
+    assert.equal(later.busy, false);
+    assert.equal(existsSync(join(dir, 'auth-state')), false);
+    assert.notEqual(enabledOnDisk(s.root), true);
+  } finally {
+    await s.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('cancel kills a login that ignores SIGTERM', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e525-auth-'));
+  const s = await start(withFake(dir, { FAKE_CLI_LOGIN_MS: '10000', FAKE_CLI_LOGIN_IGNORE_TERM: '1' }));
+  try {
+    await s.post('/api/providers/claude/login');
+    // Wait for the URL: the fake installs its SIGTERM handler before printing it.
+    await until(async () => (await s.claude()).url);
+    const t0 = Date.now();
+    await cancelLogin('claude', 200);
+    assert.ok(Date.now() - t0 < 2500, 'SIGKILL ended it before the 3 s default');
+    // /api/state follows the async providers refresh.
+    const p = await until(async () => { const c = await s.claude(); return c.busy ? null : c; });
+    assert.equal(p.busy, false);
+    assert.equal(p.error, null);
+    assert.equal(p.connected, false);
+  } finally {
+    await s.stop();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
