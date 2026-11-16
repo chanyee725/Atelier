@@ -73,6 +73,7 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   await trigger.waitFor();
   const row = page.locator('ul[aria-label="모델 연결"]');
   const connect = row.getByRole('button', { name: /연결하기$/ });
+const active = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
   const opacity = (loc) => loc.evaluate((el) => getComputedStyle(el).opacity);
 
   // 1. 테마 menu: three choices, one checked; choosing applies at once. No settings dialog anywhere.
@@ -118,6 +119,8 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   assert.equal(await connect.count(), 0);
   const more = row.getByRole('button', { name: 'Claude · Fable 5.2 메뉴' });
   await more.waitFor({ state: 'attached' });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-menu');
+  assert.equal(await active(), 'model-menu', 'focus moves to the ⋯ button, not <body>');
 
   // 4. ⋯ menu: 연결 끊기 and 다시 확인; disconnect goes back to 연결 안 됨 and shows 연결하기 again.
   await row.locator('li').hover();
@@ -133,6 +136,8 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   await page.getByRole('menuitem', { name: '연결 끊기' }).click();
   await row.getByText('연결 안 됨', { exact: true }).waitFor();
   assert.ok(posts.includes('/api/providers/claude/logout'));
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-connect');
+  assert.equal(await active(), 'model-connect', 'after 연결 끊기 focus lands on 연결하기, not <body>');
   await connect.waitFor({ state: 'attached' });
 
   // 5. A double click on 연결하기 sends one request (the second is dropped).
@@ -162,6 +167,8 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   await row.locator('li').hover();
   await connect.click();
   await row.getByText('연결 중', { exact: true }).waitFor({ timeout: 8000 });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-cancel');
+  assert.equal(await active(), 'model-cancel', 'focus moves to 취소, not <body>');
   await page.mouse.move(700, 400);
   const cancel = row.getByRole('button', { name: 'Claude · Fable 5.2 연결 취소' });
   assert.equal(await opacity(cancel), '1', '취소 visible without hover');
@@ -178,7 +185,8 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   posts.length = 0;
   await page.evaluate(() => window.dispatchEvent(new Event('drawing:models-changed')));
   await cancel.waitFor();
-  await cancel.click();
+  await cancel.focus();
+  await page.keyboard.press('Enter');
   for (let i = 0; i < 50 && !posts.includes('/api/providers/claude/cancel'); i++) await page.waitForTimeout(50);
   assert.ok(posts.includes('/api/providers/claude/cancel'), `cancel sent: ${posts}`);
   await page.unroute('**/api/state');

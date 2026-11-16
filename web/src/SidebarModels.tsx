@@ -102,10 +102,30 @@ export function SidebarModels() {
       }),
     [setNote],
   );
+  // The row swaps its action button (연결하기 / 취소 / ⋯ menu). If the one the user just used unmounts and focus falls to
+  // <body>, move it to the button that replaced it. Only after an action from this row, and only for a short while.
+  const listRef = useRef<HTMLUListElement>(null);
+  const acted = useRef(false);
+  const run = (what: 'connect' | 'cancel' | 'disconnect' | 'recheck', id: ProviderId) => {
+    acted.current = true;
+    setTimeout(() => (acted.current = false), 15_000);
+    void act(what, id);
+  };
+  const actionKey = lines.map((m) => (m.busy ? 'cancel' : m.connected ? 'menu' : 'connect')).join();
+  useEffect(() => {
+    if (!acted.current) return;
+    const a = document.activeElement;
+    if (a && a !== document.body) return;
+    const next = listRef.current?.querySelector<HTMLElement>('[data-testid="model-cancel"], [data-testid="model-connect"], [data-testid="model-menu"]');
+    if (next) {
+      next.focus();
+      acted.current = false;
+    }
+  }, [actionKey, status]);
   if (!status) return null;
   const on = status.enabled;
   return (
-    <SidebarMenu aria-label="모델 연결">
+    <SidebarMenu ref={listRef} aria-label="모델 연결">
       {lines.map((m) => {
         const s = modelStatus(m, on);
         const id = m.id as ProviderId;
@@ -130,17 +150,17 @@ export function SidebarModels() {
               <span className={cn('ml-auto shrink-0 text-xs tabular-nums', s.tone === 'warn' ? 'text-foreground' : 'text-muted-foreground')}>{s.text}</span>
             </div>
             {on && m.busy && (
-              <button type="button" data-testid="model-cancel" aria-label={`${m.name} 연결 취소`} onClick={() => void act('cancel', id)} className={ACTION}>
+              <button type="button" data-testid="model-cancel" aria-label={`${m.name} 연결 취소`} onClick={() => run('cancel', id)} className={ACTION}>
                 취소
               </button>
             )}
             {on && !m.busy && !m.connected && !missing && (
-              <button type="button" data-testid="model-connect" aria-label={`${m.name} 연결하기`} onClick={() => void act('connect', id)} className={cn(ACTION, REVEAL)}>
+              <button type="button" data-testid="model-connect" aria-label={`${m.name} 연결하기`} onClick={() => run('connect', id)} className={cn(ACTION, REVEAL)}>
                 연결하기
               </button>
             )}
             {on && !m.busy && m.connected && (
-              <ModelMenu name={m.name} onDisconnect={() => void act('disconnect', id)} onRecheck={() => void act('recheck', id)} />
+              <ModelMenu name={m.name} onDisconnect={() => run('disconnect', id)} onRecheck={() => run('recheck', id)} />
             )}
             {m.busy && m.url && (
               <a href={m.url} target="_blank" rel="noreferrer noopener" className="block px-2 pb-1 text-xs underline">
