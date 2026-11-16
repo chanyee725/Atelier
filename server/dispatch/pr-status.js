@@ -1,4 +1,5 @@
-// PR and CI tracking through `gh` (E23). Metadata only: PR number, PR state and a CI rollup state.
+// PR and CI tracking through `gh` (E23). Metadata only: PR number, PR state, a CI rollup state, review decision,
+// conflict flag and the PR link.
 // No title, body, author, branch text or check names are kept. `gh` starts only through cli.js.
 //
 // Per-workspace switch: <workspace>/.drawing/settings.json { "prStatus": false } turns it off
@@ -8,6 +9,8 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { runCli } from "./cli.js";
 import { ensureDirInside } from "../lock.js";
+
+const REVIEW = { APPROVED: "approved", CHANGES_REQUESTED: "changes", REVIEW_REQUIRED: "required" };
 
 export const PR_DEFAULTS = { timeoutMs: 8000, cacheMs: 30000, minGapMs: 1000 };
 
@@ -100,7 +103,7 @@ export function validBranch(branch) {
 
 /**
  * Makes `prStatus(branch)`. Resolves to one of
- *   { ok: true, pr: { number, state: "open"|"closed"|"merged", ci: "success"|"failure"|"pending"|"none" } }
+ *   { ok: true, pr: { number, state: "open"|"closed"|"merged", ci: "success"|"failure"|"pending"|"none", url?, review?, conflict? } }
  *   { ok: false, reason: "disabled"|"gh-missing"|"not-logged-in"|"no-pr"|"timeout"|"invalid-branch"|"error" }
  * and never throws. Answers are cached per branch (cacheMs, `force: true` skips the cache) and gh
  * starts at most once per minGapMs, so a run watching many steps does not hammer GitHub.
@@ -118,13 +121,17 @@ export function createPrStatus({ workspaceDir, cwd, env, run = runCli, now = Dat
     const wait = start - now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     try {
-      const { stdout } = await run("gh", ["pr", "view", "--json", "number,state,statusCheckRollup", "--", branch], { cwd, env, timeout: timeoutMs, maxBuffer: 1 << 20 });
+      const { stdout } = await run("gh", ["pr", "view", "--json", "number,state,statusCheckRollup,url,reviewDecision,mergeable", "--", branch], { cwd, env, timeout: timeoutMs, maxBuffer: 1 << 20 });
       const j = JSON.parse(stdout);
       const state = String(j.state || "").toLowerCase();
       const number = Number(j.number);
       if (!STATES.has(state) || !Number.isInteger(number)) return { ok: false, reason: "error" };
       const ci = rollupCi(j.statusCheckRollup);
-      return { ok: true, pr: { number, state, ci: CI.has(ci) ? ci : "none" } };
+      // The PR's web address, only when it is a plain github.com PR link (the dashboard links to it).
+      const url = typeof j.url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(j.url) ? j.url : null;
+      // Review decision and merge conflicts, only when gh says so (open PRs): "approved" | "changes" | "required".
+      const review = REVIEW[j.reviewDecision] ?? null;
+      return { ok: true, pr: { number, state, ci: CI.has(ci) ? ci : "none", ...(url && { url }), ...(review && { review }), ...(j.mergeable === "CONFLICTING" && { conflict: true }) } };
     } catch (e) {
       return { ok: false, reason: classify(e) };
     }

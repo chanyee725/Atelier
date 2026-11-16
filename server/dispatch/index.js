@@ -12,6 +12,7 @@ import { Burn } from "./burn.js";
 import { Store } from "./dispatch-store.js";
 import { currentBranch } from "./git.js";
 import { Hub } from "./hub.js";
+import { createPrStatus } from "./pr-status.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
 import { SharedLimits } from "./limits.js";
 import { codexModels, staticModels } from "./models.js";
@@ -37,7 +38,7 @@ const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: nu
  * home folder, so tests run with fakes: { providerStatus, codexModels, limitsFile, login, loginWithKey,
  * logout, cancelLogin, spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
  */
-export async function createDispatch({ root, broadcast, port, deps = {} }) {
+export async function createDispatch({ root, broadcast, port, workspaceDir, deps = {} }) {
   const dep = { providerStatus, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
   const store = new Store(root);
   await store.load();
@@ -134,6 +135,8 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs,
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
+    // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.
+    prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root }),
   };
 
   const timers = [];
@@ -183,7 +186,7 @@ export async function setup(ctx, deps = {}) {
   let d;
   try {
     const topFolders = async () => ((await ctx.modules.workspace?.store?.tree()) ?? []).filter(n => n.type === "folder").map(n => n.name);
-    d = await createDispatch({ root: found.root, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
+    d = await createDispatch({ root: found.root, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
   } catch (e) {
     await claim.lock.release();
     throw e;
