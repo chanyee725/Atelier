@@ -17,21 +17,35 @@ export const ENTER_MS = MOTION_MS.move + 40;
 export const LIVE_META = 'liveApply';
 
 type Cls = 'live-enter' | 'live-exit' | 'live-touch';
-type DecoMeta = { add?: { from: number; to: number; cls: Cls }[]; clear?: Cls };
+/** A block an undo or redo took out while it faded, at its place in the document now (see LiveState.gone). */
+type Gone = { pos: number; node: PMNode };
+type DecoMeta = { add?: { from: number; to: number; cls: Cls }[]; clear?: Cls; gone?: Gone[] };
 /**
  * An invisible mark on a fading block the user typed in (#567, #577): `orig` is the block as the outside change
  * removed it. Once an undo brings it back to exactly that, the user's edits are gone and the removal is finished.
  */
 type KeptSpec = { cls: 'live-kept'; orig: PMNode };
-const key = new PluginKey<DecorationSet>('liveApply');
+/**
+ * `deco`: node decorations that carry the animation classes. `gone`: fading blocks an undo or redo took out (#569).
+ * ProseMirror's history files a transaction appended to an undo on the redo stack (and one appended to a redo on the
+ * undo stack) even with addToHistory false, so the next redo or undo puts such a block back; it is taken out again.
+ */
+type LiveState = { deco: DecorationSet; gone: Gone[] };
+/** How many taken-out blocks are watched for coming back. */
+const GONE_MAX = 20;
+const key = new PluginKey<LiveState>('liveApply');
+
+/** The animation decorations of the live-apply plugin (empty when the plugin is not installed). */
+export const liveDecorations = (state: EditorState): DecorationSet => key.getState(state)?.deco ?? DecorationSet.empty;
 
 /** Node decorations that carry the animation classes. Positions follow the document through other edits. */
-export function liveApplyPlugin(): Plugin<DecorationSet> {
-  return new Plugin<DecorationSet>({
+export function liveApplyPlugin(): Plugin<LiveState> {
+  return new Plugin<LiveState>({
     key,
     state: {
-      init: () => DecorationSet.empty,
-      apply(tr, set) {
+      init: () => ({ deco: DecorationSet.empty, gone: [] }),
+      apply(tr, st) {
+        const set = st.deco;
         let next = tr.docChanged ? set.map(tr.mapping, tr.doc) : set;
         // The user edited inside a fading block (#567): they keep it, so it stops fading and is not flushed
         // (deleting it outside history would drop the undo step of their typing).
@@ -53,10 +67,20 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
         const m = tr.getMeta(key) as DecoMeta | undefined;
         if (m?.clear) next = next.remove(next.find(undefined, undefined, (s) => s.cls === m.clear));
         if (m?.add?.length) next = next.add(tr.doc, m.add.map((a) => Decoration.node(a.from, a.to, { class: a.cls }, { cls: a.cls })));
-        return next;
+        let gone = st.gone;
+        if (tr.docChanged && gone.length)
+          gone = gone.flatMap((g) => {
+            const r = tr.mapping.mapResult(g.pos, -1);
+            return r.deletedAcross ? [] : [{ pos: r.pos, node: g.node }];
+          });
+        if (m?.gone?.length) {
+          const fresh = m.gone;
+          gone = [...gone.filter((g) => !fresh.some((f) => f.pos === g.pos && f.node.eq(g.node))), ...fresh].slice(-GONE_MAX);
+        }
+        return gone === st.gone && next === set ? st : { deco: next, gone };
       },
     },
-    props: { decorations: (s) => key.getState(s) },
+    props: { decorations: (s) => key.getState(s)?.deco },
     // A user edit while blocks fade out (#554): take them out in the same update, so the JSON the editor
     // saves already matches the outside file instead of still holding the removed blocks.
     // An undo that brings a kept block back to how the outside change removed it finishes that removal too (#577),
@@ -90,21 +114,36 @@ function touchedBy(tr: Transaction, from: number, to: number): boolean {
  * its removed form), or null when none is.
  */
 function exitFlush(state: EditorState, undone = false): Transaction | null {
-  const set = key.getState(state);
-  if (!set) return null;
-  const found = set.find(undefined, undefined, (s) => s.cls === 'live-exit');
+  const st = key.getState(state);
+  if (!st) return null;
+  const set = st.deco;
+  // `watch`: blocks the outside change removed. Taken out by an undo or redo, they are watched for coming back (#569).
+  const found: { from: number; to: number; watch: boolean }[] = set
+    .find(undefined, undefined, (s) => s.cls === 'live-exit')
+    .map((d) => ({ from: d.from, to: d.to, watch: undone }));
   if (undone) {
     const back = set.find(undefined, undefined, (s) => s.cls === 'live-kept').filter((d) => {
       const n = state.doc.nodeAt(d.from);
       return !!n && d.from + n.nodeSize === d.to && n.eq((d.spec as KeptSpec).orig);
     });
-    found.push(...back);
+    // A kept block holds the user's typing: a redo that brings it back brings their typing back, so it is not watched.
+    found.push(...back.map((d) => ({ from: d.from, to: d.to, watch: false })));
+    // A block an earlier undo or redo took out that this one put back (the history replays its removal backwards).
+    for (const g of st.gone) {
+      const n = state.doc.nodeAt(g.pos);
+      if (n && n.eq(g.node) && !found.some((f) => f.from < g.pos + n.nodeSize && g.pos < f.to)) found.push({ from: g.pos, to: g.pos + n.nodeSize, watch: true });
+    }
   }
   found.sort((a, b) => b.from - a.from);
   if (!found.length) return null;
   const tr = state.tr;
-  for (const d of found) tr.delete(d.from, d.to);
-  tr.setMeta(key, { clear: 'live-exit' } satisfies DecoMeta);
+  const watched: { step: number; from: number; node: PMNode }[] = [];
+  for (const d of found) {
+    if (d.watch) watched.push({ step: tr.steps.length, from: d.from, node: state.doc.nodeAt(d.from)! });
+    tr.delete(d.from, d.to);
+  }
+  const gone = watched.map((w) => ({ pos: tr.mapping.slice(w.step).map(w.from, -1), node: w.node }));
+  tr.setMeta(key, { clear: 'live-exit', ...(gone.length ? { gone } : {}) } satisfies DecoMeta);
   tr.setMeta('addToHistory', false);
   return tr;
 }
@@ -151,7 +190,7 @@ export function planLive(state: EditorState, target: PMNode, fadeOut: boolean): 
   const doc = state.doc;
   // Blocks still fading out from an earlier apply are already gone: they never take part in the diff
   // (else a new block of the same type would be matched with one and deleted with it) and are deleted now.
-  const exiting = new Set((key.getState(state)?.find(undefined, undefined, (s) => s.cls === 'live-exit') ?? []).map((d) => d.from));
+  const exiting = new Set(liveDecorations(state).find(undefined, undefined, (s) => s.cls === 'live-exit').map((d) => d.from));
   const oldNodes: PMNode[] = [];
   const offsets: number[] = [];
   const stale: { from: number; to: number }[] = [];
@@ -259,7 +298,7 @@ export function applyLiveDocument(editor: Editor, doc: unknown, reduced: boolean
   if (!plan) return true;
   view.dispatch(plan.tr);
   // Removed blocks fade for EXIT_MS and are then deleted together; a later call keeps the same timer.
-  if (plan.exits || (key.getState(view.state)?.find(undefined, undefined, (s) => s.cls === 'live-exit').length ?? 0)) {
+  if (plan.exits || liveDecorations(view.state).find(undefined, undefined, (s) => s.cls === 'live-exit').length) {
     if (!exitTimers.has(editor)) {
       exitTimers.set(
         editor,
