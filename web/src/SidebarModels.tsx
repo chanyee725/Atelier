@@ -102,24 +102,30 @@ export function SidebarModels() {
       }),
     [setNote],
   );
-  // The row swaps its action button (연결하기 / 취소 / ⋯ menu). If the one the user just used unmounts and focus falls to
-  // <body>, move it to the button that replaced it. Only after an action from this row, and only for a short while.
+  // The row swaps its action button (연결하기 / 취소 / ⋯ menu). If the button the user just used unmounts and focus falls to
+  // <body>, move it to the button that replaced it, and keep following the chain (연결하기 → 취소 → ⋯). Focus is only
+  // moved when that exact button was removed; if the user went elsewhere, we stop tracking.
   const listRef = useRef<HTMLUListElement>(null);
-  const acted = useRef(false);
+  const used = useRef<HTMLElement | null>(null);
   const run = (what: 'connect' | 'cancel' | 'disconnect' | 'recheck', id: ProviderId) => {
-    acted.current = true;
-    setTimeout(() => (acted.current = false), 15_000);
+    const a = document.activeElement;
+    used.current = a instanceof HTMLElement && a !== document.body ? a : null; // a ⋯ menu item lives in a portal
     void act(what, id);
   };
   const actionKey = lines.map((m) => (m.busy ? 'cancel' : m.connected ? 'menu' : 'connect')).join();
   useEffect(() => {
-    if (!acted.current) return;
+    const prev = used.current;
+    if (!prev || prev.isConnected) return;
     const a = document.activeElement;
-    if (a && a !== document.body) return;
+    if (a && a !== document.body) {
+      // Radix hands focus back to the ⋯ button after a menu item; follow it so its own swap is covered too.
+      used.current = listRef.current?.contains(a) && a instanceof HTMLElement ? a : null;
+      return;
+    }
     const next = listRef.current?.querySelector<HTMLElement>('[data-testid="model-cancel"], [data-testid="model-connect"], [data-testid="model-menu"]');
     if (next) {
       next.focus();
-      acted.current = false;
+      used.current = next;
     }
   }, [actionKey, status]);
   if (!status) return null;

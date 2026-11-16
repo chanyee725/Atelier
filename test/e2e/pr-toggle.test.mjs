@@ -80,7 +80,7 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
 
   // 0. The editor shell has no settings entry any more: the old dialog is gone, the sidebar row is 테마.
   await page.goto(BASE);
-  await page.getByRole('button', { name: '테마', exact: true }).waitFor();
+  await page.getByRole('button', { name: /^테마/ }).waitFor();
   assert.equal(await page.getByRole('button', { name: '설정', exact: true }).count(), 0);
 
   // 1. Healthy: on by default, flips off, persists in settings.json, and flips back on.
