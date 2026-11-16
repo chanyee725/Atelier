@@ -74,7 +74,8 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.goto(BASE);
   const themes = page.getByRole('radiogroup', { name: '테마' });
   await themes.waitFor();
-  const row = page.getByTestId('model-row');
+  // The Claude row; Codex and Gemini have their own (#587).
+  const row = page.locator('[data-testid="model-row"][data-provider="claude"]');
   const dialog = page.getByTestId('connect-dialog');
   const state = dialog.getByTestId('connect-state');
   const action = dialog.getByTestId('connect-action');
@@ -86,9 +87,9 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
     assert.fail(`timed out: ${what}`);
   };
   const shot = (name) => SHOTS && page.screenshot({ path: join(SHOTS, name) });
-  // One row per provider id; only Claude so far (#587 adds more).
+  // One row per provider id: Claude, OpenAI Codex, Gemini (#587).
   await row.first().waitFor();
-  assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude']);
+  assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude', 'openai', 'gemini']);
 
   // 1. 테마 switch (E527, from Dispatch): four icon radios, 시스템 first and checked; a click applies at once, survives a
   // reload, and arrows/Home/End move the choice with focus. 모니터링 renders dark plus html.monitor.
@@ -222,7 +223,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await until(async () => (await action.innerText()) === '취소', 'busy before reload');
   await page.reload();
   await row.waitFor();
-  assert.equal(await rowKey(), 'busy', 'still 로그인 중 after reload');
+  await until(async () => (await rowKey()) === 'busy', 'still 로그인 중 after reload');
   await shot('row-busy-1440.png');
   await row.click();
   assert.equal(await action.innerText(), '취소');
@@ -254,7 +255,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
   await drawer.waitFor();
-  const drow = drawer.getByTestId('model-row');
+  const drow = drawer.locator('[data-testid="model-row"][data-provider="claude"]');
   assert.ok((await drow.boundingBox()).height >= 44);
   await drow.click();
   await dialog.waitFor();

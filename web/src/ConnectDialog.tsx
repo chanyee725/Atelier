@@ -1,16 +1,17 @@
-// 모델 연결 dialog (E525, #570), ported from Dispatch's ConnectDialog/ProviderRow and ProviderLimits, for one
-// provider (`meta`, keyed by provider id; requests go to /api/providers/<id>/...). No model picker and no API-key
-// field yet (#587); sessions use the user's own CLI login.
-// Flow as in Dispatch: 연결 → the server connects at once if the CLI is logged in, else starts `claude auth login`
-// (로그인 중, a link to the CLI's sign-in page, 취소); 해제 disconnects from Drawing only. Closing the dialog leaves a
-// running login alone; the sidebar row keeps showing 로그인 중. Native modal <dialog>, same look as the 설정 modal.
-import { ExternalLink, Loader2 } from 'lucide-react';
+// 모델 연결 dialog (E525, #570; every provider #587), ported from Dispatch's ConnectDialog/ProviderRow and
+// ProviderLimits, for one provider (`meta`, keyed by provider id; requests go to /api/providers/<id>/...).
+// Flow as in Dispatch: 연결 → the server connects at once if the CLI is logged in, else starts the CLI's browser login
+// (로그인 중, a link to the CLI's sign-in page, 취소); 해제 disconnects from Drawing only; CLI 로그아웃 also logs the
+// CLI out (`cli: true`). Codex can log in with an API key instead: the key goes to the server once, which hands it to
+// `codex login --with-api-key`; the field is cleared before the request and the key is never stored or logged here.
+// Closing the dialog leaves a running login alone; the sidebar row keeps showing 로그인 중. Native modal <dialog>.
+import { ExternalLink, KeyRound, Loader2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { api } from './api';
 import { until } from './dispatch/lib/format';
 import { cn } from './lib/utils';
 import { WARN_PERCENT } from './projectNav';
-import { ACTION_TEXT, STATE_TEXT, actionFor, connectKey, connectedText, objParticle, doneText, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta } from './modelConnect';
+import { ACTION_TEXT, STATE_TEXT, actionFor, cliLogoutShown, cliLogoutText, connectKey, connectedText, objParticle, doneText, keyDoneText, keyLoginShown, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta, SUB_BUCKETS } from './modelConnect';
 import { MODELS_CHANGED } from './settings/context';
 import { oneAtATime } from './settings/model';
 import type { Models } from './SidebarModels';
@@ -29,8 +30,10 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
   const key = connectKey(p, enabled);
   const action = actionFor(key);
   const url = loginUrl(p);
-  const [pending, setPending] = useState<Action | null>(null);
+  const [pending, setPending] = useState<Action | 'key' | 'cliLogout' | null>(null);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const keyId = useId();
 
   useEffect(() => {
     const d = ref.current;
@@ -54,10 +57,21 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
   // One request at a time: a double click before the state changes is dropped.
   const run = useMemo(
     () =>
-      oneAtATime(async (what: Action) => {
+      oneAtATime(async (what: Action | 'key' | 'cliLogout', secret?: string) => {
         setPending(what);
         setNote(null);
         try {
+          if (what === 'key') {
+            const res = await api.providerKey(id, secret ?? '');
+            setNote({ text: keyDoneText(meta, res), bad: !res?.connected });
+            if (res?.connected) setKeyOpen(false);
+            return;
+          }
+          if (what === 'cliLogout') {
+            await api.providerCliLogout(id);
+            setNote({ text: cliLogoutText(meta) });
+            return;
+          }
           const res =
             what === 'connect' ? await api.providerLogin(id)
             : what === 'cancel' ? (await api.providerCancel(id), null)
@@ -77,6 +91,16 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
 
   const error = p?.error && key !== 'busy' && key !== 'connected' ? p.error : null;
   const rows = limitRows(meta, limits);
+  const showKey = keyLoginShown(meta, p, enabled);
+  const showCliLogout = cliLogoutShown(p, enabled);
+  // The key lives only in the form's input until submit: read it, clear the field, send it once. No state, no storage.
+  const submitKey = (form: HTMLFormElement) => {
+    const input = form.elements.namedItem('key') as HTMLInputElement | null;
+    const k = input?.value.trim() ?? '';
+    if (input) input.value = '';
+    if (!k || pending) return;
+    void run('key', k);
+  };
   // Hover only on enabled buttons, ~120ms, none under prefers-reduced-motion (#559).
   const btn = 'inline-flex shrink-0 whitespace-nowrap h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:opacity-60 aria-disabled:cursor-default';
   return (
@@ -148,6 +172,64 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
           {key === 'busy' && !url && <p className="ml-11 text-xs text-muted-foreground">브라우저에서 로그인을 마쳐 주세요.</p>}
           {error && <p className="ml-11 text-xs text-destructive">{error}</p>}
           {key === 'missing' && <p className="ml-11 text-xs text-muted-foreground">{meta.cliName}{objParticle(meta.cliName)} 설치한 뒤 다시 확인해 주세요.</p>}
+          {showKey &&
+            (keyOpen ? (
+              <form
+                data-testid="connect-key-form"
+                className="ml-11 flex flex-col gap-1"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  submitKey(e.currentTarget);
+                }}
+              >
+                <label htmlFor={keyId} className="text-xs text-muted-foreground">
+                  {meta.keyLabel ?? 'API 키'}
+                </label>
+                <div className="flex gap-2">
+                  {/* No name for the browser to remember and no autofill: the key goes to the CLI only. */}
+                  <input
+                    id={keyId}
+                    name="key"
+                    type="password"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    autoFocus
+                    required
+                    data-testid="connect-key"
+                    className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:h-11"
+                  />
+                  <button type="submit" aria-disabled={pending ? true : undefined} className={cn(btn, 'bg-primary text-primary-foreground [&:not([aria-disabled])]:hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none')}>
+                    {pending === 'key' && <Loader2 aria-hidden className="connect-spin size-3.5" />}키로 연결
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">키는 {meta.cliName}에만 넘기고 Drawing에는 남기지 않아요.</p>
+              </form>
+            ) : (
+              <button
+                type="button"
+                data-testid="connect-key-open"
+                onClick={() => setKeyOpen(true)}
+                className="ml-11 inline-flex w-fit items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              >
+                <KeyRound aria-hidden className="size-3" />
+                API 키로 연결
+              </button>
+            ))}
+          {showCliLogout && (
+            <button
+              type="button"
+              data-testid="connect-cli-logout"
+              aria-disabled={pending ? true : undefined}
+              title={`${meta.cliName}의 로그인도 이 컴퓨터에서 끝내요`}
+              onClick={() => !pending && void run('cliLogout')}
+              className="ml-11 inline-flex w-fit items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-disabled:opacity-60"
+            >
+              {pending === 'cliLogout' && <Loader2 aria-hidden className="connect-spin size-3" />}
+              CLI에서도 로그아웃
+            </button>
+          )}
         </section>
 
         {key === 'connected' && rows && (
@@ -155,8 +237,14 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
             <h3 id={`${titleId}-usage`} className="text-xs font-medium text-muted-foreground">
               사용량
             </h3>
-            {rows.claude.some((r) => r.pct != null) ? <Bars rows={rows.claude} /> : <p className="text-xs text-muted-foreground">{meta.short} 세션을 한 번 실행하면 표시돼요.</p>}
-            {rows.fable?.length ? <Bars rows={rows.fable} /> : <p className="text-xs text-muted-foreground">Fable 주간 한도는 Fable 세션을 한 번 실행하면 표시돼요.</p>}
+            {rows.main.some((r) => r.pct != null) ? (
+              <Bars rows={rows.main} />
+            ) : rows.reached ? (
+              <p className="text-xs text-foreground">한도에 도달했어요{until(rows.reset) === '—' ? '.' : ` · 초기화까지 ${until(rows.reset)}`}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">{meta.windowless ? `${meta.short}는 사용량을 알려 주지 않아요. 한도에 걸리면 여기에 표시돼요.` : `${meta.short} 세션을 한 번 실행하면 표시돼요.`}</p>
+            )}
+            {SUB_BUCKETS[meta.id]?.includes('fable') && (rows.fable?.length ? <Bars rows={rows.fable} /> : <p className="text-xs text-muted-foreground">Fable 주간 한도는 Fable 세션을 한 번 실행하면 표시돼요.</p>)}
           </section>
         )}
 

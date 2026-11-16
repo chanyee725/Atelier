@@ -1,7 +1,7 @@
 // #570 (E525): model connection state for the sidebar row and the 모델 연결 dialog (ported from Dispatch).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, actionFor, connectKey, doneText, limitRows, loginUrl, metaLine, objParticle, providerMeta, rowStatus, type ProviderMeta } from '../../web/src/modelConnect.ts';
+import { PROVIDERS, actionFor, cliLogoutShown, keyLoginShown, connectKey, doneText, limitGroups, limitRows, runLimits, loginUrl, metaLine, objParticle, providerMeta, rowStatus, type ProviderMeta } from '../../web/src/modelConnect.ts';
 import type { ProviderState } from '../../web/src/api.ts';
 
 const C = providerMeta('claude')!;
@@ -32,7 +32,7 @@ test('rowStatus: text and tone; connected shows 5-hour usage or 한도 도달', 
   assert.deepEqual(rowStatus(C, P({ connected: true }), true, {}), { key: 'connected', text: '연결됨', tone: 'ok' });
   const lim = { claude: { windows: [{ label: '5시간', used: 0.42 }, { label: '주간', used: 0.1 }] } };
   assert.equal(rowStatus(C, P({ connected: true }), true, lim).text, '42%');
-  const full = { claude: { windows: [{ label: '5시간', used: 0.2 }] }, fable: { windows: [{ label: '주간', used: 1 }] } };
+  const full = { claude: { windows: [{ label: '5시간', used: 0.2 }] }, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } };
   assert.deepEqual(rowStatus(C, P({ connected: true }), true, full), { key: 'connected', text: '한도 도달', tone: 'warn' });
   assert.equal(rowStatus(C, P({ connected: true }), false, lim).text, '연결 안 됨');
 });
@@ -60,13 +60,13 @@ test('doneText: connect says so only when connected at once; cancel is not an er
 
 test('limitRows: account windows, then Fable weekly; null Fable until reported', () => {
   const r = limitRows(C, { claude: { windows: [{ label: '5시간', used: 0.5, reset: 123 }, { label: '주간', used: null }] }, fable: null })!;
-  assert.deepEqual(r.claude, [{ label: '5시간', pct: 50, reset: 123 }, { label: '주간', pct: null, reset: null }]);
+  assert.deepEqual(r.main, [{ label: '5시간', pct: 50, reset: 123 }, { label: '주간', pct: null, reset: null }]);
   assert.equal(r.fable, null);
-  assert.deepEqual(limitRows(C, { fable: { windows: [{ label: '주간', used: 0.3 }] } })!.fable, [{ label: 'Fable 주간', pct: 30, reset: null }]);
+  assert.deepEqual(limitRows(C, { fable: { windows: [{ label: 'Fable 주간', used: 0.3 }] } })!.fable, [{ label: 'Fable 주간', pct: 30, reset: null }]);
 });
 
-test('providers are keyed by id; Claude is the only row for now; copy comes from the provider', () => {
-  assert.deepEqual(PROVIDERS.map((m) => m.id), ['claude']);
+test('providers are keyed by id; rows for Claude, Codex, Gemini; copy comes from the provider', () => {
+  assert.deepEqual(PROVIDERS.map((m) => m.id), ['claude', 'openai', 'gemini']);
   assert.equal(providerMeta('nope'), undefined);
   const X: ProviderMeta = { id: 'x', name: 'X 모델', short: '엑스', cliName: 'X CLI', mark: 'X', usage: false };
   assert.equal(doneText(X, 'connect', { connected: true }), '엑스를 연결했어요.');
@@ -75,4 +75,54 @@ test('providers are keyed by id; Claude is the only row for now; copy comes from
   assert.equal(rowStatus(X, P({ connected: true }), true, { claude: { windows: [{ label: '5시간', used: 0.5 }] } }).text, '연결됨', "Claude's usage is not shown on another row");
   assert.equal(objParticle('로그인'), '을');
   assert.equal(objParticle('Claude'), '를');
+});
+
+test('usage is read under each provider id, never Claude numbers on another row (PR #598 review)', () => {
+  const O = providerMeta('openai')!;
+  const G = providerMeta('gemini')!;
+  const lim = { claude: { windows: [{ label: '5시간', used: 0.9 }] }, openai: { windows: [{ label: '5시간', used: 0.2 }, { label: '주간', used: 0.4 }] }, gemini: { reached: false, reset: null } };
+  assert.equal(rowStatus(C, P({ connected: true }), true, lim).text, '90%');
+  assert.equal(rowStatus(O, P({ connected: true }), true, lim).text, '20%');
+  assert.equal(rowStatus(G, P({ connected: true }), true, lim).text, '연결됨');
+  assert.equal(rowStatus(G, P({ connected: true }), true, { ...lim, gemini: { reached: true, reset: 5 } }).text, '한도 도달');
+  assert.deepEqual(limitRows(O, lim)!.main.map((r) => r.pct), [20, 40]);
+  assert.equal(limitRows(O, { ...lim, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } })!.fable, null, 'Fable only under Claude');
+  assert.equal(rowStatus(O, P({ connected: true }), true, { claude: { windows: [{ label: '5시간', used: 1 }] } }).text, '연결됨');
+});
+
+test('API-key field only for Codex, installed, not connected, CLI not logged in; CLI logout only when CLI logged in', () => {
+  const O = providerMeta('openai')!;
+  assert.equal(keyLoginShown(O, P(), true), true);
+  assert.equal(keyLoginShown(C, P(), true), false);
+  assert.equal(keyLoginShown(O, P({ cliLoggedIn: true }), true), false);
+  assert.equal(keyLoginShown(O, P({ connected: true }), true), false);
+  assert.equal(keyLoginShown(O, P({ busy: true }), true), false);
+  assert.equal(keyLoginShown(O, P(), false), false);
+  assert.equal(cliLogoutShown(P({ cliLoggedIn: true }), true), true);
+  assert.equal(cliLogoutShown(P({ cliLoggedIn: false }), true), false);
+});
+
+test('limitGroups: one cell per connected provider, each with its own numbers (#587)', () => {
+  const limits = {
+    claude: { windows: [{ label: '5시간', used: 0.4, reset: 1 }] },
+    fable: { windows: [{ label: 'Fable 주간', used: 0.2 }] },
+    openai: { windows: [{ label: '5시간', used: 0.9 }] },
+    gemini: { reached: true, reset: 5 },
+  };
+  const all = limitGroups({ claude: { connected: true }, openai: { connected: true }, gemini: { connected: true } }, limits);
+  assert.deepEqual(all.map((g) => g.id), ['claude', 'openai', 'gemini']);
+  assert.deepEqual(all[0]!.rows.map((r) => [r.label, r.pct]), [['5시간', 40], ['Fable 주간', 20]]);
+  assert.deepEqual(all[1]!.rows.map((r) => [r.label, r.pct]), [['5시간', 90]]);
+  assert.deepEqual({ rows: all[2]!.rows, reached: all[2]!.reached, reset: all[2]!.reset, windowless: all[2]!.windowless }, { rows: [], reached: true, reset: 5, windowless: true });
+  assert.deepEqual(limitGroups({ claude: { connected: false }, openai: { connected: true } }, limits).map((g) => g.id), ['openai']);
+  assert.deepEqual(limitGroups({}, limits), []);
+});
+
+test('runLimits: cells come from provider and usage state alone, with or without a live run (PR #617 review)', () => {
+  const limits = { claude: { windows: [{ label: '5시간', used: 0.4 }] }, fable: { windows: [{ label: 'Fable 주간', used: 0.65 }] } };
+  assert.equal(runLimits(null, { claude: { connected: true } }, limits), 'loading');
+  assert.equal(runLimits({ enabled: false }, { claude: { connected: true } }, limits), 'off');
+  const cells = runLimits({ enabled: true }, { claude: { connected: true } }, limits);
+  assert.ok(Array.isArray(cells));
+  assert.deepEqual(cells[0]!.rows.map((r) => r.label), ['5시간', 'Fable 주간']);
 });
