@@ -386,34 +386,47 @@ export const TEXT_MIN = 360;
 export const CANVAS_MIN = 430;
 /** Width of the collapsed side panel (its rail). */
 export const RAIL_W = 44;
+/**
+ * The document's share of the margin row while the side panel is open (E537, #654): text 6, panel 4 (index.css flex
+ * 6 / 4). In 둘 다 the pane widens so the text keeps its split share: pane = share / DOC_SHARE (×5/3), up to the
+ * canvas minimum.
+ */
+export const DOC_SHARE = 0.6;
 export type MarginForm = 'side' | 'sheet';
 /**
  * What the margin's layout has to work with, measured from the page (not the window: the app sidebar and the split
  * take their share). `box`: the split's whole width in 둘 다, else the document column's. `share`: the document's
- * split share (null without a split). `chrome`: the document pane's width outside the margin row. `panel`: the side
- * panel's width (the rail's when collapsed).
+ * split share (null without a split). `chrome`: the document pane's width outside the margin row. `rail`: the side
+ * panel is collapsed to its rail (RAIL_W) instead of taking 4 of the row's 10 parts.
  */
-export type MarginRoom = { box: number; share: number | null; chrome: number; panel: number };
-/** The text column's width if the panel sat beside it; in 둘 다 the pane widens by the panel up to the canvas minimum. */
-const sideText = (r: MarginRoom) =>
-  r.share == null ? r.box - r.chrome - r.panel : Math.min(r.share * r.box, r.box - CANVAS_MIN - r.panel) - r.chrome;
+export type MarginRoom = { box: number; share: number | null; chrome: number; rail: boolean };
+/** The document pane's width in the side form (the margin row plus chrome); the whole box without a split. */
+const sidePane = (r: MarginRoom) => {
+  if (r.share == null) return r.box;
+  const want = r.rail ? r.share * r.box + RAIL_W : (r.share * r.box) / DOC_SHARE;
+  return Math.min(want, r.box - CANVAS_MIN);
+};
+/** The text column's width in a pane of `pane` px: the row less the rail, or its 6 parts of 10. */
+const textIn = (r: Pick<MarginRoom, 'chrome' | 'rail'>, pane: number) => (r.rail ? pane - r.chrome - RAIL_W : (pane - r.chrome) * DOC_SHARE);
 /** Side panel only when the text keeps TEXT_MIN beside it (and, in 둘 다, the canvas keeps CANVAS_MIN); else a sheet. */
-export const formOf = (r: MarginRoom): MarginForm => (sideText(r) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
+export const formOf = (r: MarginRoom): MarginForm => (textIn(r, sidePane(r)) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
 /** Where the split's divider sits (px from the split's left) for a share, as index.css lays it out. */
-export const dividerAt = (r: MarginRoom & { share: number }): number =>
-  formOf(r) === 'side' ? Math.min(r.share * r.box + r.panel, r.box - CANVAS_MIN) : r.share * r.box;
+export const dividerAt = (r: MarginRoom & { share: number }): number => (formOf(r) === 'side' ? sidePane(r) : r.share * r.box);
 /**
  * The share that puts the divider under a pointer at `x` (px from the split's left), so a drag never makes it jump.
  * Past the canvas minimum the divider stops there. Between the widest sheet layout and the narrowest side layout no
- * share puts it at `x` (the panel's width appears or goes); it snaps to the nearer of the two.
+ * share puts it at `x` (the panel appears or goes); it snaps to the nearer of the two.
  */
 export function shareAt(r: Omit<MarginRoom, 'share'>, x: number): number {
   const sheet = x / r.box;
   if (formOf({ ...r, share: sheet }) === 'sheet') return sheet;
-  const side = (Math.min(x, r.box - CANVAS_MIN) - r.panel) / r.box;
+  const pane = Math.min(x, r.box - CANVAS_MIN);
+  const side = (r.rail ? pane - RAIL_W : pane * DOC_SHARE) / r.box;
   if (formOf({ ...r, share: side }) === 'side') return side;
-  const edge = (TEXT_MIN + r.chrome) / r.box;
-  return x - edge * r.box < r.panel / 2 ? edge - 0.5 / r.box : edge;
+  // The narrowest side layout: the text exactly TEXT_MIN.
+  const edgePane = r.rail ? TEXT_MIN + r.chrome + RAIL_W : TEXT_MIN / DOC_SHARE + r.chrome;
+  const edge = (r.rail ? edgePane - RAIL_W : edgePane * DOC_SHARE) / r.box;
+  return x - edge * r.box < (edgePane - edge * r.box) / 2 ? edge - 0.5 / r.box : edge;
 }
 
 /** Per-browser collapse state (one per form), from localStorage text. A sheet starts collapsed, the side panel open. */
