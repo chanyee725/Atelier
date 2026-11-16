@@ -24,6 +24,7 @@ import {
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
+import { SettingsEntry } from './settings/LimitsSettings';
 import { SidebarModels } from './SidebarModels';
 import { ThemeMenu } from './ThemeMenu';
 import type { ThemePref } from './theme';
@@ -371,6 +372,9 @@ export function Sidebar(p: Props) {
       <SidebarFooter>
         <SidebarModels />
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SettingsEntry />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <ThemeMenu pref={p.themePref} onPref={p.onThemePref} />
           </SidebarMenuItem>

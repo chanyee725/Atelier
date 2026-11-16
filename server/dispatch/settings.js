@@ -107,3 +107,21 @@ export function effectiveRoles(roles, store, models = staticModels()) {
   const rm = teamSettings(store).roleModels;
   return roles.map(r => (rm[r.id] && models.some(m => m.id === rm[r.id]) ? { ...r, model: rm[r.id] } : r));
 }
+
+export const GUARD_DEFAULTS = Object.freeze({ five: 0.9, seven: 0.85, fable: 0.85 });
+
+/**
+ * Validates a usage-limit guard update (fractions 0.01..1; unknown keys, including `enabled`, are ignored, so the
+ * guard cannot be switched off from the UI). `fable: null` falls back to the weekly value.
+ */
+export function patchGuard(cur, patch) {
+  const next = { ...cur };
+  for (const k of ["five", "seven", "fable"]) {
+    if (!(k in patch)) continue;
+    if (k === "fable" && patch[k] === null) { delete next.fable; continue; }
+    const n = Math.round(Number(patch[k]) * 100) / 100;
+    if (patch[k] === "" || patch[k] === true || !Number.isFinite(n) || n < 0.01 || n > 1) throw Object.assign(new Error("1~100 사이 숫자를 넣어 주세요"), { status: 400 });
+    next[k] = n;
+  }
+  return next;
+}
