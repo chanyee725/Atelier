@@ -15,7 +15,8 @@ export type StatusLine = {
   /** True while no newer action has started. */
   isNewest(ticket: number): boolean;
   announce(ticket: number, text: string, isError?: boolean): void;
-  /** Forget a carried error, e.g. when another line already shows the real cause. */
+  /** Forget a carried error, e.g. when another line already shows the real cause. The newest action counts as
+   *  settled, so a late error from an older action is dropped too (#433). */
   dropCarried(): void;
   /** Stop a pending write (unmount). The line stays usable. */
   dispose(): void;
@@ -49,11 +50,12 @@ export function createStatusLine(write: (text: string | null) => void, delayMs =
         carried = null;
         pendingError = null;
         writtenSeq = ticket;
-        write(extra ? `${text} ${extra}` : text);
+        write(extra ? (text ? `${text} ${extra}` : extra) : text);
       }, delayMs);
     },
     dropCarried() {
       carried = null;
+      writtenSeq = seq;
     },
     dispose() {
       clearTimeout(timer);
