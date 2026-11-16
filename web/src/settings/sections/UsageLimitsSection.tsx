@@ -1,6 +1,6 @@
 // 사용 한도 section of the 설정 modal (#624): each connected provider's usage (GET /api/limits, read by provider id,
-// never assumed to be Claude's) and the shared guard form (LimitsForm: Claude 5시간·주간·Fable 한도 and the
-// session-length guards). The guards keep their defaults unless changed and cannot be switched off here.
+// never assumed to be Claude's) and the shared guard form (LimitsForm: a group per connected provider, #676, and
+// the session-length guards). The guards keep their defaults unless changed and cannot be switched off here.
 // Numbers only: no account, email or token is read.
 import { useEffect, useId, useState } from 'react';
 import { Meter } from '../../dispatch/parts';
@@ -86,7 +86,7 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
 export default function UsageLimitsSection() {
   const { load, retry } = useSettingsLoad();
   return (
-    <SectionFrame title="사용 한도" hint="한도에 가까워지면 새 Claude 작업을 멈추고, 세션이 길어지면 새 세션으로 넘겨요." testId="settings-section-limits">
+    <SectionFrame title="사용 한도" hint="연결한 모델마다 한도에 가까워지면 그 모델의 새 작업을 멈추고, 세션이 길어지면 새 세션으로 넘겨요." testId="settings-section-limits">
       <ProviderUsage load={load} />
       <LimitsForm load={load} onRetry={retry} />
     </SectionFrame>

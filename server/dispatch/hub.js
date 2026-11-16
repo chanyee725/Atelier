@@ -9,7 +9,7 @@ import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
 import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
 import { replyStyle } from "./style.js";
-import { effectiveRoles, teamSettings } from "./settings.js";
+import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
 import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
@@ -361,9 +361,35 @@ export class Hub extends EventEmitter {
       // Shown on its own once a Fable turn has reported it; null until then.
       fable: c.fable == null ? null : { windows: [{ label: "Fable 주간", used: c.fable, reset: c.fableReset }] },
       // ~/.codex/sessions is read only once the user has connected OpenAI Codex in Drawing.
-      openai: this.isConnected("openai") ? await codexLimits() : null,
+      openai: this.isConnected("openai") ? (this.codexLast = await codexLimits()) : null,
       gemini: { reached: geminiReached, reset: geminiReached ? g.reset ?? null : null },
     };
+  }
+
+  /** Reads Codex's windows again (cached for a minute by codexLimits) for providerHold. */
+  async refreshCodex() {
+    if (this.isConnected("openai")) this.codexLast = await codexLimits().catch(() => null);
+  }
+
+  /**
+   * Per-provider usage hold for Codex and Gemini (Claude's windows hold every new turn through limitHit): a Codex
+   * window at or over its threshold (guard.openai) or a reached Gemini quota refuses new turns of that provider only.
+   */
+  providerHold(provider, now = Date.now()) {
+    const g = this.store.data.settings.guard;
+    if (!g?.enabled) return null;
+    if (provider === "openai") {
+      const t = codexGuard(g);
+      for (const w of this.codexLast?.windows || []) {
+        const at = w.slot === "seven" ? t.seven : t.five;
+        if (w.used != null && w.used >= at && (!w.reset || w.reset > now)) return `Codex ${w.label} 한도 ${Math.round(w.used * 100)}% — 차단 기준 이상이에요`;
+      }
+    }
+    if (provider === "gemini") {
+      const q = this.shared.gemini;
+      if (q?.reached && (!q.reset || q.reset > now)) return "Gemini 한도에 닿았어요. 풀리면 다시 보낼 수 있어요.";
+    }
+    return null;
   }
 
   /* ---------------- Task board ---------------- */
@@ -489,8 +515,8 @@ export class Hub extends EventEmitter {
     const g = this.store.data.settings.guard;
     if (!g.enabled) return null;
     const limits = this.currentLimits();
-    if (limits.five != null && limits.five >= g.five) return `5시간 한도 ${Math.round(limits.five * 100)}% — 차단 기준 이상이에요`;
-    if (limits.seven != null && limits.seven >= g.seven) return `주간 한도 ${Math.round(limits.seven * 100)}% — 차단 기준 이상이에요`;
+    if (limits.five != null && limits.five >= g.five) return `Claude 5시간 한도 ${Math.round(limits.five * 100)}% — 차단 기준 이상이에요`;
+    if (limits.seven != null && limits.seven >= g.seven) return `Claude 주간 한도 ${Math.round(limits.seven * 100)}% — 차단 기준 이상이에요`;
     // Fable has its own weekly window; its own threshold (`fable`, else the weekly one).
     if (limits.fable != null && limits.fable >= (g.fable ?? g.seven)) return `Fable 주간 한도 ${Math.round(limits.fable * 100)}% — 차단 기준 이상이에요`;
     return null;
@@ -512,10 +538,13 @@ export class Hub extends EventEmitter {
       if (!model) throw badRequest(`알 수 없는 모델: ${String(id ?? "").slice(0, 60)}`);
       return model;
     };
+    if (items.some(it => { try { return modelOf(it).provider === "openai"; } catch { return false; } })) await this.refreshCodex();
     for (const it of items) {
       if (!roles.some(r => r.id === it.role)) throw badRequest(`알 수 없는 역할: ${it.role}`);
       const { provider } = modelOf(it);
       if (!this.isConnected(provider)) throw new Error(`${PROVIDER_NAMES[provider] ?? provider}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`);
+      const hold = this.providerHold(provider);
+      if (hold) throw Object.assign(new Error(hold), { status: 409 });
     }
     // A folder is a top-level workspace folder that exists; without one the session inherits its parent's.
     const top = await this.resolveFolder(folder, parent);
@@ -600,6 +629,7 @@ export class Hub extends EventEmitter {
     const s = this.get(id);
     if (!s) throw new Error("세션이 없어요");
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
+    if (s.provider === "openai") void this.refreshCodex(); // fresh windows for the next turn's hold check
     const blocked = this.runBlock(s); // before anything is recorded or started
     if (blocked) throw new Error(blocked);
     const r = this.rt(id);
@@ -642,7 +672,7 @@ export class Hub extends EventEmitter {
     const name = PROVIDER_NAMES[s.provider];
     if (!this.isConnected(s.provider)) return `${name}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`;
     if (!this.models.some(m => m.id === s.model && m.provider === s.provider)) return `${String(s.model ?? "").slice(0, 60)} 모델을 지금은 쓸 수 없어요. ${name} 연결과 모델 목록을 확인하세요.`;
-    return null;
+    return this.providerHold(s.provider);
   }
 
   /** Idle (between turns) and past the turn budget, or over the context guard, since its CLI session started. */

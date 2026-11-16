@@ -64,16 +64,17 @@ export async function loginUnlessClosed<R extends { connected: boolean }>(
   return res;
 }
 
-// Usage-limit and session-length guards (E509c), edited in the 설정 modal and page. Defaults mirror the server's.
-// The usage guard reads Claude's account windows only (Fable models have their own weekly window there); as in
-// standalone Dispatch, Codex and Gemini sessions are never held by it (#587). The session-length guard covers every
-// provider.
-export type GuardField = { id: 'five' | 'seven' | 'fable' | 'handoffMTokens' | 'ctxHandoff'; label: string; unit: string; min: number; max: number; def: number; hint: string };
+// Usage-limit and session-length guards (E509c), edited in the 설정 modal and page. Defaults mirror the server's
+// (server/dispatch/settings.js GUARD_DEFAULTS). Each provider has its own usage guard (#676): Claude's 5시간·주간·Fable
+// windows (stored as guard.five/seven/fable, as in standalone Dispatch), Codex's 5시간·주간 windows (guard.openai), and
+// Gemini, which only says whether its quota was hit, so it has no value to set. A provider's guard holds new work of
+// that provider only. The session-length guard covers every provider.
+export type GuardField = { id: 'five' | 'seven' | 'fable' | 'codexFive' | 'codexSeven' | 'handoffMTokens' | 'ctxHandoff'; label: string; unit: string; min: number; max: number; def: number; hint: string };
 export type GuardGroup = { title: string; hint: string; /** The provider whose windows the group guards; none = every provider. */ provider?: string; fields: GuardField[] };
 export const GUARD_FIELDS: GuardGroup[] = [
   {
     title: 'Claude 사용량 한도',
-    hint: 'Claude 사용량이 이만큼 차면 새 Claude 작업을 멈춰요. Codex·Gemini는 막지 않아요.',
+    hint: 'Claude 사용량이 이만큼 차면 새 Claude 작업을 멈춰요.',
     provider: 'claude',
     fields: [
       { id: 'five', label: '5시간 한도', unit: '%', min: 1, max: 100, def: 90, hint: '' },
@@ -82,8 +83,23 @@ export const GUARD_FIELDS: GuardGroup[] = [
     ],
   },
   {
+    title: 'OpenAI Codex 사용량 한도',
+    hint: 'Codex 사용량이 이만큼 차면 새 Codex 작업을 멈춰요.',
+    provider: 'openai',
+    fields: [
+      { id: 'codexFive', label: 'Codex 5시간 한도', unit: '%', min: 1, max: 100, def: 90, hint: '' },
+      { id: 'codexSeven', label: 'Codex 주간 한도', unit: '%', min: 1, max: 100, def: 85, hint: '' },
+    ],
+  },
+  {
+    title: 'Gemini 사용량 한도',
+    hint: 'Gemini는 한도에 닿았는지만 알려 줘요. 닿으면 풀릴 때까지 새 Gemini 작업을 멈춰요.',
+    provider: 'gemini',
+    fields: [],
+  },
+  {
     title: '세션 길이',
-    hint: '세션이 너무 길어지면 새 세션으로 넘겨요.',
+    hint: '어느 모델이든 세션이 너무 길어지면 새 세션으로 넘겨요.',
     fields: [
       { id: 'handoffMTokens', label: '토큰 한도', unit: '백만', min: 2, max: 500, def: 15, hint: '' },
       { id: 'ctxHandoff', label: '컨텍스트 한도', unit: '%', min: 30, max: 95, def: 70, hint: '' },
@@ -91,24 +107,34 @@ export const GUARD_FIELDS: GuardGroup[] = [
   },
 ];
 
+type GuardSettings = { five: number; seven: number; fable?: number | null; openai?: { five?: number; seven?: number } };
+const CODEX_KEY = { codexFive: 'five', codexSeven: 'seven' } as const;
+
 /** The value a field shows, from saved settings (guards are stored as 0..1 fractions; fable falls back to weekly). */
-export function guardValue(id: GuardField['id'], s: { guard: { five: number; seven: number; fable?: number }; team: { ctxHandoff?: number; handoffMTokens?: number } }): number {
+export function guardValue(id: GuardField['id'], s: { guard: GuardSettings; team: { ctxHandoff?: number; handoffMTokens?: number } }): number {
   const f = GUARD_FIELDS.flatMap((g) => g.fields).find((x) => x.id === id)!;
   if (id === 'five' || id === 'seven') return Math.round(s.guard[id] * 100);
   if (id === 'fable') return Math.round((s.guard.fable ?? s.guard.seven) * 100);
+  if (id === 'codexFive' || id === 'codexSeven') {
+    const v = s.guard.openai?.[CODEX_KEY[id]];
+    return typeof v === 'number' ? Math.round(v * 100) : f.def;
+  }
   return s.team[id] || f.def;
 }
 
 /** A settings patch for the given field values (percent fields become fractions; `fable: null` follows weekly again). */
 export function guardPatch(values: Partial<Record<GuardField['id'], number | null>>) {
-  const guard: Record<string, number | null> = {};
+  const guard: Record<string, number | null | Record<string, number>> = {};
+  const openai: Record<string, number> = {};
   const team: Record<string, number> = {};
   for (const [k, v] of Object.entries(values) as [GuardField['id'], number | null][]) {
     if (k === 'fable' && v === null) guard.fable = null;
     else if (v === null) continue;
     else if (k === 'five' || k === 'seven' || k === 'fable') guard[k] = v / 100;
+    else if (k === 'codexFive' || k === 'codexSeven') openai[CODEX_KEY[k]] = v / 100;
     else team[k] = v;
   }
+  if (Object.keys(openai).length) guard.openai = openai;
   return { ...(Object.keys(guard).length ? { guard } : {}), ...(Object.keys(team).length ? { team } : {}) };
 }
 
@@ -155,6 +181,7 @@ export function readGuardTexts(texts: Record<GuardField['id'], string>, follows:
   const fableEmpty = !texts.fable.trim();
   for (const f of fields) {
     if (f.id === 'fable' && fableEmpty) continue;
+    if (texts[f.id] === undefined) continue; // a caller that holds only some fields
     const v = wholeIn(texts[f.id], f.min, f.max);
     if (v === null) return { error: `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요` };
     values[f.id] = v;

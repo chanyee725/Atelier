@@ -117,20 +117,39 @@ export function effectiveRoles(roles, store, models = staticModels()) {
   return roles.map(r => (rm[r.id] && models.some(m => m.id === rm[r.id]) ? { ...r, model: rm[r.id] } : r));
 }
 
-export const GUARD_DEFAULTS = Object.freeze({ five: 0.9, seven: 0.85, fable: 0.85 });
+/**
+ * Usage-limit guard thresholds per provider, as fractions. The top-level `five`/`seven`/`fable` stay Claude's (as
+ * standalone Dispatch stores them, so saved settings keep working); `openai` holds Codex's own thresholds for its
+ * short (primary, 5시간) and weekly (secondary) windows. Gemini only reports whether its quota was hit, so it has no
+ * threshold: a reached quota holds new Gemini turns until it resets.
+ */
+export const GUARD_DEFAULTS = Object.freeze({ five: 0.9, seven: 0.85, fable: 0.85, openai: Object.freeze({ five: 0.9, seven: 0.85 }) });
+
+/** Codex thresholds from saved guard settings, defaults filled in. */
+export const codexGuard = guard => ({ ...GUARD_DEFAULTS.openai, ...(guard?.openai && typeof guard.openai === "object" ? guard.openai : {}) });
+
+const fraction = v => {
+  const n = Math.round(Number(v) * 100) / 100;
+  if (v === "" || v === true || v === null || !Number.isFinite(n) || n < 0.01 || n > 1) throw Object.assign(new Error("1~100 사이 숫자를 넣어 주세요"), { status: 400 });
+  return n;
+};
 
 /**
  * Validates a usage-limit guard update (fractions 0.01..1; unknown keys, including `enabled`, are ignored, so the
- * guard cannot be switched off from the UI). `fable: null` falls back to the weekly value.
+ * guard cannot be switched off from the UI). `fable: null` falls back to the weekly value. `openai: { five, seven }`
+ * sets Codex's thresholds.
  */
 export function patchGuard(cur, patch) {
   const next = { ...cur };
   for (const k of ["five", "seven", "fable"]) {
     if (!(k in patch)) continue;
     if (k === "fable" && patch[k] === null) { delete next.fable; continue; }
-    const n = Math.round(Number(patch[k]) * 100) / 100;
-    if (patch[k] === "" || patch[k] === true || !Number.isFinite(n) || n < 0.01 || n > 1) throw Object.assign(new Error("1~100 사이 숫자를 넣어 주세요"), { status: 400 });
-    next[k] = n;
+    next[k] = fraction(patch[k]);
+  }
+  if (patch.openai && typeof patch.openai === "object") {
+    const o = { ...(cur.openai || {}) };
+    for (const k of ["five", "seven"]) if (k in patch.openai) o[k] = fraction(patch.openai[k]);
+    next.openai = o;
   }
   return next;
 }
