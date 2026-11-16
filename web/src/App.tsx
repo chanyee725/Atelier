@@ -46,6 +46,7 @@ import { ExportMenu } from './ExportMenu';
 import { DEFAULT_EXPORT, type ExportOptions } from './export/options';
 import { HistoryDialog } from './HistoryDialog';
 import { TrashDialog } from './TrashDialog';
+import { FolderPickerDialog } from './FolderPickerDialog';
 import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
 import { displayName } from './docTitles';
@@ -230,6 +231,7 @@ export function App() {
   const [paletteGroup, setPaletteGroup] = useState<Command['group']>(undefined);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   // Set by the canvas while it is mounted (export, palette commands).
   const canvasHandle = useRef<CanvasHandle | null>(null);
 
@@ -400,20 +402,14 @@ export function App() {
       setError(e instanceof ApiError && e.status === 409 ? '같은 이름의 파일이 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요');
     }
   };
-  // A project is a top-level folder (design doc 6 §1).
-  const newProject = async () => {
-    const name = window.prompt('새 프로젝트 이름을 입력해 주세요')?.trim();
-    if (!name) return;
-    const problem = nameProblem({ type: 'folder' }, name) ?? (name.includes('/') ? '이름에 / 나 \\를 넣을 수 없어요.' : null);
-    if (problem) return setError(problem);
-    try {
-      await api.createFolder(name);
-      notifyApp({ type: 'created', kind: 'project', path: name });
-      await refreshTree();
-      setSection({ kind: 'project', path: name });
-    } catch (e) {
-      setError(e instanceof ApiError && e.status === 409 ? '같은 이름의 프로젝트가 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요');
-    }
+  // A project is a top-level folder (design doc 6 §1); 새 프로젝트 links a folder of the server PC to one (E554).
+  const newProject = () => setFolderPickerOpen(true);
+  const projectLinked = async (path: string) => {
+    setFolderPickerOpen(false);
+    await refreshTree();
+    setSection({ kind: 'project', path });
+    // After the picker is gone: a toast raised while a modal is open is placed inside that modal.
+    notifyApp({ type: 'created', kind: 'project', path });
   };
   // The open file is gone (deleted or moved away): drop it and its pending save.
   const closeOpenFile = useCallback(() => {
@@ -857,7 +853,7 @@ export function App() {
       onSection={showSection}
       onOpen={openFile}
       onNewFile={() => void newFile()}
-      onNewProject={() => void newProject()}
+      onNewProject={newProject}
       onRename={(n) => void renameEntry(n)}
       onDelete={(n) => void remove(n)}
       onMove={moveEntry}
@@ -879,6 +875,7 @@ export function App() {
         <ActivityAlerts onOpen={openFile} onSession={() => window.location.assign('/dispatch')} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
+          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onLinked={(p) => void projectLinked(p)} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
           {paletteOpen && <CommandPalette commands={registry.list()} scope={paletteScope(docScreen ? section : homeSection, projects, path)} onlyGroup={paletteGroup} onClose={() => setPaletteOpen(false)} />}
           {conflict && (
