@@ -58,9 +58,9 @@ export function ThemeField({ headingClass = 'text-sm font-medium' }: { headingCl
   const id = useId();
   return (
     <div data-testid="settings-theme" className="flex flex-col gap-2">
-      <h3 id={id} className={headingClass}>
+      <h4 id={id} className={headingClass}>
         화면 테마
-      </h3>
+      </h4>
       <ThemeSwitch pref={pref} onPref={setPref} system={system} labelledBy={id} className="mx-0 mb-0 max-w-64" />
     </div>
   );
