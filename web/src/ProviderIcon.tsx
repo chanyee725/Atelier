@@ -30,7 +30,7 @@ export function ProviderIcon({ provider, className }: { provider: string | null 
       data-provider-icon={provider}
       className={cn('size-[1em] shrink-0', brand && 'provider-icon', className)}
       style={vars || undefined}
-      fill={gradient ? `url(#${gid}) currentColor` : undefined}
+      fill={gradient ? `url(#${gid}) currentColor` : 'currentColor'}
     />
   );
   if (!gradient) return icon;
