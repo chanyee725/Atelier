@@ -1,5 +1,6 @@
-// 모델 연결 dialog (E525, #570), ported from Dispatch's ConnectDialog/ProviderRow and ProviderLimits, Claude only:
-// no other providers, no model picker, no API-key field (sessions use the user's own `claude` CLI login).
+// 모델 연결 dialog (E525, #570), ported from Dispatch's ConnectDialog/ProviderRow and ProviderLimits, for one
+// provider (`meta`, keyed by provider id; requests go to /api/providers/<id>/...). No model picker and no API-key
+// field yet (#587); sessions use the user's own CLI login.
 // Flow as in Dispatch: 연결 → the server connects at once if the CLI is logged in, else starts `claude auth login`
 // (로그인 중, a link to the CLI's sign-in page, 취소); 해제 disconnects from Drawing only. Closing the dialog leaves a
 // running login alone; the sidebar row keeps showing 로그인 중. Native modal <dialog>, same look as the 설정 modal.
@@ -9,7 +10,7 @@ import { api } from './api';
 import { until } from './dispatch/lib/format';
 import { cn } from './lib/utils';
 import { WARN_PERCENT } from './projectNav';
-import { ACTION_TEXT, MODEL_NAME, STATE_TEXT, actionFor, connectKey, doneText, limitRows, loginUrl, metaLine, type Action, type LimitRow } from './modelConnect';
+import { ACTION_TEXT, STATE_TEXT, actionFor, connectKey, connectedText, objParticle, doneText, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta } from './modelConnect';
 import { MODELS_CHANGED } from './settings/context';
 import { oneAtATime } from './settings/model';
 import type { Models } from './SidebarModels';
@@ -17,11 +18,13 @@ import './connect.css';
 
 const STATE_DOT = { off: 'bg-muted-foreground/50', missing: 'bg-destructive', busy: '', connected: 'bg-ok', idle: 'bg-muted-foreground/50' } as const;
 
-export function ConnectDialog({ models, onClose }: { models: Models; onClose: () => void }) {
+export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; models: Models; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descId = useId();
-  const { status, claude: p, limits } = models;
+  const { status, limits } = models;
+  const p = models.providers[meta.id];
+  const id = meta.id;
   const enabled = !!status?.enabled;
   const key = connectKey(p, enabled);
   const action = actionFor(key);
@@ -44,9 +47,9 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
   // A login that finishes while the dialog is open says so, like the request that connects at once.
   const wasBusy = useRef(key === 'busy');
   useEffect(() => {
-    if (wasBusy.current && key === 'connected') setNote({ text: 'Claude를 연결했어요.' });
+    if (wasBusy.current && key === 'connected') setNote({ text: connectedText(meta) });
     wasBusy.current = key === 'busy';
-  }, [key]);
+  }, [key, meta]);
 
   // One request at a time: a double click before the state changes is dropped.
   const run = useMemo(
@@ -56,11 +59,11 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
         setNote(null);
         try {
           const res =
-            what === 'connect' ? await api.providerLogin('claude')
-            : what === 'cancel' ? (await api.providerCancel('claude'), null)
-            : what === 'disconnect' ? (await api.providerLogout('claude'), null)
+            what === 'connect' ? await api.providerLogin(id)
+            : what === 'cancel' ? (await api.providerCancel(id), null)
+            : what === 'disconnect' ? (await api.providerLogout(id), null)
             : (await api.providerRefresh(), null);
-          const text = doneText(what, res);
+          const text = doneText(meta, what, res);
           if (text) setNote({ text });
         } catch (e) {
           setNote({ text: e instanceof Error ? e.message : '요청이 실패했어요.', bad: true });
@@ -69,11 +72,11 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
           window.dispatchEvent(new Event(MODELS_CHANGED));
         }
       }),
-    [],
+    [id, meta],
   );
 
   const error = p?.error && key !== 'busy' && key !== 'connected' ? p.error : null;
-  const rows = limitRows(limits);
+  const rows = limitRows(meta, limits);
   // Hover only on enabled buttons, ~120ms, none under prefers-reduced-motion (#559).
   const btn = 'inline-flex shrink-0 whitespace-nowrap h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:opacity-60 aria-disabled:cursor-default';
   return (
@@ -92,7 +95,7 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
               모델 연결
             </h2>
             <p id={descId} className="text-xs text-muted-foreground">
-              로그인은 Claude CLI가 처리해요. 해제해도 CLI 로그인은 남아요.
+              로그인은 {meta.short} CLI가 처리해요. 해제해도 CLI 로그인은 남아요.
             </p>
           </div>
           <button type="button" onClick={() => ref.current?.close()} className={cn(btn, 'ml-auto font-normal text-muted-foreground hover:bg-accent hover:text-foreground')}>
@@ -100,21 +103,21 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
           </button>
         </header>
 
-        <section aria-label={MODEL_NAME} className="flex flex-col gap-2 rounded-lg border px-3 py-3">
+        <section aria-label={meta.name} className="flex flex-col gap-2 rounded-lg border px-3 py-3">
           <div className="flex items-center gap-3">
             <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground text-sm font-semibold text-background">
-              C
+              {meta.mark}
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2">
-                <span className="text-sm font-semibold">{MODEL_NAME}</span>
+                <span className="text-sm font-semibold">{meta.name}</span>
                 <span data-testid="connect-state" className={cn('inline-flex shrink-0 items-center gap-1.5 text-xs', key === 'connected' ? 'text-foreground' : key === 'missing' ? 'text-destructive' : 'text-muted-foreground')}>
                   {key === 'busy' ? <Loader2 aria-hidden className="connect-spin size-3" /> : <span aria-hidden className={cn('size-1.5 rounded-full', STATE_DOT[key])} />}
                   {STATE_TEXT[key]}
                 </span>
               </div>
-              <p className="truncate text-xs text-muted-foreground" title={metaLine(p)}>
-                {enabled ? metaLine(p) : (status?.message ?? '이 서버에선 모델을 연결할 수 없어요.')}
+              <p className="truncate text-xs text-muted-foreground" title={metaLine(meta, p)}>
+                {enabled ? metaLine(meta, p) : (status?.message ?? '이 서버에선 모델을 연결할 수 없어요.')}
               </p>
             </div>
             {action && (
@@ -123,7 +126,7 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
                 type="button"
                 data-testid="connect-action"
                 aria-disabled={pending ? true : undefined}
-                title={action === 'connect' ? (p?.cliLoggedIn ? '이미 로그인된 CLI 계정을 그대로 써요' : 'Claude 계정으로 로그인') : undefined}
+                title={action === 'connect' ? (p?.cliLoggedIn ? '이미 로그인된 CLI 계정을 그대로 써요' : `${meta.short} 계정으로 로그인`) : undefined}
                 onClick={() => !pending && void run(action)}
                 className={cn(
                   btn,
@@ -144,15 +147,15 @@ export function ConnectDialog({ models, onClose }: { models: Models; onClose: ()
           )}
           {key === 'busy' && !url && <p className="ml-11 text-xs text-muted-foreground">브라우저에서 로그인을 마쳐 주세요.</p>}
           {error && <p className="ml-11 text-xs text-destructive">{error}</p>}
-          {key === 'missing' && <p className="ml-11 text-xs text-muted-foreground">Claude Code를 설치한 뒤 다시 확인해 주세요.</p>}
+          {key === 'missing' && <p className="ml-11 text-xs text-muted-foreground">{meta.cliName}{objParticle(meta.cliName)} 설치한 뒤 다시 확인해 주세요.</p>}
         </section>
 
-        {key === 'connected' && (
+        {key === 'connected' && rows && (
           <section aria-labelledby={`${titleId}-usage`} className="flex flex-col gap-2">
             <h3 id={`${titleId}-usage`} className="text-xs font-medium text-muted-foreground">
               사용량
             </h3>
-            {rows.claude.some((r) => r.pct != null) ? <Bars rows={rows.claude} /> : <p className="text-xs text-muted-foreground">Claude 세션을 한 번 실행하면 표시돼요.</p>}
+            {rows.claude.some((r) => r.pct != null) ? <Bars rows={rows.claude} /> : <p className="text-xs text-muted-foreground">{meta.short} 세션을 한 번 실행하면 표시돼요.</p>}
             {rows.fable?.length ? <Bars rows={rows.fable} /> : <p className="text-xs text-muted-foreground">Fable 주간 한도는 Fable 세션을 한 번 실행하면 표시돼요.</p>}
           </section>
         )}

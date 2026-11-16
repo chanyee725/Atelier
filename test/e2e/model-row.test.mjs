@@ -86,6 +86,9 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
     assert.fail(`timed out: ${what}`);
   };
   const shot = (name) => SHOTS && page.screenshot({ path: join(SHOTS, name) });
+  // One row per provider id; only Claude so far (#587 adds more).
+  await row.first().waitFor();
+  assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude']);
 
   // 1. 테마 menu: three choices, one checked; choosing applies at once. No settings dialog anywhere.
   await trigger.click();
