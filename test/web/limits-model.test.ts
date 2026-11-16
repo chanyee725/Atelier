@@ -107,4 +107,6 @@ test('guardDirty: unsaved input is a typed value off the saved one or a Fable fo
   assert.equal(guardDirty(saved, { ...texts, five: '0' }, true), true, 'an invalid value is still unsaved input');
   assert.equal(guardDirty(saved, { ...texts, fable: '50' }, false), true, 'pinning Fable is an edit');
   assert.equal(guardDirty({ values, fableFollows: false }, texts, true), true, 'following again is an edit');
+  assert.equal(guardDirty(saved, { ...texts, five: `0${values.five}` }, true), false, 'the same number spelled 0-padded is not an edit (#644)');
+  assert.equal(guardDirty(saved, { ...texts, five: ' ' }, true), true, 'a cleared field is an edit (#644)');
 });

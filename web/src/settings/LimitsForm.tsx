@@ -46,7 +46,8 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
     if (follows === saved.fableFollows) setFollows(fromStore.fableFollows);
     setSaved(fromStore);
   }
-  useDirtyMark('limits', load.kind === 'ok' && guardDirty(saved, texts, follows));
+  // In every load state: a dropped or reconnecting stream keeps the input on screen (#644).
+  useDirtyMark('limits', guardDirty(saved, texts, follows));
 
   // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value, and
   // clearing it makes it follow again (#563).

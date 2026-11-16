@@ -378,7 +378,13 @@ export const pickTexts = (texts: Record<TeamNumberId, string>, ids: readonly Tea
  */
 export function guardDirty(saved: GuardSaved, texts: Record<GuardField['id'], string>, follows: boolean): boolean {
   if (follows !== saved.fableFollows) return true;
-  return (Object.keys(saved.values) as GuardField['id'][]).some((id) => !(id === 'fable' && follows) && (texts[id] ?? '').trim() !== String(saved.values[id]));
+  return (Object.keys(saved.values) as GuardField['id'][]).some((id) => !(id === 'fable' && follows) && !sameNumber(texts[id] ?? '', saved.values[id]));
+}
+
+/** A typed number that reads as the saved one, whatever its spelling ('08', '1.50'); blank is never the same. */
+export function sameNumber(text: string, saved: number): boolean {
+  const t = text.trim();
+  return t === String(saved) || (t !== '' && Number(t) === saved);
 }
 
 /**
