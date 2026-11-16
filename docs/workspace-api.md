@@ -6,6 +6,7 @@ Paths are relative to the workspace, `/`-separated. No `..`, absolute paths, hid
 |---|---|
 | `GET /api/tree` | folders first; unreadable files are listed with `title:''`, `revision:null`; files with a `plan` carry `pipeline: {state:'plan'}` |
 | `GET /api/workspace/projects` | projects view, see below (`/api/projects` belongs to Dispatch) |
+| `GET /api/workspace/agents?project=` | live agent list, see below; `project` (a top folder) is optional |
 | `GET /api/file?path=` / `POST /api/file {path,title?,document?,canvas?,blocks?,plan?}` | create is exclusive (409 if it exists); optional content (a template) is checked like a save (400) |
 | `PUT /api/file?path=` `{revision,title,document,canvas,blocks,plan?}` | whole-file save; 409 `{revision}` when `revision` is not the current one |
 | `PATCH /api/file/plan?path=` `{revision?,ops}` | step-level plan edit, see below; returns `{path,revision,plan}` |
@@ -21,6 +22,12 @@ Paths are relative to the workspace, `/`-separated. No `..`, absolute paths, hid
 - **DocNode** = `{ type: 'doc'|'group', path, name, title?, revision?, created, modified, count, children }`. A folder `X/` next to `X.dpx.json` holds X's sub-documents (`children`); a folder with no such file is a `group` (its `path` is the folder). `count` is the number of documents below. Sorted by `name`.
 - `loose` = files right in the workspace root (미분류). They are not nested: a top-level folder is always a project.
 - Times are ISO strings. `modified` is the file's mtime (a group's or project's newest below). `created`: saves replace the file, so its birth time is lost; a file made through the API gets a `born` mark (ms) in its history folder, which moves with it and goes through the trash. For files made outside the app it is the earliest of the oldest kept snapshot and the file's own times.
+
+## Live agents and who is writing (E528)
+
+- `GET /api/workspace/agents[?project=<top folder>]` → `{ agents: AgentPresence[] }` (type: `shared/dispatch/agent-presence.ts`): the agent sessions working right now (status `starting`, `running` or `waiting`) with `name`, `role`, `model`, `state`, `project` and `file`, the file each one edited last. Newest activity first. The SSE `agents` event carries the same `{ agents }` for the whole workspace, once on connect and on every change. Memory only; nothing about it is written to disk.
+- A session counts for a project when the project is its own folder or the file it holds is in that folder.
+- Outside API writers (another Dispatch, a script) may name themselves with the optional header `x-drawing-session: <name>` on `PUT /api/file`, `POST /api/file` and `PATCH /api/file/plan`. Their cursor (`cursor` event, `sid` `outside:<name>`) then shows that name instead of `에이전트`, and they are listed with `outside: true` for 2 minutes after their last write. When a session started by this Drawing could have made the change, the change stays that session's, whatever name the header sends. The name is cleaned: control and format characters, `<`, `>`, `&`, quotes, backticks and backslashes are dropped, spaces collapsed, at most 32 characters. It is kept in memory only, never on disk or in logs. Use a session name, never a real name or an email. Writes still need `x-drawing: 1`.
 
 ## Delete and move rules
 

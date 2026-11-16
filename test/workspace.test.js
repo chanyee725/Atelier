@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink, stat, chmod } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
+import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
@@ -878,6 +879,50 @@ test('an outside edit found by the restarted watcher\'s catch-up is flagged catc
     for (let i = 0; i < 100 && changes.length === n; i++) await new Promise((r) => setTimeout(r, 10));
     assert.equal(changes.at(-1).path, 'x.dpx.json');
     assert.equal(changes.at(-1).catchUp, true);
+  } finally {
+    warn.mock.restore();
+    await store.close();
+    await rm(ws, { recursive: true, force: true });
+  }
+});
+
+// npm test runs with DRAW_WORKSPACE_WATCH=poll, so this is the one test that drives the production fs.watch path (#512).
+test('the real fs.watch notices a file edited outside the app', async (t) => {
+  const ws = await mkdtemp(join(tmpdir(), 'draw-ws-'));
+  let startErr = null;
+  // Wrap fs.watch so a machine out of inotify instances/watches (EMFILE, ENOSPC) skips the test instead of failing it.
+  const watchFn = (root, opts, cb) => {
+    try {
+      const w = watch(root, opts, cb);
+      w.on('error', (err) => { startErr ??= err; });
+      return w;
+    } catch (err) {
+      startErr = err;
+      throw err;
+    }
+  };
+  const changes = [];
+  const store = createStore(ws, { watchFn, watchDebounceMs: 0, onExternalChange: (c) => changes.push(c) });
+  const warn = t.mock.method(console, 'warn', () => {});
+  try {
+    await store.createFile('x');
+    await store.startWatching();
+    if (startErr) {
+      t.skip(`fs.watch unavailable here (${startErr.code ?? 'error'})`);
+      return;
+    }
+    const cur = JSON.parse(await readFile(join(ws, 'x.dpx.json'), 'utf8'));
+    await writeFile(join(ws, 'x.dpx.json'), JSON.stringify({ ...cur, title: 'edited outside', revision: cur.revision + 1 }));
+    // Generous wait: a loaded machine can deliver inotify events late.
+    for (let i = 0; i < 200 && !changes.some((c) => c.path === 'x.dpx.json') && !startErr; i++) await new Promise((r) => setTimeout(r, 25));
+    if (startErr && !changes.length) {
+      t.skip(`fs.watch failed here (${startErr.code ?? 'error'})`);
+      return;
+    }
+    const c = changes.find((x) => x.path === 'x.dpx.json');
+    assert.ok(c, 'outside edit was reported through fs.watch');
+    assert.equal(c.kind, 'change');
+    assert.equal(c.catchUp, undefined);
   } finally {
     warn.mock.restore();
     await store.close();
