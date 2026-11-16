@@ -1,100 +1,20 @@
-// Settings dialog model (E57): sections, provider rows and the run-guard fields, kept free of React so
-// node --test can check them. Status and percentages only: no account, email or token ever reaches here.
-import { fiveHourWindow, percent, reachedWindows } from '../projectNav.ts';
-import type { ThemePref } from '../theme';
-
-export const SECTIONS = [
-  { id: 'general', label: '일반' },
-  { id: 'models', label: '모델 연결' },
-  { id: 'run', label: '실행' },
-] as const;
-export type SettingsSection = (typeof SECTIONS)[number]['id'];
-
-export const isSection = (v: unknown): v is SettingsSection => SECTIONS.some((s) => s.id === v);
-
-export const THEME_CHOICES: { id: ThemePref; label: string }[] = [
-  { id: 'system', label: '시스템' },
-  { id: 'light', label: '라이트' },
-  { id: 'dark', label: '다크' },
-];
+// Model connection helpers for the sidebar row (E57, E509), kept free of React so node --test can check them.
+// Status only: no account, email or token ever reaches here.
 
 // One model only (E505): Claude CLI running Fable 5.2. Older saved sessions may name other providers; they are not rows here.
 export const PROVIDER_IDS = ['claude'] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
-const NAMES: Record<ProviderId, string> = { claude: 'Claude · Fable 5.2' };
-
-/** What /api/state reports per provider; only the fields this dialog reads. */
-export type { ProviderInfo } from '../api';
-import type { ProviderInfo, ProviderLimits } from '../api';
-export type LimitsView = ProviderLimits;
-
-export type ProviderAction = 'connect' | 'disconnect' | 'cancel' | null;
-export type ProviderRow = {
-  id: ProviderId;
-  name: string;
-  /** Dot colour: ok, warn (near or at a limit), idle (not connected). */
-  tone: 'ok' | 'warn' | 'idle';
-  status: string;
-  action: ProviderAction;
-  /** Usage windows, e.g. 5시간 42%; empty when not connected or unknown. */
-  windows: { label: string; pct: number }[];
-  /** Labels of the windows at 100%, e.g. 주간; empty when no limit is reached. */
-  reachedLabels: string[];
-  error: string | null;
-  /** The CLI's own sign-in page while a login runs (https only). */
-  loginUrl: string | null;
-};
-
-export const WARN_AT = 75;
-
-export function providerRows(providers: Partial<Record<string, ProviderInfo>>, limits: LimitsView): ProviderRow[] {
-  return PROVIDER_IDS.map((id) => {
-    const p = providers[id] ?? {};
-    const connected = !!p.connected;
-    const busy = !!p.busy;
-    const missing = p.installed === false;
-    // 5시간 from the account window (same pick as the sidebar), then Fable's own weekly window once it has reported.
-    const five = fiveHourWindow(limits);
-    const raw = [...(five ? [five] : []), ...(limits.fable?.windows ?? [])];
-    const windows = connected ? raw.flatMap((w) => (percent(w.used) == null ? [] : [{ label: w.label, pct: percent(w.used)! }])) : [];
-    const hit = reachedWindows(connected, limits).map((w) => w.label);
-    const reached = hit.length > 0;
-    const status = busy ? '연결하는 중이에요' : missing ? 'CLI가 설치되지 않았어요' : !connected ? '연결 안 됨' : reached ? '한도에 닿았어요' : '연결됨';
-    const tone = !connected ? 'idle' : reached || windows.some((w) => w.pct > WARN_AT) ? 'warn' : 'ok';
-    const action: ProviderAction = busy ? 'cancel' : connected ? 'disconnect' : missing ? null : 'connect';
-    const loginUrl = busy && typeof p.url === 'string' && p.url.startsWith('https://') ? p.url : null;
-    return { id, name: NAMES[id], tone, status, action, windows, reachedLabels: hit, error: p.error ?? null, loginUrl };
-  });
-}
-
-/** A percent field (1..100) as the 0..1 fraction the guard stores; null when out of range or not a number. */
-export function fractionFrom(input: string): number | null {
-  const n = Number(input.trim());
-  if (!input.trim() || !Number.isFinite(n) || n < 1 || n > 100) return null;
-  return Math.round(n) / 100;
-}
-
-/** A whole number in [min, max]; null otherwise (0 means off where the server allows it). */
-export function wholeFrom(input: string, min: number, max: number): number | null {
-  const n = Number(input.trim());
-  if (!input.trim() || !Number.isInteger(n) || n < min || n > max) return null;
-  return n;
-}
-
-/** Providers whose CLI login is running now. The dialog cancels these when it closes (#219 review). */
-export const busyIds = (providers: Partial<Record<string, ProviderInfo>>): ProviderId[] => PROVIDER_IDS.filter((id) => !!providers[id]?.busy);
-
-/** Polling stops after this long even if the server still says a login runs; 다시 확인 checks again. */
+/** Polling stops after this long even if the server still says a login runs. */
 export const LOGIN_POLL_LIMIT_MS = 10 * 60_000;
 export const LOGIN_POLL_EVERY_MS = 2000;
-export const LOGIN_POLL_TIMEOUT_NOTE = '로그인을 너무 오래 기다렸어요. 다시 확인을 눌러 주세요.';
+export const LOGIN_POLL_TIMEOUT_NOTE = '로그인을 너무 오래 기다렸어요. 취소하고 다시 해 주세요.';
 
 type Clock = { now: () => number; setInterval: (fn: () => void, ms: number) => unknown; clearInterval: (t: unknown) => void };
 const realClock: Clock = { now: () => Date.now(), setInterval: (fn, ms) => setInterval(fn, ms), clearInterval: (t) => clearInterval(t as number) };
 
 /**
  * Checks back every LOGIN_POLL_EVERY_MS while a CLI login runs and gives up after LOGIN_POLL_LIMIT_MS (calling
- * `onGiveUp` once). Returns a stop function. Each call starts a fresh window, so 다시 확인 restarts it.
+ * `onGiveUp` once). Returns a stop function. Each call starts a fresh window, so a new login restarts it.
  */
 export function pollLogins(load: () => void, onGiveUp: () => void, clock: Clock = realClock): () => void {
   const started = clock.now();
@@ -107,36 +27,6 @@ export function pollLogins(load: () => void, onGiveUp: () => void, clock: Clock 
     load();
   }, LOGIN_POLL_EVERY_MS);
   return () => clock.clearInterval(t);
-}
-
-type Focusable = { isConnected: boolean; focus: () => void; checkVisibility?: () => boolean };
-type FocusRoot = { activeElement: unknown; body: unknown; querySelectorAll: (s: string) => ArrayLike<unknown> };
-const canFocus = (el: unknown): el is Focusable =>
-  !!el && typeof (el as Focusable).focus === 'function' && (el as Focusable).isConnected && (el as Focusable).checkVisibility?.() !== false;
-
-/**
- * After the settings dialog closes: the browser returns focus to the opener, but on a phone the drawer that held
- * the opener has already closed, so focus would drop to <body>. Then focus the opener if it is still on screen,
- * else the visible 설정 row, else the visible sidebar (menu) button (#230 review, #242). Leaves focus alone when it already landed somewhere.
- */
-export function focusAfterClose(opener: unknown, dialog: { contains: (n: never) => boolean } | null, root: FocusRoot = document): void {
-  const now = root.activeElement;
-  // At the close event a focus left inside the closed dialog has not moved on yet: that counts as lost too.
-  if (now && now !== root.body && !dialog?.contains(now as never)) return;
-  // The 설정 row first (desktop: the palette that opened the dialog is gone), then the menu button (phone).
-  const target = canFocus(opener)
-    ? opener
-    : (Array.from(root.querySelectorAll('[data-settings-trigger]')).find(canFocus) ??
-      Array.from(root.querySelectorAll('[data-slot="sidebar-trigger"]')).find(canFocus));
-  target?.focus();
-}
-
-/**
- * Logins that ended since the last check without connecting and without an error of their own: the CLI exited
- * but the provider is still off. The dialog says so instead of waiting forever (#219 review).
- */
-export function loginsEndedUnconnected(before: readonly string[], providers: Partial<Record<string, ProviderInfo>>): ProviderId[] {
-  return PROVIDER_IDS.filter((id) => before.includes(id) && !providers[id]?.busy && !providers[id]?.connected && !providers[id]?.error);
 }
 
 export const LOGIN_ENDED_NOTE = '로그인이 끝났지만 연결되지 않았어요. 다시 해 주세요.';
