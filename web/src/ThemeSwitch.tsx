@@ -4,7 +4,7 @@
 // chosen one with Highlight. The chosen item is raised in every theme: white on a grey track in light, a lighter tint in
 // dark and 모니터링 (--card there is darker than the track, which made it look pressed in, #684).
 import { useRef, type KeyboardEvent } from 'react';
-import { Activity, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
+import { Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
 import type { Theme, ThemePref } from './theme';
@@ -13,7 +13,6 @@ export const THEME_CHOICES: { id: ThemePref; label: string; icon: LucideIcon }[]
   { id: 'system', label: '시스템', icon: Monitor },
   { id: 'light', label: '라이트', icon: Sun },
   { id: 'dark', label: '다크', icon: Moon },
-  { id: 'monitor', label: '모니터링', icon: Activity },
 ];
 
 const NEXT: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
