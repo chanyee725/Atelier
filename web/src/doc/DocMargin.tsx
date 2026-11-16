@@ -7,6 +7,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import type { Editor } from '@tiptap/core';
 import { MarginPanel } from './MarginPanel';
 import { useAgentMargin } from './marginStore';
+import type { MarginRoom } from './agentMargin';
+import { measureRoom, scrollerOf } from './marginRoom';
 
 /** Exit transition length (ms), a little over the CSS one, as the fallback if `transitionend` never comes. */
 const EXIT_MS = 360;
@@ -25,8 +27,8 @@ export function DocMargin({ file, children }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const main = useRef<HTMLDivElement>(null);
   const aside = useRef<HTMLElement>(null);
-  const [width, setWidth] = useState(0);
-  const m = useAgentMargin(file, editor, width);
+  const [room, setRoom] = useState<MarginRoom | null>(null);
+  const m = useAgentMargin(file, editor, room);
 
   // Mounted from the moment it opens until its exit transition has played.
   const [mounted, setMounted] = useState(m.open);
@@ -74,19 +76,26 @@ export function DocMargin({ file, children }: Props) {
     });
   }, [mounted, closing, m.form, sideCollapsed]);
 
-  // Viewport width picks side panel or bottom sheet (the 둘 다 view widens the document pane for the panel); a
-  // resize of the column also refreshes the FLIP's "before".
+  // The room on the page (not the window: the app sidebar and the split share it) picks side panel or bottom sheet,
+  // so the text keeps TEXT_MIN and, in 둘 다, the canvas CANVAS_MIN. Observed on the column, the document pane and the
+  // split, which change with the sidebar, the divider and the window. A resize of the column also refreshes the FLIP's
+  // "before", and the scroller's height caps the sticky panel's.
   useLayoutEffect(() => {
     const el = host.current;
-    const onWin = () => setWidth(window.innerWidth);
-    onWin();
-    window.addEventListener('resize', onWin);
-    const ro = el && typeof ResizeObserver === 'function' ? new ResizeObserver(() => (lefts.current = measure())) : null;
-    if (el) ro?.observe(el);
-    return () => {
-      window.removeEventListener('resize', onWin);
-      ro?.disconnect();
+    if (!el) return;
+    const scroller = scrollerOf(el);
+    const update = () => {
+      const next = measureRoom(el, false);
+      setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.panel === next.panel ? old : next));
+      lefts.current = measure();
+      if (scroller) el.style.setProperty('--doc-margin-view-h', `${scroller.clientHeight}px`);
     };
+    update();
+    if (typeof ResizeObserver !== 'function') return;
+    const ro = new ResizeObserver(update);
+    const pane = el.closest('.split-doc');
+    for (const t of new Set([el, pane, pane?.parentElement, scroller])) if (t) ro.observe(t);
+    return () => ro.disconnect();
   }, []);
 
   // While it fades out, the panel keeps showing who was there.
@@ -94,7 +103,7 @@ export function DocMargin({ file, children }: Props) {
   if (m.open) last.current = m.agents;
   const onToggle = useCallback(() => m.setCollapsed(!m.collapsed), [m]);
   return (
-    <div ref={host} className="doc-margin" data-form={m.form} data-margin-open={mounted && !closing ? '' : undefined} data-margin-mounted={mounted ? '' : undefined}>
+    <div ref={host} className="doc-margin" data-form={m.form} data-side-rail={m.sideCollapsed ? '' : undefined} data-margin-open={mounted && !closing ? '' : undefined} data-margin-mounted={mounted ? '' : undefined}>
       <div ref={main} className="doc-margin-main">
         {children(onEditor)}
       </div>

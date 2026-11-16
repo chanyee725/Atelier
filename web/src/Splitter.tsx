@@ -1,3 +1,5 @@
+import { shareAt } from './doc/agentMargin';
+import { measureRoom } from './doc/marginRoom';
 import { useRef, type ReactNode } from 'react';
 
 type Props = { ratio: number; onRatio: (r: number) => void; left: ReactNode; right: ReactNode };
@@ -13,9 +15,11 @@ export function Splitter({ ratio, onRatio, left, right }: Props) {
   const onMove = (e: React.PointerEvent) => {
     if (!(e.target as HTMLElement).hasPointerCapture(e.pointerId) || !box.current) return;
     const r = box.current.getBoundingClientRect();
-    // Width the pane has on top of its share (the agent margin, E532): the divider follows the pointer anyway.
-    const extra = Math.max(0, (pane.current?.getBoundingClientRect().width ?? 0) - ratio * r.width);
-    onRatio(clamp((e.clientX - r.left - extra) / r.width));
+    // While the agent margin shows (E532), the pane is its share plus the side panel, up to the canvas minimum; pick
+    // the share that keeps the divider under the pointer (doc/agentMargin.ts shareAt).
+    const x = e.clientX - r.left;
+    const host = pane.current?.querySelector<HTMLElement>('.doc-margin[data-margin-mounted]');
+    onRatio(clamp(host ? shareAt({ ...measureRoom(host), box: r.width }, x) : x / r.width));
   };
   return (
     <div ref={box} className="flex min-h-0 flex-1">

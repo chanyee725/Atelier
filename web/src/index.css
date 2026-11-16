@@ -578,7 +578,7 @@ body {
 .doc-margin { display: flex; align-items: flex-start; min-height: 100%; }
 .doc-margin-main { flex: 1 1 auto; min-width: 0; }
 .doc-margin-aside {
-  flex: none; position: sticky; top: 0; width: var(--doc-margin-w); max-height: 100dvh; overflow: auto; overscroll-behavior: contain;
+  flex: none; position: sticky; top: 0; width: var(--doc-margin-w); max-height: var(--doc-margin-view-h, 100dvh); overflow: auto; overscroll-behavior: contain;
   border-inline-start: 1px solid var(--border); background: var(--background);
   opacity: 1; translate: 0;
   transition: opacity 0.24s ease-out, translate 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -588,7 +588,7 @@ body {
 .doc-margin-aside[data-closing] { opacity: 0; translate: 16px 0; }
 .doc-margin[data-form='sheet'] { flex-direction: column; align-items: stretch; }
 .doc-margin[data-form='sheet'] .doc-margin-aside {
-  top: auto; bottom: 0; width: auto; max-height: 45dvh;
+  top: auto; bottom: 0; width: auto; max-height: calc(var(--doc-margin-view-h, 100dvh) * 0.45);
   border-inline-start: 0; border-top: 1px solid var(--border);
 }
 @starting-style { .doc-margin[data-form='sheet'] .doc-margin-aside { opacity: 0; translate: 0 16px; } }

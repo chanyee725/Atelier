@@ -380,13 +380,41 @@ export function marginCard(a: MarginAgent, live: LiveAgent | null, now: number, 
 
 // ---- layout ----
 
-/**
- * Viewport width (px) from which the margin sits beside the document, in the 문서 and the 둘 다 view alike (the split
- * gives the document pane the panel's width from the canvas, index.css); narrower (phone widths) it is a bottom sheet.
- */
-export const SIDE_MIN = 768;
+/** Narrowest text column (px) the side panel may leave beside it; any narrower and the margin is a bottom sheet. */
+export const TEXT_MIN = 360;
+/** Narrowest the canvas gets in the 둘 다 view while the document pane widens for the panel (index.css). */
+export const CANVAS_MIN = 430;
+/** Width of the collapsed side panel (its rail). */
+export const RAIL_W = 44;
 export type MarginForm = 'side' | 'sheet';
-export const formOf = (width: number): MarginForm => (width >= SIDE_MIN ? 'side' : 'sheet');
+/**
+ * What the margin's layout has to work with, measured from the page (not the window: the app sidebar and the split
+ * take their share). `box`: the split's whole width in 둘 다, else the document column's. `share`: the document's
+ * split share (null without a split). `chrome`: the document pane's width outside the margin row. `panel`: the side
+ * panel's width (the rail's when collapsed).
+ */
+export type MarginRoom = { box: number; share: number | null; chrome: number; panel: number };
+/** The text column's width if the panel sat beside it; in 둘 다 the pane widens by the panel up to the canvas minimum. */
+const sideText = (r: MarginRoom) =>
+  r.share == null ? r.box - r.chrome - r.panel : Math.min(r.share * r.box, r.box - CANVAS_MIN - r.panel) - r.chrome;
+/** Side panel only when the text keeps TEXT_MIN beside it (and, in 둘 다, the canvas keeps CANVAS_MIN); else a sheet. */
+export const formOf = (r: MarginRoom): MarginForm => (sideText(r) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
+/** Where the split's divider sits (px from the split's left) for a share, as index.css lays it out. */
+export const dividerAt = (r: MarginRoom & { share: number }): number =>
+  formOf(r) === 'side' ? Math.min(r.share * r.box + r.panel, r.box - CANVAS_MIN) : r.share * r.box;
+/**
+ * The share that puts the divider under a pointer at `x` (px from the split's left), so a drag never makes it jump.
+ * Past the canvas minimum the divider stops there. Between the widest sheet layout and the narrowest side layout no
+ * share puts it at `x` (the panel's width appears or goes); it snaps to the nearer of the two.
+ */
+export function shareAt(r: Omit<MarginRoom, 'share'>, x: number): number {
+  const sheet = x / r.box;
+  if (formOf({ ...r, share: sheet }) === 'sheet') return sheet;
+  const side = (Math.min(x, r.box - CANVAS_MIN) - r.panel) / r.box;
+  if (formOf({ ...r, share: side }) === 'side') return side;
+  const edge = (TEXT_MIN + r.chrome) / r.box;
+  return x - edge * r.box < r.panel / 2 ? edge - 0.5 / r.box : edge;
+}
 
 /** Per-browser collapse state (one per form), from localStorage text. A sheet starts collapsed, the side panel open. */
 export const COLLAPSE_KEY = 'drawing.docMargin.collapsed';

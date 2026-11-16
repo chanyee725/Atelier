@@ -20,11 +20,13 @@ import {
   nextTurnAt,
   placeOf,
   pruneIdle,
+  RAIL_W,
   readCollapsed,
   SETTLE_MS,
   type BlockInfo,
   type MarginForm,
   type MarginMap,
+  type MarginRoom,
   type MarginCard,
 } from './agentMargin.ts';
 
@@ -94,6 +96,8 @@ export type AgentMargin = {
   form: MarginForm;
   /** Collapsed in this form (remembered per browser). */
   collapsed: boolean;
+  /** The side form's collapse state (its width counts when picking the form). */
+  sideCollapsed: boolean;
   setCollapsed: (v: boolean) => void;
   /** Scroll the document to a change and flash it there. */
   jump: (spot: DocSpot) => void;
@@ -127,22 +131,24 @@ export function jumpTo(editor: Editor | null, spot: DocSpot) {
 
 /**
  * The margin of the open document `file`: its agent cards, whether it shows, side panel or bottom sheet (by the
- * container `width`), and the remembered collapse state. `editor` gives the document's blocks for the words.
+ * measured `room`, see formOf), and the remembered collapse state. `editor` gives the document's blocks for the words.
  */
-export function useAgentMargin(file: string, editor: Editor | null, width: number): AgentMargin {
+export function useAgentMargin(file: string, editor: Editor | null, room: MarginRoom | null): AgentMargin {
   const { map, presence } = useSyncExternalStore(subscribe, read, read);
   const [now, setNow] = useState(clock);
   // The document's blocks, read again on every editor change (the words follow the text).
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
+  const mine = useMemo(() => agentsOf(map, file, now), [map, file, now]);
+  // Only while an agent is here: no reading the whole document on every key otherwise.
+  const busy = mine.length > 0;
   useEffect(() => {
-    if (!editor) return setBlocks([]);
+    if (!editor || !busy) return setBlocks([]);
     const read = () => setBlocks(blocksOfJson(editor.getJSON()));
     read();
     editor.on('update', read);
     return () => void editor.off('update', read);
-  }, [editor]);
+  }, [editor, busy]);
 
-  const mine = useMemo(() => agentsOf(map, file, now), [map, file, now]);
   // Wake up when a state turns or an agent leaves; while open, also every 5 s for the "12초 전" times.
   useEffect(() => {
     setNow(clock());
@@ -185,8 +191,8 @@ export function useAgentMargin(file: string, editor: Editor | null, width: numbe
     [mine, presence, now, blocks],
   );
 
-  const form = formOf(width);
   const [stored, setStored] = useState(readStored);
+  const form: MarginForm = room ? formOf({ ...room, panel: stored.side ? RAIL_W : room.panel }) : 'side';
   const setCollapsed = useCallback(
     (v: boolean) =>
       setStored((old) => {
@@ -201,5 +207,5 @@ export function useAgentMargin(file: string, editor: Editor | null, width: numbe
     [form],
   );
   const jump = useCallback((spot: DocSpot) => jumpTo(editor, spot), [editor]);
-  return { agents, open: agents.length > 0, form, collapsed: stored[form], setCollapsed, jump };
+  return { agents, open: agents.length > 0, form, collapsed: stored[form], sideCollapsed: stored.side, setCollapsed, jump };
 }

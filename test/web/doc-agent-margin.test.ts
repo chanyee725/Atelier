@@ -11,6 +11,10 @@ import {
   doingLines,
   editSentence,
   formOf,
+  dividerAt,
+  shareAt,
+  CANVAS_MIN,
+  TEXT_MIN,
   freezePlace,
   IDLE_MS,
   marginPhase,
@@ -173,10 +177,19 @@ test('ago, stepOf, blocksOfJson, formOf, readCollapsed', () => {
     [{ type: 'heading', text: '가나', level: 2 }, { type: 'diagram', text: '' }, { type: 'bulletList', text: 'i' }],
   );
   assert.deepEqual(blocksOfJson(null), []);
-  assert.equal(formOf(1200), 'side');
-  assert.equal(formOf(800), 'side');
-  assert.equal(formOf(767), 'sheet');
-  assert.equal(formOf(390), 'sheet');
+  // 문서 view: the column's own width.
+  const doc = (box: number) => ({ box, share: null, chrome: 0, panel: 304 });
+  assert.equal(formOf(doc(1336)), 'side');
+  assert.equal(formOf(doc(664)), 'side');
+  assert.equal(formOf(doc(663)), 'sheet');
+  assert.equal(formOf(doc(390)), 'sheet');
+  // 둘 다 at a 1024px window: the split is 760px past the sidebar; side would leave 26px of text, so a sheet.
+  assert.equal(formOf({ box: 760, share: 0.45, chrome: 0, panel: 304 }), 'sheet');
+  // 1440px window, 50/50: 1176px split; the canvas keeps 430, the text 442 beside the panel.
+  assert.equal(formOf({ box: 1176, share: 0.5, chrome: 0, panel: 304 }), 'side');
+  // The rail (collapsed side panel) needs far less.
+  assert.equal(formOf({ box: 900, share: 0.5, chrome: 0, panel: 44 }), 'side');
+  assert.equal(formOf({ box: 900, share: 0.3, chrome: 0, panel: 44 }), 'sheet');
   assert.deepEqual(readCollapsed(null), { side: false, sheet: true });
   assert.deepEqual(readCollapsed('{"side":true}'), { side: true, sheet: true });
   assert.deepEqual(readCollapsed('{"side":"x","sheet":false}'), { side: false, sheet: false });
@@ -204,4 +217,29 @@ test('marginCard: the pipeline step and tool activity from the live list, model 
   assert.deepEqual([waiting.phase, waiting.phaseLabel, waiting.sub], ['waiting', '기다리는 중', '단계: 화면 지도 그리기']);
   const bare = marginCard(a, null, 1500, blocks);
   assert.deepEqual([bare.model, bare.provider, bare.sub], [null, null, null], 'no live entry: no step, model or provider');
+});
+
+test('shareAt keeps the split divider under the pointer while the margin shows, and the text and canvas their minimums', () => {
+  for (const room of [
+    { box: 1176, chrome: 0, panel: 304 },
+    { box: 1336, chrome: 12, panel: 264 },
+    { box: 760, chrome: 0, panel: 304 },
+    { box: 900, chrome: 0, panel: 44 },
+  ]) {
+    let last = -Infinity;
+    for (let x = 0.2 * room.box; x <= 0.8 * room.box; x += 3) {
+      const share = shareAt(room, x);
+      const r = { ...room, share };
+      const d = dividerAt(r);
+      assert.ok(d >= last - 0.01, `the divider only moves with the pointer: ${JSON.stringify({ room, x, d, last })}`);
+      last = d;
+      const off = Math.abs(d - x);
+      // Under the pointer, except past the canvas minimum (it stops) or across the panel's own width (it snaps).
+      assert.ok(off < 0.01 || x > room.box - CANVAS_MIN || off <= room.panel / 2 + 0.5, `${JSON.stringify({ room, x, d })}`);
+      if (formOf(r) === 'side') {
+        assert.ok(d - room.panel - room.chrome >= TEXT_MIN - 0.01, 'the text keeps its minimum');
+        assert.ok(room.box - d >= CANVAS_MIN - 0.01, 'the canvas keeps its minimum');
+      }
+    }
+  }
 });
