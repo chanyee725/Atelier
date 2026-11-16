@@ -1,6 +1,6 @@
 // How an embedded diagram looks in the document: the block's live picture, read-only.
 // Clicking it shows the block on the canvas, where its code is edited.
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import type { Block } from '../api';
 import type { Scene } from '../../../shared/render/index';
@@ -28,6 +28,10 @@ export type DocCtx = {
   onExport: (block: Block, kind: ImageKind) => void;
 };
 export const DocContext = createContext<DocCtx>({ blocks: [], frameScene: [], frameBlocks: [], dark: false, onShow: () => {}, onShowFrame: () => {}, onExport: () => {} });
+
+// The picture each block showed last, so a view that is built again (the document was re-read) still animates from
+// what the user saw instead of popping to the new drawing (E520).
+const lastShown = new Map<string, BlockPicture>();
 
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
@@ -60,13 +64,33 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
     [dark],
   );
   useEffect(() => () => settle.cancel(), [settle]);
+  const memKey = `${id}\n${theme}`;
+  const fromMemory = useRef<Scene | null>(null);
+  useLayoutEffect(() => {
+    if (!pic) return;
+    const from = fromMemory.current;
+    fromMemory.current = null;
+    const s = stageRef.current;
+    const i = imgRef.current;
+    if (from && pic.scene && s && i && willMorph(from, pic.scene, dark)) {
+      const a = s.getBoundingClientRect();
+      const b = i.getBoundingClientRect();
+      setMorph({ from, to: pic.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / pic.width });
+    }
+    lastShown.set(memKey, pic);
+    if (lastShown.size > 100) lastShown.delete(lastShown.keys().next().value!);
+  }, [pic, memKey, dark]);
   useEffect(() => {
     if (!block) return;
     let live = true;
     void renderBlock(block, theme).then((p) => {
       if (!live) return;
       if (shown.current) settle.push('pic', p);
-      else setPic(p);
+      else {
+        const mem = lastShown.get(memKey);
+        if (mem?.scene && mem.fileId !== p.fileId) fromMemory.current = mem.scene;
+        setPic(p);
+      }
     });
     return () => {
       live = false;

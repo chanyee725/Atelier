@@ -114,11 +114,15 @@ export async function setup(ctx) {
       route('GET', '/api/file', (p) => store.readFile(need(p, 'path'))),
       route('PUT', '/api/file', async (p, b, _sp, from) => {
         const r = await store.writeFile(need(p, 'path'), b);
+        // The store marks its own writes as known, so the watcher stays silent about them: tell open pages of a write
+        // that did not come from a page (an agent calling the API), so they apply it live (E520, #543).
+        if (!from.app) ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
         changed(r.path, { app: from.app });
         return r;
       }),
       route('POST', '/api/file', async (_p, b, _sp, from) => {
         const r = await store.createFile(need(b?.path, 'path'), b);
+        if (!from.app) ctx.hub.broadcast('workspace', { kind: 'create', path: r.path, revision: r.revision });
         changed(r.path, { app: from.app });
         return r;
       }, 201),
