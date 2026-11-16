@@ -202,7 +202,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await settings.waitFor();
   const providers = settings.getByRole('region', { name: '모델 연결' });
   await providers.waitFor();
-  assert.equal(await settings.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'page');
+  assert.equal(await settings.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'true');
   await providers.getByRole('button', { name: 'Claude 연결', exact: true }).waitFor();
   await page.keyboard.press('Escape');
   await settings.waitFor({ state: 'detached' });

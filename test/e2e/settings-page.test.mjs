@@ -76,7 +76,7 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   const nav = dialog.getByRole('navigation', { name: '설정 항목' });
   const section = (name) => nav.getByRole('button', { name, exact: true }).click();
   assert.deepEqual(await nav.getByRole('button').allInnerTexts(), ['일반', '모델 연결', '역할별 모델', '관리자와 팀', '사용 한도', '작업 폴더', '멈춤 감지']);
-  assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'true');
   await dialog.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
 
   // 2. 일반: the answer-style switch saves at once.
@@ -213,7 +213,7 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await page.reload();
   await page.getByRole('button', { name: '설정', exact: true }).click();
   await dialog.waitFor();
-  assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'true');
   await section('관리자와 팀');
   assert.equal(await maxChildren.inputValue(), '4');
   await section('역할별 모델');
