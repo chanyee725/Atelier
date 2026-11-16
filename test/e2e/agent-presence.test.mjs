@@ -118,6 +118,8 @@ test('agent list and named cursors: a fake session in a project, then a named ou
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-presence-session.png') });
 
   // An outside writer naming itself (cleaned: no HTML).
+  // After the session's edit call has settled (server/cursor SETTLE_MS), so the write is not credited to it.
+  await page.waitForTimeout(3500);
   const cur = await call('GET', `/api/file?path=${encodeURIComponent('Proj/demo.dpx.json')}`);
   await call('PUT', `/api/file?path=${encodeURIComponent('Proj/demo.dpx.json')}`, { ...cur, canvas: { elements: [...cur.canvas.elements, rect('r9', 0, 400)], appState: {} } }, { 'x-drawing-session': '<i>Nova</i>' });
   await page.locator('[data-agent-cursor]', { hasText: 'iNova/i' }).first().waitFor({ timeout: 10_000 });

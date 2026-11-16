@@ -150,8 +150,8 @@ export async function setup(ctx) {
     // No session on this hub made the change: a writer from another Dispatch or plain API calls (E520, #543). It gets
     // a generic cursor at the changed place, per file, that fades by itself. Saves from this page (`app`) are not it.
     // A writer that names itself (`x-drawing-session`, cleaned; E528 #592) gets its own label and one cursor of its own.
-    // A request that names itself is that writer, unless the name is one of the candidate sessions on this hub.
-    if (writer && !cands.some((c) => c.s.name === writer)) cands = [];
+    // A session on this hub that could have made the change keeps it, whatever name the request sends (an agent may
+    // send a wrong or role-style name); the `x-drawing-session` label only names writers this hub cannot see.
     if (!cands.length) {
       if (app) return;
       const now = Date.now();
