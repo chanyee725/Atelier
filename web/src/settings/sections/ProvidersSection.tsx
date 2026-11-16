@@ -1,6 +1,6 @@
 // 설정 > 모델 연결 (#624): one row per provider (Claude, OpenAI Codex, Gemini; PROVIDERS in modelConnect.ts) with its
 // mark (#621), state, CLI line and one action that follows the state (연결 → 취소 → 해제, 다시 확인 when the CLI is
-// missing), as in the 모델 연결 dialog (ConnectDialog.tsx) but inline, so no dialog opens over the 설정 modal. Codex can
+// missing), inline in the 설정 modal (the sidebar model rows open it here). Codex can
 // log in with an API key: the key lives only in the input until submit, is cleared before the request and goes once
 // to the server, which hands it to `codex login --with-api-key`; it is never stored or logged here. Provider state
 // comes from the shared model-connection subscription (useModels, #616/#625). With Dispatch off the rows show

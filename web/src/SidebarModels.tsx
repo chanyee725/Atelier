@@ -1,17 +1,17 @@
 // Sidebar model rows (E525, #570), ported from Dispatch's Sidebar provider list: one row per entry in PROVIDERS
 // (modelConnect.ts, keyed by provider id; only Claude for now, #587 adds more), each with a status dot and its text
-// (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 모델 연결 dialog for that provider
-// (ConnectDialog.tsx), where connect, cancel and disconnect happen. State comes from GET /api/state and the
+// (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 설정 modal at 모델 연결
+// (settings/sections/ProvidersSection.tsx), where connect, cancel and disconnect happen (#624). State comes from GET /api/state and the
 // `providers` SSE event (docs/design/model-connection-contract.md). Nothing here reads credentials or logs anything.
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
-import { ConnectDialog } from './ConnectDialog';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
 import { events } from './lib/events';
 import { cn } from './lib/utils';
 import { PROVIDERS, rowStatus, type ProviderMeta, type RowTone } from './modelConnect';
 import { ProviderIcon } from './ProviderIcon';
 import { MODELS_CHANGED } from './settings/context';
+import { SettingsModal, closeTo } from './settings/SettingsEntry';
 import { pollLogins } from './settings/model';
 import { createModelsStore } from './settings/modelsStore';
 
@@ -90,19 +90,7 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
           {s.text}
         </span>
       </SidebarMenuButton>
-      {open && (
-        <ConnectDialog
-          meta={meta}
-          models={models}
-          onClose={() => {
-            setOpen(false);
-            // The browser returns focus to the opener on close; this covers the case where it landed on <body>.
-            requestAnimationFrame(() => {
-              if (!document.activeElement || document.activeElement === document.body) trigger.current?.focus();
-            });
-          }}
-        />
-      )}
+      {open && <SettingsModal section="providers" onClose={closeTo(trigger, () => setOpen(false))} />}
     </SidebarMenuItem>
   );
 }
