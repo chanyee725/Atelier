@@ -25,9 +25,9 @@ import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
 import { RunStrip } from './run/RunStrip';
 import { onRunEvent, reloadRun, watchRun } from './run/runData';
-import { applyCursorEvent, clearCursors } from './canvas/cursorStore';
-import { applyDocCursorEvent, clearDocCursors } from './doc/docCursorStore';
-import type { CursorEvent } from './canvas/agentCursor';
+import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from './canvas/cursorStore';
+import { applyDocCursorEvent, applyDocCursorStatusEvent, clearDocCursors } from './doc/docCursorStore';
+import type { CursorEvent, CursorStatusEvent } from './canvas/agentCursor';
 import type { RunEvent } from './run/runModel';
 // The run view (E22) loads when it is first shown.
 const RunView = lazy(() => import('./run/RunView'));
@@ -446,7 +446,13 @@ export function App() {
       applyCursorEvent(e);
       applyDocCursorEvent(e);
     });
-    // Events missed while the stream was down: read the run again. Cursors from before the gap are stale.
+    // A session's status label changed (E536): the tag text only, the cursor stays where it is.
+    const offStatus = events.subscribeJson<CursorStatusEvent>('cursor-status', (e) => {
+      applyCursorStatusEvent(e);
+      applyDocCursorStatusEvent(e);
+    });
+    // Events missed while the stream was down: read the run again. Cursors from before the gap are stale; the server
+    // sends the cursors of sessions still at work to the new connection (live cursors only leave on `gone`).
     const offOpen = events.onConnection((online) => {
       if (!online) return;
       clearCursors();
@@ -457,6 +463,7 @@ export function App() {
       offWorkspace();
       offRun();
       offCursor();
+      offStatus();
       offOpen();
     };
   }, [session, load, refreshTree]);

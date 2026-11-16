@@ -291,3 +291,17 @@ test('measureRoom reads the rail from data-side-rail only', async () => {
   assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, rail: false });
   assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, rail: true });
 });
+
+// E536 (#653): a live session's card stays past IDLE_MS until `gone`; another file lets it go.
+test('a live agent stays in the margin while its session works', () => {
+  let m = applyMarginEvent(new Map(), ev({ index: 0, offset: 0 }, { live: true }), 0, 1);
+  assert.equal(agentsOf(m, 'a.dpx.json', 10 * IDLE_MS).length, 1);
+  assert.equal(pruneIdle(m, 10 * IDLE_MS), m);
+  assert.equal(nextTurnAt(agentsOf(m, 'a.dpx.json', WRITING_MS + 1), WRITING_MS + 1), Infinity);
+  // Same stay after a long pause: the change list continues.
+  m = applyMarginEvent(m, ev({ index: 3, offset: 0 }, { live: true }), 5 * IDLE_MS, 2);
+  assert.equal(m.get('s1')!.edits.length, 2);
+  m = applyMarginEvent(m, ev(undefined, { file: 'b.dpx.json', live: true }), 6 * IDLE_MS, 3);
+  assert.equal(agentsOf(m, 'a.dpx.json', 7 * IDLE_MS).length, 0);
+  assert.equal(applyMarginEvent(m, { sid: 's1', gone: true } as never, 0, 4).size, 0);
+});

@@ -1,6 +1,6 @@
 // Headless check of the document agent margin (E532, #622): a fake Claude session writes a document in steps; the
 // margin opens beside the text (the document shifts left), its card names the session and says what it is doing,
-// the line follows the next edit, a recent change jumps to its block, and the margin closes after the agent idles.
+// the line follows the next edit, a recent change jumps to its block, the margin stays while the session works (E536, #653) and closes when it ends.
 // The user's caret and focus stay where they were the whole time.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_SHOTS=<dir> also saves light/dark x desktop/narrow screenshots there.
@@ -33,7 +33,7 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('doc agent margin (둘 다, the default view): opens beside the text while a fake session writes, follows its edits, closes after idle', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'both'));
+test('doc agent margin (둘 다, the default view): opens beside the text while a fake session writes, follows its edits, closes when the session ends', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'both'));
 
 test('doc agent margin (문서 view): the same with the document alone', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'doc'));
 
@@ -70,7 +70,7 @@ async function run(t, view) {
     { $sleep: 300 },
     { $write: { file: abs, text: fileWith(step2, 60) } },
     result(2),
-    { $waitFor: gate(3) }, // the margin closed after idle
+    { $waitFor: gate(3) }, // the margin stayed past the idle time
     { type: 'assistant', message: { id: 'm9', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     { type: 'result', subtype: 'success', total_cost_usd: 0.001 },
   ];
@@ -327,9 +327,14 @@ async function run(t, view) {
   }
   if (await panel.count()) assert.equal(await panel.getAttribute('data-form'), 'side');
 
-  // 5. No more edits: after the idle time the margin closes and the text moves back.
-  await panel.waitFor({ state: 'detached', timeout: 40_000 }).catch(async () => {
-    assert.ok(!(await panel.isVisible()), 'the margin closed after idle');
+  // 5. No more edits: the session still works, so its card stays past the idle time (IDLE_MS = 20 s, E536). When the
+  // session ends the margin closes and the text moves back.
+  const shown = await panel.isVisible();
+  await page.waitForTimeout(22_000);
+  if (shown) assert.ok(await panel.isVisible(), 'the margin stayed while the session works');
+  release(3);
+  await panel.waitFor({ state: 'detached', timeout: 20_000 }).catch(async () => {
+    assert.ok(!(await panel.isVisible()), 'the margin closed when the session ended');
   });
   await page.waitForTimeout(500);
   const x2 = await textX();
@@ -342,7 +347,6 @@ async function run(t, view) {
     // (Not exactly w0: see above, the drag that ended at the canvas minimum set a smaller share.)
     assert.ok(w2.canvas >= w0.canvas - 2 && w2.pane <= w0.pane + 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
   }
-  release(3);
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);
 }
