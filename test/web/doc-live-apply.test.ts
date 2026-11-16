@@ -5,6 +5,7 @@ import { getSchema } from '@tiptap/core';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { docExtensions } from '../../web/src/doc/extensions.ts';
 import { planLive, liveApplyPlugin } from '../../web/src/doc/liveApply.ts';
+import { history, undo, undoDepth } from '@tiptap/pm/history';
 
 const schema = getSchema(docExtensions());
 const p = (t: string) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
@@ -79,4 +80,28 @@ test('a selection-only change does not flush the fade-out (#554)', () => {
   const r1 = apply(s0, doc(p('a'), p('c')), true)!;
   const { state } = r1.state.applyTransaction(r1.state.tr.setSelection(TextSelection.create(r1.state.doc, 2)));
   assert.equal(state.doc.childCount, 3);
+});
+
+test('typing inside a fading block keeps that block and is undoable (#567)', () => {
+  // [a, gone, c] -> [a, c] (gone fades) -> the user types inside "gone": the block stays, the typing has an undo step.
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin(), history()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  const { state } = r1.state.applyTransaction(r1.state.tr.insertText('x', 5));
+  assert.deepEqual(state.doc.toJSON(), doc(p('a'), p('gxone'), p('c')).toJSON());
+  const exiting = liveApplyPlugin().spec.key!.getState(state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  assert.equal(exiting.length, 0);
+  assert.equal(undoDepth(state), 1);
+  let undone: EditorState | null = null;
+  assert.ok(undo(state, (tr) => (undone = state.apply(tr))));
+  assert.deepEqual(undone!.doc.toJSON(), doc(p('a'), p('gone'), p('c')).toJSON());
+});
+
+test('typing elsewhere during the fade-out still takes the fading block out and stays undoable (#554, #567)', () => {
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin(), history()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  const { state } = r1.state.applyTransaction(r1.state.tr.insertText('x', 2));
+  assert.deepEqual(state.doc.toJSON(), doc(p('ax'), p('c')).toJSON());
+  let undone: EditorState | null = null;
+  assert.ok(undo(state, (tr) => (undone = state.apply(tr))));
+  assert.deepEqual(undone!.doc.toJSON(), doc(p('a'), p('c')).toJSON());
 });
