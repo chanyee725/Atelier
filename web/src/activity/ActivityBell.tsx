@@ -3,20 +3,9 @@
 // placed under the bell from JS (anchor positioning is not widely available), kept inside the viewport.
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { badgeText, feedOf, unreadCount } from './activity';
+import { badgeText, feedOf, placeFeed, unreadCount } from './activity';
 import { readAll, useActivityLog } from './store';
 import './activity.css';
-
-const GAP = 6;
-const EDGE = 8;
-
-/** Where the feed goes: under the bell, left-aligned, flipped above or shifted in when it would leave the viewport. */
-export function placeFeed(bell: { left: number; top: number; bottom: number }, feed: { width: number; height: number }, view: { width: number; height: number }) {
-  const left = Math.max(EDGE, Math.min(bell.left, view.width - feed.width - EDGE));
-  const below = bell.bottom + GAP;
-  const top = below + feed.height <= view.height - EDGE ? below : Math.max(EDGE, bell.top - GAP - feed.height);
-  return { left, top };
-}
 
 export function ActivityBell({ className, onOpen }: { className: string; onOpen: (path: string) => void }) {
   const log = useActivityLog();

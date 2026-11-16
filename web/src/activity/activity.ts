@@ -56,3 +56,14 @@ export function feedOf(log: ActivityLog, now: number): FeedItem[] {
     ...(e.color && /^#[0-9a-f]{6}$/i.test(e.color) ? { color: e.color } : {}),
   }));
 }
+
+const GAP = 6;
+const EDGE = 8;
+
+/** Where the feed goes: under the bell, left-aligned, flipped above or shifted in when it would leave the viewport. */
+export function placeFeed(bell: { left: number; top: number; bottom: number }, feed: { width: number; height: number }, view: { width: number; height: number }) {
+  const left = Math.max(EDGE, Math.min(bell.left, view.width - feed.width - EDGE));
+  const below = bell.bottom + GAP;
+  const top = below + feed.height <= view.height - EDGE ? below : Math.max(EDGE, bell.top - GAP - feed.height);
+  return { left, top };
+}
