@@ -20,6 +20,8 @@ export type SessionState = {
   file: DpxFile | null;
   /** Bumped on every load from disk so the panes restart from the loaded content. */
   loadSeq: number;
+  /** An outside change applied to the open file without a reload (the panes update in place); `seq` counts them. */
+  live: { seq: number; document: unknown } | null;
   status: string;
   /** True while the status is a problem (failed save or conflict). */
   statusAlert: boolean;
@@ -38,7 +40,7 @@ type Deps = {
 export type FileSession = ReturnType<typeof createFileSession>;
 
 export function createFileSession(deps: Deps) {
-  let state: SessionState = { path: null, file: null, loadSeq: 0, status: '', statusAlert: false, conflict: null };
+  let state: SessionState = { path: null, file: null, loadSeq: 0, live: null, status: '', statusAlert: false, conflict: null };
   const listeners = new Set<() => void>();
   const set = (patch: Partial<SessionState>) => {
     let changed = false;
@@ -192,7 +194,20 @@ export function createFileSession(deps: Deps) {
       conflicted = false;
       reloadStopped = false;
       // A file from before the document editor gets its diagrams listed in the document (once: the next save stores the current format version).
-      set({ conflict: null, path: p, file: { ...f, document: migrateDocument(f) }, loadSeq: state.loadSeq + 1, status: '', statusAlert: false });
+      set({ conflict: null, path: p, file: { ...f, document: migrateDocument(f) }, loadSeq: state.loadSeq + 1, live: null, status: '', statusAlert: false });
+    },
+    /**
+     * An outside change of the open, clean file, taken in without a reload: the file is replaced, `loadSeq` stays (the
+     * panes keep their zoom, scroll and selection) and `live` tells the document pane what to apply.
+     */
+    applyLive(p: string, f: DpxFile) {
+      if (state.path !== p || dirty) return;
+      const file = { ...f, document: migrateDocument(f) };
+      set({ file, live: { seq: (state.live?.seq ?? 0) + 1, document: file.document } });
+    },
+    /** Start the panes over from the current file (a live change could not be applied in place). */
+    remount() {
+      set({ loadSeq: state.loadSeq + 1 });
     },
     close,
     /** The open file was renamed or moved by this tab: keep its content and pending save, write to the new path from now on. */
