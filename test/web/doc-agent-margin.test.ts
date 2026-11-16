@@ -11,6 +11,7 @@ import {
   doingLines,
   editSentence,
   formOf,
+  formWithRail,
   dividerAt,
   shareAt,
   CANVAS_MIN,
@@ -308,6 +309,8 @@ test('measureRoom reads the rail from data-side-rail only', async () => {
       }) as unknown as HTMLElement;
   assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, rail: false });
   assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, rail: true });
+  // DocMargin measures the open panel whatever the attribute says (#648).
+  assert.deepEqual(measureRoom(host(true), false), { box: 900, share: null, chrome: 0, rail: false });
 });
 
 // E536 (#653): a live session's card stays past IDLE_MS until `gone`; another file lets it go.
@@ -322,4 +325,13 @@ test('a live agent stays in the margin while its session works', () => {
   m = applyMarginEvent(m, ev(undefined, { file: 'b.dpx.json', live: true }), 6 * IDLE_MS, 3);
   assert.equal(agentsOf(m, 'a.dpx.json', 7 * IDLE_MS).length, 0);
   assert.equal(applyMarginEvent(m, { sid: 's1', gone: true } as never, 0, 4).size, 0);
+});
+
+// #648: the form counts the collapsed rail in the same render as the collapse, from the open panel's room.
+test('formWithRail: the rail fits where the open panel does not', () => {
+  const room = { box: TEXT_MIN + 200, share: null, chrome: 0, rail: false };
+  assert.equal(formWithRail(room, false), 'sheet');
+  assert.equal(formWithRail(room, true), 'side');
+  assert.equal(formWithRail({ ...room, box: TEXT_MIN + RAIL_W - 1 }, true), 'sheet');
+  assert.equal(formWithRail(room, true), formOf({ ...room, rail: true }));
 });

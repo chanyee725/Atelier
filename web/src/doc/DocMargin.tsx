@@ -80,31 +80,24 @@ export function DocMargin({ file, children }: Props) {
   // so the text keeps TEXT_MIN and, in 둘 다, the canvas CANVAS_MIN. Observed on the column, the document pane and the
   // split, which change with the sidebar, the divider and the window. A resize of the column also refreshes the FLIP's
   // "before", and the scroller's height caps the sticky panel's.
-  const remeasure = useRef<(() => void) | null>(null);
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
     const scroller = scrollerOf(el);
     const update = () => {
-      const next = measureRoom(el);
+      // The open panel's room: useAgentMargin counts a collapsed side panel as its rail in the same render.
+      const next = measureRoom(el, false);
       setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.rail === next.rail ? old : next));
       lefts.current = measure();
       if (scroller) el.style.setProperty('--doc-margin-view-h', `${scroller.clientHeight}px`);
     };
     update();
-    remeasure.current = update;
-    if (typeof ResizeObserver !== 'function') return () => void (remeasure.current = null);
+    if (typeof ResizeObserver !== 'function') return;
     const ro = new ResizeObserver(update);
     const pane = el.closest('.split-doc');
     for (const t of new Set([el, pane, pane?.parentElement, scroller])) if (t) ro.observe(t);
-    return () => {
-      ro.disconnect();
-      remeasure.current = null;
-    };
+    return () => ro.disconnect();
   }, []);
-  // Collapsing or opening the side panel flips `data-side-rail`, which changes the panel's width in the room: measure
-  // again before paint, so the form follows at once (the Splitter reads the same attribute).
-  useLayoutEffect(() => remeasure.current?.(), [m.sideCollapsed]);
 
   // While it fades out, the panel keeps showing who was there.
   const last = useRef(m.agents);

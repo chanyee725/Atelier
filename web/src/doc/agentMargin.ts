@@ -456,6 +456,8 @@ const sidePane = (r: MarginRoom) => {
 const textIn = (r: Pick<MarginRoom, 'chrome' | 'rail'>, pane: number) => (r.rail ? pane - r.chrome - RAIL_W : (pane - r.chrome) * DOC_SHARE);
 /** Side panel only when the text keeps TEXT_MIN beside it (and, in 둘 다, the canvas keeps CANVAS_MIN); else a sheet. */
 export const formOf = (r: MarginRoom): MarginForm => (textIn(r, sidePane(r)) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
+/** formOf for a room measured with the open panel, while the side panel may be collapsed to its rail (same render). */
+export const formWithRail = (r: MarginRoom, rail: boolean): MarginForm => formOf({ ...r, rail });
 /** Where the split's divider sits (px from the split's left) for a share, as index.css lays it out. */
 export const dividerAt = (r: MarginRoom & { share: number }): number => (formOf(r) === 'side' ? sidePane(r) : r.share * r.box);
 /**

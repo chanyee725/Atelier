@@ -14,7 +14,7 @@ import {
   blocksOfJson,
   clearFile,
   COLLAPSE_KEY,
-  formOf,
+  formWithRail,
   marginCard,
   freezePlace,
   nextTurnAt,
@@ -102,8 +102,8 @@ export type AgentMargin = {
   form: MarginForm;
   /** Collapsed in this form (remembered per browser). */
   collapsed: boolean;
-  /** The side form's collapse state. DocMargin marks it on the page (`data-side-rail`), where measureRoom reads the
-   *  rail's width for the room, so the form and the Splitter's drag both count the same panel. */
+  /** The side form's collapse state. `form` counts the rail's width for it; DocMargin also marks it on the page
+   *  (`data-side-rail`), where the Splitter's measureRoom reads it, so the form and the drag count the same panel. */
   sideCollapsed: boolean;
   setCollapsed: (v: boolean) => void;
   /** Scroll the document to a change and flash it there. */
@@ -138,7 +138,7 @@ export function jumpTo(editor: Editor | null, spot: DocSpot) {
 
 /**
  * The margin of the open document `file`: its agent cards, whether it shows, side panel or bottom sheet (by the
- * measured `room`, see formOf), and the remembered collapse state. `editor` gives the document's blocks for the words.
+ * measured `room`, with the open panel's width; see formWithRail), and the remembered collapse state. `editor` gives the document's blocks for the words.
  */
 export function useAgentMargin(file: string, editor: Editor | null, room: MarginRoom | null): AgentMargin {
   const { map, presence, statuses } = useSyncExternalStore(subscribe, read, read);
@@ -199,7 +199,9 @@ export function useAgentMargin(file: string, editor: Editor | null, room: Margin
   );
 
   const [stored, setStored] = useState(readStored);
-  const form: MarginForm = room ? formOf(room) : 'side';
+  // `room` is measured with the open panel; a collapsed side panel counts as its rail here, in the same render as the
+  // collapse (measuring again after the commit would leave the form one render behind).
+  const form: MarginForm = room ? formWithRail(room, stored.side) : 'side';
   const setCollapsed = useCallback(
     (v: boolean) =>
       setStored((old) => {
