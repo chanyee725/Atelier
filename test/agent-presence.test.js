@@ -159,7 +159,7 @@ test('agents module: the list follows edits, sessions and named outside writers'
 
   // First snapshot on connect.
   const got = [];
-  await r.attachers[0]((ev, data) => got.push({ ev, data }));
+  for (const fn of r.attachers) await fn((ev, data) => got.push({ ev, data }));
   assert.deepEqual(got, [{ ev: 'agents', data: { agents: [] } }]);
 
   r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running', state: 'working', folder: 'P' };
@@ -186,8 +186,12 @@ test('agents module: the list follows edits, sessions and named outside writers'
   assert.deepEqual(m.list('P').map((a) => a.name).sort(), ['Ext', 'Otto']);
   assert.deepEqual(m.list('Q'), []);
 
-  // An unnamed outside write keeps the generic cursor and is not listed.
+  // An unnamed outside write of the file a named writer just wrote keeps that name (#653); of another file it gets
+  // the generic cursor and is not listed.
   await r.change('P/b.dpx.json', rect('q', 90));
+  assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, 'Ext');
+  r.files.set('P/c.dpx.json', rect('z', 0));
+  await r.change('P/c.dpx.json', rect('z', 40));
   assert.equal(r.sent.filter((s) => s.event === 'cursor').at(-1).data.name, '에이전트');
   assert.equal(m.list().length, 2);
 
