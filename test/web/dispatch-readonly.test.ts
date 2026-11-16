@@ -18,6 +18,8 @@ test('the runnable list matches the server hub PROVIDERS', () => {
 });
 
 test('the read-only notice is short 해요체', () => {
-  assert.match(READ_ONLY_NOTICE, /요\.( |$)/);
+  // Every sentence ends in 요. (not just one), and no 합니다/습니다 form slips in.
+  assert.match(READ_ONLY_NOTICE, /^(?:[^.]+요\.)(?: [^.]+요\.)*$/);
+  assert.doesNotMatch(READ_ONLY_NOTICE, /니다/);
   assert.ok(READ_ONLY_NOTICE.length < 60);
 });

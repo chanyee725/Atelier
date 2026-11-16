@@ -10,12 +10,12 @@ import { Textarea } from '../components/ui/textarea';
 import { cn } from '../lib/utils';
 import { DiffView } from './DiffView';
 import { ModelTag, StatusBadge } from './parts';
-import { fmtK, fmtUsd, pct, permLabel, stateOf } from './lib/format.ts';
+import { fmtK, fmtUsd, pct, permLabel, providerName, stateOf } from './lib/format.ts';
 import { questionOf } from './lib/question.ts';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
-import { canRun, READ_ONLY_NOTICE } from './lib/runnable';
+import { canRun, READ_ONLY_NOTICE } from './lib/runnable.ts';
 
 type Report = (p: Promise<unknown>) => Promise<boolean>;
 
@@ -238,7 +238,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [entries, s.pending.length]);
-  const agent = s.provider === 'claude' ? 'Claude' : s.modelLabel || s.provider;
+  const agent = providerName(s.provider);
   const runnable = canRun(s);
   return (
     <div

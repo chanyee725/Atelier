@@ -8,6 +8,7 @@ import type { DispatchStatus } from '../api';
 import { cn } from '../lib/utils';
 import { useTheme } from '../theme';
 import { ThemeSwitch } from '../ThemeSwitch';
+import { ProviderIcon } from '../ProviderIcon';
 import { OffNote, useDispatchStatus } from './DispatchOff';
 import { Meter } from '../dispatch/parts';
 import { pct, until } from '../dispatch/lib/format.ts';
@@ -176,6 +177,7 @@ function TeamForm({ off }: { off: DispatchStatus | null | false }) {
               <label htmlFor={`role-model-${r.id}`} className="w-24 shrink-0 text-sm">
                 {r.name}
               </label>
+              <ProviderIcon provider={models.find((m) => m.id === (roleModels[r.id] ?? r.model))?.provider} className="size-4" />
               <select
                 id={`role-model-${r.id}`}
                 name={`roleModels.${r.id}`}
@@ -272,7 +274,8 @@ function UsageSection() {
       {limits && groups.length === 0 && <p className="text-sm text-muted-foreground">연결된 모델이 없어요.</p>}
       {groups.map((g) => (
         <div key={g.id} data-provider={g.id} className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">
+          <h3 className="flex items-center gap-1.5 text-sm font-medium">
+            <ProviderIcon provider={g.id} className="size-4" />
             {g.name}
             {g.plan && <span className="ml-2 text-xs font-normal text-muted-foreground">{g.plan}</span>}
           </h3>
