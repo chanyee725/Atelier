@@ -243,7 +243,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" wide />
         </div>
       )}
-      <div role="group" aria-label="새로 만들기" className="flex items-center gap-1.5 overflow-x-auto border-b px-4 py-2.5 [scrollbar-width:none]">
+      <div role="group" aria-label="새로 만들기" className="relative flex items-center gap-1.5 overflow-x-auto border-b px-4 py-2.5 [scrollbar-width:none]">
         <span className="mr-1 hidden shrink-0 text-[13px] text-muted-foreground sm:inline">새로 만들기</span>
         {CHIPS.map(({ kind, label, key, icon: Icon, soon }) => (
           <Button
