@@ -75,14 +75,17 @@ export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS
   let seq = 0;
   let chain = Promise.resolve();
   const emit = (e) => {
-    chain = chain.then(async () => {
-      const title = await titleOf(e.file);
-      const ev = { id: `${e.at}-${++seq}`, ...e, ...(title ? { title } : {}) };
-      log.events.push(ev);
-      if (log.events.length > ACTIVITY_MAX) log.events.splice(0, log.events.length - ACTIVITY_MAX);
-      save();
-      ctx.hub.broadcast('activity', ev);
-    });
+    // One failing event (a throwing broadcast) must not reject the chain, or every later event would be lost.
+    chain = chain
+      .then(async () => {
+        const title = await titleOf(e.file);
+        const ev = { id: `${e.at}-${++seq}`, ...e, ...(title ? { title } : {}) };
+        log.events.push(ev);
+        if (log.events.length > ACTIVITY_MAX) log.events.splice(0, log.events.length - ACTIVITY_MAX);
+        save();
+        ctx.hub.broadcast('activity', ev);
+      })
+      .catch(() => {});
     return chain;
   };
 
