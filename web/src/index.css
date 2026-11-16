@@ -567,11 +567,18 @@ body {
 
 /* E532 (#622): the document's agent margin. Wide: a sticky column beside the text (the text slides left, FLIP in
    doc/DocMargin.tsx); narrow: a sticky bottom sheet under it. A flex sibling of the text, never over it. The panel
-   itself (cards, list) is margin-panel.css. Entry via @starting-style; exit via [data-closing], then unmounted. */
+   itself (cards, list) is margin-panel.css. Entry via @starting-style; exit via [data-closing], then unmounted.
+   In the 둘 다 view the document pane takes the panel's width from the canvas (:has below), so the text keeps its
+   column and the panel sits in a right margin of its own. */
+:root { --doc-margin-w: 304px; }
+@media (width < 1280px) { :root { --doc-margin-w: 264px; } }
+.split-doc { width: var(--split); }
+.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted]) { width: min(calc(var(--split) + var(--doc-margin-w)), calc(100% - 360px)); }
+.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted] > .doc-margin-aside[data-collapsed]) { width: min(calc(var(--split) + 44px), calc(100% - 360px)); }
 .doc-margin { display: flex; align-items: flex-start; min-height: 100%; }
 .doc-margin-main { flex: 1 1 auto; min-width: 0; }
 .doc-margin-aside {
-  flex: none; position: sticky; top: 0; width: 304px; max-height: 100dvh; overflow: auto; overscroll-behavior: contain;
+  flex: none; position: sticky; top: 0; width: var(--doc-margin-w); max-height: 100dvh; overflow: auto; overscroll-behavior: contain;
   border-inline-start: 1px solid var(--border); background: var(--background);
   opacity: 1; translate: 0;
   transition: opacity 0.24s ease-out, translate 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), width 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);

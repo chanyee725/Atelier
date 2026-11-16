@@ -174,7 +174,9 @@ test('ago, stepOf, blocksOfJson, formOf, readCollapsed', () => {
   );
   assert.deepEqual(blocksOfJson(null), []);
   assert.equal(formOf(1200), 'side');
-  assert.equal(formOf(800), 'sheet');
+  assert.equal(formOf(800), 'side');
+  assert.equal(formOf(767), 'sheet');
+  assert.equal(formOf(390), 'sheet');
   assert.deepEqual(readCollapsed(null), { side: false, sheet: true });
   assert.deepEqual(readCollapsed('{"side":true}'), { side: true, sheet: true });
   assert.deepEqual(readCollapsed('{"side":"x","sheet":false}'), { side: false, sheet: false });
