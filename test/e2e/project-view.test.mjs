@@ -68,12 +68,12 @@ test('project view: own files only, no 미분류, live agents with held files', 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.route('**/api/workspace/agents*', (r) => r.fulfill({ json: { agents: first } }));
-  // The event stream: the first connection sends nothing new; later ones (EventSource reconnects after the body ends)
-  // send the next snapshot, so the panel must change with no reload.
-  let streams = 0;
+  // The event stream: until `release` is set every connection is empty; EventSource reconnects after each body ends,
+  // and the first one after `release` sends the next snapshot. Gated, so the first snapshot is checked before the
+  // update can land (an ungated reconnect raced the first checks).
+  let release = false;
   await page.route('**/api/events', (r) => {
-    streams++;
-    const body = `retry: 300\n\n${streams > 1 ? `event: agents\ndata: ${JSON.stringify({ agents: next })}\n\n` : ''}`;
+    const body = `retry: 200\n\n${release ? `event: agents\ndata: ${JSON.stringify({ agents: next })}\n\n` : ''}`;
     return r.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }, body });
   });
   await page.goto(BASE);
@@ -113,6 +113,7 @@ test('project view: own files only, no 미분류, live agents with held files', 
   assert.equal(await home.locator('[data-doc-row="Sim/02-화면.dpx.json"] > div [data-held-by]').getAttribute('data-held-by'), 'Otto');
 
   // A new snapshot moves Otto to another file and brings Cal in, with no reload.
+  release = true;
   await page.waitForFunction(() => document.querySelector('[data-slot="agent-panel"] li[data-agent="Cal"]'), null, { timeout: 10_000 });
   assert.deepEqual(await names(), ['Otto', 'Cal']);
   assert.match(await panel.locator('li[data-agent="Otto"]').innerText(), /화면 상세/);

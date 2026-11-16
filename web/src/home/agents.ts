@@ -1,34 +1,11 @@
 // Agent sessions working in a project right now, for the project home's 지금 작업 중 panel (#592).
 // Data: GET /api/workspace/agents (first answer) and the SSE event `agents` (a full snapshot of the whole workspace,
 // sent on connect and on every change). Memory-only on the server; nothing here is stored either.
-// The type mirrors shared/dispatch/agent-presence.ts (part b of #592, PR #603); import it from there once that lands.
 import { STATE } from '../dispatch/lib/format.ts';
+import type { AgentPresence } from '../../../shared/dispatch/agent-presence.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 
-export type AgentPresence = {
-  sid: string;
-  /** The session's own name as created ("Otto"), or the label an outside API writer gave in x-drawing-session. */
-  name: string;
-  /** Role id; '' for an outside writer. */
-  role: string;
-  roleName?: string;
-  /** The session's cursor colour (`#rrggbb`); absent for outside writers. */
-  color?: string;
-  model: string | null;
-  modelLabel?: string;
-  /** Hub status: starting | running | waiting. */
-  status: string;
-  /** Monitoring state (SessionState), null when not known yet. */
-  state: string | null;
-  /** Top folder the session works in. */
-  project: string | null;
-  /** Workspace-relative file it edited last (held now); null before its first edit. */
-  file: string | null;
-  /** Last activity (ms), null when unknown. */
-  at: number | null;
-  /** An API writer from outside (no role, model or colour). */
-  outside?: true;
-};
+export type { AgentPresence };
 
 const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중' };
 /** The monitoring state when known (작업 중, 사람 기다림, 멈춤, …), else the hub status. */
