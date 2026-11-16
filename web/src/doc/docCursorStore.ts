@@ -20,7 +20,9 @@ export const subscribeDocCursors = (f: () => void) => {
 
 /** One `cursor` event from the server. */
 export function applyDocCursorEvent(e: CursorEvent) {
-  set(applyDocCursor(cursors, e, now()));
+  // Pruned here too: the layer prunes only while its file is open, so cursors of other files would linger.
+  const t = now();
+  set(pruneDocGone(applyDocCursor(cursors, e, t), t));
 }
 
 /** Drop cursors that have faded out. */

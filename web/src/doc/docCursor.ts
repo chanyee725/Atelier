@@ -40,7 +40,9 @@ const spotOf = (v: unknown): DocSpot | null => {
 
 /**
  * Apply one `cursor` event; returns a new map (or the same one when nothing changed). An event with a document place
- * moves (or creates) the session's cursor; one without keeps a cursor of the same file alive; `gone` removes it.
+ * moves (or creates) the session's cursor; one with neither a document nor a canvas place keeps a cursor of the same
+ * file alive; `gone` removes it. A canvas-only edit (`x`/`y`, no `doc`) leaves the document cursor alone, so it fades
+ * out while the agent works on the canvas instead of looking like it is still writing there.
  */
 export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: CursorEvent, now: number): ReadonlyMap<string, DocCursor> {
   if (!e || typeof e.sid !== 'string') return cursors;
@@ -54,7 +56,7 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
   const spot = spotOf(e.doc);
   const file = e.file ?? old?.file ?? '';
   if (!spot) {
-    if (!old || old.file !== file) return cursors;
+    if (!old || old.file !== file || (Number.isFinite(e.x) && Number.isFinite(e.y))) return cursors;
     return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now });
   }
   return new Map(cursors).set(e.sid, {

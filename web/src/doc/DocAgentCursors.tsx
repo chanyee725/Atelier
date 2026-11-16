@@ -16,13 +16,20 @@ import { docCursorsNow, pruneDocCursors, subscribeDocCursors, useDocCursors } fr
 
 type Props = { editor: Editor; file: string };
 
+/** How long (ms) after a new place a cursor that cannot be placed yet is looked for again every 100ms. */
+const RETRY_MS = 2000;
+/** Room (px) the name tag needs above the caret (16px line + gap). */
+const TAG_ROOM = 20;
+
 /** Caret box of `c` in the layer's coordinates, or null when it has no place in the document now. */
 function measure(editor: Editor, c: DocCursor, origin: DOMRect): { x: number; y: number; h: number } | null {
-  const view = editor.view;
-  if (!view || (view as { isDestroyed?: boolean }).isDestroyed) return null;
-  const at = docPos(view.state.doc, c.spot);
-  if (!at) return null;
   try {
+    // In the frame after an unmount the editor (or its view) may be gone: reading `editor.view` can throw then.
+    if (editor.isDestroyed) return null;
+    const view = editor.view;
+    if (!view || (view as { isDestroyed?: boolean }).isDestroyed) return null;
+    const at = docPos(view.state.doc, c.spot);
+    if (!at) return null;
     if (at.atom) {
       const el = view.nodeDOM(at.pos);
       if (!(el instanceof HTMLElement)) return null;
@@ -32,7 +39,7 @@ function measure(editor: Editor, c: DocCursor, origin: DOMRect): { x: number; y:
     const r = view.coordsAtPos(at.pos);
     return { x: r.left - origin.left, y: r.top - origin.top, h: Math.max(r.bottom - r.top, 14) };
   } catch {
-    // The view is not laid out yet (or the position just went away).
+    // The view is not laid out yet, is gone, or the position just went away.
     return null;
   }
 }
@@ -70,8 +77,9 @@ export function DocAgentCursors({ editor, file }: Props) {
         const m = measure(editor, c, origin);
         if (!m) {
           el.style.visibility = 'hidden';
-          // Look again soon: the editor may not have taken the change in yet.
-          wake = Math.min(wake, t + 100);
+          // Look again soon: the editor may not have taken the change in yet. Not for ever: past RETRY_MS after the
+          // new place only phase changes wake the loop (a later edit or editor update measures again).
+          wake = Math.min(wake, t - c.moveAt < RETRY_MS ? t + 100 : nextPhaseAt(c, t));
           continue;
         }
         const g = nextGlide(glides.current.get(c.sid), c, { x: m.x, y: m.y }, t, reduced);
@@ -80,6 +88,12 @@ export function DocAgentCursors({ editor, file }: Props) {
         el.style.translate = `${Math.round(p.x * 10) / 10}px ${Math.round(p.y * 10) / 10}px`;
         el.style.setProperty('--caret-h', `${Math.round(m.h)}px`);
         el.style.visibility = '';
+        // On the top line the name tag above the caret would be cut off by the scroll box: show it below instead.
+        const below = m.y < TAG_ROOM;
+        if ((el.dataset.below === '') !== below) {
+          if (below) el.dataset.below = '';
+          else delete el.dataset.below;
+        }
         const phase = phaseOf(c, t);
         if (el.dataset.phase !== phase) el.dataset.phase = phase;
         if (gliding(g, t, reduced)) glide = true;

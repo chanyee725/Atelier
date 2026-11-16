@@ -125,6 +125,8 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
   const hasPlace = finite(e.x) && finite(e.y);
   const sameFile = !!old && old.file === (e.file ?? old.file);
   if (!hasPlace && !sameFile) return cursors; // nothing to show yet
+  // A document-only edit (E529) leaves the canvas cursor alone: it fades out while the agent writes in the document.
+  if (!hasPlace && e.doc) return cursors;
   const next = new Map(cursors);
   if (!hasPlace) {
     next.set(e.sid, { ...old!, color: cursorColor(e.color) || old!.color, editAt: now });
