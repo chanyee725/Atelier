@@ -78,10 +78,11 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
   const BROKEN = '설정 파일을 읽을 수 없어요. 파일을 확인해 주세요.';
   const STILL = '아직 읽을 수 없어요.';
 
-  // 0. The editor shell has no settings entry any more: the old dialog is gone, the sidebar row is 테마.
+  // 0. The sidebar has 테마 and the 설정 row (E509c, limits only); the old dialog with the PR toggle is gone.
   await page.goto(BASE);
   await page.getByRole('button', { name: '테마', exact: true }).waitFor();
-  assert.equal(await page.getByRole('button', { name: '설정', exact: true }).count(), 0);
+  await page.getByRole('button', { name: '설정', exact: true }).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
 
   // 1. Healthy: on by default, flips off, persists in settings.json, and flips back on.
   await open();

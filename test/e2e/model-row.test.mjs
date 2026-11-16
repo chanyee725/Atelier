@@ -106,6 +106,7 @@ const active = () => page.evaluate(() => document.activeElement?.getAttribute('d
   assert.equal(await opacity(connect), '1', 'visible on hover');
   await page.mouse.move(700, 400);
   await trigger.focus();
+  await page.keyboard.press('Shift+Tab'); // 설정 row (E509c)
   await page.keyboard.press('Shift+Tab');
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'model-connect', 'reachable by Tab');
   assert.equal(await opacity(connect), '1', 'visible on focus-within');

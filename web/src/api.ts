@@ -55,7 +55,7 @@ export type ProviderLimits = {
 };
 
 export type ProviderInfo = { installed?: boolean | null; connected?: boolean; busy?: boolean; url?: string | null; error?: string | null };
-export type DispatchSettings = { guard: { enabled: boolean; five: number; seven: number }; team: { ctxHandoff?: number; handoffMTokens?: number } & Record<string, unknown> };
+export type DispatchSettings = { guard: { enabled: boolean; five: number; seven: number; fable?: number }; team: { ctxHandoff?: number; handoffMTokens?: number } & Record<string, unknown> };
 
 export type VersionLabel = 'draft' | 'approved' | 'done';
 export type HistoryEntry = { id: string; /** ms since epoch */ time: number; bytes: number; /** Pipeline milestones this version stands for (E28). */ labels?: VersionLabel[] };
@@ -107,7 +107,7 @@ export const api = {
   /** Disconnects from Drawing only; the CLI's own login stays. */
   providerLogout: (id: string) => call<{ ok: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/logout`, {}),
   providerRefresh: () => call<Record<string, ProviderInfo>>('POST', '/api/providers/refresh', {}),
-  saveDispatchSettings: (patch: { guard?: Partial<DispatchSettings['guard']>; team?: Partial<DispatchSettings['team']> }) =>
+  saveDispatchSettings: (patch: { guard?: Partial<Omit<DispatchSettings["guard"], "fable">> & { fable?: number | null }; team?: Partial<DispatchSettings['team']> }) =>
     call<DispatchSettings>('POST', '/api/settings', patch),
   prTracking: () => call<{ on: boolean }>('GET', '/api/workspace/pr-tracking'),
   setPrTracking: (on: boolean) => call<{ on: boolean }>('POST', '/api/workspace/pr-tracking', { on }),

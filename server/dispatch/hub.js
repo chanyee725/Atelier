@@ -454,8 +454,8 @@ export class Hub extends EventEmitter {
     const limits = this.currentLimits();
     if (limits.five != null && limits.five >= g.five) return `5시간 한도 ${Math.round(limits.five * 100)}% — 차단 기준 이상이에요`;
     if (limits.seven != null && limits.seven >= g.seven) return `주간 한도 ${Math.round(limits.seven * 100)}% — 차단 기준 이상이에요`;
-    // Fable has its own weekly window; it uses the weekly threshold.
-    if (limits.fable != null && limits.fable >= g.seven) return `Fable 주간 한도 ${Math.round(limits.fable * 100)}% — 차단 기준 이상이에요`;
+    // Fable has its own weekly window; its own threshold (`fable`, else the weekly one).
+    if (limits.fable != null && limits.fable >= (g.fable ?? g.seven)) return `Fable 주간 한도 ${Math.round(limits.fable * 100)}% — 차단 기준 이상이에요`;
     return null;
   }
 
@@ -797,7 +797,7 @@ export class Hub extends EventEmitter {
     const l = this.currentLimits();
     if (l.five != null && l.five >= g.five) return { key: `five:${l.fiveReset}`, reason: `5시간 한도 ${Math.round(l.five * 100)}%`, resetAt: l.fiveReset };
     if (l.seven != null && l.seven >= g.seven) return { key: `seven:${l.sevenReset}`, reason: `주간 한도 ${Math.round(l.seven * 100)}%`, resetAt: l.sevenReset };
-    if (l.fable != null && l.fable >= g.seven) return { key: `fable:${l.fableReset}`, reason: `Fable 주간 한도 ${Math.round(l.fable * 100)}%`, resetAt: l.fableReset };
+    if (l.fable != null && l.fable >= (g.fable ?? g.seven)) return { key: `fable:${l.fableReset}`, reason: `Fable 주간 한도 ${Math.round(l.fable * 100)}%`, resetAt: l.fableReset };
     return null;
   }
 
