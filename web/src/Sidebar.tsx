@@ -27,8 +27,8 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/LimitsSettings';
 import { SidebarModels } from './SidebarModels';
-import { ThemeMenu } from './ThemeMenu';
-import type { ThemePref } from './theme';
+import { ThemeSwitch } from './ThemeSwitch';
+import type { Theme, ThemePref } from './theme';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
 
 export const displayName = (n: { name: string; title?: string }) => n.title || n.name.replace(/\.dpx\.json$/, '');
@@ -49,9 +49,10 @@ type Props = {
   onMove: (item: MoveItem, dir: string) => Promise<boolean>;
   onArchive: () => void;
   onCommands: () => void;
-  /** The 테마 row's popover: the chosen theme and its setter. */
+  /** The theme switch at the bottom: the chosen theme, its setter, and the system's scheme (shown on 시스템). */
   themePref: ThemePref;
   onThemePref: (t: ThemePref) => void;
+  systemTheme: Theme;
 };
 
 const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
@@ -376,10 +377,8 @@ export function Sidebar(p: Props) {
           <SidebarMenuItem>
             <SettingsEntry />
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <ThemeMenu pref={p.themePref} onPref={p.onThemePref} />
-          </SidebarMenuItem>
         </SidebarMenu>
+        <ThemeSwitch pref={p.themePref} onPref={p.onThemePref} system={p.systemTheme} />
       </SidebarFooter>
     </SidebarRoot>
   );

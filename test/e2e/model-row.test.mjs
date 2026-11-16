@@ -1,4 +1,4 @@
-// Headless check of the sidebar model row and its 모델 연결 dialog (E525, #570, ported from Dispatch) and the 테마 menu:
+// Headless check of the sidebar model row and its 모델 연결 dialog (E525, #570, ported from Dispatch) and the 테마 switch:
 // connect (CLI login with a sign-in link), cancel, connect again, state after reload (connected and mid-login), disconnect
 // (the CLI stays logged in, so 연결 connects at once), 390px drawer; also that no settings command or "," shortcut is left.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
@@ -27,7 +27,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('model row and connect dialog: connect, cancel, reload, disconnect with the fake CLI login; theme menu; 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
+test('model row and connect dialog: connect, cancel, reload, disconnect with the fake CLI login; theme switch; 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-modelrow-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-modelrow-home-'));
@@ -72,8 +72,8 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   const posts = [];
   page.on('request', (r) => r.method() === 'POST' && r.url().includes('/api/providers/') && posts.push(new URL(r.url()).pathname));
   await page.goto(BASE);
-  const trigger = page.getByRole('button', { name: /^테마/ });
-  await trigger.waitFor();
+  const themes = page.getByRole('radiogroup', { name: '테마' });
+  await themes.waitFor();
   const row = page.getByTestId('model-row');
   const dialog = page.getByTestId('connect-dialog');
   const state = dialog.getByTestId('connect-state');
@@ -90,18 +90,35 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await row.first().waitFor();
   assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude']);
 
-  // 1. 테마 menu: three choices, one checked; choosing applies at once. No settings dialog anywhere.
-  await trigger.click();
-  const menu = page.getByRole('menu', { name: '테마' });
-  await menu.waitFor();
-  assert.deepEqual(await menu.getByRole('menuitemradio').allInnerTexts(), ['라이트', '다크', '시스템']);
-  await menu.getByRole('menuitemradio', { name: '다크' }).click();
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
-  await trigger.click();
-  assert.equal(await page.getByRole('menuitemradio', { name: '다크' }).getAttribute('aria-checked'), 'true');
-  await page.getByRole('menuitemradio', { name: '라이트' }).click();
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
-  assert.equal(await trigger.evaluate((el) => el === document.activeElement), true, 'focus returns to the 테마 row');
+  // 1. 테마 switch (E527, from Dispatch): four icon radios, 시스템 first and checked; a click applies at once, survives a
+  // reload, and arrows/Home/End move the choice with focus. 모니터링 renders dark plus html.monitor.
+  const radio = (name) => themes.getByRole('radio', { name, exact: true });
+  const html = () => page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.classList.contains('monitor')]);
+  const checked = () => themes.getByRole('radio', { checked: true }).getAttribute('aria-label');
+  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))), ['시스템', '라이트', '다크', '모니터링']);
+  assert.equal(await checked(), '시스템');
+  await radio('다크').click();
+  assert.deepEqual(await html(), ['dark', false]);
+  await radio('모니터링').click();
+  assert.deepEqual(await html(), ['dark', true]);
+  await shot('theme-monitor.png');
+  await page.reload();
+  await themes.waitFor();
+  assert.equal(await checked(), '모니터링', 'persists after reload');
+  assert.deepEqual(await html(), ['dark', true]);
+  await radio('모니터링').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await checked(), '시스템', 'arrows wrap');
+  assert.equal(await radio('시스템').evaluate((el) => el === document.activeElement), true, 'focus follows the choice');
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual([await checked(), await html()], ['라이트', ['light', false]]);
+  await page.keyboard.press('End');
+  assert.equal(await checked(), '모니터링');
+  await page.keyboard.press('Home');
+  assert.equal(await checked(), '시스템');
+  assert.equal(await page.evaluate(() => localStorage.getItem('drawing.theme')), null, '시스템 stores nothing');
+  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.tabIndex)), [0, -1, -1, -1], 'one tab stop');
+  await radio('라이트').click();
   assert.equal(await page.getByRole('dialog').count(), 0, 'no settings dialog');
   await page.locator('body').click({ position: { x: 700, y: 400 } });
   await page.keyboard.press('Comma');
@@ -226,6 +243,8 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   assert.equal(await drawer.count(), 1, 'Esc closes the dialog only, not the drawer');
 
   // Only fakes ran.
-  assert.ok(fake.calls().every((c) => ['claude', 'git', 'gh'].includes(c.bin)));
+  // Only the CLIs server/dispatch/cli.js ALLOWED lists since #606 (claude, codex, agy, git, gh), all of them fakes here.
+  const strays = fake.calls().filter((c) => !['claude', 'codex', 'agy', 'git', 'gh'].includes(c.bin)).map((c) => c.bin);
+  assert.deepEqual(strays, [], 'no CLI outside the allowed set');
   assert.deepEqual(errors, []);
 });

@@ -113,6 +113,35 @@
   --role-design: oklch(0.72 0.16 0);
   --role-docs: oklch(0.7 0.03 250);
 }
+/* 모니터링 (ported from Dispatch's monitor theme): dark-first, so it sits on top of the dark tokens above. */
+:root[data-theme="dark"].monitor {
+  --radius: 0.25rem;
+  --background: oklch(0.14 0.008 255);
+  --foreground: oklch(0.92 0.005 250);
+  --card: oklch(0.185 0.01 255);
+  --card-foreground: oklch(0.92 0.005 250);
+  --popover: oklch(0.2 0.01 255);
+  --popover-foreground: oklch(0.92 0.005 250);
+  --primary: oklch(0.92 0.005 250);
+  --primary-foreground: oklch(0.16 0.01 255);
+  --secondary: oklch(0.23 0.01 255);
+  --secondary-foreground: oklch(0.92 0.005 250);
+  --muted: oklch(0.23 0.01 255);
+  --muted-foreground: oklch(0.7 0.012 250);
+  --accent: oklch(0.255 0.012 255);
+  --accent-foreground: oklch(0.92 0.005 250);
+  --border: oklch(0.31 0.012 255);
+  --input: oklch(0.34 0.012 255);
+  --ring: oklch(0.72 0.13 250);
+  --sidebar: oklch(0.185 0.01 255);
+  --sidebar-foreground: oklch(0.92 0.005 250);
+  --sidebar-primary: oklch(0.92 0.005 250);
+  --sidebar-primary-foreground: oklch(0.16 0.01 255);
+  --sidebar-accent: oklch(0.255 0.012 255);
+  --sidebar-accent-foreground: oklch(0.92 0.005 250);
+  --sidebar-border: oklch(0.31 0.012 255);
+  --sidebar-ring: oklch(0.72 0.13 250);
+}
 :root {
   /* Sizes: doc 6 §4.2 (first draft x1.08): 30px rows and controls, 48px header, 264px sidebar, 691px doc column. */
   --h-row: 30px;
