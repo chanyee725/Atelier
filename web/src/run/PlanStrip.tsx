@@ -9,6 +9,7 @@ import { useSession } from '../useSession';
 import { PLAN_CHANGED_NOTICE, confirmSnapshot, isPlanChanged, limitLine, startError, unansweredAsks, type PipelineStatus, type PlanSnapshot } from './planStripModel';
 import { openPlanConfirm, requestStart } from './planOpen';
 import { events } from '../lib/events';
+import { StepModels } from './StepModels';
 
 async function readStatus(path: string): Promise<PipelineStatus | null> {
   const res = await fetch(`/api/pipeline?path=${encodeURIComponent(path)}`);
@@ -21,6 +22,8 @@ export function PlanStrip({ session }: { session: FileSession }) {
   const revision = useSession(session, (s) => s.file?.revision ?? null);
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
   const document = useSession(session, (s) => s.file?.document);
+  const [modelsOpen, setModelsOpen] = useState(false);
+  const modelsId = useId();
   const [status, setStatus] = useState<PipelineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -131,6 +134,9 @@ export function PlanStrip({ session }: { session: FileSession }) {
         )}
       </span>
       <span className="text-muted-foreground">예상 {status.sessions}세션</span>
+      <Button size="sm" variant="ghost" aria-expanded={modelsOpen} aria-controls={modelsId} className="px-2 text-sm" onClick={() => setModelsOpen((v) => !v)}>
+        단계 모델
+      </Button>
       {/* An aria-disabled button gets no pointer events (and stays focusable, so the description is reachable by Tab), so the tooltip with every blocker sits on the wrapper. */}
       <span title={blocked ? status.blockers.join('\n') : undefined} data-testid="start-wrap" className="inline-flex">
         <Button
@@ -148,6 +154,8 @@ export function PlanStrip({ session }: { session: FileSession }) {
         </Button>
       </span>
     </Alert>
+    {/* Outside the live region: picking a model must not re-read the strip. */}
+    {modelsOpen && <StepModels id={modelsId} session={session} path={path} />}
     {/* Outside the live region too, so the open dialog and its role="alert" are not nested live regions. */}
     <dialog
       ref={dialog}
