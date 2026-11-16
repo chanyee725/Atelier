@@ -140,6 +140,34 @@ test('free-form shapes with code get a badge at their top-right; sameBadges comp
   assert.equal(out.length, 1);
   assert.equal(out[0]!.blockId, '');
   assert.equal(out[0]!.node, 's1');
+  assert.equal(out[0]!.label, '도형', 'a shape without text falls back to 도형');
   assert.ok(sameBadges(out, out.map((b) => ({ ...b }))));
   assert.ok(!sameBadges(out, out.map((b) => ({ ...b, x: b.x + 1 }))));
+  assert.ok(!sameBadges(out, out.map((b) => ({ ...b, label: 'x' }))));
+});
+
+test('a block node badge is labelled with its node name', () => {
+  const view = { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 };
+  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 50, h: 30 }] } };
+  const image = { id: 'img', type: 'image', customData: { blockId: 'b1' }, x: 0, y: 0, width: 400, height: 200, fileId: 'f' };
+  const out = placeBadges([image] as never, view, { left: 0, top: 0 }, () => info, () => pic as never, null);
+  assert.equal(out[0]!.label, 'Web');
+});
+
+test('free-form shape badges use the shape text as their label (#540)', () => {
+  const view = { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 };
+  const a = { ...SHAPE, id: 'a', x: 0, y: 0, width: 30, height: 20 };
+  const aText = { id: 'at', type: 'text', containerId: 'a', text: ' 저장 ', x: 0, y: 0, width: 10, height: 10 };
+  const b = { ...SHAPE, id: 'b', x: 50, y: 0, width: 30, height: 20 };
+  const bText = { id: 'bt', type: 'text', containerId: 'b', text: '불러오기', x: 50, y: 0, width: 10, height: 10, isDeleted: true };
+  const out = placeBadges([a, aText, b, bText] as never, view, { left: 0, top: 0 }, () => undefined, () => undefined, null);
+  assert.deepEqual(out.map((x) => [x.node, x.label]), [['a', '저장'], ['b', '도형']]);
+});
+
+test('free text with codeRefs gets a badge labelled by its text; bound text never does (#511)', () => {
+  const view = { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 };
+  const free = { ...SHAPE, id: 'ft', type: 'text', text: '로그인', x: 0, y: 0, width: 40, height: 20 };
+  const bound = { ...SHAPE, id: 'bt', type: 'text', text: '안쪽', containerId: 'box', x: 0, y: 40, width: 40, height: 20 };
+  const out = placeBadges([free, bound] as never, view, { left: 0, top: 0 }, () => undefined, () => undefined, null);
+  assert.deepEqual(out.map((x) => [x.node, x.label]), [['ft', '로그인']]);
 });
