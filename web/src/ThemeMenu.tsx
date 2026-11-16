@@ -17,7 +17,7 @@ export function ThemeMenu({ pref, onPref }: { pref: ThemePref; onPref: (t: Theme
   return (
     <DropdownMenu {...menu}>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton data-testid="theme-trigger" aria-label="테마" title="테마 바꾸기">
+        <SidebarMenuButton data-testid="theme-trigger" title="테마 바꾸기">
           <Palette aria-hidden />
           <span className="truncate">테마</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{THEME_CHOICES.find((t) => t.id === pref)?.label}</span>
