@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { connect, setState, useDispatch } from '../dispatch/store';
 import { cn } from '../lib/utils';
-import { SettingsContext } from './context';
+import { SectionShownContext, SettingsContext } from './context';
 import { useDispatchStatus } from './DispatchOff';
 import { BTN, PRIMARY_BTN } from './LimitsForm';
 import { SECTION_KEY, SECTIONS, firstSection, settingsLoad, stopEscWhileOpen, type SectionId } from './model';
@@ -180,7 +180,9 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 const Section = SECTION_COMPONENTS[s.id];
                 return (
                   <div key={s.id} data-settings-section={s.id} hidden={current !== s.id}>
-                    <Section />
+                    <SectionShownContext.Provider value={current === s.id}>
+                      <Section />
+                    </SectionShownContext.Provider>
                   </div>
                 );
               })}

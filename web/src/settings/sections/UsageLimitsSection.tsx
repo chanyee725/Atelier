@@ -9,11 +9,11 @@ import { api, useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
 import { OffNote } from '../DispatchOff';
 import { BTN, LimitsForm } from '../LimitsForm';
-import { useSettingsLoad } from '../context';
+import { useSectionShown, useSettingsLoad } from '../context';
 import { usageGroups, type SettingsLoad, type UsageEntry } from '../model';
 import { SectionFrame } from '../SectionFrame';
 
-/** Per-provider usage windows, refreshed when the server pushes new limits or providers change. */
+/** Per-provider usage windows, fetched once the section is shown, then again when the server pushes new limits or providers change. */
 function ProviderUsage({ load }: { load: SettingsLoad }) {
   const headingId = useId();
   const providers = useDispatch((s) => s.providers);
@@ -22,8 +22,10 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
   const [failed, setFailed] = useState(false);
   const [tick, setTick] = useState(0);
   const ok = load.kind === 'ok';
+  // Hidden behind another section, it asks for nothing (#639).
+  const shown = useSectionShown();
   useEffect(() => {
-    if (!ok) return;
+    if (!ok || !shown) return;
     let alive = true;
     api<Record<string, UsageEntry>>('GET', '/api/limits').then(
       (l) => alive && (setLimits(l), setFailed(false)),
@@ -32,7 +34,7 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
     return () => {
       alive = false;
     };
-  }, [ok, pushed, providers, tick]);
+  }, [ok, shown, pushed, providers, tick]);
   const groups = limits ? usageGroups(limits, providers) : [];
   return (
     <div role="group" aria-labelledby={headingId} data-testid="settings-usage" className="flex flex-col gap-3">
