@@ -33,11 +33,13 @@ export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: bool
 }
 
 /**
- * A modal dialog that makes the page behind it inert: a native one (showModal), the Radix one in
- * components/ui/dialog.tsx, or any aria-modal dialog. Toasts wait while one is open (persistent-toast-notifications).
+ * A modal dialog that makes the page behind it inert: a native one (showModal), the Radix ones in
+ * components/ui/dialog.tsx and components/ui/sheet.tsx (SessionSheet, 작업 보드, the narrow sidebar), or any aria-modal
+ * dialog. Toasts wait while one is open (persistent-toast-notifications).
  * The bell's own feed is a non-modal role="dialog" popover and does not match.
  */
-export const MODAL_SELECTOR = 'dialog:modal, [data-slot="dialog-content"][data-state="open"], [role="dialog"][aria-modal="true"]';
+export const MODAL_SELECTOR =
+  'dialog:modal, [data-slot="dialog-content"][data-state="open"], [data-slot="sheet-content"][data-state="open"], [role="dialog"][aria-modal="true"]';
 
 export type FeedItem = { id: string; text: string; when: string; unread: boolean; file: string; color?: string; kind: ActivityEvent['kind'] };
 

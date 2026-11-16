@@ -3,7 +3,7 @@ import type { DocNode } from './api';
 import { Button } from './components/ui/button';
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
-import { displayName } from './Sidebar';
+import { displayName } from './docTitles';
 
 type Props = {
   /** The open document in the projects view; null until the view has it (a file just made). */

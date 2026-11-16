@@ -31,23 +31,8 @@ import { ActivityBell } from './activity/ActivityBell';
 import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
 import type { Theme, ThemePref } from './theme';
+import { displayName, titlesOf } from './docTitles';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
-
-export const displayName = (n: { name: string; title?: string }) => n.title || n.name.replace(/\.dpx\.json$/, '');
-
-/** Path -> shown name of every document in the projects view (for the working agents' file line). */
-export const titlesOf = (view: ProjectsView | null) => {
-  const m = new Map<string, string>();
-  const walk = (nodes: readonly DocNode[]) => {
-    for (const n of nodes) {
-      m.set(n.path, displayName(n));
-      walk(n.children);
-    }
-  };
-  for (const p of view?.projects ?? []) walk(p.docs);
-  walk(view?.loose ?? []);
-  return m;
-};
 
 type Props = {
   workspace: string | null;
