@@ -73,7 +73,7 @@ Free-form canvas shapes carry the same shape in `customData.codeRefs` (`{summary
 
 Read the whole file, change only the block, and send the whole file back with its `revision`. Never type `document`, `canvas` or `plan` by hand: a save rewrites the whole file, so anything missing is wiped. Every non-GET request needs the `x-drawing: 1` header. A stale `revision` gets 409 with the current one: re-read and retry. `PORT` is the port in the dispatch skill.
 
-Needs `jq`. `set -e` and `curl -f` stop the script on the first failure (HTTP error, missing block) instead of saving a broken file.
+Needs `jq`. Save it as a script file and run it (`bash save.sh`) rather than pasting it into a shell: `set -e` would close an interactive shell. `set -e` and `curl -f` stop the script on the first failure (HTTP error, missing block) instead of saving a broken file.
 
 ```bash
 set -e
@@ -99,7 +99,7 @@ Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the re
 
 - `summary` and `note` are stored in the document. Write only a description of the code. Never include secrets, tokens, API keys, emails, real names or conversation text.
 - The DSL `code:` attribute works only in `flowchart` and `cloud-architecture` diagrams.
-- Paths are repo-relative with `/`; `./` segments are dropped (`./a.py` is stored as `a.py`). `#` starts the symbol, so paths containing `#` are not supported. `symbol`, when given, is non-empty.
+- Paths are repo-relative with `/`; `./` segments are dropped (`./a.py` is stored as `a.py`). In the DSL `code:` attribute the first `#` starts the symbol and everything after it is the symbol (`a.ts#Class.#priv`, `a.cpp#operator/`), so paths containing `#` are not supported there. `symbol`, when given, is non-empty.
 - At most 2000 nodes per block. The file format is v5 once a block has `codeRefs`; an older server opens such files read-only.
 - Refs are keyed by node name. When you rename a node, rename its `codeRefs.nodes` key too, or the refs are orphaned.
 

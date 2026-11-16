@@ -50,15 +50,12 @@ export function parseCodeAttr(text: string): ParsedCodeAttr {
     if (!piece) continue;
     let rest = piece;
     let symbol: string | undefined;
-    // `#` starts the symbol; paths with `#` are not supported, so a second `#` or a `/` after it is reported.
+    // The first `#` starts the symbol and the rest is the symbol as written (`#`, `/` included), as in block JSON.
+    // So paths with `#` are not supported here.
     const hash = rest.indexOf('#');
     if (hash >= 0) {
       symbol = rest.slice(hash + 1).trim();
       rest = rest.slice(0, hash).trim();
-      if (symbol.includes('#') || symbol.includes('/')) {
-        problems.push(`Bad code reference '${piece}': '#' starts the symbol, paths with '#' are not supported`);
-        continue;
-      }
       if (!symbol || symbol.length > MAX_CODE_SYMBOL) {
         problems.push(`Bad symbol in code reference '${piece}'`);
         continue;

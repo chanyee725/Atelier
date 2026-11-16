@@ -175,13 +175,20 @@ test('unmatched [ in an unquoted value ends at the first , or ] like a plain val
   assert.deepEqual(diagnostics.filter((d) => d.severity === 'error'), []);
 });
 
-test("'.' path segments are dropped, '#' in a path is reported, empty symbol is rejected in block JSON (#469)", () => {
-  const r = parseCodeAttr('./a.py:3; a/./b.py#f; .; a#b/c.py; a#b#c');
-  assert.deepEqual(r.refs, [{ path: 'a.py', start: 3 }, { path: 'a/b.py', start: 1, symbol: 'f' }]);
-  assert.equal(r.problems.length, 3);
+test("'.' path segments are dropped, the first '#' starts the symbol, empty symbol is rejected in block JSON (#469)", () => {
+  const r = parseCodeAttr('./a.py:3; a/./b.py#f; .; a.ts#Class.#priv; a.cpp:4#operator/; Foo.ts#bar#baz; a.py#');
+  assert.deepEqual(r.refs, [
+    { path: 'a.py', start: 3 },
+    { path: 'a/b.py', start: 1, symbol: 'f' },
+    { path: 'a.ts', start: 1, symbol: 'Class.#priv' },
+    { path: 'a.cpp', start: 4, symbol: 'operator/' },
+    { path: 'Foo.ts', start: 1, symbol: 'bar#baz' },
+  ]);
+  assert.equal(r.problems.length, 2);
   assert.match(r.problems[0]!, /'\.'.*path must name a file/);
-  assert.match(r.problems[1]!, /paths with '#' are not supported/);
-  assert.match(r.problems[2]!, /paths with '#' are not supported/);
+  assert.match(r.problems[1]!, /Bad symbol/);
+  // the same refs are valid in block JSON
+  assert.equal(blockCodeProblem({ v: 1, nodes: { A: { refs: r.refs } } }), null);
   const ok = { v: 1, nodes: { A: { refs: [{ path: './src/./a.py', start: 1 }] } } };
   assert.equal(blockCodeProblem(ok), null);
   assert.deepEqual(cleanBlockCode(ok as BlockCode).nodes.A!.refs, [{ path: 'src/a.py', start: 1 }]);
