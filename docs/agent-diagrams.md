@@ -91,7 +91,7 @@ jq '.blocks |= map(if .id == "b1" then .codeRefs = {
 curl -sf -X PUT "$URL" -H 'content-type: application/json' -H 'x-drawing: 1' -H "x-drawing-session: $SESSION_NAME" --data-binary @/tmp/robot.next.json
 ```
 
-`x-drawing-session` is optional: your session's own name (e.g. `Otto`), shown on your cursor and in the project's agent list instead of `에이전트`. Sessions started by this Drawing are recognised without it. Never put a real name or an email there; it is kept in memory only, cut to 32 characters, and stripped of HTML and control characters.
+`x-drawing-session` is optional: your session's own name (e.g. `Otto`), shown on your cursor and in the project's agent list instead of `에이전트`. Sessions started by this Drawing are recognised without it, also when the path has no `.dpx.json`, is partly encoded, or the PUT runs from a script you saved (`bash save.sh`). While you work, your cursor stays at your last edit with a short status (`글 작성 중…`, `다이어그램 작성 중…`) and leaves when your session ends. Never put a real name or an email there; it is kept in memory only, cut to 32 characters, and stripped of HTML and control characters.
 
 The GET body already holds `revision`, `title`, `document`, `canvas`, `blocks` and `plan` (if any), so the PUT body is the same JSON with the edited block. The block shown above is what `b1` looks like after the edit.
 
