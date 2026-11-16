@@ -159,7 +159,7 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
       data-provider={id}
       {...hover}
       style={{ position: 'fixed', inset: 'auto', margin: 0, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
-      className="z-50 w-64 rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
+      className="z-50 popover-box w-64 rounded-md border bg-popover text-popover-foreground shadow-md"
     >
       <p className="mb-2 flex items-baseline gap-2 text-sm font-medium">
         {meta.name}

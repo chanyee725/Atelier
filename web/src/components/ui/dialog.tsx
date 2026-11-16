@@ -42,11 +42,11 @@ function DialogContent({ className, overlayClassName, children, ...props }: Reac
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="dialog-header" className={cn('flex items-center gap-2 border-b px-4 py-2.5', className)} {...props} />;
+  return <div data-slot="dialog-header" className={cn('overlay-head flex items-center gap-2 border-b', className)} {...props} />;
 }
 
 function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="dialog-footer" className={cn('flex items-center justify-end gap-2 border-t px-4 py-2.5', className)} {...props} />;
+  return <div data-slot="dialog-footer" className={cn('overlay-foot flex items-center justify-end gap-2 border-t', className)} {...props} />;
 }
 
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {

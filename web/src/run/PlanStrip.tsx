@@ -163,10 +163,10 @@ export function PlanStrip({ session }: { session: FileSession }) {
       onClose={() => setConfirming(false)}
       className="m-auto w-[min(28rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
     >
-      <h2 id={titleId} className="border-b px-4 py-2.5 text-sm font-semibold">
+      <h2 id={titleId} className="overlay-head border-b text-sm font-semibold">
         이 계획으로 시작할까요?
       </h2>
-      <div className="flex flex-col gap-1.5 px-4 py-3">
+      <div className="flex flex-col gap-1.5 px-(--overlay-x) py-(--overlay-y)">
         <p>
           세션 {view.sessions}개{viewLimits ? ` · ${viewLimits}` : ''}
         </p>
@@ -177,7 +177,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
         </p>
         {asks > 0 && <p className="text-destructive">물어볼 것 {asks}개에 답이 없어요. 그래도 시작할까요?</p>}
       </div>
-      <form method="dialog" className="flex items-center justify-end gap-2 border-t px-4 py-2.5">
+      <form method="dialog" className="overlay-foot flex items-center justify-end gap-2 border-t">
         <Button type="submit" value="cancel" variant="outline" size="sm" className="bg-transparent px-3 text-sm">
           취소
         </Button>

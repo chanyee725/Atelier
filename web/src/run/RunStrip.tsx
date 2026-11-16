@@ -164,18 +164,18 @@ export function RunStrip({ code, inRunView, onRunView, onOpenFile }: Props) {
         onClose={() => setConfirming(false)}
         className="m-auto w-[min(28rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
       >
-        <h2 id={titleId} className="border-b px-4 py-2.5 text-sm font-semibold">
+        <h2 id={titleId} className="overlay-head border-b text-sm font-semibold">
           계획을 다시 열까요?
         </h2>
-        <p className="px-4 py-3">
+        <p className="px-(--overlay-x) py-(--overlay-y)">
           이번 실행은 멈춘 채로 끝나요. 끝난 단계는 다음에 시작하기를 누르면 완료로 이어져요.
         </p>
         {error && (
-          <p className="px-4 pb-3 text-destructive" role="alert">
+          <p className="px-(--overlay-x) pb-(--overlay-y) text-destructive" role="alert">
             {error}
           </p>
         )}
-        <form method="dialog" className="flex items-center justify-end gap-2 border-t px-4 py-2.5">
+        <form method="dialog" className="overlay-foot flex items-center justify-end gap-2 border-t">
           <button type="submit" value="cancel" className={cn('h-7 rounded-md border px-3', FOCUS_RING)}>
             취소
           </button>

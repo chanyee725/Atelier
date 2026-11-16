@@ -38,7 +38,7 @@ function SheetContent({ className, children, side = 'left', showCloseButton = fa
 }
 
 function SheetHeader({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div data-slot="sheet-header" className={cn('flex flex-col gap-1.5 p-4', className)} {...props} />;
+  return <div data-slot="sheet-header" className={cn('overlay-head flex flex-col gap-1.5', className)} {...props} />;
 }
 
 function SheetTitle({ className, ...props }: React.ComponentProps<typeof SheetPrimitive.Title>) {
