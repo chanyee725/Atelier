@@ -203,6 +203,8 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-idle: var(--idle);
   --shadow-pop: var(--shadow-pop);
 }
 

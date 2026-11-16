@@ -14,6 +14,7 @@ import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { AgentPanel } from './AgentPanel';
 import { HomeDashboard } from './HomeDashboard';
+import { ProjectDashboard } from './ProjectDashboard';
 import { agentsIn, holdersByFile } from './agents';
 import { useAgents } from './useAgents';
 import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
@@ -353,11 +354,6 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
 function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & { info: ProjectInfo }) {
   const [tab, setTab] = useState<PTab>('docs');
   const { collapsed, toggle } = useCollapse();
-  const docs = filterDocs(project.docs, query);
-  const { agents: live, retry: retryAgents } = useAgents();
-  const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
-  const holders = useMemo(() => holdersByFile(Array.isArray(agents) ? agents : []), [agents]);
-  const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -375,7 +371,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
           <span className="truncate font-medium">{project.name}</span>
         </p>
         <TabsList aria-label="프로젝트 보기">
-          <TabsTrigger value="docs">문서</TabsTrigger>
+          <TabsTrigger value="docs">대시보드</TabsTrigger>
           <TabsTrigger value="pipelines">파이프라인</TabsTrigger>
           <TabsTrigger value="sessions">세션</TabsTrigger>
           <TabsTrigger value="overview">개요</TabsTrigger>
@@ -387,32 +383,8 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
       </header>
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="pb-3">
-        <TabsContent value="docs" className="@container">
-          {/* Wide: the documents, and the agents at work beside them; narrow: the agents first, above the list. */}
-          <div className="grid @min-[880px]:grid-cols-[minmax(0,1fr)_300px]">
-            <AgentPanel
-              agents={agents}
-              onRetry={retryAgents}
-              titleOf={(f) => titles.get(f)}
-              onOpen={p.onOpen}
-              className="border-b @min-[880px]:sticky @min-[880px]:top-0 @min-[880px]:order-2 @min-[880px]:self-start @min-[880px]:border-b-0 @min-[880px]:border-l"
-            />
-            <div className="min-w-0 @min-[880px]:order-1">
-              {project.docs.length === 0 ? (
-                <Empty>
-                  <FilePlus2 className="mx-auto mb-2 size-5" aria-hidden />
-                  이 프로젝트에는 아직 문서가 없어요. 새 문서를 만들어 보세요.
-                </Empty>
-              ) : docs.length === 0 ? (
-                <Empty>맞는 문서가 없어요</Empty>
-              ) : (
-                <>
-                  <ColumnHead />
-                  <DocList docs={docs} collapsed={collapsed} label={`${project.name} 문서`} running={p.running} holders={holders} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />
-                </>
-              )}
-            </div>
-          </div>
+        <TabsContent value="docs">
+          <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} />
         </TabsContent>
         <TabsContent value="pipelines">
           <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>

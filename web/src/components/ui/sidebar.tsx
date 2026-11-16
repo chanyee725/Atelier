@@ -12,10 +12,15 @@ const SIDEBAR_WIDTH = '264px';
 const MOBILE_QUERY = '(max-width: 767px)';
 
 // Sidebar colours. The shell and sidebar sit on --sidebar; the inset panel stays on --background.
+// Hover and the current row are tints of --sidebar-foreground (5% and 9%), so in every theme the current row reads
+// darker (light) or lighter (dark, 모니터링) than a hovered one; --accent and --muted are the same grey in light and
+// dark, which made the two look alike (#684). A row action hovered inside a hovered row stacks the tint and still shows.
+// Forced colours outline the current row, since there the fill is gone.
 const C = {
   bg: 'bg-sidebar text-sidebar-foreground',
-  hover: 'cursor-pointer transition-colors hover:bg-accent hover:text-foreground',
-  active: 'aria-[current=page]:bg-muted aria-[current=page]:text-foreground',
+  hover: 'cursor-pointer transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground',
+  active:
+    'aria-[current=page]:bg-sidebar-foreground/9 aria-[current=page]:text-sidebar-foreground forced-colors:aria-[current=page]:outline-1 forced-colors:aria-[current=page]:outline-[Highlight]',
   border: 'border-sidebar-border',
 };
 
