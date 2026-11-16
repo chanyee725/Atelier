@@ -6,6 +6,7 @@ import {
   TEAM_TOGGLES,
   pickTexts,
   readTeamNumbers,
+  sameNumber,
   sectionNext,
   teamNumberErrors,
   teamPatch,
@@ -28,7 +29,7 @@ export function sectionFields(section: TeamSectionId): { numbers: TeamNumberFiel
 /** Whether this section's fields differ from the saved values (unsaved input, valid or not; #638). */
 export function sectionDirty(saved: TeamValues, form: TeamFormState, section: TeamSectionId): boolean {
   const { numbers, toggles } = sectionFields(section);
-  return numbers.some((f) => form.texts[f.id].trim() !== String(saved[f.id])) || toggles.some((f) => form.toggles[f.id] !== saved[f.id]);
+  return numbers.some((f) => !sameNumber(form.texts[f.id], saved[f.id])) || toggles.some((f) => form.toggles[f.id] !== saved[f.id]);
 }
 
 /** The form with this section's fields back at their defaults; other sections' fields stay as they are. */
