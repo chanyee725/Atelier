@@ -158,7 +158,7 @@ const lastChange = (p: ProjectInfo) => allDocs([p], []).reduce((m, x) => Math.ma
 function ProjectsPanel({ data, agents, running, now, onProject, onCreateIn, onTab }: { data: ProjectsResponse; agents: AgentPresence[]; running: ReadonlySet<string>; now: number } & Pick<Props, 'onProject' | 'onCreateIn' | 'onTab'>) {
   const projects = useMemo(() => [...data.projects].sort((a, b) => lastChange(b) - lastChange(a)), [data.projects]);
   return (
-    <Panel id="projects" title="프로젝트" count={projects.length} action={projects.length > 0 && <MoreLink onClick={() => onTab('projects')}>문서 목록</MoreLink>}>
+    <Panel id="projects" title="프로젝트" count={projects.length} action={projects.length > 0 && <MoreLink onClick={() => onTab('projects')}>프로젝트별 보기</MoreLink>}>
       {projects.length === 0 ? (
         <div className="flex flex-col gap-2 px-4 py-6">
           <p className="m-0 text-sm">아직 프로젝트가 없어요</p>
