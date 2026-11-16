@@ -69,11 +69,11 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   const posts = [];
   page.on('request', (r) => r.method() === 'POST' && r.url().includes('/api/providers/') && posts.push(new URL(r.url()).pathname));
   await page.goto(BASE);
-  const trigger = page.getByRole('button', { name: '테마', exact: true });
+  const trigger = page.getByRole('button', { name: /^테마/ });
   await trigger.waitFor();
   const row = page.locator('ul[aria-label="모델 연결"]');
   const connect = row.getByRole('button', { name: /연결하기$/ });
-const active = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
+  const active = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
   const opacity = (loc) => loc.evaluate((el) => getComputedStyle(el).opacity);
 
   // 1. 테마 menu: three choices, one checked; choosing applies at once. No settings dialog anywhere.
@@ -206,9 +206,9 @@ const active = () => page.evaluate(() => document.activeElement?.getAttribute('d
   const dconnect = drawer.getByRole('button', { name: /연결하기$/ });
   assert.equal(await opacity(dconnect), '1');
   assert.ok((await dconnect.boundingBox()).height >= 44);
-  assert.ok((await drawer.getByRole('button', { name: '테마', exact: true }).boundingBox()).height >= 44);
+  assert.ok((await drawer.getByRole('button', { name: /^테마/ }).boundingBox()).height >= 44);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'row-not-connected-390.png') });
-  await drawer.getByRole('button', { name: '테마', exact: true }).click();
+  await drawer.getByRole('button', { name: /^테마/ }).click();
   const m390 = page.getByRole('menu', { name: '테마' });
   await m390.waitFor();
   await page.waitForTimeout(300); // the open animation scales the menu from 95%

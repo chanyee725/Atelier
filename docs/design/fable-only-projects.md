@@ -48,7 +48,7 @@ What is kept, so old data still opens:
 - Model connection (sidebar `SidebarModels`, settings 모델 연결): one row, "Claude · Fable 5.2", with connect/disconnect and the five-hour and Fable weekly windows. Codex and Gemini rows, their API calls and palette keywords go.
 - `parts.tsx` `ModelTag` keeps showing unknown providers/models as their raw names (old sessions).
 - `UsagePage`: Codex no-cost branch and copy go.
-- E2E: `settings-dialog`, `app-sidebar`, `dispatch-usage` assert the single row.
+- E2E: `model-row`, `app-sidebar`, `dispatch-usage` assert the single row.
 
 ## B. Sessions per project
 
