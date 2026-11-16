@@ -82,6 +82,9 @@ export function pruneDocGone(cursors: ReadonlyMap<string, DocCursor>, now: numbe
  * The editor position of a document place: inside top-level block `index` (clamped to the last block), after
  * `offset` characters of its text nodes (clamped to its end; counted like server/cursor/model.js `blockText`).
  * `atom`: the block holds no text (an embedded diagram, a rule): the position is the block itself.
+ * The server counts blocks in the saved JSON; the editor's top-level children are the same blocks in the same order
+ * (TipTap's content check refuses a document it would have to rewrite: DocPane shows it as broken, without cursors),
+ * plus at most a trailing paragraph after the last one (withTrailingParagraph), so an index never shifts.
  */
 export function docPos(doc: PMNode, spot: DocSpot): { pos: number; atom: boolean } | null {
   if (!doc.childCount) return null;

@@ -53,6 +53,8 @@ test('editing → thinking → fading → gone; an edit without a place keeps it
   const kept = m.get('s1')!;
   assert.equal(phaseOf(kept, FADE_AFTER_MS + 10), 'editing');
   assert.deepEqual(kept.to, { x: 10, y: 20 });
+  // A document-only edit (E529) does not keep the canvas cursor editing (#627).
+  assert.equal(applyCursor(m, ev(undefined, undefined, { doc: { index: 0, offset: 1 } }), FADE_AFTER_MS, false), m);
   assert.equal(pruneGone(m, FADE_AFTER_MS).size, 1);
   assert.equal(nextPhaseAt(c, 0), THINK_MS);
   assert.equal(nextPhaseAt(c, THINK_MS), FADE_AFTER_MS);

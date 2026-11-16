@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 // Pure helpers for the live agent cursor (E56): which element or block of a `.dpx.json` changed between two
 // versions, and where its centre is in scene coordinates. No I/O, so it runs under `node --test`.
 
@@ -85,6 +87,8 @@ function blockSig(b) {
   return JSON.stringify(b);
 }
 
+const hash = (s) => createHash('sha1').update(s).digest('base64');
+
 /** Text of a block: its text nodes only, in order (the doc view counts the same way, see web/src/doc/docCursor.ts). */
 export function blockText(b) {
   if (!b || typeof b !== 'object') return '';
@@ -96,7 +100,8 @@ export function blockText(b) {
 export function docBlocksOf(file) {
   const c = file?.document?.content;
   if (!Array.isArray(c)) return [];
-  return c.map((b) => ({ sig: blockSig(b), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) }));
+  // The signature is kept per file between changes (server/cursor/index.js): a hash, not a second copy of the JSON.
+  return c.map((b) => ({ sig: hash(blockSig(b)), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) }));
 }
 
 /**
