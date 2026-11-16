@@ -604,3 +604,16 @@ body {
   @starting-style { .doc-margin-aside, .doc-margin[data-form='sheet'] .doc-margin-aside { translate: none; } }
   .doc-margin-aside[data-closing], .doc-margin[data-form='sheet'] .doc-margin-aside[data-closing] { translate: none; }
 }
+
+/* Provider marks in brand colours (E539, #670). The colours live in web/src/providerIcons.ts and come in as
+   --brand-* custom properties; here only the theme picks the shade. 모니터링 sits on dark, so it takes the dark shade. */
+.provider-icon { color: var(--brand-light); }
+:root[data-theme="dark"] .provider-icon { color: var(--brand-dark); }
+.provider-gradient-from { stop-color: var(--brand-light-from); }
+.provider-gradient-to { stop-color: var(--brand-light-to); }
+:root[data-theme="dark"] .provider-gradient-from { stop-color: var(--brand-dark-from); }
+:root[data-theme="dark"] .provider-gradient-to { stop-color: var(--brand-dark-to); }
+@media (forced-colors: active) {
+  /* Back to the system text colour: no brand colour, no gradient. */
+  .provider-icon { color: inherit; fill: currentColor; }
+}
