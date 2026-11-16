@@ -16,7 +16,14 @@ export type CursorEvent = {
   y?: number;
   /** Where in the document the change ends (E529, #619): top-level block index and text offset in it. */
   doc?: { index: number; offset: number };
+  /** The session is at work (E536, #653): its cursor stays until a `gone` event, it does not fade. */
+  live?: boolean;
+  /** Short status label (shared/dispatch/agent-status.ts), e.g. "글 작성 중…". */
+  status?: string | null;
 };
+
+/** The `cursor-status` SSE event: only the status label of a session changed; its place and edit time stay. */
+export type CursorStatusEvent = { sid: string; status?: string | null };
 
 type Pt = { x: number; y: number };
 
@@ -33,6 +40,10 @@ export type Cursor = {
   moveAt: number;
   /** Last edit (ms): drives thinking and fade. */
   editAt: number;
+  /** A live session's cursor (E536): it thinks between edits but never fades; a `gone` event removes it. */
+  live: boolean;
+  /** Short status label shown in the tag, or '' (then the thinking dots show). */
+  status: string;
 };
 
 /** Glide length (ms) with an ease-out. */
@@ -56,8 +67,11 @@ export function positionAt(c: Cursor, now: number, reduced: boolean): Pt {
   return { x: c.from.x + (c.to.x - c.from.x) * k, y: c.from.y + (c.to.y - c.from.y) * k };
 }
 
-export function phaseOf(c: Pick<Cursor, 'editAt'>, now: number): Phase {
+type Timed = { editAt: number; live?: boolean };
+
+export function phaseOf(c: Timed, now: number): Phase {
   const idle = now - c.editAt;
+  if (c.live) return idle >= THINK_MS ? 'thinking' : 'editing';
   if (idle >= FADE_AFTER_MS + FADE_MS) return 'gone';
   if (idle >= FADE_AFTER_MS) return 'fading';
   if (idle >= THINK_MS) return 'thinking';
@@ -65,8 +79,8 @@ export function phaseOf(c: Pick<Cursor, 'editAt'>, now: number): Phase {
 }
 
 /** When `c`'s phase next changes after `now` (Infinity once it is gone). */
-export function nextPhaseAt(c: Pick<Cursor, 'editAt'>, now: number): number {
-  for (const d of [THINK_MS, FADE_AFTER_MS, FADE_AFTER_MS + FADE_MS]) if (c.editAt + d > now) return c.editAt + d;
+export function nextPhaseAt(c: Timed, now: number): number {
+  for (const d of c.live ? [THINK_MS] : [THINK_MS, FADE_AFTER_MS, FADE_AFTER_MS + FADE_MS]) if (c.editAt + d > now) return c.editAt + d;
   return Infinity;
 }
 
@@ -109,6 +123,33 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 /** A colour from the event goes into an inline style: only plain `#rrggbb` passes. */
 export const cursorColor = (v: unknown): string => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : '');
 
+/** A status label from an event goes into the tag as text: a short single line, or '' (none). */
+export const cursorStatus = (v: unknown): string => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, 40) : '');
+
+/** The status of a cursor after event `e`: the event's (null clears it), else the old one. */
+export const statusAfter = (e: { status?: unknown }, old: string | undefined): string =>
+  e.status === undefined ? (old ?? '') : cursorStatus(e.status);
+
+/** `sid`'s live cursor stops being live and starts fading out now (the session works elsewhere). */
+export function letGoOf<C extends { live: boolean; editAt: number }>(cursors: ReadonlyMap<string, C>, sid: string, now: number): ReadonlyMap<string, C> {
+  const old = cursors.get(sid);
+  if (!old?.live) return cursors;
+  return new Map(cursors).set(sid, { ...old, live: false, editAt: Math.max(old.editAt, now - FADE_AFTER_MS) });
+}
+
+/**
+ * Apply a `cursor-status` event to any cursor map: only the status label changes (not the place, not editAt, so the
+ * phase does not restart). Returns the same map when nothing changed.
+ */
+export function applyStatus<C extends { status: string }>(cursors: ReadonlyMap<string, C>, e: CursorStatusEvent): ReadonlyMap<string, C> {
+  if (!e || typeof e.sid !== 'string') return cursors;
+  const old = cursors.get(e.sid);
+  if (!old) return cursors;
+  const status = cursorStatus(e.status);
+  if (old.status === status) return cursors;
+  return new Map(cursors).set(e.sid, { ...old, status });
+}
+
 /**
  * Apply one event; returns a new map (or the same one when nothing changed). A new place glides from wherever the
  * cursor is drawn now; a cursor that moved to another file, or a first appearance, starts at its target.
@@ -124,12 +165,14 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
   }
   const hasPlace = finite(e.x) && finite(e.y);
   const sameFile = !!old && old.file === (e.file ?? old.file);
-  if (!hasPlace && !sameFile) return cursors; // nothing to show yet
+  // Nothing to place here: a live cursor left behind (the session works elsewhere now) stops being live and fades.
+  const letGo = () => letGoOf(cursors, e.sid, now);
+  if (!hasPlace && !sameFile) return letGo(); // nothing to show yet
   // A document-only edit (E529) leaves the canvas cursor alone: it fades out while the agent writes in the document.
-  if (!hasPlace && e.doc) return cursors;
+  if (!hasPlace && e.doc) return letGo();
   const next = new Map(cursors);
   if (!hasPlace) {
-    next.set(e.sid, { ...old!, color: cursorColor(e.color) || old!.color, editAt: now });
+    next.set(e.sid, { ...old!, color: cursorColor(e.color) || old!.color, editAt: now, live: e.live ?? old!.live, status: statusAfter(e, old!.status) });
     return next;
   }
   const to = { x: e.x!, y: e.y! };
@@ -144,6 +187,8 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
     to,
     moveAt: now,
     editAt: now,
+    live: e.live === true,
+    status: statusAfter(e, sameFile ? old?.status : undefined),
   });
   return next;
 }

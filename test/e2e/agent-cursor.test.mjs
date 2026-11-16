@@ -1,5 +1,6 @@
 // Headless check of the live agent cursor (E56, #226): a fake Claude session edits a diagram file twice; the cursor
-// appears with the session's name at the first edit, then glides to the second, then fades out.
+// appears with the session's name at the first edit, then glides to the second, then stays there with its status
+// while the session works (E536, #653) and goes when the session ends.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
 // real claude, codex or agy can start. It refuses to go on unless the server log names its port and workspace.
@@ -30,7 +31,7 @@ const rect = (id, x, y) => ({ id, type: 'rectangle', x, y, width: 120, height: 6
 
 const SKIP = !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run';
 
-test('agent cursor: a fake session edits a diagram; the cursor appears, moves and fades', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 0));
+test('agent cursor: a fake session edits a diagram; the cursor appears, moves and stays while it works', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 0));
 
 // The second edit remounts the canvas: on a slow page (or while screen-recording a demo) the remount stalls the main
 // thread for longer than the glide. The glide must still be seen, not jump (#254).
@@ -256,6 +257,19 @@ async function run(t, cpuThrottle) {
   const after = (await page.evaluate(() => window.__cursorYs)).slice(landedAt);
   assert.ok(after.length > 0 && after.every((y) => Math.abs(y - second[1]) < 2), `stayed on r3: ${JSON.stringify(after.filter((y, i) => y !== after[i - 1]))}`);
   assert.ok(Math.abs((await at())[1] - second[1]) < 2);
+
+  // Between edits a live session's cursor stays (E536): thinking, with its status in the tag and no dots, past the
+  // old fade time (FADE_AFTER_MS + FADE_MS = 6.4 s), with the session's own name.
+  await page.locator('[data-agent-cursor][data-phase="thinking"]').waitFor({ timeout: 10_000 });
+  assert.equal(await cursor.getAttribute('data-live'), '');
+  const status = await cursor.locator('.agent-cursor-status').textContent();
+  assert.ok(/중/.test(status), `a short status in the tag: ${status}`);
+  assert.equal(await cursor.locator('.agent-cursor-dots').evaluate((el) => getComputedStyle(el).display), 'none');
+  await page.waitForTimeout(8000);
+  assert.equal(await cursor.getAttribute('data-phase'), 'thinking');
+  assert.equal(await cursor.locator('.agent-cursor-name').textContent(), name);
+  assert.ok(Math.abs((await at())[1] - second[1]) < 2, 'parked at the last edit');
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-cursor-parked.png') });
   release(4);
 
   // The session stops editing and its turn ends: the cursor goes.

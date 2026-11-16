@@ -1,6 +1,6 @@
 // Headless check of the document agent cursor (E529, #619): a fake Claude session writes a document in steps; a caret
-// with the session's name appears at the end of what it wrote, glides to the next edit, thinks, then fades out. The
-// user's own caret and focus stay where they were the whole time.
+// with the session's name appears at the end of what it wrote, glides to the next edit, then thinks there with its
+// status and stays (E536, #653) until the session ends. The user's own caret and focus stay where they were.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
 // real claude, codex or agy can start. It refuses to go on unless the server log names its port and workspace.
@@ -31,7 +31,7 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('doc agent cursor: a fake session writes a document; the named caret appears at the edit, moves and fades', { skip: SKIP, timeout: 180_000 }, (t) => run(t, false));
+test('doc agent cursor: a fake session writes a document; the named caret appears at the edit, moves and stays while it works', { skip: SKIP, timeout: 180_000 }, (t) => run(t, false));
 
 test('doc agent cursor: with reduced motion it jumps instead of gliding', { skip: SKIP, timeout: 180_000 }, (t) => run(t, true));
 
@@ -68,7 +68,7 @@ async function run(t, reduced) {
     { $sleep: 300 },
     { $write: { file: abs, text: fileWith(step2, 60) } },
     result(2),
-    { $waitFor: gate(3) }, // thought, faded and gone
+    { $waitFor: gate(3) }, // thought and stayed, past the old fade time
     { type: 'assistant', message: { id: 'm9', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
     { type: 'result', subtype: 'success', total_cost_usd: 0.001 },
   ];
@@ -198,9 +198,15 @@ async function run(t, reduced) {
   assert.deepEqual(await caret(), mine);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, `doc-cursor-second${reduced ? '-reduced' : ''}.png`) });
 
-  // No more edits: thinking, then it fades out and goes, while the session is still running.
+  // No more edits: thinking at the last place, with its status, and it stays while the session is still running
+  // (E536): no fading, past the old fade time (FADE_AFTER_MS + FADE_MS = 6.4 s).
   await page.locator('[data-doc-agent-cursor][data-phase="thinking"]').waitFor({ state: 'attached', timeout: 10_000 });
   if (SHOTS) await page.screenshot({ path: join(SHOTS, `doc-cursor-thinking${reduced ? '-reduced' : ''}.png`) });
+  assert.equal(await cursor.getAttribute('data-live'), '');
+  const status = await cursor.locator('.agent-cursor-status').textContent();
+  assert.ok(/중/.test(status), `a short status in the tag: ${status}`);
+  // With a status the thinking dots stay off (a cursor that stays on the page must not animate for minutes).
+  assert.equal(await cursor.locator('.agent-cursor-dots').evaluate((el) => getComputedStyle(el).display), 'none');
   await page.evaluate(() => {
     const log = (window.__phaseLog = []);
     const tick = () => {
@@ -211,10 +217,13 @@ async function run(t, reduced) {
     };
     requestAnimationFrame(tick);
   });
-  const faded = await page.locator('[data-doc-agent-cursor][data-phase="fading"]').waitFor({ state: 'attached', timeout: 15_000 }).then(() => true, (e) => e);
-  if (faded !== true) assert.fail(`no fading phase; phase/visibility seen: ${JSON.stringify(await page.evaluate(() => window.__phaseLog))}`);
-  await cursor.waitFor({ state: 'detached', timeout: 5000 });
+  await page.waitForTimeout(8000);
+  const seenPhases = await page.evaluate(() => window.__phaseLog);
+  assert.deepEqual(seenPhases, ['thinking/v'], `stayed, thinking: ${JSON.stringify(seenPhases)}`);
+  assert.ok(Math.abs((await page.evaluate(() => window.__docYs.at(-1))) - second) < 2, 'parked at the last edit');
+  // The session finishes: its caret goes.
   release(3);
+  await cursor.waitFor({ state: 'detached', timeout: 15_000 });
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);
 }

@@ -138,12 +138,15 @@ export function DocAgentCursors({ editor, file }: Props) {
           className="agent-cursor doc-agent-cursor"
           data-doc-agent-cursor={c.sid}
           data-role={c.role}
+          data-live={c.live ? '' : undefined}
+          data-status={c.status ? '' : undefined}
           data-phase="editing"
           style={{ visibility: 'hidden', ...(c.color ? ({ '--agent': c.color } as CSSProperties) : {}) }}
         >
           <span className="doc-agent-caret" />
           <span className="agent-cursor-tag">
-            {c.name || roleLabel(c.role)}
+            <span className="agent-cursor-name">{c.name || roleLabel(c.role)}</span>
+            {c.status && <span className="agent-cursor-status">{c.status}</span>}
             <span className="agent-cursor-dots">
               <span />
               <span />

@@ -1,9 +1,10 @@
 // Live agent cursors in the document (E529, issue #619): one caret and name tag per agent session that edits the open
 // document, at the place the server reports (`doc: { index, offset }` on the `cursor` event: top-level block and text
-// offset in it), gliding between places, then "thinking" and fading out like the canvas cursor (canvas/agentCursor.ts).
+// offset in it), gliding between places, then "thinking" and fading out like the canvas cursor (canvas/agentCursor.ts);
+// a live session's caret (E536) stays at its last place until the session leaves, with its status in the tag.
 // Pure (no React or DOM), so it runs under `node --test`. Memory only: nothing here is stored.
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { cursorColor, easeOut, phaseOf, type CursorEvent } from '../canvas/agentCursor.ts';
+import { cursorColor, easeOut, letGoOf, phaseOf, statusAfter, type CursorEvent } from '../canvas/agentCursor.ts';
 
 export type DocSpot = { index: number; offset: number };
 
@@ -19,6 +20,10 @@ export type DocCursor = {
   moveAt: number;
   /** Last edit (ms): drives thinking and fade (phaseOf). */
   editAt: number;
+  /** A live session's caret (E536): it thinks between edits but never fades; a `gone` event removes it. */
+  live: boolean;
+  /** Short status label shown in the tag, or ''. */
+  status: string;
 };
 
 /** Glide length (ms) with an ease-out. */
@@ -56,8 +61,9 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
   const spot = spotOf(e.doc);
   const file = e.file ?? old?.file ?? '';
   if (!spot) {
-    if (!old || old.file !== file || (Number.isFinite(e.x) && Number.isFinite(e.y))) return cursors;
-    return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now });
+    // The session works elsewhere (another file, or the canvas): a live caret left here fades out.
+    if (!old || old.file !== file || (Number.isFinite(e.x) && Number.isFinite(e.y))) return letGoOf(cursors, e.sid, now);
+    return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now, live: e.live ?? old.live, status: statusAfter(e, old.status) });
   }
   return new Map(cursors).set(e.sid, {
     sid: e.sid,
@@ -68,6 +74,8 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
     spot,
     moveAt: now,
     editAt: now,
+    live: e.live === true,
+    status: statusAfter(e, old?.file === file ? old.status : undefined),
   });
 }
 

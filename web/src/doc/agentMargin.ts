@@ -38,6 +38,8 @@ export type MarginAgent = {
   editAt: number;
   /** Newest first, at most RECENT_MAX. */
   edits: readonly MarginEdit[];
+  /** The session is at work (E536, #653): it stays in the margin past IDLE_MS, until a `gone` event. */
+  live?: boolean;
 };
 
 export type MarginMap = ReadonlyMap<string, MarginAgent>;
@@ -67,12 +69,12 @@ export function applyMarginEvent(map: MarginMap, e: CursorEvent, now: number, se
   const spot = spotOf(e.doc);
   const file = typeof e.file === 'string' ? e.file : '';
   if (!spot) {
-    if (!old || !file || old.file !== file) return map;
-    return new Map(map).set(e.sid, { ...old, editAt: now });
+    if (!old || !file || old.file !== file) return old?.live ? new Map(map).set(e.sid, { ...old, live: false }) : map;
+    return new Map(map).set(e.sid, { ...old, editAt: now, live: e.live ?? old.live });
   }
   if (!file) return map;
   // Same stay: same file and not idle yet. Otherwise a fresh card.
-  const stay = old && old.file === file && now - old.editAt < IDLE_MS ? old : null;
+  const stay = old && old.file === file && !idle(old, now) ? old : null;
   const edits = stay?.edits ?? [];
   const last = edits[0];
   const merged = last && last.spot.index === spot.index && now - last.at < MERGE_MS;
@@ -87,6 +89,7 @@ export function applyMarginEvent(map: MarginMap, e: CursorEvent, now: number, se
     firstAt: stay?.firstAt ?? now,
     editAt: now,
     edits: nextEdits,
+    live: e.live === true,
   });
 }
 
@@ -99,15 +102,18 @@ export function freezePlace(map: MarginMap, sid: string, id: string, place: Edit
   return new Map(map).set(sid, { ...a, edits });
 }
 
+/** Whether `a` has left the margin at `now`: no edit for IDLE_MS, unless its session is still at work (live). */
+const idle = (a: Pick<MarginAgent, 'editAt' | 'live'>, now: number) => !a.live && now - a.editAt >= IDLE_MS;
+
 /** Agents of `file` (none for another file), in the order they came, without those idle at `now`. */
 export function agentsOf(map: MarginMap, file: string, now: number): MarginAgent[] {
-  return [...map.values()].filter((a) => a.file === file && now - a.editAt < IDLE_MS).sort((a, b) => a.firstAt - b.firstAt || a.sid.localeCompare(b.sid));
+  return [...map.values()].filter((a) => a.file === file && !idle(a, now)).sort((a, b) => a.firstAt - b.firstAt || a.sid.localeCompare(b.sid));
 }
 
 /** Drop agents idle at `now` (returns the same map when none are). */
 export function pruneIdle(map: MarginMap, now: number): MarginMap {
   let next: Map<string, MarginAgent> | null = null;
-  for (const [sid, a] of map) if (now - a.editAt >= IDLE_MS) (next ??= new Map(map)).delete(sid);
+  for (const [sid, a] of map) if (idle(a, now)) (next ??= new Map(map)).delete(sid);
   return next ?? map;
 }
 
@@ -119,9 +125,9 @@ export function clearFile(map: MarginMap, file?: string): MarginMap {
 }
 
 /** When the margin's view next changes on its own (a state turns, an agent leaves); Infinity when never. */
-export function nextTurnAt(agents: readonly Pick<MarginAgent, 'editAt'>[], now: number): number {
+export function nextTurnAt(agents: readonly Pick<MarginAgent, 'editAt' | 'live'>[], now: number): number {
   let t = Infinity;
-  for (const a of agents) for (const d of [WRITING_MS, IDLE_MS]) if (a.editAt + d > now) t = Math.min(t, a.editAt + d);
+  for (const a of agents) for (const d of a.live ? [WRITING_MS] : [WRITING_MS, IDLE_MS]) if (a.editAt + d > now) t = Math.min(t, a.editAt + d);
   return t;
 }
 
