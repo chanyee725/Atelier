@@ -540,7 +540,12 @@ test('cursor module: a write carrying a session id (x-drawing-session) is that s
   await r.change(rel, paras(4), { sid: '33333333-3333-4333-8333-333333333333' });
   // A page save stays the user's, id or not.
   await r.change(rel, paras(5), { sid: B, app: true });
-  assert.deepEqual(docCursors(), ['Otto', 'Otto', '에이전트']);
+  // An outside writer that named itself just now does not pass its name on to a write with an unknown id.
+  const other = 'notes/other.dpx.json';
+  r.files.set(other, paras(1));
+  await r.change(other, paras(2), { writer: 'Mo' });
+  await r.change(other, paras(3), { sid: '33333333-3333-4333-8333-333333333333' });
+  assert.deepEqual(docCursors(), ['Otto', 'Otto', '에이전트', 'Mo', '에이전트']);
   m.close();
 });
 

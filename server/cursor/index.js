@@ -273,7 +273,7 @@ export async function setup(ctx) {
     return newest(cands);
   }
 
-  async function place(rel, cands, wait, app, writer) {
+  async function place(rel, cands, wait, app, writer, sid = null) {
     await wait; // a tool-time read still in flight when the change came: let it land in `pre` first
     let after;
     try { after = await read(rel); } catch { return; }
@@ -289,15 +289,16 @@ export async function setup(ctx) {
     if (!cands.length) {
       if (app) return;
       const now = Date.now();
-      // An unnamed write of a file a named outside writer wrote lately is that writer's (#653).
+      // An unnamed write of a file a named outside writer wrote lately is that writer's (#653). A write with a session
+      // id this hub does not know is someone else's for certain: it stays '에이전트', it does not take that name (#656).
       const named = outsideNames.get(rel);
       if (writer) outsideNames.set(rel, { name: writer, at: now });
-      else if (named && now - named.at <= OUTSIDE_HOLD_MS) writer = named.name;
+      else if (!sid && named && now - named.at <= OUTSIDE_HOLD_MS) writer = named.name;
       if (outsideNames.size > MAX_FILES) outsideNames.delete(outsideNames.keys().next().value);
       if (writer) held({ sid: `outside:${writer}`, name: writer, file: rel, at: now, outside: true });
       const spot = spotOf(before ?? (earlier && spotOf(earlier, after) ? earlier : EMPTY), after);
-      const sid = writer ? `outside:${writer}` : `outside:${rel}`;
-      if (spot) ctx.hub.broadcast('cursor', { sid, name: writer ?? OUTSIDE_NAME, role: '', file: rel, ...spot, at: now });
+      const key = writer ? `outside:${writer}` : `outside:${rel}`;
+      if (spot) ctx.hub.broadcast('cursor', { sid: key, name: writer ?? OUTSIDE_NAME, role: '', file: rel, ...spot, at: now });
       return;
     }
     // From the reported version when there is one. Otherwise from the tool-time read, unless that shows no change
@@ -340,7 +341,7 @@ export async function setup(ctx) {
   // So read-only calls (jq, curl GET) that finished within that window also become candidates during a catch-up.
   const onChange = (rel, { catchUp = false, app = false, sid = null, writer = null } = {}) => {
     const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS, { app, sid, writer });
-    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app, writer));
+    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app, writer, sid));
     const tail = run.catch(() => {});
     queue.set(rel, tail);
     tail.then(() => { if (queue.get(rel) === tail) queue.delete(rel); });
