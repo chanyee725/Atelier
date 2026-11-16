@@ -1,7 +1,7 @@
 // Workspace module: HTTP API over the file store + SSE "workspace" events for outside changes.
 import { createStore, StoreError } from './store.js';
 import { listProjects } from './projects.js';
-import { cleanSessionLabel } from '../cursor/presence.js';
+import { cleanSessionLabel, sessionIdOf } from '../cursor/presence.js';
 // The PR/CI switch lives with the Dispatch PR tracker (it reads the same settings.json), so the route reuses it.
 import { readPrTracking, setPrTracking } from '../dispatch/pr-status.js';
 
@@ -66,8 +66,11 @@ export async function setup(ctx) {
     async handler(req, res, _ctx, _m, url) {
       try {
         const body = method === 'GET' || method === 'DELETE' ? null : await readJson(req);
-        // x-drawing-session: an outside writer's own name for its cursor label (E528 #592); cleaned, memory only.
-        const from = { app: req.headers['x-drawing-client'] === 'app', writer: cleanSessionLabel(req.headers['x-drawing-session']) };
+        // x-drawing-session: the writing session's id (`$DRAWING_SESSION`, #656), or an outside writer's own name for
+        // its cursor label (E528 #592; cleaned). Memory only.
+        const head = req.headers['x-drawing-session'];
+        const sid = sessionIdOf(head);
+        const from = { app: req.headers['x-drawing-client'] === 'app', sid, writer: sid ? null : cleanSessionLabel(head) };
         send(res, okStatus, await fn(url.searchParams.get('path'), body, url.searchParams, from));
       } catch (e) {
         const err = toStoreError(e);
@@ -85,7 +88,7 @@ export async function setup(ctx) {
 
   return {
     store,
-    /** fn(path, { catchUp, app, writer }) on each content change of a file (catchUp: found after the watcher restarted); returns an unsubscribe function. */
+    /** fn(path, { catchUp, app, sid, writer }) on each content change of a file (catchUp: found after the watcher restarted); returns an unsubscribe function. */
     onChange(fn) {
       changeListeners.add(fn);
       return () => changeListeners.delete(fn);
@@ -120,14 +123,14 @@ export async function setup(ctx) {
         // Same as the plan patch: the store knows its own writes, so tell open tabs. A tab that saved this revision
         // itself ignores the echo (it only reloads a strictly newer revision).
         ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
-        changed(r.path, { app: from.app, writer: from.writer });
+        changed(r.path, { app: from.app, sid: from.sid, writer: from.writer });
         return r;
       }),
       route('POST', '/api/file', async (_p, b, _sp, from) => {
         const r = await store.createFile(need(b?.path, 'path'), b);
         // The store knows its own writes, so the watcher stays quiet: tell the open tabs the tree grew.
         ctx.hub.broadcast('workspace', { kind: 'tree', path: r.path });
-        changed(r.path, { app: from.app, writer: from.writer });
+        changed(r.path, { app: from.app, sid: from.sid, writer: from.writer });
         return r;
       }, 201),
       // Step-level plan edit (agents): re-read under the store lock, then announced like an outside change so an
@@ -135,7 +138,7 @@ export async function setup(ctx) {
       route('PATCH', '/api/file/plan', async (p, b, _sp, from) => {
         const r = await store.patchPlan(need(p, 'path'), b);
         ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
-        changed(r.path, { writer: from.writer });
+        changed(r.path, { sid: from.sid, writer: from.writer });
         return r;
       }),
       // withSubdocs=1: the document's sub-documents folder goes to the trash with it.

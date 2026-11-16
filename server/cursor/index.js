@@ -20,6 +20,9 @@ const LIVE = new Set(['running', 'starting', 'waiting']);
 // A session that edited a file keeps it this long (#653): an unnamed later write of that file while one of its own
 // edit calls runs (`bash save.sh`, a helper script) is still its own, not an outside writer's.
 const HOLD_MS = 10 * 60_000;
+// In that fallback a call still running counts only this soon after it started, unless it already wrote the file
+// during this run: a long call that never touched it (npm test, a build) does not take another writer's save (#656).
+const HOLD_START_MS = 30_000;
 // An outside writer that named itself keeps the file this long: its unnamed writes keep that name (#653).
 const OUTSIDE_HOLD_MS = 2 * 60_000;
 const MAX_SCRIPTS = 20;
@@ -205,9 +208,19 @@ export async function setup(ctx) {
   // still running, or finished within SETTLE_MS, and not failed. Several sessions can edit one file at once (two
   // agents, two blocks of one diagram): choosing among them waits for the diff, see `pick`.
   // A call still running counts however long ago it started (a script that saves several times over minutes, #653).
-  function whoEdited(rel, now, settle = SETTLE_MS, { app = false, writer = null } = {}) {
+  // A write that carries a session id (`x-drawing-session: $DRAWING_SESSION`, #656) is that session's for certain; an
+  // id this hub does not know is an outside writer's, never guessed onto one of ours. The rest is the fallback for
+  // writes without it.
+  function whoEdited(rel, now, settle = SETTLE_MS, { app = false, sid = null, writer = null } = {}) {
     const out = [];
     if (app) return out; // a save from this page is the user's, even while an agent's call is open
+    if (sid) {
+      const s = hub.get(sid);
+      if (!s) return out;
+      const list = recent.get(sid) ?? [];
+      const last = list.at(-1);
+      return [{ s, entry: last?.entry ?? { kind: 'write', text: '' }, at: last?.at ?? now }];
+    }
     for (const [id, list] of recent) {
       const s = hub.get(id);
       if (!s) continue;
@@ -220,8 +233,8 @@ export async function setup(ctx) {
       }
     }
     if (out.length) return out;
-    // Nobody named the file: a session that edited it lately and has an edit-capable call running (or just finished)
-    // made it, when it is the only one. A writer naming someone else is not it.
+    // Nobody named the file: a session that edited it lately and has an edit-capable call that just started, already
+    // wrote this file, or just finished made it, when it is the only one. A writer naming someone else is not it.
     const held = [];
     for (const [id, h] of holds) {
       const s = hub.get(id);
@@ -232,6 +245,9 @@ export async function setup(ctx) {
         const { entry, at, done, failed } = list[i];
         if (now - at > HOLD_MS) break;
         if (failed || READ_ONLY.has(entry.name) || (done !== null && now - done > settle)) continue;
+        // The session's newest edit-capable call decides: a long one that started a while ago and has not written
+        // this file since is not taken as the writer; the change stays unnamed ('에이전트') rather than misnamed.
+        if (done === null && now - at > HOLD_START_MS && h.at < at) break;
         held.push({ s, entry, at });
         break;
       }
@@ -322,8 +338,8 @@ export async function setup(ctx) {
   // A watcher catch-up (it restarted after a failure, backoff up to 30s) reports edits made while it was down, so
   // the call finishing before it is no longer a sign of a read-only call: any call within ATTRIBUTE_MS can be it.
   // So read-only calls (jq, curl GET) that finished within that window also become candidates during a catch-up.
-  const onChange = (rel, { catchUp = false, app = false, writer = null } = {}) => {
-    const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS, { app, writer });
+  const onChange = (rel, { catchUp = false, app = false, sid = null, writer = null } = {}) => {
+    const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS, { app, sid, writer });
     const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app, writer));
     const tail = run.catch(() => {});
     queue.set(rel, tail);

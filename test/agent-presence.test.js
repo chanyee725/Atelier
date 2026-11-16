@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildAgents, cleanSessionLabel, LABEL_MAX, projectOf } from '../server/cursor/presence.js';
+import { buildAgents, cleanSessionLabel, LABEL_MAX, projectOf, sessionIdOf } from '../server/cursor/presence.js';
 import * as cursor from '../server/cursor/index.js';
 import * as agents from '../server/cursor/agents.js';
 import * as workspace from '../server/workspace/index.js';
@@ -13,6 +13,11 @@ import { createApp } from '../server/app.js';
 import { newFile } from '../server/workspace/model.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('sessionIdOf: a session id from DRAWING_SESSION only (#656)', () => {
+  assert.equal(sessionIdOf(' 1A2B3C4D-0000-4000-8000-00000000abcd '), '1a2b3c4d-0000-4000-8000-00000000abcd');
+  for (const v of ['Otto', '', undefined, ['x'], '1a2b3c4d-0000-4000-8000-00000000abcdx', '1a2b3c4d00004000800000000000abcd']) assert.equal(sessionIdOf(v), null);
+});
 
 test('cleanSessionLabel: short plain text only', () => {
   assert.equal(cleanSessionLabel('Otto'), 'Otto');

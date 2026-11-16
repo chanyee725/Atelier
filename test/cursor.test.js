@@ -488,6 +488,62 @@ test('cursor module: a saved script run later (bash save.sh) or a call that does
   m.close();
 });
 
+test('cursor module: a long unrelated call does not take an unnamed writer\'s save of a file the session edited (#656)', async (t) => {
+  const later = clock(t);
+  const r = rig();
+  const m = await setup(r.ctx);
+  const rel = 'analysis/robot.dpx.json';
+  r.files.set(rel, paras(1));
+  r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' };
+  const say = (entry) => r.hub.emit('message', { id: 's1', entry });
+  const docCursors = () => r.sent.filter((s) => s.event === 'cursor' && s.data.doc).map((s) => s.data.name);
+  // Jude edits the file by name, so it holds it.
+  say({ kind: 'tool', name: 'Bash', callId: 'a', text: JSON.stringify({ command: `curl -X PUT 'http://127.0.0.1:1/api/file?path=analysis/robot' -d @/tmp/x.json` }) });
+  await r.tick();
+  await r.change(rel, paras(2));
+  say({ kind: 'tool_result', callId: 'a', text: 'ok' });
+  // Then starts npm test, which never touches the file; a minute in, someone unnamed saves it.
+  later(5000);
+  say({ kind: 'tool', name: 'Bash', callId: 'b', text: JSON.stringify({ command: 'npm test' }) });
+  later(60_000);
+  await r.change(rel, paras(3));
+  assert.deepEqual(docCursors(), ['Jude', '에이전트']);
+  say({ kind: 'tool_result', callId: 'b', text: 'ok' });
+  // A long call that already wrote the file during this run keeps it on later unnamed saves.
+  later(5000);
+  say({ kind: 'tool', name: 'Bash', callId: 'c', text: JSON.stringify({ command: 'node put.mjs' }) });
+  await r.tick();
+  await r.change(rel, paras(4)); // just started: Jude's
+  later(90_000);
+  await r.change(rel, paras(5)); // 90 s in, but this call wrote it already: still Jude's
+  assert.deepEqual(docCursors(), ['Jude', '에이전트', 'Jude', 'Jude']);
+  m.close();
+});
+
+test('cursor module: a write carrying a session id (x-drawing-session) is that session\'s for certain (#656)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const rel = 'analysis/robot.dpx.json';
+  r.files.set(rel, paras(1));
+  const A = '11111111-1111-4111-8111-111111111111';
+  const B = '22222222-2222-4222-8222-222222222222';
+  r.hub.sessions[A] = { id: A, name: 'Jude', role: 'impl', status: 'running' };
+  r.hub.sessions[B] = { id: B, name: 'Otto', role: 'impl', status: 'running' };
+  const docCursors = () => r.sent.filter((s) => s.event === 'cursor' && s.data.doc).map((s) => s.data.name);
+  // Jude's running call names the file; Otto's write carries Otto's id: Otto's, not Jude's.
+  r.hub.emit('message', { id: A, entry: { kind: 'tool', name: 'Bash', callId: 'a', text: JSON.stringify({ command: `curl -X PUT 'http://127.0.0.1:1/api/file?path=analysis/robot' -d @/tmp/x.json` }) } });
+  await r.tick();
+  await r.change(rel, paras(2), { sid: B });
+  // With no call of Otto's on record at all, the id still names it.
+  await r.change(rel, paras(3), { sid: B });
+  // An id this hub does not know is an outside writer's: never guessed onto Jude, shown as 에이전트.
+  await r.change(rel, paras(4), { sid: '33333333-3333-4333-8333-333333333333' });
+  // A page save stays the user's, id or not.
+  await r.change(rel, paras(5), { sid: B, app: true });
+  assert.deepEqual(docCursors(), ['Otto', 'Otto', '에이전트']);
+  m.close();
+});
+
 test('cursor module: status label follows the running call; page saves are never the agent\'s; replay on attach (#653)', async () => {
   const r = rig();
   const attach = [];
