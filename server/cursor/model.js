@@ -72,3 +72,61 @@ export function changedKeys(before, after) {
   for (const k of before.keys()) if (!after.has(k)) out.push(k);
   return out;
 }
+
+// Document cursor (E529, issue #619): where in the document (`file.document`, ProseMirror JSON) an agent wrote, as a
+// top-level block index and a text offset inside that block, so the doc view can map it to a caret position.
+
+/** Signature of a top-level block; a heading's link id is ignored (the editor gives ids to headings that have none). */
+function blockSig(b) {
+  if (b && typeof b === 'object' && b.type === 'heading' && b.attrs && 'id' in b.attrs) {
+    const { id: _id, ...attrs } = b.attrs;
+    return JSON.stringify({ ...b, attrs });
+  }
+  return JSON.stringify(b);
+}
+
+/** Text of a block: its text nodes only, in order (the doc view counts the same way, see web/src/doc/docCursor.ts). */
+export function blockText(b) {
+  if (!b || typeof b !== 'object') return '';
+  if (b.type === 'text') return typeof b.text === 'string' ? b.text : '';
+  return Array.isArray(b.content) ? b.content.map(blockText).join('') : '';
+}
+
+/** The document's top-level blocks: { sig, type, text } each (empty for a file without a document). */
+export function docBlocksOf(file) {
+  const c = file?.document?.content;
+  if (!Array.isArray(c)) return [];
+  return c.map((b) => ({ sig: blockSig(b), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) }));
+}
+
+/**
+ * Where a document change from `before` to `after` (lists from docBlocksOf) ends: { index, offset } of the last
+ * changed top-level block in `after` and the text offset just past the change in it (the end of a new block). A pure
+ * removal lands at the start of the block that now stands in its place. Null when the document did not change.
+ */
+export function changedDocSpot(before = [], after = []) {
+  const B = before.length;
+  const A = after.length;
+  let pre = 0;
+  while (pre < A && pre < B && before[pre].sig === after[pre].sig) pre++;
+  let suf = 0;
+  while (suf < A - pre && suf < B - pre && before[B - 1 - suf].sig === after[A - 1 - suf].sig) suf++;
+  if (pre === A && pre === B) return null;
+  if (A - suf === pre) {
+    // Only removed blocks: the block now at their place, or the one before it at the end.
+    if (!A) return null;
+    return { index: Math.min(pre, A - 1), offset: 0 };
+  }
+  const index = A - suf - 1;
+  const now = after[index];
+  const k = index - pre;
+  const old = k < B - suf - pre ? before[pre + k] : null;
+  if (!old || old.type !== now.type) return { index, offset: now.text.length };
+  const a = now.text;
+  const b = old.text;
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  return { index, offset: a.length - s };
+}
