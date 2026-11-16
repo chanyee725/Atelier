@@ -5,13 +5,19 @@ import { statSync } from 'node:fs';
 import { createApp } from './app.js';
 import { parseArgs, USAGE } from './cli.js';
 import { claimWorkspace } from './lock.js';
+import { readDefaultsSync, startDefaults } from './user-defaults.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = 4330;
 
+// ~/.dispatch/drawing.json: the default workspace and port when the command line and DRAW_PORT name none.
+const userDefaults = readDefaultsSync();
+if (userDefaults.error) console.error(`~/.dispatch/drawing.json unreadable (${userDefaults.error}); using built-in defaults.`);
+const start = startDefaults(userDefaults.values, process.env, DEFAULT_PORT);
+
 let opts;
 try {
-  opts = parseArgs(process.argv.slice(2));
+  opts = parseArgs(process.argv.slice(2), process.env, start.workspaceDir);
 } catch (err) {
   console.error(`${err.message}\n${USAGE}`);
   process.exit(1);
@@ -45,7 +51,7 @@ const releaseLocks = () => {
 };
 process.on('exit', releaseLocks);
 
-const port = Number(process.env.DRAW_PORT) || DEFAULT_PORT;
+const port = start.port;
 app = await createApp(opts);
 app.server.on('error', async (err) => {
   if (err.code === 'EADDRINUSE') {
