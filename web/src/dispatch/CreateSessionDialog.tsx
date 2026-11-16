@@ -10,6 +10,7 @@ import { Textarea } from '../components/ui/textarea';
 import { cn } from '../lib/utils';
 import { createBody, disconnected, fitPerm, initialRows, notices, permsFor, providerGroups, rowFor, summary, total, type Row } from './lib/create.ts';
 import { permLabel, providerName } from './lib/format.ts';
+import { ProviderIcon } from '../ProviderIcon';
 import { api, useDispatch } from './store';
 import './create-session.css';
 
@@ -105,7 +106,7 @@ export function CreateSessionDialog({ folder, onClose, onCreated }: { folder?: s
                         onChange={e => { const role = roles.find(x => x.id === e.target.value); if (role) update(r.key, { ...rowFor(role, r.n), key: r.key, open: r.open }); }}>
                         {roles.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                       </NativeSelect>
-                      <NativeSelect aria-label="모델" className={sel} value={r.model}
+                      <NativeSelect aria-label="모델" className={sel} value={r.model} start={m && <ProviderIcon provider={m.provider} className="size-3.5" />}
                         onChange={e => { const p = modelOf(e.target.value)?.provider; update(r.key, { model: e.target.value, effort: 'default', perm: fitPerm(r.perm, p, perms) }); }}>
                         {!m && <option value={r.model}>{r.model}</option>}
                         {groups.map(p => {
