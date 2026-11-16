@@ -18,7 +18,8 @@ const excalidrawFonts = fileURLToPath(new URL('../node_modules/@excalidraw/excal
 // family (Fonts.register is private) and defines id 9 with one face and no unicode-range, so the one file it loads from
 // /excalidraw/fonts/Liberation/ is replaced by web/fonts/drawing-sans-canvas.woff2: Pretendard Regular 1.3.9 (npm
 // `pretendard`, SIL OFL-1.1, license text in shared/render/fonts/drawing-sans-OFL.txt) cut to Latin, Jamo and the 2,350
-// KS X 1001 syllables, renamed "Drawing Sans" (Pretendard is a reserved font name). Regenerate (repo root, fonttools==4.68.0):
+// KS X 1001 syllables (the other 8,822 modern syllables, e.g. 똠 햏 뷁, are drawn by a fallback font), renamed "Drawing Sans"
+// (Pretendard is a reserved font name). Regenerate (repo root, fonttools==4.68.0, brotli==1.2.1):
 //   python scripts/subset-canvas-font.py node_modules/pretendard/dist/web/static/woff2 web/fonts
 // Text, SVG and PNG export all load fonts through that registration, so they follow. docs/design/code-linked-nodes.md §5.
 const CANVAS_FONT = fileURLToPath(new URL('./fonts/drawing-sans-canvas.woff2', import.meta.url));
@@ -100,8 +101,9 @@ function excalidrawAssets(): Plugin {
         const url = req.url?.split('?')[0] ?? '';
         if (!url.startsWith(FONT_PREFIX)) return next();
         const name = decodeURIComponent(url.slice(FONT_PREFIX.length));
-        const file = FONT_OVERRIDES[name] ?? normalize(join(excalidrawFonts, name));
-        if ((!FONT_OVERRIDES[name] && !file.startsWith(excalidrawFonts + sep)) || !existsSync(file) || !statSync(file).isFile()) return next();
+        const override = Object.hasOwn(FONT_OVERRIDES, name) ? FONT_OVERRIDES[name] : undefined;
+        const file = override ?? normalize(join(excalidrawFonts, name));
+        if ((!override && !file.startsWith(excalidrawFonts + sep)) || !existsSync(file) || !statSync(file).isFile()) return next();
         res.setHeader('content-type', 'font/woff2');
         createReadStream(file).pipe(res);
       });
