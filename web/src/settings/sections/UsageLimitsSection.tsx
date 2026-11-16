@@ -9,8 +9,9 @@ import { api, useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
 import { OffNote } from '../DispatchOff';
 import { BTN, LimitsForm } from '../LimitsForm';
+import { useSettingsLoad } from '../context';
 import { usageGroups, type SettingsLoad, type UsageEntry } from '../model';
-import { SectionFrame, useSectionLoad } from './shared';
+import { SectionFrame } from '../SectionFrame';
 
 /** Per-provider usage windows, refreshed when the server pushes new limits or providers change. */
 function ProviderUsage({ load }: { load: SettingsLoad }) {
@@ -35,9 +36,9 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
   const groups = limits ? usageGroups(limits, providers) : [];
   return (
     <div role="group" aria-labelledby={headingId} data-testid="settings-usage" className="flex flex-col gap-3">
-      <h3 id={headingId} className="text-sm font-medium">
+      <h4 id={headingId} className="text-sm font-medium">
         모델별 사용량
-      </h3>
+      </h4>
       {load.kind === 'off' && <OffNote status={load.status} />}
       {ok && failed && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -52,10 +53,10 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
       {ok &&
         groups.map((g) => (
           <div key={g.id} data-provider={g.id} className="flex flex-col gap-2">
-            <h4 className="text-sm">
+            <h5 className="text-sm">
               {g.name}
               {g.plan && <span className="ml-2 text-xs text-muted-foreground">{g.plan}</span>}
-            </h4>
+            </h5>
             {g.windows.length > 0 ? (
               <ul className="flex flex-col gap-3">
                 {g.windows.map((w) => (
@@ -68,7 +69,9 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
                 ))}
               </ul>
             ) : g.reached != null ? (
-              <p className="text-sm text-muted-foreground">{g.reached ? `한도에 닿았어요.${g.reset ? ` ${until(g.reset)} 뒤 풀려요.` : ''}` : '한도에 닿지 않았어요.'}</p>
+              <p className="text-sm text-muted-foreground">
+                {g.reached ? `한도에 닿았어요.${g.reset ? ` ${until(g.reset)} 뒤 풀려요.` : ''}` : '한도에 닿지 않았어요.'}
+              </p>
             ) : (
               <p className="text-sm text-muted-foreground">아직 사용량 정보가 없어요. 세션이 돌면 채워져요.</p>
             )}
@@ -79,15 +82,11 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
 }
 
 export default function UsageLimitsSection() {
-  const { load, retry } = useSectionLoad();
+  const { load, retry } = useSettingsLoad();
   return (
     <SectionFrame title="사용 한도" hint="한도에 가까워지면 새 Claude 작업을 멈추고, 세션이 길어지면 새 세션으로 넘겨요." testId="settings-section-limits">
-      {(titleId) => (
-        <>
-          <ProviderUsage load={load} />
-          <LimitsForm load={load} onRetry={retry} labelledBy={titleId} />
-        </>
-      )}
+      <ProviderUsage load={load} />
+      <LimitsForm load={load} onRetry={retry} />
     </SectionFrame>
   );
 }
