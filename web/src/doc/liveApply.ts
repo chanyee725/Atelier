@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/core';
 import { Node as PMNode, Slice, type Schema } from '@tiptap/pm/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { isHistoryTransaction } from '@tiptap/pm/history';
 import { diffBlocks, blocksOf } from './liveDiff.ts';
 import { MOTION_MS } from '../lib/liveMotion.ts';
 import { isEmptyDoc, withTrailingParagraph } from './model.ts';
@@ -17,6 +18,11 @@ export const LIVE_META = 'liveApply';
 
 type Cls = 'live-enter' | 'live-exit' | 'live-touch';
 type DecoMeta = { add?: { from: number; to: number; cls: Cls }[]; clear?: Cls };
+/**
+ * An invisible mark on a fading block the user typed in (#567, #577): `orig` is the block as the outside change
+ * removed it. Once an undo brings it back to exactly that, the user's edits are gone and the removal is finished.
+ */
+type KeptSpec = { cls: 'live-kept'; orig: PMNode };
 const key = new PluginKey<DecorationSet>('liveApply');
 
 /** Node decorations that carry the animation classes. Positions follow the document through other edits. */
@@ -31,7 +37,18 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
         // (deleting it outside history would drop the undo step of their typing).
         if (tr.docChanged && !tr.getMeta(LIVE_META)) {
           const kept = next.find(undefined, undefined, (s) => s.cls === 'live-exit').filter((d) => touchedBy(tr, d.from, d.to));
-          if (kept.length) next = next.remove(kept);
+          if (kept.length) {
+            next = next.remove(kept);
+            // Remember the block as it was removed, so undoing the typing can finish the removal (#577).
+            const origs = kept.map((d) => tr.before.nodeAt(tr.mapping.invert().map(d.from, 1)));
+            next = next.add(
+              tr.doc,
+              kept.flatMap((d, i) => {
+                const orig = origs[i];
+                return orig ? [Decoration.node(d.from, d.to, {}, { cls: 'live-kept', orig } satisfies KeptSpec)] : [];
+              }),
+            );
+          }
         }
         const m = tr.getMeta(key) as DecoMeta | undefined;
         if (m?.clear) next = next.remove(next.find(undefined, undefined, (s) => s.cls === m.clear));
@@ -42,9 +59,11 @@ export function liveApplyPlugin(): Plugin<DecorationSet> {
     props: { decorations: (s) => key.getState(s) },
     // A user edit while blocks fade out (#554): take them out in the same update, so the JSON the editor
     // saves already matches the outside file instead of still holding the removed blocks.
+    // An undo that brings a kept block back to how the outside change removed it finishes that removal too (#577),
+    // or the next save would write the removed block back.
     appendTransaction(trs, _old, state) {
       if (!trs.some((t) => t.docChanged && !t.getMeta(LIVE_META))) return null;
-      return exitFlush(state);
+      return exitFlush(state, trs.some((t) => t.docChanged && isHistoryTransaction(t)));
     },
   });
 }
@@ -66,11 +85,22 @@ function touchedBy(tr: Transaction, from: number, to: number): boolean {
   return hit;
 }
 
-/** The transaction that deletes every block marked `live-exit`, or null when none is. */
-function exitFlush(state: EditorState): Transaction | null {
+/**
+ * The transaction that deletes every block marked `live-exit` (and, after an undo, every kept block that is back to
+ * its removed form), or null when none is.
+ */
+function exitFlush(state: EditorState, undone = false): Transaction | null {
   const set = key.getState(state);
   if (!set) return null;
-  const found = set.find(undefined, undefined, (s) => s.cls === 'live-exit').sort((a, b) => b.from - a.from);
+  const found = set.find(undefined, undefined, (s) => s.cls === 'live-exit');
+  if (undone) {
+    const back = set.find(undefined, undefined, (s) => s.cls === 'live-kept').filter((d) => {
+      const n = state.doc.nodeAt(d.from);
+      return !!n && d.from + n.nodeSize === d.to && n.eq((d.spec as KeptSpec).orig);
+    });
+    found.push(...back);
+  }
+  found.sort((a, b) => b.from - a.from);
   if (!found.length) return null;
   const tr = state.tr;
   for (const d of found) tr.delete(d.from, d.to);

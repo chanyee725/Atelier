@@ -514,3 +514,26 @@ test('a change event for another file that is not newer than its loaded revision
   await settle();
   assert.equal(reads, 1);
 });
+
+test('switching a.dpx -> b.dpx -> a.dpx while a.dpx reloads applies the newer read once (#568)', async (t) => {
+  const { s } = setup(t);
+  let reads = 0;
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => (reads++, new Promise<DpxFile>((ok) => gates.push(ok)));
+  const reloaded: [string, number][] = [];
+  const onReload = (p: string, f: DpxFile) => {
+    reloaded.push([p, f.revision]);
+    s.applyLive(p, f);
+  };
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, onReload);
+  await settle();
+  // The user goes to b.dpx and back to a.dpx (still revision 1) before the read ends; the change event comes again.
+  s.load('b.dpx', file({ revision: 5 }));
+  s.load('a.dpx', file({ revision: 1 }));
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, onReload);
+  gates.shift()!(file({ revision: 2, title: 'a2' }));
+  await settle();
+  assert.equal(reads, 1);
+  assert.deepEqual(reloaded, [['a.dpx', 2]]);
+  assert.equal(s.getState().file?.title, 'a2');
+});
