@@ -30,6 +30,7 @@ export function projectOf(rel) {
   return i > 0 ? rel.slice(0, i) : null;
 }
 
+const labelField = (t) => (typeof t === 'string' && t ? { statusLabel: t.slice(0, 40) } : {});
 const stepField = (t) => (typeof t === 'string' && t.trim() ? { step: t.trim().slice(0, 80) } : {});
 
 /**
@@ -40,8 +41,9 @@ const stepField = (t) => (typeof t === 'string' && t.trim() ? { step: t.trim().s
  * - project: optional filter (top folder); a session counts for its own folder and for the folder of the file it holds
  * - activity: Map sid -> tool activity label of its current turn (from the hub's `session` events; memory only)
  * - stepOf: session -> title of the pipeline step it works on, or null
+ * - statusOf: sid -> short status label ("다이어그램 작성 중…", shared/dispatch/agent-status.ts) or null
  */
-export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null, activity = new Map(), stepOf = () => null } = {}) {
+export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null, activity = new Map(), stepOf = () => null, statusOf = () => null } = {}) {
   const out = [];
   for (const s of sessions) {
     if (!s?.id || !LIVE_STATUSES.has(s.status)) continue;
@@ -58,6 +60,7 @@ export function buildAgents({ sessions = [], held = new Map(), outside = new Map
       ...(typeof s.provider === 'string' && s.provider && { provider: s.provider }),
       ...(typeof activity.get(s.id) === 'string' && { activity: activity.get(s.id) }),
       ...stepField(stepOf(s)),
+      ...labelField(statusOf(s.id)),
       status: s.status,
       state: typeof s.state === 'string' ? s.state : null,
       project: (typeof s.folder === 'string' && s.folder) || projectOf(file),

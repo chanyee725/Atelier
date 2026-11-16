@@ -71,7 +71,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
   };
   const list = (project = null) => {
     prune();
-    return buildAgents({ sessions: sessions(), held, outside, project, activity, stepOf });
+    return buildAgents({ sessions: sessions(), held, outside, project, activity, stepOf, statusOf: (sid) => cursor?.statusOf?.(sid) ?? null });
   };
   // Sent only when the list really changed, so a session's other updates (tokens, cost) do not repeat it.
   const update = () => {
@@ -95,6 +95,8 @@ export async function setup(ctx, { now = Date.now } = {}) {
     }
     update();
   });
+  // The short status label (E536/E537) changes between session events too: a tool call starts or ends.
+  const offStatus = (cursor?.onStatus ?? (() => () => {}))(() => update());
   // The hub's public session carries `activity` ({ label, since } while a turn runs a tool, else null); the stored
   // session does not, so the label is kept here.
   let again = null;
@@ -139,6 +141,7 @@ export async function setup(ctx, { now = Date.now } = {}) {
       clearInterval(timer);
       clearTimeout(again);
       offHeld();
+      offStatus();
       hub?.off('session', onSession);
       hub?.off('removed', onRemoved);
       hub?.off('tasks', onTasks);
