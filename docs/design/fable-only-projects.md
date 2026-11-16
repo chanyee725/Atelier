@@ -1,5 +1,7 @@
 # E505: Fable 5.2 only, sessions grouped by project
 
+> Superseded (issue #587, 2026-11-16): part A (Fable 5.2 only) no longer applies. Claude, OpenAI Codex and Gemini run again as in standalone Dispatch; see CLAUDE.md for the provider and permission-mode rules. Part B (sessions grouped by project) still stands.
+
 User decision (2026-11-15):
 
 1. The agent features merged from Dispatch (pipeline runs, session board, model connection, limits) use one model: `claude-fable-5-2` through the Claude CLI. Roles (lead, impl, review, test, design, docs) stay; every role runs Fable 5.2.

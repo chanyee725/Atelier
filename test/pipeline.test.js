@@ -121,9 +121,9 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     st = await call('GET', `/api/pipeline?path=${encodeURIComponent(w.body.path)}`);
     assert.deepEqual(st.body.changes, ['단계 ui 모델 claude-fable-5-2 → claude-sonnet-5-5']);
-    // An old model name is no blocker: the step is listed under legacyModels and runs on Fable 5.2.
+    // Any known model runs as named (#587); legacyModels stays for older web builds and is always empty.
     assert.deepEqual(st.body.blockers, []);
-    assert.deepEqual(st.body.legacyModels, { ui: 'claude-sonnet-5-5' });
+    assert.deepEqual(st.body.legacyModels, {});
 
     // A stale revision is refused; the current one starts.
     const stale = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });

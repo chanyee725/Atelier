@@ -20,11 +20,18 @@ test("mergeLimits: the Claude section with the newer updatedAt wins", () => {
   assert.deepEqual(mergeLimits(b, a), m);
 });
 
-test("mergeLimits: the Claude section keeps numbers only; keys this server does not know pass through untouched", () => {
-  const gemini = { reached: true, reset: 5, at: 100, note: "kept as it is" };
-  const m = mergeLimits({ claude: { ...claude(0.3, 1), email: "x@y", token: "t" }, gemini }, null);
+test("mergeLimits: Claude and Gemini sections keep numbers only; keys this server does not know pass through untouched", () => {
+  const other = { reached: true, note: "kept as it is" };
+  const m = mergeLimits({ claude: { ...claude(0.3, 1), email: "x@y", token: "t" }, gemini: { reached: true, reset: 5, at: 100, account: "a" }, other }, null);
   assert.deepEqual(Object.keys(m.claude).sort(), ["fable", "fableReset", "five", "fiveReset", "seven", "sevenReset", "updatedAt"]);
-  assert.deepEqual(m.gemini, gemini);
+  assert.deepEqual(m.gemini, { reached: true, reset: 5, at: 100 });
+  assert.deepEqual(m.other, other);
+});
+
+test("mergeLimits: the Gemini section with the newer `at` wins", () => {
+  const a = { gemini: { reached: true, reset: 9, at: 200 } }, b = { gemini: { reached: false, reset: null, at: 100 } };
+  assert.equal(mergeLimits(a, b).gemini.reached, true);
+  assert.equal(mergeLimits(b, a).gemini.reached, true);
 });
 
 test("SharedLimits: a limits.json with a gemini key (written by another server) round-trips through load, write and refresh", async t => {
@@ -193,13 +200,12 @@ test("SharedLimits: two updates in the same millisecond both land, the later one
 test("Hub guards: guardCheck and limitHit both check five, seven and the Fable weekly window, with the fable ticket key", async t => {
   const { Hub } = await import("../../server/dispatch/hub.js");
   const file = await tmpFile(t);
-  // Strictly increasing stamps: a random offset can tie or go backwards inside one millisecond, and
-  // mergeLimits keeps the newer section, so an older-stamped write would lose to the previous hub's.
-  let stamp = Date.now();
+  // No updatedAt here: setClaude stamps through SharedLimits.stamp(), which stays strictly above the
+  // stamp loaded from the file, so each hub's write wins over the previous hub's (#515).
   const mk = async limits => {
     const shared = new SharedLimits(file);
     await shared.load();
-    await shared.setClaude({ ...claude(0.1, Date.now()), seven: 0.1, ...limits, updatedAt: ++stamp });
+    await shared.setClaude({ five: 0.1, seven: 0.1, fiveReset: 1e13, sevenReset: 1e13, ...limits });
     const store = { data: { sessions: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 } } }, save() {} };
     return new Hub({ root: path.dirname(file), store, models: [], roles: [], port: 0, limits: shared });
   };

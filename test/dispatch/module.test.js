@@ -141,13 +141,11 @@ test('dispatch writes need x-drawing: 1 or x-dispatch: 1', async () => {
   }
 });
 
-test('removed routes: no API-key login, no cross-project probing', async () => {
+test('removed routes: no cross-project probing', async () => {
   const { root, ws } = scratchRepo();
   const { deps } = fakeDeps(root);
   const { base, stop } = await start(ws, deps);
   try {
-    const key = await fetch(`${base}/api/providers/openai/key`, { method: 'POST', headers: W, body: JSON.stringify({ key: 'x' }) });
-    assert.equal(key.status, 404);
     const { projects } = await (await fetch(`${base}/api/projects`)).json();
     assert.equal(projects.length, 1);
     assert.equal(projects[0].current, true);

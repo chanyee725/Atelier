@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../server/app.js';
@@ -287,6 +287,58 @@ test('#590 a child error after spawn (e.g. a failed kill) keeps the login; its e
     assert.equal(done, true, 'onDone ran on exit');
   } finally {
     process.env = ORIGINAL;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/* ---------------- Codex and Gemini (#587) ---------------- */
+
+const filesUnder = (dir) => readdirSync(dir, { withFileTypes: true, recursive: true })
+  .filter((e) => e.isFile()).map((e) => join(e.parentPath ?? e.path, e.name));
+
+test('#587 Codex API key: goes to the CLI stdin only, never into args, logs, files or the answer; models load once after connect', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-587-key-'));
+  const KEY = 'sk-test-NEVER-STORE-587';
+  const logged = [];
+  const orig = { log: console.log, error: console.error, warn: console.warn };
+  for (const k of Object.keys(orig)) console[k] = (...a) => { logged.push(a.map(String).join(' ')); };
+  const s = await start(withFake(dir));
+  const c0 = fake.calls().length;
+  const calls = () => fake.calls().slice(c0);
+  try {
+    const state = async () => (await fetch(`${s.base}/api/state`)).json();
+    assert.equal((await state()).models.some((m) => m.provider === 'openai'), false, 'no Codex models before connect');
+    assert.equal(calls().filter((c) => c.bin === 'codex').length, 0);
+
+    const empty = await s.post('/api/providers/openai/key', { key: '  ' });
+    assert.equal(empty.status, 400);
+    assert.equal(calls().filter((c) => c.bin === 'codex' && c.args[0] === 'login' && c.args[1] === '--with-api-key').length, 0);
+
+    const res = await s.post('/api/providers/openai/key', { key: KEY });
+    assert.deepEqual(res.body, { ok: true, connected: true });
+    const st = await state();
+    assert.equal(st.providers.openai.connected, true);
+    assert.ok(st.models.some((m) => m.id === 'gpt-fake-codex'));
+    assert.equal(st.models.some((m) => m.id === 'gpt-fake-hidden'), false);
+    await s.post('/api/providers/refresh');
+    const debug = calls().filter((c) => c.bin === 'codex' && c.args.join(' ') === 'debug models');
+    assert.equal(debug.length, 1, 'Codex models asked once');
+
+    const keyLogin = calls().filter((c) => c.args.join(' ') === 'login --with-api-key');
+    assert.equal(keyLogin.length, 1);
+    assert.equal(JSON.stringify(calls()).includes(KEY), false, 'key not in any CLI args');
+    assert.equal(JSON.stringify(st).includes(KEY), false);
+    assert.equal(logged.some((l) => l.includes(KEY)), false, 'key not logged');
+    for (const f of [...filesUnder(s.root), ...filesUnder(dir)]) {
+      assert.equal(readFileSync(f, 'utf8').includes(KEY), false, `key written to ${f}`);
+    }
+    // The other providers' login routes exist too: agy has no status command, so an installed agy connects at once.
+    assert.deepEqual((await s.post('/api/providers/gemini/login')).body, { ok: true, connected: true });
+    assert.equal((await state()).providers.gemini.connected, true);
+    assert.equal((await s.post('/api/providers/claude/key', { key: KEY })).status, 404, 'no key route for Claude');
+  } finally {
+    Object.assign(console, orig);
+    await s.stop();
     rmSync(dir, { recursive: true, force: true });
   }
 });
