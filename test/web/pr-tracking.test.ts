@@ -119,3 +119,27 @@ test('an older error that arrives while the newer action is still in flight is c
   await sleep(40);
   assert.equal(notes.at(-1), '저장했어요. 오래된 오류');
 });
+
+test('after the newest action settles through dropCarried, a late older error is dropped (#433)', async () => {
+  const notes: (string | null)[] = [];
+  const s = createStatusLine((t) => notes.push(t), 10);
+  const a = s.begin();
+  const b = s.begin();
+  s.dropCarried(); // b got a 409: its cause is on its own line, nothing is written here
+  s.announce(a, '늦은 오류', true);
+  const c = s.begin();
+  s.announce(c, '다음 저장');
+  await sleep(40);
+  assert.equal(notes.at(-1), '다음 저장');
+});
+
+test('a carried error on a silent text has no leading space (#433)', async () => {
+  const notes: (string | null)[] = [];
+  const s = createStatusLine((t) => notes.push(t), 10);
+  const a = s.begin();
+  const b = s.begin();
+  s.announce(a, '오래된 오류', true);
+  s.announce(b, '');
+  await sleep(40);
+  assert.equal(notes.at(-1), '오래된 오류');
+});
