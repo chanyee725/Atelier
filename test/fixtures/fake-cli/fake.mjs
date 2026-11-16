@@ -9,6 +9,7 @@
 // - with $FAKE_CLI_AUTH (a state file path) fakes `auth status|login|logout`: status reads the file,
 //   login prints a fake URL, waits $FAKE_CLI_LOGIN_MS (default 300) and writes the file, or exits with
 //   $FAKE_CLI_LOGIN_EXIT without logging in; logout removes the file. Without it, status says logged in.
+//   With $FAKE_CLI_LOGIN_IGNORE_TERM the login ignores SIGTERM (only SIGKILL stops it).
 // It never talks to the network and never reads credentials.
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
@@ -48,6 +49,7 @@ function fakeAuth(file, sub) {
   }
   if (sub === "logout") { rmSync(file, { force: true }); return process.exit(0); }
   if (sub === "login") {
+    if (process.env.FAKE_CLI_LOGIN_IGNORE_TERM) process.on("SIGTERM", () => {});
     process.stdout.write("Open this URL to log in: https://login.example.invalid/oauth?fake=1\n");
     setTimeout(() => {
       if (process.env.FAKE_CLI_LOGIN_EXIT) return process.exit(Number(process.env.FAKE_CLI_LOGIN_EXIT));
