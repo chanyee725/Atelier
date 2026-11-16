@@ -3,6 +3,7 @@
 // their branches against develop, and the PRs of those branches with review, CI and conflicts. All live: agents by
 // the event stream, sessions by session events, branches and PRs by polling while the page is visible.
 // At a narrow main pane (under 880px) the halves stack, documents first.
+// The work column splits its height 5:3:2 (sessions, branches, PRs) and lays each card's items out 3 to a row (#720).
 import { useMemo } from 'react';
 import { ArrowUpRight, FilePlus2, FileText, GitBranch, GitPullRequest, PenTool, Plus, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
@@ -10,7 +11,7 @@ import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
 import { cn } from '../lib/utils';
-import { Card, CardList, CardRow, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
+import { Card, CardGrid, CardTile, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
 import { AgentTag } from './AgentPanel';
 import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, type AgentPresence } from './agents';
 import { ColumnHead, DocList } from './DocList';
@@ -107,7 +108,7 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder }: { agents: Ag
   const list = Array.isArray(agents) ? agents : [];
   const busy = list.filter(isBusy).length;
   return (
-    <Card id="sessions" title="실행 중인 세션" count={list.length} hint={busy > 0 ? `${busy}명이 지금 작업 중이에요` : undefined} flush actions={<BoardLink folder={folder} />}>
+    <Card id="sessions" grow={5} title="실행 중인 세션" count={list.length} hint={busy > 0 ? `${busy}명이 지금 작업 중이에요` : undefined} flush actions={<BoardLink folder={folder} />}>
       {agents === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : agents === 'failed' ? (
@@ -125,11 +126,11 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder }: { agents: Ag
       ) : list.length === 0 ? (
         <EmptyState>지금 이 프로젝트에서 일하는 세션이 없어요. 계획 문서에서 시작하기를 누르면 여기에 보여요.</EmptyState>
       ) : (
-        <ul aria-label="실행 중인 세션" className="m-0 list-none divide-y p-0">
+        <CardGrid label="실행 중인 세션">
           {list.map((a) => (
             <SessionRow key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
           ))}
-        </ul>
+        </CardGrid>
       )}
     </Card>
   );
@@ -138,35 +139,31 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder }: { agents: Ag
 function SessionRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
   return (
-    <li data-agent={a.sid} className="grid gap-1 px-4 py-2">
-      <div className="flex min-w-0 items-start gap-2">
+    <li data-agent={a.sid} className="grid min-w-0 content-start gap-1 rounded-md border px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2">
         <AgentTag agent={a} size="sm" />
-        <span className="mt-1 min-w-0 truncate text-xs text-muted-foreground">
-          {a.outside ? '외부 API' : a.roleName || a.role}
-        </span>
-        <span className={cn('mt-1 ml-auto shrink-0 text-xs', busy ? 'text-foreground' : 'text-muted-foreground')}>
-          <StatusDot tone={busy ? 'ok' : needsLook(a) ? 'warn' : 'idle'} pulse={busy}>
-            {agentStateLabel(a)}
-          </StatusDot>
-        </span>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
       </div>
-      <div className="flex min-w-0 items-center gap-2 pl-3 text-xs text-muted-foreground">
-        {(a.modelLabel || a.model) && (
-          <span className="inline-flex min-w-0 items-center gap-1">
-            <ProviderIcon provider={a.provider} className="size-3.5 shrink-0" />
-            <span className="truncate">{a.modelLabel || a.model}</span>
-          </span>
-        )}
-        {a.file && title ? (
-          <button type="button" onClick={() => onOpen(a.file!)} className="ml-auto inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
-            <FileText aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="sr-only">잡고 있는 파일 </span>
-            <span className="truncate">{title}</span>
-          </button>
-        ) : (
-          <span className="ml-auto shrink-0">잡고 있는 파일 없음</span>
-        )}
-      </div>
+      <span className={cn('text-xs', busy ? 'text-foreground' : 'text-muted-foreground')}>
+        <StatusDot tone={busy ? 'ok' : needsLook(a) ? 'warn' : 'idle'} pulse={busy}>
+          {agentStateLabel(a)}
+        </StatusDot>
+      </span>
+      {(a.modelLabel || a.model) && (
+        <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <ProviderIcon provider={a.provider} className="size-3.5 shrink-0" />
+          <span className="truncate">{a.modelLabel || a.model}</span>
+        </span>
+      )}
+      {a.file && title ? (
+        <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 justify-self-start rounded-sm text-xs text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+          <FileText aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="sr-only">잡고 있는 파일 </span>
+          <span className="truncate">{title}</span>
+        </button>
+      ) : (
+        <span className="text-xs text-muted-foreground">잡고 있는 파일 없음</span>
+      )}
     </li>
   );
 }
@@ -185,7 +182,7 @@ function AheadBehind({ ahead, behind, base }: { ahead: number; behind: number; b
 function BranchesCard({ sessions, open, branches }: { sessions: Feed<Session[]>; open: Session[]; branches: Feed<Branches> }) {
   const base = branches && branches !== 'failed' ? branches.base : 'develop';
   return (
-    <Card id="branches" title="브랜치 작업" count={open.length} hint={`${base} 기준`} flush>
+    <Card id="branches" grow={3} title="브랜치 작업" count={open.length} hint={`${base} 기준`} flush>
       {sessions === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : sessions === 'failed' ? (
@@ -193,21 +190,21 @@ function BranchesCard({ sessions, open, branches }: { sessions: Feed<Session[]>;
       ) : open.length === 0 ? (
         <EmptyState>열린 세션 브랜치가 없어요.</EmptyState>
       ) : (
-        <CardList label="세션 브랜치">
+        <CardGrid label="세션 브랜치">
           {open.map((s) => {
             const tip = branches && branches !== 'failed' ? branches.tips.get(s.branch!) : undefined;
             return (
-              <CardRow
+              <CardTile
                 key={s.id}
                 data={s.branch!}
                 icon={<GitBranch />}
-                title={<span className="font-mono text-[13px]">{s.branch}</span>}
+                title={<span className="font-mono text-[13px]" title={s.branch!}>{s.branch}</span>}
                 sub={`${s.name} · ${s.roleName}${s.worktree ? ' · 워크트리' : ''}`}
                 meta={tip ? <AheadBehind ahead={tip.ahead} behind={tip.behind} base={base} /> : branches === null ? '…' : '정보 없음'}
               />
             );
           })}
-        </CardList>
+        </CardGrid>
       )}
     </Card>
   );
@@ -237,7 +234,7 @@ function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; b
   found.sort((x, y) => order[x.pr.state] - order[y.pr.state] || y.pr.number - x.pr.number);
   const openCount = found.filter((f) => f.pr.state === 'open').length;
   return (
-    <Card id="prs" title="PR과 머지" count={tracking === false ? undefined : openCount} hint={tracking === false ? undefined : '열린 PR 수, 세션 브랜치 기준'} flush>
+    <Card id="prs" grow={2} title="PR과 머지" count={tracking === false ? undefined : openCount} hint={tracking === false ? undefined : '열린 PR 수, 세션 브랜치 기준'} flush>
       {tracking === false ? (
         <EmptyState>PR·CI 추적이 꺼져 있어요. 세션 보드 위쪽 스위치로 켤 수 있어요.</EmptyState>
       ) : branches.length === 0 ? (
@@ -249,13 +246,13 @@ function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; b
       ) : found.length === 0 ? (
         <EmptyState>{prBlankReason(prs)}</EmptyState>
       ) : (
-        <CardList label="PR">
+        <CardGrid label="PR">
           {found.map(({ branch, pr }) => {
             const st = PR_STATE[pr.state];
             const ci = pr.state === 'open' ? CI[pr.ci] : null;
             const s = owner(branch);
             return (
-              <CardRow
+              <CardTile
                 key={branch}
                 data={`pr-${pr.number}`}
                 href={pr.url}
@@ -281,7 +278,7 @@ function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; b
               />
             );
           })}
-        </CardList>
+        </CardGrid>
       )}
     </Card>
   );
