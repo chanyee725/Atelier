@@ -1,5 +1,6 @@
 // Headless check of the 설정 modal (E509c): the sidebar 설정 row opens a modal for the usage-limit and session-length guards:
-// open, change a value (saved to the server), reset to default, Esc closes, focus returns, 390px.
+// open, change a value (saved to the server), reset to default, Esc closes, focus returns, 390px (#552: Esc closes
+// only the modal, not the sidebar drawer; Fable keeps following the weekly value unless the user sets it).
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
 // real claude can start. It refuses to go on unless the server log names its port and workspace.
@@ -26,7 +27,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('설정 modal: open, change, reset, focus return, 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
+test('설정 modal: open, change, reset, focus return, Fable follows weekly, 390px Esc', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-limits-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-limits-home-'));
@@ -93,6 +94,22 @@ test('설정 modal: open, change, reset, focus return, 390px', { skip: !ON && 's
   assert.equal(s.guard.five, 0.8);
   assert.equal(s.guard.enabled, true);
   assert.equal(s.team.handoffMTokens, 20);
+  assert.equal(s.guard.fable, undefined, 'untouched Fable is not pinned');
+
+  // 2b. 주간 한도 changes while Fable follows: the Fable field mirrors it and nothing pins Fable. Typing Fable pins it.
+  const seven = dialog.getByRole('spinbutton', { name: /^주간 한도/ });
+  const fable = dialog.getByRole('spinbutton', { name: /^Fable 주간 한도/ });
+  await seven.fill('70');
+  assert.equal(await fable.inputValue(), '70');
+  await dialog.getByRole('button', { name: '저장' }).click();
+  await dialog.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.deepEqual([s.guard.seven, s.guard.fable], [0.7, undefined]);
+  await fable.fill('60');
+  await dialog.getByRole('button', { name: '저장' }).click();
+  await dialog.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.deepEqual([s.guard.seven, s.guard.fable], [0.7, 0.6]);
 
   // 3. An out-of-range value is not sent (the browser blocks the submit), then 기본값으로 on one field.
   await five.fill('0');
@@ -102,27 +119,38 @@ test('설정 modal: open, change, reset, focus return, 390px', { skip: !ON && 's
   assert.equal(await five.inputValue(), '90');
   assert.equal(await dialog.getByRole('spinbutton', { name: /^토큰 한도/ }).inputValue(), '20', 'other values stay');
 
-  // 4. 모두 기본값으로 + 저장 puts every default back.
+  // 4. 모두 기본값으로 clears the old 저장했어요. and, with 저장, puts every default back; Fable follows weekly again.
   await dialog.getByRole('button', { name: '모두 기본값으로' }).click();
+  assert.equal(await dialog.getByText('저장했어요.').count(), 0);
+  assert.match(await dialog.innerText(), /주간 한도를 따라요/);
   await dialog.getByRole('button', { name: '저장' }).click();
   await dialog.getByText('저장했어요.').waitFor();
   s = await state();
-  assert.deepEqual([s.guard.five, s.guard.seven, s.guard.fable, s.team.handoffMTokens, s.team.ctxHandoff], [0.9, 0.85, 0.85, 15, 70]);
+  assert.deepEqual([s.guard.five, s.guard.seven, s.guard.fable, s.team.handoffMTokens, s.team.ctxHandoff], [0.9, 0.85, undefined, 15, 70]);
 
   // 5. Esc closes and focus returns to the 설정 row.
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
   assert.equal(await entry.evaluate((el) => el === document.activeElement), true, 'focus returns to 설정');
 
-  // 6. Narrow width: the modal fits (the 테마 menu is covered by model-row).
+  // 6. Narrow width: the sidebar is a drawer; the modal fits, and one Esc closes only the modal (the drawer stays
+  // open and focus goes back to 설정). A second Esc closes the drawer. (The 테마 menu is covered by model-row.)
   await page.setViewportSize({ width: 390, height: 780 });
   await page.reload();
-  await page.getByRole('button', { name: /메뉴|사이드바/ }).first().click().catch(() => {});
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  const drawer = page.locator('[data-slot="sheet-content"]');
+  await drawer.waitFor();
   await entry.click();
   await dialog.waitFor();
   const box = await dialog.boundingBox();
   assert.ok(box && box.x >= 0 && box.x + box.width <= 390, `fits 390px: ${JSON.stringify(box)}`);
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'limits-modal-390.png') });
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
+  await page.waitForTimeout(300);
+  assert.equal(await drawer.isVisible(), true, 'the drawer stays open after one Esc');
+  assert.equal(await entry.evaluate((el) => el === document.activeElement), true, 'focus returns to 설정 in the drawer');
+  await page.keyboard.press('Escape');
+  await drawer.waitFor({ state: 'hidden' });
   assert.deepEqual(errors, []);
 });
