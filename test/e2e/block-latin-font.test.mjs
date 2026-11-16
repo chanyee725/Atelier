@@ -57,7 +57,7 @@ test('Latin text in block pictures, placeholder included, uses embedded Pretenda
     server.kill();
     rmSync(ws, { recursive: true, force: true });
   });
-  // Wait for the listen line itself: a watcher warning (EMFILE poll fallback, #531) also contains 'workspace' and comes first.
+  // Wait for the listen line itself: a watcher warning ("workspace: watching for outside changes failed ..., retrying" from store.js, #531) also contains 'workspace' and can come first. With DRAW_WORKSPACE_WATCH=poll it should not appear, but the wait stays strict.
   for (let i = 0; i < 100 && !log.includes(`workspace ${ws}`); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
 
