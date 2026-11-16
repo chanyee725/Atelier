@@ -2,16 +2,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, symlink, rm, realpath, open, appendFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, symlink, rm, realpath, open, appendFile, rename, stat } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
 import * as code from '../server/code/index.js';
-import { cleanPath, windowOf, sameFile, readCapped, MAX_PATH, MAX_SEGMENTS } from '../server/code/index.js';
+import { cleanPath, windowOf, sameFile, readCapped, MAX_BYTES, MAX_PATH, MAX_SEGMENTS, OPEN_FLAGS } from '../server/code/index.js';
 
 const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
 
-async function rig(t, { git = true } = {}) {
+async function rig(t, { git = true, race } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), 'draw-code-')));
   const repo = join(base, 'repo');
   const outside = join(base, 'outside');
@@ -22,13 +23,13 @@ async function rig(t, { git = true } = {}) {
   await writeFile(join(repo, 'src', 'a.py'), lines(1000));
   await writeFile(join(repo, 'src', 'small.js'), 'one\ntwo\r\nthree');
   await writeFile(join(repo, 'src', 'bin.dat'), Buffer.from([1, 2, 0, 3]));
-  await writeFile(join(repo, 'src', 'big.txt'), 'x'.repeat(1024 * 1024 + 1));
+  await writeFile(join(repo, 'src', 'big.txt'), 'x'.repeat(MAX_BYTES + 1));
   await writeFile(join(repo, '.env'), 'TOKEN=1\n');
   await writeFile(join(repo, '.env.local'), 'TOKEN=1\n');
   await writeFile(join(repo, 'src', 'server.pem'), 'k\n');
   await writeFile(join(repo, 'src', 'credentials.json'), '{}\n');
   await writeFile(join(repo, '.npmrc'), 'x\n');
-  await writeFile(join(repo, 'src', 'exact.txt'), 'x'.repeat(1024 * 1024));
+  await writeFile(join(repo, 'src', 'exact.txt'), 'x'.repeat(MAX_BYTES));
   await writeFile(join(repo, 'src', 'empty.txt'), '');
   await writeFile(join(repo, '.gitignore'), 'ignored.txt\nlocal.json\n');
   await writeFile(join(repo, 'local.json'), '{"secret":1}\n');
@@ -41,6 +42,9 @@ async function rig(t, { git = true } = {}) {
   await symlink('a.py', join(repo, 'src', 'inside-link'));
   await symlink('../.env', join(repo, 'src', 'to-env'));
   await symlink('local.json', join(repo, 'link-to-ignored'));
+  await symlink('../.git/config', join(repo, 'src', 'to-git'));
+  await symlink('server.pem', join(repo, 'src', 'to-key'));
+  await symlink('../.npmrc', join(repo, 'src', 'Notes.TXT'));
   await symlink('src', join(repo, 'src-link'));
   if (git) {
     const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
@@ -49,7 +53,7 @@ async function rig(t, { git = true } = {}) {
     g('--literal-pathspecs', 'rm', '-q', '--cached', 'src/untracked.js', 'ignored.txt', 'local.json', 'a[b].txt');
     g('-c', 'user.name=t', '-c', 'user.email=t@example.invalid', 'commit', '-q', '-m', 'init');
   }
-  const app = await createApp({ workspaceDir: join(repo, 'ws') }, { publicDir: base, moduleList: [{ name: 'code', setup: code.setup }] });
+  const app = await createApp({ workspaceDir: join(repo, 'ws') }, { publicDir: base, moduleList: [{ name: 'code', setup: (ctx) => code.setup(ctx, { race }) }] });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const { port } = app.server.address();
   t.after(async () => { await app.close(); await rm(base, { recursive: true, force: true }); });
@@ -57,7 +61,7 @@ async function rig(t, { git = true } = {}) {
     const r = await fetch(`http://127.0.0.1:${port}/api/code?${q}`);
     return { status: r.status, body: await r.json() };
   };
-  return { get, port };
+  return { get, port, repo, outside };
 }
 
 test('cleanPath rejects absolute, .., NUL, backslash and empty', () => {
@@ -105,13 +109,13 @@ test('bad path or range: 400', async (t) => {
 
 test('forbidden: .git, .env*, key and secret files, symlink escapes', async (t) => {
   const { get } = await rig(t);
-  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env', '.dispatch/x', '.DISPATCH/x', 'src/.Dispatch/wt/a.js']) {
+  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env', '.dispatch/x', '.DISPATCH/x', 'src/.Dispatch/wt/a.js', 'sub/.git/config', 'pkg/.Dispatch/x', 'src/to-git', 'src/to-key', 'src/Notes.TXT', 'src/ID_RSA.pub']) {
     assert.equal((await get(`path=${encodeURIComponent(p)}`)).status, 403, p);
   }
   assert.equal((await get('path=src/inside-link')).status, 200);
 });
 
-test('413 over 1 MB, 415 binary, 404 missing or not a regular file', async (t) => {
+test('413 over MAX_BYTES, 415 binary, 404 missing or not a regular file', async (t) => {
   const { get } = await rig(t);
   assert.equal((await get('path=src/big.txt')).status, 413);
   assert.equal((await get('path=src/exact.txt')).status, 200);
@@ -164,6 +168,10 @@ test('over-long path: more than MAX_PATH characters or MAX_SEGMENTS segments is 
   assert.equal(cleanPath(Array(MAX_SEGMENTS + 1).fill('a').join('/')), null);
   assert.equal((await get(`path=${'a'.repeat(MAX_PATH + 1)}`)).status, 400);
   assert.equal((await get(`path=${Array(MAX_SEGMENTS + 1).fill('a').join('/')}`)).status, 400);
+  // Exactly MAX_PATH characters passes the length check and reaches the file lookup (no such file: 404, not 400).
+  const atMax = await get(`path=${'a'.repeat(MAX_PATH)}`);
+  assert.equal(atMax.status, 404);
+  assert.equal(atMax.body.error, 'not found');
 });
 
 test('sameFile: the opened handle must be the checked file (open TOCTOU)', async (t) => {
@@ -175,8 +183,66 @@ test('sameFile: the opened handle must be the checked file (open TOCTOU)', async
   try {
     assert.equal(await sameFile(fh, join(base, 'a.txt')), true);
     assert.equal(await sameFile(fh, join(base, 'b.txt')), false);
+    // Linux: this fails at the /proc/self/fd readlink mismatch, before the dev/ino stat.
     assert.equal(await sameFile(fh, join(base, 'gone.txt')), false);
   } finally { await fh.close(); }
+});
+
+test('sameFile without /proc: falls back to dev/ino of a fresh stat; a missing path is false', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'draw-code-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  await writeFile(join(base, 'a.txt'), 'a\n');
+  await writeFile(join(base, 'b.txt'), 'b\n');
+  const st = await stat(join(base, 'a.txt'));
+  // fd -1: the /proc/self/fd readlink throws, as on a system without /proc.
+  const fh = { fd: -1, stat: async () => st };
+  assert.equal(await sameFile(fh, join(base, 'a.txt')), true);
+  assert.equal(await sameFile(fh, join(base, 'b.txt')), false);
+  assert.equal(await sameFile(fh, join(base, 'gone.txt')), false);
+});
+
+test('open flags refuse a symlink in the last component (O_NOFOLLOW)', async (t) => {
+  assert.ok(constants.O_NOFOLLOW && (OPEN_FLAGS & constants.O_NOFOLLOW), 'OPEN_FLAGS has O_NOFOLLOW');
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'draw-code-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  await writeFile(join(base, 'a.txt'), 'a\n');
+  await symlink('a.txt', join(base, 'link'));
+  await assert.rejects(open(join(base, 'link'), OPEN_FLAGS), { code: 'ELOOP' });
+});
+
+test('race: the file swapped for a symlink after the path checks is 404 and leaks nothing', async (t) => {
+  const race = {};
+  const { get, outside } = await rig(t, { race });
+  race.beforeOpen = async (real) => {
+    await rm(real);
+    await symlink(join(outside, 'secret.txt'), real);
+  };
+  const r = await get('path=src/small.js');
+  assert.equal(r.status, 404);
+  assert.equal(JSON.stringify(r.body).includes('outside'), false);
+});
+
+test('race: a parent directory swapped for a symlink after the path checks is 404 (sameFile)', async (t) => {
+  const race = {};
+  const { get, repo, outside } = await rig(t, { race });
+  await writeFile(join(outside, 'small.js'), 'outside\n');
+  race.beforeOpen = async () => {
+    // O_NOFOLLOW only covers the last component: only the sameFile check catches this one.
+    await rename(join(repo, 'src'), join(repo, 'src-old'));
+    await symlink(outside, join(repo, 'src'));
+  };
+  const r = await get('path=src/small.js');
+  assert.equal(r.status, 404);
+  assert.equal(JSON.stringify(r.body).includes('outside'), false);
+});
+
+test('race: a file that grows past MAX_BYTES after the size check is 413', async (t) => {
+  const race = {};
+  const { get } = await rig(t, { race });
+  race.beforeRead = (real) => appendFile(real, 'y');
+  const r = await get('path=src/exact.txt');
+  assert.equal(r.status, 413);
+  assert.equal(r.body.error, 'file too large');
 });
 
 test('readCapped: the read is bounded by max + 1 whatever stat said (size TOCTOU)', async (t) => {

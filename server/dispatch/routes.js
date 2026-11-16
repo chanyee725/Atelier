@@ -127,9 +127,11 @@ export function routeTable(d) {
       d.login(id, () => d.refreshProviders().catch(e => console.error("dispatch providers:", e.code ?? e.name)), ok => ok && d.setEnabled(id, true));
       return { ok: true, connected: false };
     }],
-    ["POST", /^\/api\/providers\/(claude)\/cancel$/, async ([id]) => { d.cancelLogin(id); return { ok: true }; }],
+    ["POST", /^\/api\/providers\/(claude)\/cancel$/, async ([id]) => { await d.cancelLogin(id); return { ok: true }; }],
     // Disconnects from Drawing only; the CLI stays logged in unless `cli: true` is passed.
     ["POST", /^\/api\/providers\/(claude)\/logout$/, async ([id], b) => {
+      // A login still running would connect again when it finishes.
+      await d.cancelLogin(id);
       d.setEnabled(id, false);
       if (b.cli) await d.logout(id);
       await d.refreshProviders();

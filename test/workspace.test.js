@@ -656,6 +656,12 @@ test('block codeRefs: valid refs round-trip, unknown fields are dropped, bad one
     const { parseStored } = await import('../server/workspace/model.js');
     const f = parseStored(JSON.stringify({ version: 5, title: 't', document: { type: 'doc', content: [] }, canvas: {}, revision: 1, blocks: [{ ...blk, codeRefs: { v: 1, nodes: { A: { refs: 'oops' } } } }] }));
     assert.equal('codeRefs' in f.blocks[0], false);
+    // refs stored before #469 (empty symbol, path '.') do not take the good refs with them
+    const mixed = [{ path: 'a.py', start: 1, symbol: '' }, { path: '.', start: 2 }, { path: 'b.py', start: 3, symbol: 'g' }, { path: '../x', start: 1 }];
+    const g = parseStored(JSON.stringify({ version: 5, title: 't', document: { type: 'doc', content: [] }, canvas: {}, revision: 1, blocks: [{ ...blk, codeRefs: { v: 1, nodes: { A: { summary: 's', refs: mixed } } } }] }));
+    assert.deepEqual(g.blocks[0].codeRefs, { v: 1, nodes: { A: { summary: 's', refs: [{ path: 'a.py', start: 1 }, { path: 'b.py', start: 3, symbol: 'g' }] } } });
+    // a save stays strict
+    assert.equal((await put({ ...blk, codeRefs: { v: 1, nodes: { A: { refs: mixed } } } }, 4)).status, 400);
     void ws;
   });
 });

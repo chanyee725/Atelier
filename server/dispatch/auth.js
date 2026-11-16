@@ -10,6 +10,8 @@ const CLI = {
 };
 export const PROVIDER_IDS = Object.keys(CLI);
 
+const START_FAILED = "로그인을 시작하지 못했어요. 다시 눌러 주세요";
+
 const state = Object.fromEntries(PROVIDER_IDS.map(id => [id, { busy: false, url: null, error: null }]));
 
 async function version(bin) {
@@ -64,29 +66,46 @@ export function login(id, onChange, onDone = () => {}) {
   onChange();
   let p;
   try { p = spawnCli(cli.bin, cli.login, { stdio: ["ignore", "pipe", "pipe"] }); }
-  catch (e) { Object.assign(state[id], { busy: false, error: e.message }); onChange(); return; }
+  catch { Object.assign(state[id], { busy: false, error: START_FAILED, proc: null }); onChange(); return; }
   const scan = d => {
     const m = String(d).match(/https:\/\/\S+/);
     if (m && !state[id].url) { state[id].url = m[0]; onChange(); }
   };
   p.stdout.on("data", scan);
   p.stderr.on("data", scan);
-  p.on("error", e => { Object.assign(state[id], { busy: false, error: e.message }); onChange(); });
+  // A spawn failure (no exit follows) ends the login too; the raw message stays out of the UI.
+  p.on("error", () => {
+    if (state[id].proc !== p) return;
+    Object.assign(state[id], { busy: false, url: null, error: START_FAILED, proc: null, cancelled: false });
+    onChange();
+  });
   p.on("exit", code => {
-    // A cancel ends the login on purpose: no error to show.
-    const error = code === 0 || state[id].cancelled ? null : `로그인이 끝나지 않았어요 (code ${code})`;
+    if (state[id].proc !== p) return;
+    // A cancel ends the login on purpose: no error to show, and never a connect (even if it raced to 0).
+    const { cancelled } = state[id];
+    const error = code === 0 || cancelled ? null : code == null ? "로그인이 끝나지 않았어요" : `로그인이 끝나지 않았어요 (code ${code})`;
     Object.assign(state[id], { busy: false, url: null, error, proc: null, cancelled: false });
-    onDone(code === 0);
+    onDone(code === 0 && !cancelled);
     onChange();
   });
   state[id].proc = p;
 }
 
-export function cancelLogin(id) {
+/**
+ * Stops a running login: SIGTERM, then SIGKILL after `killAfterMs` for a CLI that ignores it.
+ * Resolves once the login process has exited (at once when none is running).
+ */
+export function cancelLogin(id, killAfterMs = 3000) {
   const s = state[id];
-  if (!s?.busy || !s.proc) return;
+  const p = s?.proc;
+  if (!s?.busy || !p) return Promise.resolve();
   s.cancelled = true;
-  s.proc.kill("SIGTERM");
+  return new Promise(resolve => {
+    if (p.exitCode !== null || p.signalCode !== null) return resolve();
+    const timer = setTimeout(() => p.kill("SIGKILL"), killAfterMs);
+    p.once("exit", () => { clearTimeout(timer); resolve(); });
+    p.kill("SIGTERM");
+  });
 }
 
 // agy has no logout command (running it bare would start an interactive session): nothing to run.

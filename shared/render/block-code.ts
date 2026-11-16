@@ -1,7 +1,7 @@
 // Per-block code references (`block.codeRefs` in `.dpx.json`), keyed by node name like `layout.items`.
 // Rules shared by the server (checks saves) and the web (merges DSL refs for display / free-form conversion).
 // Design: docs/design/code-linked-nodes.md §1.
-import { codePathProblem, MAX_CODE_NOTE, MAX_CODE_SPAN, MAX_CODE_SYMBOL, type CodeRef } from '../dsl/code-refs.ts';
+import { codePathProblem, normalizeCodePath, MAX_CODE_NOTE, MAX_CODE_SPAN, MAX_CODE_SYMBOL, type CodeRef } from '../dsl/code-refs.ts';
 
 export type { CodeRef };
 
@@ -33,7 +33,7 @@ function refProblem(r: unknown, at: string): string | null {
     if (!Number.isInteger(r.end) || (r.end as number) < (r.start as number)) return `${at}.end must be an integer >= start`;
     if ((r.end as number) - (r.start as number) > MAX_CODE_SPAN) return `${at} spans more than ${MAX_CODE_SPAN} lines`;
   }
-  if (r.symbol !== undefined && (typeof r.symbol !== 'string' || r.symbol.length > MAX_CODE_SYMBOL)) return `${at}.symbol must be a string of at most ${MAX_CODE_SYMBOL} characters`;
+  if (r.symbol !== undefined && (typeof r.symbol !== 'string' || r.symbol.length < 1 || r.symbol.length > MAX_CODE_SYMBOL)) return `${at}.symbol must be a string of 1-${MAX_CODE_SYMBOL} characters`;
   if (r.note !== undefined && (typeof r.note !== 'string' || r.note.length > MAX_CODE_NOTE)) return `${at}.note must be a string of at most ${MAX_CODE_NOTE} characters`;
   return null;
 }
@@ -63,8 +63,29 @@ export function blockCodeProblem(c: unknown, at = 'codeRefs'): string | null {
   return null;
 }
 
+/**
+ * For reading stored files: block code with each bad ref dropped instead of failing the whole value. An empty
+ * `symbol` (allowed before #469) is removed and the ref kept. Anything else is returned as is for
+ * {@link blockCodeProblem} to judge.
+ */
+export function salvageBlockCode(c: unknown): unknown {
+  if (!isObj(c) || !Number.isInteger(c.v) || (c.v as number) > BLOCK_CODE_VERSION || !isObj(c.nodes)) return c;
+  const nodes: Record<string, unknown> = {};
+  for (const [k, n] of Object.entries(c.nodes)) {
+    if (!isObj(n) || !Array.isArray(n.refs)) {
+      nodes[k] = n;
+      continue;
+    }
+    const refs = n.refs
+      .map((r) => (isObj(r) && r.symbol === '' ? Object.fromEntries(Object.entries(r).filter(([f]) => f !== 'symbol')) : r))
+      .filter((r, i) => refProblem(r, `refs[${i}]`) === null);
+    nodes[k] = { ...n, refs };
+  }
+  return { ...c, nodes };
+}
+
 const cleanRef = (r: CodeRef): CodeRef => {
-  const o: CodeRef = { path: r.path, start: r.start };
+  const o: CodeRef = { path: normalizeCodePath(r.path), start: r.start };
   if (r.end !== undefined) o.end = r.end;
   if (r.symbol !== undefined) o.symbol = r.symbol;
   if (r.note !== undefined) o.note = r.note;
