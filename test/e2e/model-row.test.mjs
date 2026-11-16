@@ -243,6 +243,8 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   assert.equal(await drawer.count(), 1, 'Esc closes the dialog only, not the drawer');
 
   // Only fakes ran.
-  assert.ok(fake.calls().every((c) => ['claude', 'git', 'gh'].includes(c.bin)));
+  // Only the CLIs server/dispatch/cli.js ALLOWED lists since #606 (claude, codex, agy, git, gh), all of them fakes here.
+  const strays = fake.calls().filter((c) => !['claude', 'codex', 'agy', 'git', 'gh'].includes(c.bin)).map((c) => c.bin);
+  assert.deepEqual(strays, [], 'no CLI outside the allowed set');
   assert.deepEqual(errors, []);
 });
