@@ -109,6 +109,11 @@ export const keyDoneText = (meta: ProviderMeta, res: { connected?: boolean } | n
 export const cliLogoutText = (meta: ProviderMeta) => `${meta.cliName}에서도 로그아웃했어요.`;
 
 export type LimitRow = { label: string; pct: number | null; reset: number | null };
+/** Usage entries a provider owns besides its own id (same map as settings/model.ts usageGroups): Claude's Fable weekly window. */
+export const SUB_BUCKETS: Record<string, string[]> = { claude: ['fable'] };
+type UsageEntry = { windows?: LimitWindow[]; reached?: boolean; reset?: number | null } | null | undefined;
+const subWindows = (id: string, limits: ProviderLimits) =>
+  (SUB_BUCKETS[id] ?? []).flatMap((k) => { const e = (limits as Record<string, UsageEntry>)[k]; return Array.isArray(e?.windows) ? e.windows : []; });
 
 /**
  * This provider's usage from /api/limits, read under its own id (PR #598 review: never Claude's numbers on another row).
@@ -117,9 +122,9 @@ export type LimitRow = { label: string; pct: number | null; reset: number | null
  */
 export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { windows: LimitWindow[]; extra: LimitWindow[]; reached: boolean; reset: number | null } {
   if (!meta.usage) return { windows: [], extra: [], reached: false, reset: null };
-  const entry = (limits as Record<string, { windows?: LimitWindow[]; reached?: boolean; reset?: number | null } | null | undefined>)[meta.id];
+  const entry = (limits as Record<string, UsageEntry>)[meta.id];
   const windows = Array.isArray(entry?.windows) ? entry.windows : [];
-  const extra = meta.id === 'claude' ? (limits.fable?.windows ?? []) : [];
+  const extra = subWindows(meta.id, limits);
   const flagged = !!entry?.reached;
   const reached = flagged || [...windows, ...extra].some((w) => (percent(w.used) ?? 0) >= 100);
   return { windows, extra, reached, reset: flagged ? (entry?.reset ?? null) : null };
@@ -133,7 +138,7 @@ export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { main: L
   const row = (w: LimitWindow, prefix = ''): LimitRow => ({ label: prefix + w.label, pct: percent(w.used), reset: w.reset ?? null });
   return {
     main: u.windows.map((w) => row(w)),
-    fable: meta.id === 'claude' && limits.fable ? limits.fable.windows.map((w) => row(w, 'Fable ')) : null,
+    fable: u.extra.length ? u.extra.map((w) => row(w, 'Fable ')) : null,
     reached: u.reached,
     reset: u.reset,
   };

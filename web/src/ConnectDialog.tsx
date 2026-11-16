@@ -11,7 +11,7 @@ import { api } from './api';
 import { until } from './dispatch/lib/format';
 import { cn } from './lib/utils';
 import { WARN_PERCENT } from './projectNav';
-import { ACTION_TEXT, STATE_TEXT, actionFor, cliLogoutShown, cliLogoutText, connectKey, connectedText, objParticle, doneText, keyDoneText, keyLoginShown, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta } from './modelConnect';
+import { ACTION_TEXT, STATE_TEXT, actionFor, cliLogoutShown, cliLogoutText, connectKey, connectedText, objParticle, doneText, keyDoneText, keyLoginShown, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta, SUB_BUCKETS } from './modelConnect';
 import { MODELS_CHANGED } from './settings/context';
 import { oneAtATime } from './settings/model';
 import type { Models } from './SidebarModels';
@@ -244,7 +244,7 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
             ) : (
               <p className="text-xs text-muted-foreground">{meta.windowless ? `${meta.short}는 사용량을 알려 주지 않아요. 한도에 걸리면 여기에 표시돼요.` : `${meta.short} 세션을 한 번 실행하면 표시돼요.`}</p>
             )}
-            {meta.id === 'claude' && (rows.fable?.length ? <Bars rows={rows.fable} /> : <p className="text-xs text-muted-foreground">Fable 주간 한도는 Fable 세션을 한 번 실행하면 표시돼요.</p>)}
+            {SUB_BUCKETS[meta.id]?.includes('fable') && (rows.fable?.length ? <Bars rows={rows.fable} /> : <p className="text-xs text-muted-foreground">Fable 주간 한도는 Fable 세션을 한 번 실행하면 표시돼요.</p>)}
           </section>
         )}
 
