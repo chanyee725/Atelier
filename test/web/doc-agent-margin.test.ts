@@ -243,3 +243,23 @@ test('shareAt keeps the split divider under the pointer while the margin shows, 
     }
   }
 });
+
+// #643: DocMargin and the Splitter read the collapsed side panel from one place, the host's `data-side-rail`.
+test('measureRoom reads the rail from data-side-rail only', async () => {
+  const { measureRoom } = await import('../../web/src/doc/marginRoom.ts');
+  const g = globalThis as { getComputedStyle?: unknown };
+  const saved = g.getComputedStyle;
+  g.getComputedStyle = () => ({ getPropertyValue: (n: string) => (n === '--doc-margin-w' ? '304px' : '') });
+  try {
+    const host = (rail: boolean) =>
+      ({
+        getBoundingClientRect: () => ({ width: 900 }),
+        hasAttribute: (n: string) => rail && n === 'data-side-rail',
+        closest: () => null,
+      }) as unknown as HTMLElement;
+    assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, panel: 304 });
+    assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, panel: 44 });
+  } finally {
+    g.getComputedStyle = saved;
+  }
+});
