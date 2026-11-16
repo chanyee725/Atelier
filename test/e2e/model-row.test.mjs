@@ -1,4 +1,4 @@
-// Headless check of the sidebar model row and its 모델 연결 dialog (E525, #570, ported from Dispatch) and the 테마 switch:
+// Headless check of the sidebar model row and the 설정 modal's 모델 연결 section it opens (E525, #570, #624) and the 테마 switch:
 // connect (CLI login with a sign-in link), cancel, connect again, state after reload (connected and mid-login), disconnect
 // (the CLI stays logged in, so 연결 connects at once), 390px drawer; also that no settings command or "," shortcut is left.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
@@ -27,7 +27,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('model row and connect dialog: connect, cancel, reload, disconnect with the fake CLI login; theme switch; 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
+test('model row and 설정 > 모델 연결: connect, cancel, reload, disconnect with the fake CLI login; theme switch; 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-modelrow-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-modelrow-home-'));
@@ -76,10 +76,12 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await themes.waitFor();
   // The Claude row; Codex and Gemini have their own (#587).
   const row = page.locator('[data-testid="model-row"][data-provider="claude"]');
-  const dialog = page.getByTestId('connect-dialog');
-  const state = dialog.getByTestId('connect-state');
-  const action = dialog.getByTestId('connect-action');
-  const note = dialog.getByTestId('connect-note');
+  // The row opens the 설정 modal at 모델 연결 (#624); Claude's entry there carries its state, one action and a note.
+  const dialog = page.getByTestId('settings-dialog');
+  const entry = dialog.locator('[data-testid="settings-provider"][data-provider="claude"]');
+  const state = entry;
+  const action = entry.getByTestId('settings-provider-action');
+  const note = entry.getByRole('status');
   const active = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
   const rowKey = () => row.getAttribute('data-state-key');
   const until = async (fn, what, ms = 8000) => {
@@ -159,14 +161,16 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(), 0, ', opens nothing');
 
-  // 2. Not connected: the row says 연결 안 됨 and opens the dialog; its one button says 연결.
+  // 2. Not connected: the row says 연결 안 됨 and opens 설정 > 모델 연결; Claude's one button says 연결.
   await row.getByText('연결 안 됨', { exact: true }).waitFor();
   assert.equal(await rowKey(), 'idle');
   await shot('row-idle-1440.png');
   await row.click();
   await dialog.waitFor();
-  assert.equal(await page.getByRole('dialog', { name: '모델 연결' }).count(), 1, 'named by its heading');
-  assert.equal(await dialog.locator('svg[data-provider-icon="claude"]').evaluate((s) => s.closest('[aria-hidden="true"]') !== null), true, 'the dialog shows the Claude mark, hidden from assistive tech');
+  assert.equal(await page.getByRole('dialog', { name: '설정' }).count(), 1, 'named by its heading');
+  await dialog.getByRole('region', { name: '모델 연결' }).waitFor();
+  assert.equal(await dialog.getByRole('navigation', { name: '설정 항목' }).getByRole('button', { name: '모델 연결' }).getAttribute('aria-current'), 'page');
+  assert.equal(await entry.locator('svg[data-provider-icon="claude"]').evaluate((s) => s.closest('[aria-hidden="true"]') !== null), true, 'the entry shows the Claude mark, hidden from assistive tech');
   assert.match(await state.innerText(), /연결 안 됨/);
   assert.equal(await action.innerText(), '연결');
   await shot('dialog-idle-1440.png');
@@ -176,8 +180,8 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.keyboard.press('Enter');
   await until(async () => (await action.innerText()) === '취소', '취소 button');
   assert.match(await state.innerText(), /로그인 중/);
-  assert.equal(await active(), 'connect-action', 'focus stays on the action button');
-  const link = dialog.getByRole('link', { name: /로그인 페이지 열기/ });
+  assert.equal(await active(), 'settings-provider-action', 'focus stays on the action button');
+  const link = entry.getByRole('link', { name: /로그인 페이지 열기/ });
   await link.waitFor();
   assert.match(await link.getAttribute('href'), /^https:\/\/login\.example\.invalid\//);
   assert.equal(await rowKey(), 'busy');
@@ -188,19 +192,18 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await until(async () => (await action.innerText()) === '연결', '연결 again after cancel');
   assert.ok(posts.includes('/api/providers/claude/cancel'));
   await until(async () => (await note.innerText()) === '로그인을 취소했어요.', 'cancel note');
-  assert.equal(await dialog.locator('.text-destructive').count(), 0, 'no error after a cancel');
-  assert.equal(await active(), 'connect-action');
+  assert.equal(await entry.locator('.text-destructive').count(), 0, 'no error after a cancel');
+  assert.equal(await active(), 'settings-provider-action');
 
-  // 5. 연결 again; the login finishes: 연결됨, 해제, usage section, and the note says it connected.
+  // 5. 연결 again; the login finishes: 연결됨 with the 5-hour usage, 해제, and the note says it connected.
   await page.keyboard.press('Enter');
   await until(async () => (await action.innerText()) === '해제', 'connected', 12000);
   assert.match(await state.innerText(), /연결됨/);
   await until(async () => (await note.innerText()) === 'Claude를 연결했어요.', 'connected note');
-  await dialog.getByRole('heading', { name: '사용량' }).waitFor();
   assert.equal(posts.filter((p) => p === '/api/providers/claude/login').length, 2);
   await shot('dialog-connected-1440.png');
 
-  // 6. Esc closes the dialog and focus returns to the row; the row shows the connected state.
+  // 6. Esc closes the modal and focus returns to the row; the row shows the connected state.
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
   assert.equal(await active(), 'model-row');
@@ -240,7 +243,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
 
-  // 10. Not installed (state stubbed): the row says 설치 안 됨 and the dialog offers 다시 확인.
+  // 10. Not installed (state stubbed): the row says 설치 안 됨 and 모델 연결 offers 다시 확인.
   await page.route('**/api/state', async (route) => {
     const res = await route.fetch();
     const body = await res.json();
@@ -259,7 +262,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await page.reload();
   await row.waitFor();
 
-  // 11. 390px: in the drawer the row is at least 44px tall and opens the dialog; Esc closes only the dialog.
+  // 11. 390px: in the drawer the row is at least 44px tall and opens the modal; Esc closes only the modal.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
@@ -272,7 +275,7 @@ test('model row and connect dialog: connect, cancel, reload, disconnect with the
   await shot('dialog-connected-390.png');
   await page.keyboard.press('Escape');
   await dialog.waitFor({ state: 'detached' });
-  assert.equal(await drawer.count(), 1, 'Esc closes the dialog only, not the drawer');
+  assert.equal(await drawer.count(), 1, 'Esc closes the modal only, not the drawer');
 
   // Only fakes ran.
   // Only the CLIs server/dispatch/cli.js ALLOWED lists since #606 (claude, codex, agy, git, gh), all of them fakes here.

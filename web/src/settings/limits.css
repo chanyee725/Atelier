@@ -1,8 +1,10 @@
-/* 설정 modal (E509c): a native modal <dialog>. Scrolling over the backdrop or inside it must not scroll the page. */
-dialog.limits-dialog:modal {
+/* 설정 modal (#624): a native modal <dialog>. Scrolling over the backdrop or inside it must not scroll the page;
+   the root is never locked with overflow: hidden. */
+dialog.settings-dialog:modal,
+dialog.settings-dialog .settings-dialog-body {
   overscroll-behavior: contain;
 }
-dialog.limits-dialog::backdrop {
+dialog.settings-dialog::backdrop {
   overflow: hidden;
   overscroll-behavior: contain;
   background: oklch(0 0 0 / 0.4);

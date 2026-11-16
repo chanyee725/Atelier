@@ -1,5 +1,6 @@
-// Headless check of the 설정 page (#587): the modal's 전체 설정 열기 link opens /dispatch#settings; team values, a
-// role's default model and a switch are saved with one 저장; the limits form and per-provider usage show; 390px fits.
+// Headless check of the 설정 modal (#587, #624): the section list, the answer-style switch, team values, a role's
+// default model and the limits form each saved from their own section; edits survive switching sections; the last
+// section is remembered; 390px fits with a <select> for the sections.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
 // real claude can start. It refuses to go on unless the server log names its port and workspace.
@@ -26,7 +27,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('설정 page: link from the modal, save team settings and a role model, limits form, 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
+test('설정 modal: sections, save team settings, a role model and limits, remembered section, 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-settings-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-settings-home-'));
@@ -67,43 +68,60 @@ test('설정 page: link from the modal, save team settings and a role model, lim
   const page = await browser.newPage({ viewport: { width: 1440, height: 860 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
 
-  // 1. The modal links to the full page.
+  // 1. The sidebar 설정 row opens the modal on 일반, with the section list on the left.
   await page.goto(BASE);
   await page.getByRole('button', { name: '설정', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '설정' });
   await dialog.waitFor();
-  await dialog.getByRole('link', { name: '전체 설정 열기' }).click();
-  await page.waitForURL(/\/dispatch#settings$/);
-  const settings = page.getByTestId('settings-page');
-  await settings.waitFor();
-  assert.equal(await page.getByRole('link', { name: '설정', exact: true }).getAttribute('aria-current'), 'page');
+  const nav = dialog.getByRole('navigation', { name: '설정 항목' });
+  const section = (name) => nav.getByRole('button', { name, exact: true }).click();
+  assert.deepEqual(await nav.getByRole('button').allInnerTexts(), ['일반', '모델 연결', '역할별 모델', '관리자와 팀', '사용 한도', '작업 폴더', '멈춤 감지']);
+  assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'page');
+  await dialog.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
 
-  // 2. Team values show their saved/default values; change a number, a switch and a role model, then save once.
-  const team = page.getByRole('form', { name: '팀' });
+  // 2. 일반: the answer-style switch saves at once.
+  const general = dialog.getByRole('region', { name: '일반' });
+  const reply = general.locator('#settings-reply-style');
+  await page.waitForFunction(() => !document.querySelector('#settings-reply-style')?.disabled);
+  assert.equal(await reply.isChecked(), true);
+  await reply.uncheck();
+  await general.getByText('저장했어요.').waitFor();
+  assert.equal((await state()).settings.team.replyStyle, false);
+
+  // 3. 관리자와 팀: change a number and save; untouched values stay.
+  await section('관리자와 팀');
+  const team = dialog.getByRole('form', { name: '관리자와 팀' });
   const maxChildren = team.getByRole('spinbutton', { name: /^관리자 한 명이 둘 수 있는 팀원/ });
   assert.equal(await maxChildren.inputValue(), '8');
   await maxChildren.fill('4');
-  const reply = team.getByRole('checkbox', { name: '답변 스타일 지침 넣기' });
-  assert.equal(await reply.isChecked(), true);
-  await reply.uncheck();
   const before = await state();
-  const role = before.roles[0];
-  const other = before.models.find((m) => m.id !== role.model);
-  assert.ok(other, 'a second model to pick');
-  await team.getByRole('combobox', { name: role.name }).selectOption(other.id);
   await team.getByRole('button', { name: '저장' }).click();
   await team.getByText('저장했어요.').waitFor();
   let s = await state();
   assert.equal(s.settings.team.maxChildren, 4);
-  assert.equal(s.settings.team.replyStyle, false);
-  assert.equal(s.settings.team.roleModels[role.id], other.id);
-  assert.equal(s.roles.find((r) => r.id === role.id).model, other.id);
   assert.equal(s.settings.team.rotateLead, before.settings.team.rotateLead, 'untouched values stay');
 
-  // 2b. A change made elsewhere while the page is open shows in untouched fields, and the next save does not
+  // 3a. Auto-remove of finished teammates (#640): the switch and the grace period save together.
+  const autoRemove = team.getByRole('checkbox', { name: '일이 끝난 팀원 자동으로 지우기' });
+  const grace = team.getByRole('spinbutton', { name: /^끝난 팀원 지우기 전 기다리는 시간/ });
+  assert.equal(await autoRemove.isChecked(), true);
+  assert.equal(await grace.inputValue(), '120');
+  await grace.fill('2');
+  await team.getByRole('button', { name: '저장' }).click();
+  await team.locator('#team-autoRemoveGraceSec-error').waitFor();
+  assert.equal((await state()).settings.team.autoRemoveGraceSec, 120, 'a bad grace is not sent');
+  await grace.fill('45');
+  await autoRemove.uncheck();
+  await team.getByRole('button', { name: '저장' }).click();
+  await team.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.equal(s.settings.team.autoRemoveDone, false);
+  assert.equal(s.settings.team.autoRemoveGraceSec, 45);
+  assert.equal(s.settings.team.maxChildren, 4);
+
+  // 3b. A change made elsewhere while the modal is open shows in untouched fields, and the next save does not
   // send the old value back (#615).
   const post = (body) => fetch(`${BASE}/api/settings`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: JSON.stringify(body) });
-  await maxChildren.fill('4');
   const rotateLead = team.getByRole('spinbutton', { name: /^관리자 대화 새로 시작/ });
   await rotateLead.fill('3'); // in-progress edit, not saved yet
   assert.ok((await post({ team: { maxChildren: 6, rotateLead: 9 } })).ok);
@@ -115,8 +133,8 @@ test('설정 page: link from the modal, save team settings and a role model, lim
   assert.ok((await post({ team: { maxChildren: 4 } })).ok);
   await page.waitForFunction(() => document.querySelector('#team-maxChildren')?.value === '4');
 
-  // 3. A bad value is not sent: the Korean message shows under the field (no browser bubble) and the field gets
-  // focus; saving with nothing changed says so.
+  // 4. A bad value is not sent: the Korean message shows under the field (no browser bubble) and the field gets
+  // focus; once fixed, saving with nothing changed says so.
   await maxChildren.fill('0');
   await team.getByRole('button', { name: '저장' }).click();
   await team.locator('#team-maxChildren-error').waitFor();
@@ -130,28 +148,60 @@ test('설정 page: link from the modal, save team settings and a role model, lim
   await team.getByRole('button', { name: '저장' }).click();
   await team.getByText('바뀐 게 없어요.').waitFor();
 
-  // 4. After a reload the saved values are shown; the limits form and the usage section are there.
-  await page.reload();
-  await settings.waitFor();
-  assert.equal(await page.getByRole('spinbutton', { name: /^관리자 한 명이 둘 수 있는 팀원/ }).inputValue(), '4');
-  assert.equal(await page.getByRole('combobox', { name: role.name }).inputValue(), other.id);
-  const limits = page.getByRole('form', { name: '한도' });
-  await limits.getByRole('spinbutton', { name: /^5시간 한도/ }).waitFor();
-  await limits.getByRole('spinbutton', { name: /^5시간 한도/ }).fill('80');
+  // 5. 역할별 모델: pick another model for a role and save it; an unsaved edit in another section survives switching.
+  await maxChildren.fill('5');
+  await section('역할별 모델');
+  const roles = dialog.getByRole('form', { name: '역할별 모델' });
+  const role = before.roles[0];
+  const other = before.models.find((m) => m.id !== role.model);
+  assert.ok(other, 'a second model to pick');
+  await roles.getByRole('combobox', { name: role.name }).selectOption(other.id);
+  await roles.getByRole('button', { name: '저장' }).click();
+  await roles.getByText('저장했어요.').waitFor();
+  s = await state();
+  assert.equal(s.settings.team.roleModels[role.id], other.id);
+  assert.equal(s.roles.find((r) => r.id === role.id).model, other.id);
+  assert.equal(s.settings.team.maxChildren, 4, 'another section\'s edit is not sent');
+  await section('관리자와 팀');
+  assert.equal(await maxChildren.inputValue(), '5', 'the unsaved edit survives switching sections');
+
+  // 6. 사용 한도: per-provider usage and the guard form; Dispatch on, so nothing is read-only.
+  await section('사용 한도');
+  const limits = dialog.getByRole('region', { name: '사용 한도' });
+  await limits.getByRole('group', { name: '모델별 사용량' }).waitFor();
+  const five = limits.getByRole('spinbutton', { name: /^5시간 한도/ });
+  await five.fill('80');
   await limits.getByRole('button', { name: '저장' }).click();
   await limits.getByText('저장했어요.').waitFor();
   assert.equal((await state()).settings.guard.five, 0.8);
-  await page.getByRole('region', { name: '모델별 사용량' }).waitFor();
-  // Dispatch on: nothing is read-only, and the theme choice is there too (#620).
-  assert.equal(await settings.getAttribute('data-dispatch'), 'on');
-  assert.equal(await page.getByTestId('settings-off-note').count(), 0);
-  await page.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-page-1440.png'), fullPage: true });
+  assert.equal(await dialog.getByTestId('settings-off-note').count(), 0);
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-modal-1440.png') });
 
-  // 5. Narrow width: nothing overflows sideways.
+  // 7. Reopen after a reload: saved values show, and the modal opens on the section last chosen.
+  await page.reload();
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await dialog.waitFor();
+  assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'page');
+  await section('관리자와 팀');
+  assert.equal(await maxChildren.inputValue(), '4');
+  await section('역할별 모델');
+  assert.equal(await roles.getByRole('combobox', { name: role.name }).inputValue(), other.id);
+
+  // 8. Narrow width: the modal fits, a <select> picks the section, nothing overflows sideways.
+  // Below 768px the sidebar becomes a drawer (a different tree), so open the modal again from there.
   await page.setViewportSize({ width: 390, height: 780 });
-  const wide = await page.evaluate(() => document.documentElement.scrollWidth);
-  assert.ok(wide <= 390, `no sideways scroll at 390px: ${wide}`);
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-page-390.png'), fullPage: true });
+  await page.reload();
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await dialog.waitFor();
+  const select = dialog.getByRole('combobox', { name: '설정 항목' });
+  await select.selectOption({ label: '관리자와 팀' });
+  await maxChildren.waitFor();
+  const box = await dialog.boundingBox();
+  assert.ok(box && box.x >= 0 && box.x + box.width <= 390, `fits 390px: ${JSON.stringify(box)}`);
+  // Nothing inside the modal scrolls sideways.
+  const wide = await dialog.evaluate((d) => [d, ...d.querySelectorAll('.settings-dialog-body')].map((e) => e.scrollWidth - e.clientWidth));
+  assert.deepEqual(wide, [0, 0], `no sideways scroll in the modal at 390px: ${wide}`);
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-modal-390.png') });
   assert.deepEqual(errors, []);
 });
