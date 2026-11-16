@@ -571,10 +571,10 @@ body {
    In the 둘 다 view the document pane takes the panel's width from the canvas (:has below), so the text keeps its
    column and the panel sits in a right margin of its own. */
 :root { --doc-margin-w: 304px; }
-@media (width < 1280px) { :root { --doc-margin-w: 264px; } }
+@media (width < 1536px) { :root { --doc-margin-w: 264px; } }
 .split-doc { width: var(--split); }
-.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted]) { width: min(calc(var(--split) + var(--doc-margin-w)), calc(100% - 360px)); }
-.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted] > .doc-margin-aside[data-collapsed]) { width: min(calc(var(--split) + 44px), calc(100% - 360px)); }
+.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted]) { width: min(calc(var(--split) + var(--doc-margin-w)), calc(100% - 430px)); }
+.split-doc:has(> * .doc-margin[data-form='side'][data-margin-mounted] > .doc-margin-aside[data-collapsed]) { width: min(calc(var(--split) + 44px), calc(100% - 430px)); }
 .doc-margin { display: flex; align-items: flex-start; min-height: 100%; }
 .doc-margin-main { flex: 1 1 auto; min-width: 0; }
 .doc-margin-aside {

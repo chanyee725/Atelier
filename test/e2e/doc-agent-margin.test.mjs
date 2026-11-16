@@ -119,17 +119,20 @@ async function run(t, view) {
   await intro.waitFor();
 
   // The user's caret: inside the intro paragraph, after "소개".
-  await intro.click();
-  await page.evaluate(() => {
-    const t = [...document.querySelectorAll('.doc-editor p')].find((e) => e.textContent.includes('소개'));
-    const r = document.createRange();
-    r.setStart(t.firstChild, 2);
-    r.collapse(true);
-    const s = getSelection();
-    s.removeAllRanges();
-    s.addRange(r);
-  });
-  await page.waitForTimeout(200);
+  const placeCaret = async () => {
+    await intro.click();
+    await page.evaluate(() => {
+      const t = [...document.querySelectorAll('.doc-editor p')].find((e) => e.textContent.includes('소개'));
+      const r = document.createRange();
+      r.setStart(t.firstChild, 2);
+      r.collapse(true);
+      const s = getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+    });
+    await page.waitForTimeout(200);
+  };
+  await placeCaret();
   const caret = () => page.evaluate(() => {
     const s = getSelection();
     return { text: s.anchorNode?.textContent ?? null, offset: s.anchorOffset, focused: !!document.activeElement?.closest('.doc-editor') };
@@ -139,6 +142,12 @@ async function run(t, view) {
   // Where the text column sits with no margin (its centre, in viewport px).
   const textX = () => intro.evaluate((el) => { const r = el.getBoundingClientRect(); return Math.round(r.left + r.width / 2); });
   const x0 = await textX();
+  // 둘 다: the document pane and the canvas beside it.
+  const widths = () => page.evaluate(() => ({
+    pane: document.querySelector('.split-doc')?.getBoundingClientRect().width ?? 0,
+    canvas: document.querySelector('.split-doc')?.nextElementSibling?.nextElementSibling?.getBoundingClientRect().width ?? 0,
+  }));
+  const w0 = view === 'both' ? await widths() : null;
   assert.equal(await page.locator('[data-margin-panel]').count(), 0, 'no margin before any agent edits');
 
   await call('POST', '/api/providers/claude/login');
@@ -147,7 +156,8 @@ async function run(t, view) {
   assert.ok(name);
   release(1);
 
-  // 1. The margin opens beside the text, the text column shifts left, and the card names the session.
+  // 1. The margin opens beside the text and the card names the session. 문서: the text column shifts left. 둘 다: the
+  // document pane takes the panel's width from the canvas, so the text stays where it was.
   const panel = page.locator('[data-margin-panel]');
   await panel.waitFor({ timeout: 15_000 });
   assert.equal(await panel.getAttribute('data-form'), 'side');
@@ -158,7 +168,13 @@ async function run(t, view) {
   await page.waitForFunction(() => /계획 섹션/.test(document.querySelector('[data-margin-doing]')?.textContent ?? ''), null, { timeout: 10_000 });
   await page.waitForTimeout(500); // the shift's transition
   const x1 = await textX();
-  assert.ok(x1 < x0 - 20, `the text moved left: ${x0} → ${x1}`);
+  if (view === 'doc') assert.ok(x1 < x0 - 20, `the text moved left: ${x0} → ${x1}`);
+  else {
+    assert.ok(Math.abs(x1 - x0) <= 6, `the text kept its place: ${x0} → ${x1}`);
+    const w1 = await widths();
+    assert.ok(w1.pane - w0.pane > 200 && w1.pane - w0.pane < 320, `the document pane widened by the panel: ${JSON.stringify([w0, w1])}`);
+    assert.ok(w0.canvas - w1.canvas > 200, `the canvas gave the room: ${JSON.stringify([w0, w1])}`);
+  }
   // The panel never covers the text.
   const [pb, ib] = await Promise.all([panel.boundingBox(), intro.boundingBox()]);
   assert.ok(ib.x + ib.width <= pb.x + 1, `text ${JSON.stringify(ib)} clear of panel ${JSON.stringify(pb)}`);
@@ -193,7 +209,7 @@ async function run(t, view) {
   await panel.locator('.margin-rail').click();
   await toggle.waitFor();
 
-  // Screenshots in the default view: 1600 and 1440 wide (side panel), 820 (bottom sheet), light and dark.
+  // Screenshots in the default view: 1600 and 1440 wide (side panel), 700 (bottom sheet, under 768), light and dark.
   if (SHOTS && view === 'both') {
     const shot = (n) => page.screenshot({ path: join(SHOTS, `doc-margin-${n}.png`) });
     for (const w of [1600, 1440]) {
@@ -205,19 +221,23 @@ async function run(t, view) {
         await shot(`${w}-${scheme}`);
       }
     }
-    await page.setViewportSize({ width: 820, height: 900 });
+    await page.setViewportSize({ width: 700, height: 900 });
     await panel.locator('.margin-sheet-bar').waitFor({ timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(400);
-    await shot('820-dark-collapsed');
+    await shot('700-dark-collapsed');
     const bar = panel.locator('.margin-sheet-bar');
     if (await bar.count()) await bar.click();
     await page.waitForTimeout(400);
-    await shot('820-dark');
+    await shot('700-dark');
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(150);
-    await shot('820-light');
+    await shot('700-light');
     await page.setViewportSize({ width: 1600, height: 900 });
     await page.waitForTimeout(400);
+    // The phone layout redraws the document, so the caret goes with it (the app's narrow mode, not the margin).
+    await page.emulateMedia({ colorScheme: 'light' });
+    await placeCaret();
+    assert.deepEqual(await caret(), mine);
   }
   if (await panel.count()) assert.equal(await panel.getAttribute('data-form'), 'side');
 
@@ -228,6 +248,10 @@ async function run(t, view) {
   await page.waitForTimeout(500);
   const x2 = await textX();
   assert.ok(Math.abs(x2 - x0) <= 2, `the text came back: ${x0} → ${x2}`);
+  if (view === 'both') {
+    const w2 = await widths();
+    assert.ok(Math.abs(w2.pane - w0.pane) <= 2 && Math.abs(w2.canvas - w0.canvas) <= 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
+  }
   release(3);
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);
