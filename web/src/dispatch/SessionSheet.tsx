@@ -244,7 +244,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     <div
       ref={box}
       onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
-      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body [&>*]:shrink-0"
+      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body-mid [&>*]:shrink-0"
     >
       {!entries && <p className="text-sm text-muted-foreground">대화를 불러오는 중이에요…</p>}
       {entries?.length === 0 && (

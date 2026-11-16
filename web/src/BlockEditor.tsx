@@ -19,7 +19,7 @@ const baseTheme = EditorView.theme({
   '.cm-activeLine, .cm-activeLineGutter': { background: 'color-mix(in oklab, var(--foreground) 5%, transparent)' },
   '&.cm-focused': { outline: 'none' },
   '.cm-scroller': { minHeight: '8rem' },
-  '.cm-tooltip.cm-tooltip-autocomplete': { background: 'var(--popover)', color: 'var(--popover-foreground)', border: 'none', borderRadius: '8px', boxShadow: 'var(--shadow-pop)', padding: '4px' },
+  '.cm-tooltip.cm-tooltip-autocomplete': { background: 'var(--popover)', color: 'var(--popover-foreground)', border: 'none', borderRadius: '8px', boxShadow: 'var(--shadow-pop)', padding: '4px 4px var(--menu-end)' },
   '.cm-tooltip-autocomplete ul li': { borderRadius: '4px', padding: '2px 6px' },
   '.cm-tooltip-autocomplete ul li[aria-selected]': { background: 'var(--accent)', color: 'var(--accent-foreground)' },
   '.cm-completionDetail': { color: 'var(--muted-foreground)', marginLeft: '0.75em', fontStyle: 'normal' },

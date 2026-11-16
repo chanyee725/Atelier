@@ -154,7 +154,7 @@
   --overlay-x: 20px; /* dialog and sheet sides */
   --overlay-head-y: 14px; /* header top and bottom */
   --overlay-y: 16px; /* body top */
-  --overlay-end: 24px; /* body bottom, when the body is the last part */
+  --overlay-end: 24px; /* body bottom, when the body is the last part (above a footer use overlay-body-mid) */
   --overlay-foot-y: 12px; /* footer top */
   --overlay-foot-end: 16px; /* footer bottom */
   --popover-x: 14px; /* hover cards and small floating panels */
@@ -176,6 +176,12 @@
 }
 @utility overlay-body {
   padding: var(--overlay-y) var(--overlay-x) var(--overlay-end);
+}
+/* A body with a footer under it (#717): the footer's own top padding and border already part them, so the body
+   ends on the base step instead of --overlay-end, or the gap above the footer doubles up. */
+@utility overlay-body-mid {
+  padding-block: var(--overlay-y);
+  padding-inline: var(--overlay-x);
 }
 @utility overlay-foot {
   padding: var(--overlay-foot-y) var(--overlay-x) var(--overlay-foot-end);
