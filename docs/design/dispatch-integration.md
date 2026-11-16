@@ -1,6 +1,6 @@
 # E9 설계: Dispatch를 Drawing으로 (파이프라인을 문서·다이어그램으로 계획하고 지켜보기)
 
-> 대체됨(E505): Codex·Gemini 관련 부분은 `docs/design/fable-only-projects.md`가 대체해요. 에이전트는 claude-fable-5-2 하나만 써요.
+> 대체됨(#587): Codex·Gemini는 다시 돌아가요. 에이전트는 연결한 제공자(Claude `claude`, OpenAI Codex `codex`, Gemini `agy`)의 모델을 써요. Fable 5.2만 쓰던 규칙(`docs/design/fable-only-projects.md`)은 대체됐어요. 권한 모드 규칙은 CLAUDE.md를 따라요.
 
 상태: 설계안 (코드 변경 없음). 기준 커밋: Drawing `develop` 0394637, Dispatch 플러그인 0.14.0. 이슈 #87.
 이 문서는 다섯 하위 문서의 **결정 요약, 문서끼리 충돌 정리, 티켓, 열린 질문**이에요. 근거와 세부는 하위 문서에 있어요.

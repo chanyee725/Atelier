@@ -91,7 +91,7 @@ export function patchTeam(store, patch, { roles, models }) {
       if (!roles.some(r => r.id === role)) continue;
       if (model === null || model === "") { delete rm[role]; continue; }
       if (!models.some(m => m.id === model)) throw Object.assign(new Error(`알 수 없는 모델: ${model}`), { status: 400 });
-      rm[role] = model; // only Fable 5.2 is in the list, so this is the only value that passes
+      rm[role] = model;
     }
     next.roleModels = rm;
   }
@@ -101,7 +101,7 @@ export function patchTeam(store, patch, { roles, models }) {
 
 /**
  * Roles as the UI and the lead see them: preset defaults with the user's model overrides. Overrides
- * naming a model that is no longer offered (saved before Fable 5.2 only) are ignored.
+ * naming a model that is not offered (not in the list, or Codex models before Codex connects) are ignored.
  */
 export function effectiveRoles(roles, store, models = staticModels()) {
   const rm = teamSettings(store).roleModels;

@@ -283,7 +283,15 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
                 </section>
               );
             })}
-            {query.trim() && found.length === 0 && noMatch}
+            {/* A search with no hit in any project says so (a hit only in a loose top-level file points to 전체). The status
+                region stays mounted so the message is announced when it appears. */}
+            <div role="status">
+              {query.trim() && data.projects.length > 0 && !data.projects.some((pr) => filterDocs(pr.docs, query).length > 0) && (
+                <div data-no-project-match>
+                  <Empty>{found.length > 0 ? '프로젝트 안에는 맞는 파일이 없어요. 전체 탭에서 찾아보세요.' : '맞는 파일이 없어요'}</Empty>
+                </div>
+              )}
+            </div>
           </TabsContent>
         </>
       )}
@@ -336,7 +344,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
   const [tab, setTab] = useState<PTab>('docs');
   const { collapsed, toggle } = useCollapse();
   const docs = filterDocs(project.docs, query);
-  const live = useAgents();
+  const { agents: live, retry: retryAgents } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const holders = useMemo(() => holdersByFile(Array.isArray(agents) ? agents : []), [agents]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
@@ -374,6 +382,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
           <div className="grid @min-[880px]:grid-cols-[minmax(0,1fr)_300px]">
             <AgentPanel
               agents={agents}
+              onRetry={retryAgents}
               titleOf={(f) => titles.get(f)}
               onOpen={p.onOpen}
               className="border-b @min-[880px]:sticky @min-[880px]:top-0 @min-[880px]:order-2 @min-[880px]:self-start @min-[880px]:border-b-0 @min-[880px]:border-l"

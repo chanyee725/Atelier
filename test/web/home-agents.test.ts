@@ -1,19 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentMeta, agentsIn, fileStem, holdersByFile, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
+import { agentMeta, agentStateLabel, agentsIn, isBusy, needsLook, fileStem, holdersByFile, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
 
-const a = (sid: string, x: Partial<AgentPresence> = {}): AgentPresence => ({ sid, name: sid, role: 'impl', model: null, state: 'idle', project: null, file: null, at: 0, ...x });
+const a = (sid: string, x: Partial<AgentPresence> = {}): AgentPresence => ({ sid, name: sid, role: 'impl', model: null, status: 'waiting', state: 'resting', project: null, file: null, at: 0, ...x });
 
 test('agentsIn keeps the project\'s agents (by folder or held file), busy first, then file holders, then newest', () => {
   const all = [
     a('Idle', { project: 'P', at: 5 }),
     a('Holder', { project: 'P', file: 'P/x.dpx.json', at: 1 }),
-    a('Busy', { project: 'P', state: 'running', at: 0 }),
-    a('ByFile', { file: 'P/sub/y.dpx.json', state: 'waiting' }),
-    a('Other', { project: 'Q', state: 'running', file: 'Q/z.dpx.json' }),
+    a('Busy', { project: 'P', state: 'working', at: 0 }),
+    a('ByFile', { file: 'P/sub/y.dpx.json', status: 'running', state: null, at: null }),
+    a('Other', { project: 'Q', state: 'working', file: 'Q/z.dpx.json' }),
     a('Prefix', { file: 'PX/z.dpx.json' }),
   ];
-  assert.deepEqual(agentsIn(all, 'P').map((x) => x.sid), ['Busy', 'ByFile', 'Holder', 'Idle']);
+  assert.deepEqual(agentsIn(all, 'P').map((x) => x.sid), ['ByFile', 'Busy', 'Holder', 'Idle']);
 });
 
 test('holdersByFile groups agents by the file they hold', () => {
@@ -31,4 +31,15 @@ test('meta, colours and parsing', () => {
   assert.equal(fileStem('P/02-화면-지도.dpx.json'), '02-화면-지도');
   assert.deepEqual(parseAgents(null), []);
   assert.deepEqual(parseAgents({ agents: [a('A'), { name: 1 }, null] }).map((x) => x.sid), ['A']);
+});
+
+test('state label and dots: the monitoring state wins, the hub status fills in when it is not known yet', () => {
+  assert.equal(agentStateLabel(a('A', { status: 'running', state: 'working' })), '작업 중');
+  assert.equal(agentStateLabel(a('A', { status: 'waiting', state: 'waiting' })), '사람 기다림');
+  assert.equal(agentStateLabel(a('A', { status: 'starting', state: null })), '시작 중');
+  assert.equal(agentStateLabel(a('A', { status: 'odd', state: null })), 'odd');
+  assert.equal(isBusy(a('A', { status: 'running', state: 'resting' })), false);
+  assert.equal(isBusy(a('A', { status: 'starting', state: null })), true);
+  assert.equal(needsLook(a('A', { state: 'stuck' })), true);
+  assert.equal(needsLook(a('A', { status: 'waiting', state: null })), true);
 });

@@ -76,9 +76,9 @@ test("cli: refuses anything outside the allowlist, and any shell", async () => {
 });
 
 test("cli: a real agent CLI or gh never starts under npm test", async () => {
-  // An executable named claude (or gh) in a folder without the fake marker counts as real.
+  // An executable named claude, codex, agy or gh in a folder without the fake marker counts as real.
   const dir = tmp("drawing-real-cli-");
-  for (const bin of ["claude", "gh"]) {
+  for (const bin of ["claude", "codex", "agy", "gh"]) {
     writeFileSync(path.join(dir, bin), `#!${process.execPath}\nprocess.exit(0);\n`);
     chmodSync(path.join(dir, bin), 0o755);
     const env = { ...process.env, PATH: dir };
@@ -90,19 +90,21 @@ test("cli: a real agent CLI or gh never starts under npm test", async () => {
   await assert.rejects(runCli("gh", ["--version"], { env: { ...process.env, PATH: tmp("drawing-empty-bin-") } }), e => e.code === "ECLIDENIED");
 });
 
-test("cli: the real seam runs the fake claude from a marked folder; codex and agy are refused", async () => {
+test("cli: the real seam runs each fake agent CLI from a marked folder; others are refused", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const env = { ...process.env, ...bin.env };
-  const { stdout } = await runCli("claude", ["--version"], { env });
-  assert.equal(stdout.trim(), "claude 0.0.0-fake");
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
-  // Codex and Gemini (agy) are gone from the allow list: no spawn path, even with a fake on PATH.
-  for (const name of ["codex", "agy"]) {
-    assert.throws(() => spawnCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
-    await assert.rejects(runCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
+  for (const name of ["claude", "codex", "agy"]) {
+    const { stdout } = await runCli(name, ["--version"], { env });
+    assert.equal(stdout.trim(), `${name} 0.0.0-fake`);
   }
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"], "a refused CLI never started");
+  assert.deepEqual(bin.calls().map(c => c.bin), ["claude", "codex", "agy"]);
+  // A CLI outside the list never starts, even with a same-named file on PATH.
+  for (const name of ["gemini", "sh", "node"]) {
+    assert.throws(() => spawnCli(name, ["--version"], { env }), e => e.code === "ECLIDENIED", name);
+  }
+  // No shell, for any CLI.
+  assert.throws(() => spawnCli("codex", ["--version"], { env, shell: true }), e => e.code === "ECLIDENIED");
   // git is not an agent CLI: it runs from the normal PATH.
   assert.match((await runCli("git", ["--version"])).stdout, /^git version/);
   assert.equal(readdirSync(bin.dir).includes(FAKE_MARKER), true);
@@ -112,6 +114,8 @@ test("cli: the real seam runs the fake claude from a marked folder; codex and ag
 
 const MODELS = [
   { id: "claude-fable-5-2", provider: "claude", efforts: ["low"], contextWindow: 200000 },
+  { id: "gpt-fake-codex", provider: "openai", efforts: ["low", "medium"], contextWindow: 272000 },
+  { id: "gemini-3.8-flash-low", provider: "gemini", efforts: ["low"], contextWindow: 1000000 },
 ];
 const ROLES = [{ id: "impl", name: "구현자", model: "claude-fable-5-2", perm: "plan", prompt: "" }];
 
@@ -150,7 +154,56 @@ test("permission matrix: 4 modes through hub.create, never looser than chosen", 
   assert.equal(bin.calls().every(c => c.bin === "claude"), true);
 });
 
-test("resumeInterrupted resumes Claude sessions only; old-provider sessions load as done and never start", async () => {
+// Codex and agy run headless with no approval channel (lead decision, #587): Codex runs plan (read-only
+// sandbox) and auto (workspace-write) only — workspace-write runs commands without asking, looser than
+// acceptEdits; agy runs acceptEdits/auto/plan through its own --mode. Manual is refused for both.
+const LOOSE = ["--dangerously-skip-permissions", "bypassPermissions", "--yolo", "danger-full-access", "--dangerously-bypass-approvals-and-sandbox", "--full-auto"];
+const OTHER_MATRIX = {
+  "gpt-fake-codex": { bin: "codex", plan: 'sandbox_mode="read-only"', auto: 'sandbox_mode="workspace-write"', acceptEdits: null, manual: null },
+  "gemini-3.8-flash-low": { bin: "agy", plan: "plan", auto: "auto", acceptEdits: "accept-edits", manual: null },
+};
+
+test("permission matrix: Codex and agy get their own strict flag per mode, and the looser modes are refused", async () => {
+  const bin = fakeCliBin();
+  dirs.push(bin.dir);
+  const { hub, store } = await makeHub(bin);
+  for (const [model, row] of Object.entries(OTHER_MATRIX)) {
+    for (const perm of ["manual", "acceptEdits", "auto", "plan"]) {
+      const before = bin.calls().length;
+      if (row[perm] == null) {
+        await assert.rejects(hub.create({ items: [{ role: "impl", model, perm }], commonPrompt: "hi", worktree: false }),
+          e => e.status === 400 && e.message.includes(perm), `${model} ${perm}`);
+        continue;
+      }
+      const [s] = await hub.create({ items: [{ role: "impl", model, perm, effort: "low" }], commonPrompt: "hi", worktree: false });
+      const call = await until(() => bin.calls().slice(before).find(c => c.bin === row.bin));
+      if (row.bin === "codex") {
+        assert.equal(call.args[0], "exec");
+        assert.ok(call.args.includes(row[perm]), `${perm}: ${JSON.stringify(call.args)}`);
+        assert.equal(call.args.filter(a => a.startsWith("sandbox_mode=")).length, 1);
+        assert.ok(call.args.includes('model_reasoning_effort="low"'));
+      } else {
+        assert.equal(flagAfter(call.args, "--mode"), row[perm]);
+        assert.equal(flagAfter(call.args, "--model"), model);
+      }
+      for (const loose of LOOSE) assert.equal(call.args.some(a => a.includes(loose)), false, `${model} ${perm} got ${loose}`);
+      assert.equal(store.data.sessions[s.id].perm, perm);
+      await until(() => store.data.sessions[s.id].status === "idle");
+    }
+  }
+  // A mode switch to a refused mode is refused too; a saved session with one stops with an error, nothing starts.
+  const [s] = await hub.create({ items: [{ role: "impl", model: "gpt-fake-codex", perm: "plan" }], commonPrompt: "hi", worktree: false });
+  await until(() => store.data.sessions[s.id].status === "idle");
+  assert.throws(() => hub.setPerm(s.id, "acceptEdits"), e => e.status === 400);
+  const before = bin.calls().length;
+  store.data.sessions[s.id].perm = "manual";
+  hub.start(store.data.sessions[s.id], "hi");
+  assert.equal(store.data.sessions[s.id].status, "error");
+  await new Promise(r => setTimeout(r, 50));
+  assert.equal(bin.calls().length, before);
+});
+
+test("resumeInterrupted resumes Claude, Codex and Gemini sessions; an unknown provider loads as done and never starts", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const root = tmp("drawing-safety-resume-");
@@ -160,49 +213,43 @@ test("resumeInterrupted resumes Claude sessions only; old-provider sessions load
     turns: 0, ctx: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, providerSessionId: null };
   store.data.sessions = {
     c: { ...base, id: "c", n: 1, name: "C", provider: "claude", model: "claude-fable-5-2", status: "running" },
-    o: { ...base, id: "o", n: 2, name: "O", provider: "openai", model: "gpt-x", status: "running", interrupted: true },
-    g: { ...base, id: "g", n: 3, name: "G", provider: "gemini", model: "gemini-3.8-flash-low", status: "waiting", interrupted: true },
+    o: { ...base, id: "o", n: 2, name: "O", provider: "openai", model: "gpt-fake-codex", status: "running" },
+    g: { ...base, id: "g", n: 3, name: "G", provider: "gemini", model: "gemini-3.8-flash-low", status: "waiting" },
+    x: { ...base, id: "x", n: 4, name: "X", provider: "cursor", model: "x-model", status: "running", interrupted: true },
   };
   store.save = () => {};
   const hub = new Hub({ root, store, models: MODELS, roles: ROLES, port: 0, limits: new SharedLimits(path.join(root, "limits.json")), spawnCli: fakeSpawner(bin) });
   after(() => hub.stopAll());
-  assert.equal(store.data.sessions.c.interrupted, true);
-  for (const id of ["o", "g"]) {
-    assert.equal(store.data.sessions[id].status, "done", id);
-    assert.equal(store.data.sessions[id].interrupted, false, id);
-  }
+  for (const id of ["c", "o", "g"]) assert.equal(store.data.sessions[id].interrupted, true, id);
+  assert.equal(store.data.sessions.x.status, "done");
+  assert.equal(store.data.sessions.x.interrupted, false);
 
   hub.isConnected = () => true;
   hub.resumeInterrupted();
-  await until(() => bin.calls().some(c => c.bin === "claude"));
+  await until(() => bin.calls().length >= 3);
   await new Promise(r => setTimeout(r, 100));
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
-  assert.equal(store.data.sessions.c.interrupted, false);
+  assert.deepEqual(bin.calls().map(c => c.bin).sort(), ["agy", "claude", "codex"]);
 
-  // send refuses an old-provider session before anything is pushed to its transcript or any CLI starts.
-  const before = hub.transcript("o").length;
-  assert.throws(() => hub.send("o", "hello", { force: true }), /지원하지 않는 모델/);
-  assert.equal(hub.transcript("o").length, before);
+  // send refuses an unknown-provider session before anything is pushed to its transcript or any CLI starts.
+  const before = hub.transcript("x").length;
+  assert.throws(() => hub.send("x", "hello", { force: true }), /지원하지 않는 모델/);
+  assert.equal(hub.transcript("x").length, before);
+  hub.start(store.data.sessions.x, "hi");
+  assert.equal(store.data.sessions.x.status, "error");
   await new Promise(r => setTimeout(r, 50));
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
-  // start refuses too (defence in depth), recording an error instead of spawning.
-  hub.start(store.data.sessions.g, "hi");
-  assert.equal(store.data.sessions.g.status, "error");
-  assert.deepEqual(bin.calls().map(c => c.bin), ["claude"]);
+  assert.equal(bin.calls().length, 3);
 });
 
-test("hub.create maps an old model to Fable 5.2 (mappedFrom) and drops efforts the list lacks", async () => {
+test("hub.create refuses an unknown model, an effort the model lacks, and a provider not connected, before anything starts", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
   const { hub, store } = await makeHub(bin);
-  const made = await hub.create({ items: [
-    { role: "impl", model: "claude-haiku-5-5", effort: "low" },
-    { role: "impl", model: "gpt-x", effort: "minimal" },
-    { role: "impl", model: "claude-fable-5-2", effort: "low" },
-  ], commonPrompt: "hi", worktree: false });
-  assert.deepEqual(made.map(m => m.model), ["claude-fable-5-2", "claude-fable-5-2", "claude-fable-5-2"]);
-  assert.deepEqual(made.map(m => m.mappedFrom), ["claude-haiku-5-5", "gpt-x", undefined]);
-  assert.deepEqual(made.map(m => store.data.sessions[m.id].effort), ["low", null, "low"]);
-  assert.doesNotMatch(JSON.stringify(store.data.sessions), /haiku|gpt-x/);
+  const ok = { role: "impl", model: "claude-fable-5-2", effort: "low" };
+  await assert.rejects(hub.create({ items: [ok, { role: "impl", model: "gpt-x" }], commonPrompt: "hi", worktree: false }), e => e.status === 400 && /알 수 없는 모델/.test(e.message));
+  await assert.rejects(hub.create({ items: [ok, { role: "impl", model: "gpt-fake-codex", perm: "plan", effort: "max" }], commonPrompt: "hi", worktree: false }), e => e.status === 400);
+  hub.isConnected = p => p === "claude";
+  await assert.rejects(hub.create({ items: [ok, { role: "impl", model: "gemini-3.8-flash-low" }], commonPrompt: "hi", worktree: false }), /Gemini가 Drawing에 연결되지 않았어요/);
+  await new Promise(r => setTimeout(r, 50));
+  assert.deepEqual(bin.calls(), []);
+  assert.deepEqual(store.data.sessions, {});
 });
-

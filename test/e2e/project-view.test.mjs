@@ -59,21 +59,21 @@ test('project view: own files only, no 미분류, live agents with held files', 
     ['메모', '메모'],
   ]) assert.equal((await call('POST', '/api/file', { path: p, title })).status, 201);
 
-  const agent = (sid, x) => ({ sid, name: sid, role: 'impl', roleName: '구현자', color: '#2563eb', model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', state: 'running', project: 'Sim', file: null, at: Date.now(), ...x });
+  const agent = (sid, x) => ({ sid, name: sid, role: 'impl', roleName: '구현자', color: '#2563eb', model: 'claude-opus-5-5', modelLabel: 'Opus 5.5', status: 'running', state: 'working', project: 'Sim', file: null, at: Date.now(), ...x });
   const first = [agent('Otto', { file: 'Sim/02-화면.dpx.json' }), agent('Remy', { project: 'Other', file: 'Other/x.dpx.json' })];
-  const next = [agent('Otto', { file: 'Sim/02-화면/상세.dpx.json' }), agent('Cal', { role: 'lead', roleName: '관리자', state: 'waiting', color: '#9333ea' })];
+  const next = [agent('Otto', { file: 'Sim/02-화면/상세.dpx.json' }), agent('Cal', { role: 'lead', roleName: '관리자', status: 'waiting', state: 'waiting', color: '#9333ea' })];
 
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
   const errors = [];
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await page.route('**/api/workspace/agents*', (r) => r.fulfill({ json: { agents: first } }));
-  // The event stream: the first connection sends nothing new; later ones (EventSource reconnects after the body ends)
-  // send the next snapshot, so the panel must change with no reload.
-  let streams = 0;
+  // The event stream: until `release` is set every connection is empty; EventSource reconnects after each body ends,
+  // and the first one after `release` sends the next snapshot. Gated, so the first snapshot is checked before the
+  // update can land (an ungated reconnect raced the first checks).
+  let release = false;
   await page.route('**/api/events', (r) => {
-    streams++;
-    const body = `retry: 300\n\n${streams > 1 ? `event: agents\ndata: ${JSON.stringify({ agents: next })}\n\n` : ''}`;
+    const body = `retry: 200\n\n${release ? `event: agents\ndata: ${JSON.stringify({ agents: next })}\n\n` : ''}`;
     return r.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-store' }, body });
   });
   await page.goto(BASE);
@@ -83,6 +83,15 @@ test('project view: own files only, no 미분류, live agents with held files', 
   await dash.waitFor();
   assert.deepEqual(await dash.getByRole('tablist', { name: '보기' }).getByRole('tab').allInnerTexts(), ['전체', '최근', '프로젝트별']);
   assert.equal(await dash.getByText('미분류').count(), 0);
+  // 프로젝트별 search with no hit in a project says so instead of a blank screen (#601).
+  const search = dash.getByRole('searchbox', { name: '파일 찾기' });
+  await search.fill('메모');
+  assert.match(await dash.locator('[data-no-project-match]').innerText(), /프로젝트 안에는 맞는 파일이 없어요. 전체 탭에서 찾아보세요./);
+  await search.fill('없는이름');
+  assert.equal((await dash.locator('[data-no-project-match]').innerText()).trim(), '맞는 파일이 없어요');
+  await search.fill('구성');
+  assert.equal(await dash.locator('[data-no-project-match]').count(), 0);
+  await search.fill('');
   await dash.getByRole('tab', { name: '전체' }).click();
   await dash.locator('[data-doc-row="메모.dpx.json"]').waitFor();
 
@@ -104,6 +113,7 @@ test('project view: own files only, no 미분류, live agents with held files', 
   assert.equal(await home.locator('[data-doc-row="Sim/02-화면.dpx.json"] > div [data-held-by]').getAttribute('data-held-by'), 'Otto');
 
   // A new snapshot moves Otto to another file and brings Cal in, with no reload.
+  release = true;
   await page.waitForFunction(() => document.querySelector('[data-slot="agent-panel"] li[data-agent="Cal"]'), null, { timeout: 10_000 });
   assert.deepEqual(await names(), ['Otto', 'Cal']);
   assert.match(await panel.locator('li[data-agent="Otto"]').innerText(), /화면 상세/);
@@ -114,5 +124,25 @@ test('project view: own files only, no 미분류, live agents with held files', 
   // The held file is a link to it.
   await panel.locator('li[data-agent="Otto"]').getByRole('button', { name: /화면 상세/ }).click();
   await page.waitForFunction(() => !document.querySelector('main[data-screen="project"]'));
+
+  // A failed agents request says it could not load (not "no agents") and 다시 시도 asks again (#601).
+  const page2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  page2.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
+  let fail = true;
+  await page2.route('**/api/workspace/agents*', (r) => (fail ? r.fulfill({ status: 500, json: { error: 'boom' } }) : r.fulfill({ json: { agents: first } })));
+  await page2.route('**/api/events', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: 'retry: 60000\n\n' }));
+  await page2.goto(BASE);
+  await page2.locator('[data-slot="sidebar-menu-button"]').filter({ hasText: 'Sim' }).first().click();
+  const panel2 = page2.locator('[data-slot="agent-panel"]');
+  const failed = panel2.locator('[data-agents-failed]');
+  await failed.waitFor();
+  assert.equal(await failed.getAttribute('role'), 'status');
+  assert.match(await failed.innerText(), /에이전트 목록을 불러오지 못했어요/);
+  assert.equal(await panel2.getByText('일하는 에이전트가 없어요', { exact: false }).count(), 0);
+  if (SHOTS) await page2.screenshot({ path: join(SHOTS, 'project-view-agents-failed.png') });
+  fail = false;
+  await panel2.getByRole('button', { name: '다시 시도' }).click();
+  await panel2.locator('li[data-agent="Otto"]').waitFor();
+  assert.equal(await failed.count(), 0);
   assert.deepEqual(errors, []);
 });

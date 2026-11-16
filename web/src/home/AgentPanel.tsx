@@ -3,9 +3,10 @@
 // the live cursor read as one person. Updates come from the `agents` event stream (useAgents), no reload.
 import type { CSSProperties } from 'react';
 import { useId } from 'react';
-import { File } from 'lucide-react';
+import { File, RotateCw } from 'lucide-react';
+import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
-import { agentMeta, agentStateLabel, fileStem, isBusy, safeColor, type AgentPresence } from './agents';
+import { agentMeta, agentStateLabel, fileStem, isBusy, needsLook, safeColor, type AgentPresence } from './agents';
 import { relativeTime } from './model';
 
 const FALLBACK = '#475569';
@@ -31,17 +32,19 @@ export function AgentTag({ agent, size = 'md', className }: { agent: Pick<AgentP
 }
 
 type Props = {
-  agents: AgentPresence[] | 'off' | null;
+  agents: AgentPresence[] | 'off' | 'failed' | null;
+  /** Asks the server again after a failed request. */
+  onRetry?: () => void;
   /** Title of a file in this project, when the list knows it. */
   titleOf: (path: string) => string | undefined;
   onOpen: (path: string) => void;
   className?: string;
 };
 
-export function AgentPanel({ agents, titleOf, onOpen, className }: Props) {
+export function AgentPanel({ agents, onRetry, titleOf, onOpen, className }: Props) {
   const headId = useId();
   const list = Array.isArray(agents) ? agents : [];
-  const busy = list.filter((a) => isBusy(a.state)).length;
+  const busy = list.filter(isBusy).length;
   return (
     <section aria-labelledby={headId} data-slot="agent-panel" className={cn('min-w-0', className)}>
       <header className="flex h-8 items-center gap-2 border-b px-4 text-[13px]">
@@ -62,10 +65,20 @@ export function AgentPanel({ agents, titleOf, onOpen, className }: Props) {
       </header>
       {agents === null ? (
         <p className="m-0 px-4 py-5 text-[13px] text-muted-foreground">불러오는 중이에요</p>
+      ) : agents === 'failed' ? (
+        // Polite, not an alert: the rest of the page works, and the list may still arrive on the event stream.
+        <div role="status" data-agents-failed className="grid justify-items-start gap-2 px-4 py-5 text-[13px] leading-5 break-keep text-muted-foreground">
+          <p className="m-0">에이전트 목록을 불러오지 못했어요. 잠시 뒤에 다시 시도해 주세요.</p>
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              <RotateCw aria-hidden /> 다시 시도
+            </Button>
+          )}
+        </div>
       ) : agents === 'off' ? (
         <p className="m-0 px-4 py-5 text-[13px] text-muted-foreground">이 서버는 에이전트 목록을 아직 보내지 않아요.</p>
       ) : list.length === 0 ? (
-        <p className="m-0 px-4 py-5 text-[13px] leading-5 text-muted-foreground">
+        <p className="m-0 px-4 py-5 text-[13px] leading-5 break-keep text-muted-foreground">
           지금 이 프로젝트에서 일하는 에이전트가 없어요. 세션이 파일을 고치기 시작하면 여기에 바로 보여요.
         </p>
       ) : (
@@ -80,15 +93,15 @@ export function AgentPanel({ agents, titleOf, onOpen, className }: Props) {
 }
 
 function AgentRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (path: string) => void }) {
-  const busy = isBusy(a.state);
+  const busy = isBusy(a);
   const meta = agentMeta(a);
   return (
-    <li data-agent={a.sid} data-state={a.state} className="grid gap-1 px-4 pt-1.5 pb-2.5">
+    <li data-agent={a.sid} data-state={a.state ?? a.status} className="grid gap-1 px-4 pt-1.5 pb-2.5">
       <div className="flex min-w-0 items-start gap-2">
         <AgentTag agent={a} />
         <span className={cn('mt-[7px] ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs leading-5', busy ? 'text-foreground' : 'text-muted-foreground')}>
-          <span aria-hidden className={cn('size-1.5 rounded-full', busy ? 'bg-ok' : a.state === 'waiting' ? 'bg-warn' : 'bg-muted-foreground/50')} />
-          {agentStateLabel(a.state)}
+          <span aria-hidden className={cn('size-1.5 rounded-full', busy ? 'bg-ok' : needsLook(a) ? 'bg-warn' : 'bg-muted-foreground/50')} />
+          {agentStateLabel(a)}
         </span>
       </div>
       {meta && <p className="m-0 truncate pl-3 text-xs text-muted-foreground">{meta}</p>}
@@ -101,7 +114,7 @@ function AgentRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: st
           <File aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="sr-only">잡고 있는 파일 </span>
           <span className="truncate">{title}</span>
-          <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{relativeTime(a.at)}</span>
+          <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{a.at ? relativeTime(a.at) : null}</span>
         </button>
       ) : (
         <p className="m-0 pl-3 text-xs text-muted-foreground">잡고 있는 파일 없음</p>
