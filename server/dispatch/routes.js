@@ -2,7 +2,7 @@
 // (so mcp.js, the skills and the hook keep working); only /api/events is shared, see index.js.
 import { branchGraph, diff } from "./git.js";
 import { ROLES } from "./roles.js";
-import { patchTeam, teamSettings } from "./settings.js";
+import { patchGuard, patchTeam, teamSettings } from "./settings.js";
 
 const MAX_BODY = 1e6;
 
@@ -78,7 +78,7 @@ export function routeTable(d) {
     ["POST", /^\/api\/prefs$/, async (_, b) => d.writePrefs(b || {})],
     ["GET", /^\/api\/projects$/, async () => ({ projects: await d.projects() })],
     ["POST", /^\/api\/settings$/, async (_, b) => {
-      if (b.guard) store.data.settings.guard = { ...store.data.settings.guard, ...b.guard };
+      if (b.guard) store.data.settings.guard = patchGuard(store.data.settings.guard, b.guard);
       if (b.team) patchTeam(store, b.team, { roles: ROLES, models });
       store.save();
       const settings = { ...store.data.settings, team: teamSettings(store) };
