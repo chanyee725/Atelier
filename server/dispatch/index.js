@@ -60,11 +60,15 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     return out;
   };
   let providers = decorate(UNCHECKED);
+  // Set by close(): a login that ends later must not save state or broadcast on a closed server.
+  let closed = false;
   async function refreshProviders() {
+    if (closed) return;
     providers = decorate(await dep.providerStatus());
     broadcast("providers", providers);
   }
   const setEnabled = (id, on) => {
+    if (closed) return;
     store.data.settings.enabled = { ...enabled(), [id]: on };
     store.save();
   };
@@ -142,6 +146,9 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
       try { hub.resumeInterrupted(); } catch (e) { console.error("dispatch resume:", e.code ?? e.name); }
     },
     async close() {
+      closed = true;
+      // A running `claude auth login` must not outlive the server (it could still log the CLI in).
+      await Promise.resolve(dep.cancelLogin("claude")).catch(() => {});
       for (const t of timers) clearInterval(t);
       hub.stopAll();
       await store.close().catch(() => {});

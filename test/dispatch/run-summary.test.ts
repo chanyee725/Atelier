@@ -65,3 +65,18 @@ test('durationText rounds to minutes', () => {
   assert.equal(durationText(12 * MIN), '12분');
   assert.equal(durationText(120 * MIN), '2시간');
 });
+
+test('a pre-#435 record: a resting step with a session and abandoned shows its work, not 그만둠 (#436)', () => {
+  const old: SummaryRecord = {
+    ...record,
+    steps: {
+      ...record.steps,
+      api: { state: 'resting', startedAt: T0, endedAt: T0 + 18 * MIN, sessions: [{ sid: 's1', model: 'sonnet', cost: 0.92 }], result: { abandoned: true } },
+    },
+  };
+  const nodes = summaryNodes(old) as N[];
+  const rows = nodes[2]!.content!.map((r) => r.content!.map(textOf));
+  assert.deepEqual(rows[1], ['1 api', 'impl', 'sonnet', '18분', '$0.92', '—']);
+  assert.equal(rows[3]![5], '그만둠');
+  assert.equal(textOf(nodes[3]!), '계획과 달라진 점: 단계 3 그만둠 ("README는 다음 PR에서")');
+});

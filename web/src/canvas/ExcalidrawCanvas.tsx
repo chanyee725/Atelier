@@ -588,7 +588,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     }
     // Only the idle case (selection tool, nothing selected, no box drag) shows that hint; other hints (arrow, erase) stay.
     // Text editing and an active search keep their own hints (type text, Escape closes search).
-    const searching = appState.openSidebar?.tab === 'search' && !!appState.searchMatches?.length;
+    const searching = appState.openSidebar?.name === 'default' && appState.openSidebar.tab === 'search' && !!appState.searchMatches?.length;
     setHidePanHint(appState.activeTool.type === 'selection' && sel.length === 0 && !appState.selectionElement && !appState.editingTextElement && !searching && sceneEls.some((e) => !e.isDeleted));
     setBlockSelected(sel.length > 0 && sel.every((e) => blockIdOf(e as unknown as SceneEl) !== null));
     setSelBlock(sel.length === 1 ? blockIdOf(sel[0] as unknown as SceneEl) : null);
@@ -686,8 +686,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable], [role="dialog"]')) return;
       // The "다이어그램 코드" panel is on top and the code panel is hidden behind it: leave Esc to that panel.
       if (blockPanelRef.current) return;
-      // Esc belongs to the topmost layer: an open menu, list or popover (Excalidraw's own, or a native popover) closes first.
-      if (document.querySelector('[role="menu"], [role="listbox"], .excalidraw .dropdown-menu, .excalidraw .popover, [popover]:popover-open')) return;
+      // Esc belongs to the topmost layer: an open menu, list or popover closes first. Only open layers count: Excalidraw's
+      // own menus, an open native popover, or a menu/list that holds focus (so a persistent list elsewhere never blocks Esc).
+      if (document.querySelector('.excalidraw [role="menu"], .excalidraw [role="listbox"], .excalidraw .dropdown-menu, .excalidraw .popover, [popover]:popover-open')) return;
+      if (e.target instanceof Element && e.target.closest('[role="menu"], [role="listbox"]')) return;
       setCodeTarget(null);
     };
     window.addEventListener('keydown', onKey, true);
@@ -1075,7 +1077,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       )}
       {!block && codeView && (
         <CodePanel
-          key={`${codeTarget?.kind === 'node' ? `${codeTarget.blockId}:${codeTarget.node}` : codeTarget?.kind === 'shape' ? codeTarget.id : ''}`}
+          key={codeTarget?.kind === 'node' ? `${codeTarget.blockId}:${codeTarget.node}` : codeTarget?.kind === 'shape' ? codeTarget.id : ''}
           label={codeView.label}
           code={codeView.code}
           orphans={codeView.orphans}

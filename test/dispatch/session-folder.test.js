@@ -151,7 +151,10 @@ test('시작하기 moves only the lead, live team members and folderless ones; f
     d.hub.touch(d.hub.get(bare.id), { status: 'done', folder: null });
     const bad = (await mk(call, { items: [{ role: 'impl', task: 'd' }], parent: lead.id })).body.sessions[0];
     const grand = (await mk(call, { items: [{ role: 'impl', task: 'e' }], parent: live.id })).body.sessions[0];
-    await settled(d, bad.id); await settled(d, grand.id);
+    // An unfinished grandchild under a finished child still moves; a session outside the lead's tree keeps its folder.
+    const deep = (await mk(call, { items: [{ role: 'impl', task: 'f' }], parent: old.id })).body.sessions[0];
+    const other = (await mk(call, { items: [{ role: 'lead', task: 'g' }], folder: 'alpha' })).body.sessions[0];
+    await settled(d, bad.id); await settled(d, grand.id); await settled(d, deep.id); await settled(d, other.id);
     d.hub.touch(d.hub.get(bad.id), { status: 'error' });
     const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'beta/p.dpx.json', title: 'beta 계획', goal: 'x', steps: STEP });
     assert.equal(w.status, 200, JSON.stringify(w.body));
@@ -161,8 +164,33 @@ test('시작하기 moves only the lead, live team members and folderless ones; f
     assert.equal(d.hub.get(live.id).folder, 'beta');
     assert.equal(d.hub.get(bare.id).folder, 'beta');
     assert.equal(d.hub.get(old.id).folder, 'alpha');
-    assert.equal(d.hub.get(bad.id).folder, 'beta', 'error is not finished');
     assert.equal(d.hub.get(grand.id).folder, 'beta', 'grandchildren move too');
+    assert.equal(d.hub.get(bad.id).folder, 'beta', 'error is not finished');
+    assert.equal(d.hub.get(deep.id).folder, 'beta', 'an unfinished grandchild under a done child moves');
+    assert.equal(d.hub.get(other.id).folder, 'alpha', 'outside the lead tree');
+  } finally { await t.stop(); }
+});
+
+test('renaming or moving a top folder moves its sessions along (#487)', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, d } = t;
+    const a = (await mk(call, { items: [{ role: 'lead', task: 'a' }], folder: 'alpha' })).body.sessions[0];
+    const b = (await mk(call, { items: [{ role: 'lead', task: 'b' }], folder: 'beta' })).body.sessions[0];
+    await settled(d, a.id); await settled(d, b.id);
+    const ren = await call('POST', '/api/move', { from: 'alpha', to: 'gamma', type: 'folder' });
+    assert.equal(ren.status, 200, JSON.stringify(ren.body));
+    await until(() => d.hub.get(a.id).folder === 'gamma', 5_000);
+    assert.equal(d.hub.get(b.id).folder, 'beta');
+    // Moved into another top folder: it belongs to that project now.
+    const mv = await call('POST', '/api/move', { from: 'gamma', to: 'beta/gamma', type: 'folder' });
+    assert.equal(mv.status, 200, JSON.stringify(mv.body));
+    await until(() => d.hub.get(a.id).folder === 'beta', 5_000);
+    // A subfolder move leaves the project alone.
+    const sub = await call('POST', '/api/move', { from: 'beta/gamma', to: 'gamma2', type: 'folder' });
+    assert.equal(sub.status, 200, JSON.stringify(sub.body));
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(d.hub.get(a.id).folder, 'beta');
   } finally { await t.stop(); }
 });
 

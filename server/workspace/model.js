@@ -5,7 +5,7 @@
 // Block `layout` rules are shared with the web (a higher sub-format `v` is kept verbatim).
 import { cleanLayout, layoutProblem } from '../../shared/render/block-layout.ts';
 // Block `codeRefs` (code references per node) follow the same rules, shared with the web.
-import { blockCodeProblem, cleanBlockCode } from '../../shared/render/block-code.ts';
+import { blockCodeProblem, cleanBlockCode, salvageBlockCode } from '../../shared/render/block-code.ts';
 // Pipeline `plan` rules are shared with the web (a higher `plan.v` is kept verbatim).
 import { cleanPlan, planProblem } from '../../shared/dispatch/plan.ts';
 
@@ -69,9 +69,10 @@ function normalizeBlock(b, i, lenient) {
   }
   if (b.codeRefs !== undefined) {
     try {
-      out.codeRefs = normalizeCodeRefs(b.codeRefs, `blocks[${i}].codeRefs`);
+      out.codeRefs = normalizeCodeRefs(lenient ? salvageBlockCode(b.codeRefs) : b.codeRefs, `blocks[${i}].codeRefs`);
     } catch (e) {
-      // On read, broken code refs (hand-edited file) only lose the refs, not the whole file.
+      // On read, bad refs are dropped one by one (salvageBlockCode); a codeRefs still broken after that
+      // (hand-edited file) only loses the refs, not the whole file.
       if (!lenient || !(e instanceof ValidationError)) throw e;
     }
   }

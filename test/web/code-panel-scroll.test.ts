@@ -16,3 +16,14 @@ test('previewScrollTop: never negative', () => {
   assert.equal(previewScrollTop({ firstTop: 20, span: 100, boxHeight: 300 }), 0);
   assert.equal(previewScrollTop({ firstTop: 10, span: 2000, boxHeight: 300 }), 0);
 });
+
+test('previewScrollTop: the margin is continuous at the fits/overflows boundary (#539)', () => {
+  const at = (span: number) => 1000 - previewScrollTop({ firstTop: 1000, span, boxHeight: 300 });
+  assert.equal(at(300), 0, 'exactly fits: no margin');
+  assert.equal(at(301), 1, 'one pixel over: one pixel of margin, not a 16px jump');
+  assert.equal(at(299), 0.5);
+  assert.equal(at(310), 10);
+  assert.equal(at(316), 16);
+  assert.equal(at(2000), 16, 'the margin stops at 16px');
+  for (let s = 250; s < 400; s++) assert.ok(Math.abs(at(s + 1) - at(s)) <= 1, `margin steps at most 1px at span ${s}`);
+});

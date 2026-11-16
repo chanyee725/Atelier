@@ -157,6 +157,8 @@ export function createFileSession(deps: Deps) {
         reloading = false;
         const pending = pendingReload;
         pendingReload = null;
+        // No read now: nothing was queued, an unsaved edit or a save in flight must not be replaced by a read, or the
+        // queued event is for a file that is no longer open (#568).
         if (pending === null || dirty || inFlight || state.path !== pending.path) return;
         // What this run read only counts when it read the same file.
         const held = Math.max(pending.path === p ? readRevision : 0, state.file?.revision ?? 0);

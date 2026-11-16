@@ -1,11 +1,11 @@
-// Headless check that Hangul in diagram block pictures is drawn in Pretendard (E504g): the canvas/document picture and
-// the SVG/PNG export embed only the used glyphs, fetched from local build assets; nothing leaves 127.0.0.1.
+// Headless check that Latin text in diagram block pictures, the empty-block placeholder included, is drawn in the
+// embedded Latin Drawing Sans face (Pretendard subset, E504g) rather than a system font; nothing leaves 127.0.0.1.
 //   DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_E2E_SHOTS=<dir> also saves screenshots and the exported files there.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,7 +83,7 @@ test('Latin text in block pictures, placeholder included, uses embedded Pretenda
   await page.waitForSelector('.doc-diagram-pic img', { timeout: 30000 });
   await page.waitForFunction(() => document.querySelectorAll('.doc-diagram-pic img').length >= 2, null, { timeout: 30000 });
   await page.waitForTimeout(1500);
-  const svgs = await page.evaluate(() => [...document.querySelectorAll('.doc-diagram-pic img')].map((i) => atob(i.src.split(',')[1].replace(/^$/, ''))));
+  const svgs = await page.evaluate(() => [...document.querySelectorAll('.doc-diagram-pic img')].map((i) => atob(i.src.split(',')[1])));
   const decode = (b) => Buffer.from(b, 'binary').toString('utf8');
 
   await t.test('Latin text of a drawing uses the embedded Drawing Sans (Pretendard) face, not a system font', async () => {

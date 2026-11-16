@@ -174,11 +174,11 @@ export function codeError(status: number, error?: string): string {
   }
 }
 
-/** A `</>` badge over one node of a block picture, in wrapper pixels (the node box's top-right corner). */
-export type Badge = { blockId: string; node: string; x: number; y: number };
+/** A `</>` badge over one node of a block picture or a free-form shape, in wrapper pixels (the box's top-right corner). */
+export type Badge = { blockId: string; node: string; label: string; x: number; y: number };
 
 /** The element and view fields badge placement reads. */
-export type BadgeEl = SceneEl & { opacity?: number; angle?: number; fileId?: string | null; containerId?: string | null };
+export type BadgeEl = SceneEl & { opacity?: number; angle?: number; fileId?: string | null; containerId?: string | null; text?: string };
 export type BadgeView = { scrollX: number; scrollY: number; zoom: { value: number }; offsetLeft: number; offsetTop: number };
 
 /**
@@ -202,7 +202,7 @@ export function placeBadges(
     if (blockId === null) {
       if (!(e.type === 'text' && e.containerId) && shapeCode(e)) {
         const f = layoutFrame(e, { width: 1, origin: { x: 0, y: 0 } }, view);
-        out.push({ blockId: '', node: e.id, x: f.x + e.width * view.zoom, y: f.y });
+        out.push({ blockId: '', node: e.id, label: shapeLabel(els, e), x: f.x + e.width * view.zoom, y: f.y });
       }
       continue;
     }
@@ -214,17 +214,21 @@ export function placeBadges(
     const f = layoutFrame(e, { width: pic.width, origin: { x: 0, y: 0 } }, view);
     for (const h of pic.scene.handles) {
       if (h.kind !== 'node' || !Object.hasOwn(info.nodes, h.id)) continue;
-      out.push({ blockId, node: h.id, x: f.x + (h.x + h.w) * f.k, y: f.y + h.y * f.k });
+      out.push({ blockId, node: h.id, label: h.id, x: f.x + (h.x + h.w) * f.k, y: f.y + h.y * f.k });
     }
   }
   return out;
 }
 
 export const sameBadges = (a: readonly Badge[], b: readonly Badge[]) =>
-  a.length === b.length && a.every((p, i) => p.blockId === b[i]!.blockId && p.node === b[i]!.node && p.x === b[i]!.x && p.y === b[i]!.y);
+  a.length === b.length && a.every((p, i) => p.blockId === b[i]!.blockId && p.node === b[i]!.node && p.label === b[i]!.label && p.x === b[i]!.x && p.y === b[i]!.y);
 
-/** Scroll offset for the code preview: a range that fits is centred; a taller one starts at its first line (small top margin). */
+/**
+ * Scroll offset for the code preview: a range that fits is centred; a taller one starts at its first line with a small
+ * top margin. The margin grows smoothly from 0 to 16px past the fit boundary, so it never jumps by a whole margin.
+ * `firstTop` is the first line's offset from the box's padding edge (scrollTop's frame), not its border edge.
+ */
 export function previewScrollTop({ firstTop, span, boxHeight }: { firstTop: number; span: number; boxHeight: number }): number {
-  const margin = span > boxHeight ? 16 : (boxHeight - span) / 2;
+  const margin = span <= boxHeight ? (boxHeight - span) / 2 : Math.min(16, span - boxHeight);
   return Math.max(0, firstTop - margin);
 }
