@@ -1,7 +1,7 @@
 // Dashboard ("모든 파일") and project home: data loading, tabs, quick-create chips. Layout B of
 // docs/design/dispatch-integration/6-app-shell-projects.md §3.1. Built from shadcn Tabs / Button / DropdownMenu.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, FilePlus2, FileText, Folder, FolderClosed, Layers, Menu, PenTool, Plus, Search, Workflow } from 'lucide-react';
+import { ArrowLeft, FilePlus2, FileText, Folder, Layers, Menu, PenTool, Plus, Search, Workflow } from 'lucide-react';
 import { projectsApi, type ProjectDoc, type ProjectInfo, type ProjectsResponse } from '../api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ColumnHead, DocList, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
-import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
+import { CHORD_MS, RECENT_LIMIT, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -200,24 +200,17 @@ const LetterBadge = ({ children }: { children: React.ReactNode }) => (
 );
 
 function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
-  const [tab, setTab] = useState<DashTab>('projects');
+  // With no project yet, loose files are only in 전체, so that tab opens first.
+  const [tab, setTab] = useState<DashTab>(() => (data.projects.length > 0 ? 'projects' : 'all'));
   const { collapsed, toggle } = useCollapse();
   const files = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
   // Projects without documents still get the 프로젝트별 tab (their groups and + buttons); only a bare workspace is empty.
+  // Files right in the workspace root belong to no project: they have no group (no 미분류, #592) and stay reachable
+  // in 전체 / 최근 and through search, with 최상위 as their 위치. Nothing on disk changes.
   const empty = files.length === 0 && data.projects.length === 0;
   const found = files.filter((f) => matchesQuery(f.title, query));
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
   const tree = (docs: ProjectDoc[], label: string) => <DocList docs={filterDocs(docs, query)} collapsed={collapsed} label={label} running={p.running} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />;
-  const unfiled = () => {
-    const shown = filterDocs(data.unfiled, query);
-    return shown.length > 0 && (
-      <section aria-label="미분류">
-        <GroupHead badge={<FolderClosed className="size-4 shrink-0" aria-hidden />} name="미분류" count={allDocs([], data.unfiled).length} />
-        {tree(data.unfiled, '미분류')}
-      </section>
-    );
-  };
-
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as DashTab)} className="gap-0">
       <header className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
@@ -232,7 +225,6 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           <TabsTrigger value="all">전체</TabsTrigger>
           <TabsTrigger value="recent">최근</TabsTrigger>
           <TabsTrigger value="projects">프로젝트별</TabsTrigger>
-          <TabsTrigger value="unfiled">미분류</TabsTrigger>
         </TabsList>
         {!p.narrow && <SearchBox value={query} onChange={onQuery} inputRef={search} placeholder="파일 찾기" />}
       </header>
@@ -277,7 +269,8 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
             })()}
           </TabsContent>
           <TabsContent value="projects">
-            <ColumnHead />
+            {data.projects.length === 0 && <Empty>아직 프로젝트가 없어요. 파일은 전체에서 볼 수 있어요.</Empty>}
+            {data.projects.length > 0 && <ColumnHead />}
             {data.projects.map((pr) => {
               if (query.trim() && filterDocs(pr.docs, query).length === 0) return null;
               return (
@@ -287,18 +280,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
                 </section>
               );
             })}
-            {unfiled()}
             {query.trim() && found.length === 0 && noMatch}
-          </TabsContent>
-          <TabsContent value="unfiled">
-            {filterDocs(data.unfiled, query).length === 0 ? (
-              <Empty>{query.trim() ? '맞는 파일이 없어요' : '미분류 파일이 없어요. 모든 파일이 프로젝트 안에 있어요.'}</Empty>
-            ) : (
-              <>
-                <ColumnHead />
-                {tree(data.unfiled, '미분류')}
-              </>
-            )}
           </TabsContent>
         </>
       )}
