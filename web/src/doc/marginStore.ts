@@ -27,19 +27,24 @@ import {
   type MarginMap,
   type MarginRoom,
   type MarginCard,
+  applyStatus,
+  type StatusEvent,
+  type Statuses,
 } from './agentMargin.ts';
 
-type Snap = { map: MarginMap; presence: readonly AgentPresence[] };
-let snap: Snap = { map: new Map(), presence: [] };
+type Snap = { map: MarginMap; presence: readonly AgentPresence[]; statuses: Statuses };
+let snap: Snap = { map: new Map(), presence: [], statuses: new Map() };
 let seq = 0;
 let started = false;
 const subs = new Set<() => void>();
 const put = (next: Partial<Snap>) => {
-  if ((next.map ?? snap.map) === snap.map && (next.presence ?? snap.presence) === snap.presence) return;
+  if ((next.map ?? snap.map) === snap.map && (next.presence ?? snap.presence) === snap.presence && (next.statuses ?? snap.statuses) === snap.statuses) return;
   snap = { ...snap, ...next };
   for (const f of subs) f();
 };
 const clock = () => Date.now();
+
+const onCursor = (e: StatusEvent) => put({ map: applyMarginEvent(snap.map, e, clock(), ++seq), statuses: applyStatus(snap.statuses, e) });
 
 function loadPresence() {
   void fetch('/api/workspace/agents')
@@ -54,7 +59,8 @@ function loadPresence() {
 function start() {
   if (started) return;
   started = true;
-  events.subscribeJson<CursorEvent>('cursor', (e) => put({ map: applyMarginEvent(snap.map, e, clock(), ++seq) }));
+  events.subscribeJson<StatusEvent>('cursor', onCursor);
+  events.subscribeJson<StatusEvent>('cursor-status', (e) => put({ statuses: applyStatus(snap.statuses, e) }));
   events.subscribeJson<{ file?: string; run?: { endedAt?: number | null } }>('run', (e) => {
     if (e?.run?.endedAt && typeof e.file === 'string') put({ map: clearFile(snap.map, e.file) });
   });
@@ -67,8 +73,8 @@ function start() {
       return;
     }
     // Events missed while the stream was down: places from before the gap are stale. The server sends the cursors of
-    // sessions still at work to the new connection, so their cards come back (E536).
-    put({ map: clearFile(snap.map) });
+    // sessions still at work to the new connection, so their cards come back (E536), with their status.
+    put({ map: clearFile(snap.map), statuses: new Map() });
     loadPresence();
   });
   loadPresence();
@@ -82,7 +88,7 @@ const subscribe = (f: () => void) => {
 const read = () => snap;
 
 /** For tests and the e2e hook: apply one `cursor` event as if it came from the stream. */
-export const applyMarginCursor = (e: CursorEvent) => put({ map: applyMarginEvent(snap.map, e, clock(), ++seq) });
+export const applyMarginCursor = (e: StatusEvent) => onCursor(e);
 
 // ---- the hook ----
 
@@ -135,7 +141,7 @@ export function jumpTo(editor: Editor | null, spot: DocSpot) {
  * measured `room`, see formOf), and the remembered collapse state. `editor` gives the document's blocks for the words.
  */
 export function useAgentMargin(file: string, editor: Editor | null, room: MarginRoom | null): AgentMargin {
-  const { map, presence } = useSyncExternalStore(subscribe, read, read);
+  const { map, presence, statuses } = useSyncExternalStore(subscribe, read, read);
   const [now, setNow] = useState(clock);
   // The document's blocks, read again on every editor change (the words follow the text).
   const [blocks, setBlocks] = useState<BlockInfo[]>([]);
@@ -188,8 +194,8 @@ export function useAgentMargin(file: string, editor: Editor | null, room: Margin
 
   const agents = useMemo(
     () =>
-      mine.map((a) => marginCard(a, presence.find((p) => p.sid === a.sid) ?? null, now, blocks)),
-    [mine, presence, now, blocks],
+      mine.map((a) => marginCard(a, presence.find((p) => p.sid === a.sid) ?? null, now, blocks, statuses.get(a.sid) ?? null)),
+    [mine, presence, statuses, now, blocks],
   );
 
   const [stored, setStored] = useState(readStored);

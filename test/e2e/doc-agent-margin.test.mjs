@@ -156,8 +156,8 @@ async function run(t, view) {
   assert.ok(name);
   release(1);
 
-  // 1. The margin opens beside the text and the card names the session. 문서: the text column shifts left. 둘 다: the
-  // document pane takes the panel's width from the canvas, so the text stays where it was.
+  // 1. The margin opens beside the text and the card names the session; text and panel split the row 6:4 (E537).
+  // 문서: the text column shifts left. 둘 다: the document pane widens (×5/3, up to the canvas minimum) into the canvas.
   const panel = page.locator('[data-margin-panel]');
   await panel.waitFor({ timeout: 15_000 });
   assert.equal(await panel.getAttribute('data-form'), 'side');
@@ -170,11 +170,15 @@ async function run(t, view) {
   const x1 = await textX();
   if (view === 'doc') assert.ok(x1 < x0 - 20, `the text moved left: ${x0} → ${x1}`);
   else {
-    assert.ok(Math.abs(x1 - x0) <= 6, `the text kept its place: ${x0} → ${x1}`);
     const w1 = await widths();
-    assert.ok(w1.pane - w0.pane > 200 && w1.pane - w0.pane < 320, `the document pane widened by the panel: ${JSON.stringify([w0, w1])}`);
-    assert.ok(w0.canvas - w1.canvas > 200, `the canvas gave the room: ${JSON.stringify([w0, w1])}`);
+    assert.ok(w1.pane - w0.pane > 200, `the document pane widened by the panel: ${JSON.stringify([w0, w1])}`);
+    assert.ok(w0.canvas - w1.canvas > 200 && w1.canvas >= 420, `the canvas gave the room, down to its minimum (less the divider): ${JSON.stringify([w0, w1])}`);
   }
+  const row = await page.evaluate(() => {
+    const w = (sel) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0;
+    return { host: w('.doc-margin'), main: w('.doc-margin-main'), aside: w('.doc-margin-aside') };
+  });
+  assert.ok(Math.abs(row.main - row.host * 0.6) <= 2 && Math.abs(row.aside - row.host * 0.4) <= 2, `text and panel split 6:4: ${JSON.stringify(row)}`);
   // The panel never covers the text.
   const [pb, ib] = await Promise.all([panel.boundingBox(), intro.boundingBox()]);
   assert.ok(ib.x + ib.width <= pb.x + 1, `text ${JSON.stringify(ib)} clear of panel ${JSON.stringify(pb)}`);
@@ -248,16 +252,15 @@ async function run(t, view) {
     await page.waitForTimeout(300);
 
     // 4c. Across the side↔sheet boundary (#643): the text needs 360px, so the widest sheet puts the divider at
-    // edge = split left + 360 + chrome and the narrowest side layout at edge + panel. Outside that gap the divider
-    // stays under the pointer; inside it no share fits, so it snaps to the nearer end (off by at most half the panel)
-    // and the form matches the end it took.
+    // edge = split left + 360 + 0.6 × chrome and the narrowest side layout (text 6/10 of the row) at split left +
+    // 360 / 0.6 + chrome = edge + pw. Outside that gap the divider stays under the pointer; inside it no share fits,
+    // so it snaps to the nearer end (off by at most half the gap) and the form matches the end it took.
     const bounds = await page.evaluate(() => {
       const host = document.querySelector('.doc-margin');
       const pane = document.querySelector('.split-doc');
       const split = pane.parentElement.getBoundingClientRect();
       const chrome = Math.max(0, pane.getBoundingClientRect().width - host.getBoundingClientRect().width);
-      const panel = parseFloat(getComputedStyle(host).getPropertyValue('--doc-margin-w')) || 304;
-      return { edge: split.left + 360 + chrome, panel };
+      return { edge: split.left + 360 + 0.6 * chrome, panel: 240 + 0.4 * chrome };
     });
     const at = await page.evaluate(() => { const r = document.querySelector('.split-doc').nextElementSibling.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
     await page.mouse.move(at.x, at.y);
@@ -335,10 +338,14 @@ async function run(t, view) {
   });
   await page.waitForTimeout(500);
   const x2 = await textX();
-  assert.ok(Math.abs(x2 - x0) <= 2, `the text came back: ${x0} → ${x2}`);
+  // 둘 다: the drags above end at the canvas minimum, where the share under the pointer is smaller than the one the
+  // pane started with (the 6:4 pane is clamped there), so the text comes back near, not exactly at, where it was.
+  if (view === 'doc') assert.ok(Math.abs(x2 - x0) <= 2, `the text came back: ${x0} → ${x2}`);
+  else assert.ok(Math.abs(x2 - x0) <= 60 && (await page.locator('.doc-margin-aside').count()) === 0, `the text came back: ${x0} → ${x2}`);
   if (view === 'both') {
     const w2 = await widths();
-    assert.ok(Math.abs(w2.pane - w0.pane) <= 2 && Math.abs(w2.canvas - w0.canvas) <= 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
+    // (Not exactly w0: see above, the drag that ended at the canvas minimum set a smaller share.)
+    assert.ok(w2.canvas >= w0.canvas - 2 && w2.pane <= w0.pane + 2, `the canvas got its room back: ${JSON.stringify([w0, w2])}`);
   }
   assert.deepEqual(await caret(), mine);
   assert.deepEqual(errors, []);

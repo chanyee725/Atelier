@@ -27,6 +27,8 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
+import { ActivityBell } from './activity/ActivityBell';
+import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
 import type { Theme, ThemePref } from './theme';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
@@ -333,6 +335,7 @@ export function Sidebar(p: Props) {
           </span>
           <span className="truncate text-sm font-semibold">{p.workspace ?? 'Drawing'}</span>
         </div>
+        <ActivityBell className={ICON_BUTTON} onOpen={p.onOpen} />
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />
         </button>
@@ -352,6 +355,7 @@ export function Sidebar(p: Props) {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
+        <WorkingAgents current={p.current} onOpen={p.onOpen} />
         <SidebarGroup className="mt-3">
           <SidebarGroupLabel>프로젝트</SidebarGroupLabel>
           <SidebarGroupAction aria-label="새 프로젝트" title="새 프로젝트" onClick={p.onNewProject}>

@@ -94,6 +94,30 @@ test('agents module: activity follows the hub session events and clears between 
   r.ctx.modules.cursor.close();
 });
 
+test('buildAgents: statusLabel from the cursor module status (#654), absent when null', () => {
+  const sessions = [{ id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' }, { id: 's2', name: 'Cal', role: 'lead', model: 'm', status: 'running' }];
+  const statusOf = (sid) => (sid === 's1' ? '다이어그램 작성 중…' : null);
+  const [a, b] = buildAgents({ sessions, statusOf }).sort((x, y) => x.sid.localeCompare(y.sid));
+  assert.equal(a.statusLabel, '다이어그램 작성 중…');
+  assert.equal('statusLabel' in b, false);
+});
+
+test('agents module: statusLabel follows cursor.onStatus', async () => {
+  const r = rig();
+  let label = null;
+  const fns = new Set();
+  r.ctx.modules.cursor = { onHeld: () => () => {}, statusOf: () => label, onStatus: (fn) => (fns.add(fn), () => fns.delete(fn)) };
+  const m = await agents.setup(r.ctx);
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' };
+  r.hub.emit('session', r.hub.sessions.s1);
+  assert.equal('statusLabel' in m.list()[0], false);
+  label = '글 작성 중…';
+  for (const fn of fns) fn({ sid: 's1', status: label });
+  assert.equal(r.sent.filter((s) => s.event === 'agents').at(-1).data.agents[0].statusLabel, '글 작성 중…');
+  m.close();
+  assert.equal(fns.size, 0, 'close unsubscribes');
+});
+
 test('buildAgents: the pipeline step title, trimmed and capped', () => {
   const sessions = [{ id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' }, { id: 's2', name: 'Cal', role: 'lead', model: 'm', status: 'running' }];
   const stepOf = (s) => (s.id === 's1' ? '  화면 지도 그리기 ' : '   ');
@@ -177,7 +201,8 @@ test('agents module: the list follows edits, sessions and named outside writers'
   await r.change('P/a.dpx.json', rect('r', 50));
   assert.deepEqual(lists().at(-1).map((a) => [a.name, a.file]), [['Otto', 'P/a.dpx.json']]);
 
-  // A repeated session update with nothing new is not sent again.
+  // A repeated session update with nothing new is not sent again (the first one may bring the status label up to date).
+  r.hub.emit('session', r.hub.sessions.s1);
   const n = lists().length;
   r.hub.emit('session', r.hub.sessions.s1);
   assert.equal(lists().length, n);

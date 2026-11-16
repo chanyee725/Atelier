@@ -87,7 +87,7 @@ export function DocMargin({ file, children }: Props) {
     const scroller = scrollerOf(el);
     const update = () => {
       const next = measureRoom(el);
-      setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.panel === next.panel ? old : next));
+      setRoom((old) => (old && old.box === next.box && old.share === next.share && old.chrome === next.chrome && old.rail === next.rail ? old : next));
       lefts.current = measure();
       if (scroller) el.style.setProperty('--doc-margin-view-h', `${scroller.clientHeight}px`);
     };

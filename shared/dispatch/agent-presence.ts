@@ -19,6 +19,8 @@ export interface AgentPresence {
   provider?: string;
   /** What its current turn is doing ("코드 읽기", from the hub's tool activity); absent between turns. Memory only. */
   activity?: string;
+  /** Short status label from the cursor module ("다이어그램 작성 중…", shared/dispatch/agent-status.ts); absent when idle. Memory only. */
+  statusLabel?: string;
   /** Title of the pipeline step it works on (the plan diagram's node label); absent outside a running plan. */
   step?: string;
   /** Hub status: starting | running | waiting (only live sessions are listed). */

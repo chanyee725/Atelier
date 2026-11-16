@@ -8,7 +8,7 @@
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
 // parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
 import { AGENT_COLORS } from '../dispatch/colors.js';
-import { changedCentre, changedDocSpot, changedKeys, docBlocksOf, mentionsFile, shapesOf, textMentions } from './model.js';
+import { changedCentre, changedDocSpot, changedKeys, docBlocksOf, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
 import { agentStatus } from '../../shared/dispatch/agent-status.ts';
 
 const ATTRIBUTE_MS = 60_000;
@@ -315,7 +315,9 @@ export async function setup(ctx) {
     const now = Date.now();
     holds.set(s.id, { file: rel, at: now });
     if (at) targets.set(s.id, targetOf(at, after));
-    held({ sid: s.id, file: rel, at: now });
+    // The section the change landed in, for the activity log (E537, #654); absent without a document place.
+    const section = at?.doc ? sectionAt(docOf(after), at.doc.index) : null;
+    held({ sid: s.id, file: rel, at: now, ...(section ? { section } : {}) });
     const status = statusOf(s.id);
     if (status) statuses.set(s.id, status);
     // `live`: the page keeps this cursor until the session ends or moves on (a `gone` event), it does not fade.
@@ -397,7 +399,7 @@ export async function setup(ctx) {
       statusListeners.add(fn);
       return () => statusListeners.delete(fn);
     },
-    /** fn({ sid, file, at, name?, outside? } | { sid, gone: true }) when a writer is credited with a change or leaves. */
+    /** fn({ sid, file, at, name?, outside?, section? } | { sid, gone: true }) when a writer is credited with a change or leaves. */
     onHeld(fn) {
       heldListeners.add(fn);
       return () => heldListeners.delete(fn);

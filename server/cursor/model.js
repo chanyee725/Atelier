@@ -151,3 +151,18 @@ export function changedDocSpot(before = [], after = []) {
   while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
   return { index, offset: a.length - s };
 }
+
+/**
+ * The section a document change landed in (E537, #654): the text of the nearest non-empty heading at or above block
+ * `index` in `blocks` (docBlocksOf), clipped to 60 characters; null above the first heading or without a place.
+ */
+export function sectionAt(blocks = [], index) {
+  if (!Number.isInteger(index) || index < 0) return null;
+  for (let i = Math.min(index, blocks.length - 1); i >= 0; i--) {
+    const b = blocks[i];
+    if (b?.type !== 'heading') continue;
+    const t = String(b.text ?? '').replace(/\s+/g, ' ').trim();
+    if (t) return [...t].slice(0, 60).join('');
+  }
+  return null;
+}
