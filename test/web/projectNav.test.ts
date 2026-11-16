@@ -53,8 +53,9 @@ const key = (code: string, more: Record<string, unknown> = {}) =>
   shellKey({ code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: false, repeat: false, defaultPrevented: false, target: null, ...more });
 const inside = (match: boolean) => ({ closest: () => (match ? {} : null) }) as unknown as EventTarget;
 
-test('shellKey: A R B N , outside fields, editors, the canvas and dialogs only', () => {
-  assert.deepEqual(['KeyA', 'KeyR', 'KeyB', 'KeyN', 'Comma'].map((c) => key(c)), ['all', 'recent', 'archive', 'new', 'settings']);
+test('shellKey: A R B N outside fields, editors, the canvas and dialogs only', () => {
+  assert.deepEqual(['KeyA', 'KeyR', 'KeyB', 'KeyN'].map((c) => key(c)), ['all', 'recent', 'archive', 'new']);
+  assert.equal(key('Comma'), null, ', no longer opens anything');
   assert.equal(key('KeyX'), null);
   for (const m of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey', 'isComposing', 'repeat', 'defaultPrevented']) assert.equal(key('KeyA', { [m]: true }), null, m);
   assert.equal(key('KeyA', { target: inside(true) }), null);
@@ -77,7 +78,8 @@ test('modelStatus: text next to every dot, warn above 75%', async () => {
   assert.deepEqual(modelStatus({ ...m, pct: null }, true), { text: '연결됨', long: '연결됨', tone: 'ok' });
   assert.equal(modelStatus({ ...m, reached: true }, true).text, '한도 도달');
   assert.deepEqual(modelStatus({ ...m, connected: false }, true), { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' });
-  assert.equal(modelStatus(m, false).text, '꺼짐');
+  assert.equal(modelStatus(m, false).text, '연결 안 됨');
+  assert.deepEqual(modelStatus({ ...m, connected: false, busy: true }, true), { text: '연결 중', long: '연결하는 중', tone: 'off' });
 });
 
 test('paletteScope follows the screen: open file on the document, shown project on its home, none on the dashboard', () => {

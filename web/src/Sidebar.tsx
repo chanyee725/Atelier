@@ -3,7 +3,7 @@
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useRef, useState } from 'react';
-import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, Settings, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -26,6 +26,8 @@ import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SidebarModels } from './SidebarModels';
+import { ThemeMenu } from './ThemeMenu';
+import type { ThemePref } from './theme';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
 
 export const displayName = (n: { name: string; title?: string }) => n.title || n.name.replace(/\.dpx\.json$/, '');
@@ -46,8 +48,9 @@ type Props = {
   onMove: (item: MoveItem, dir: string) => Promise<boolean>;
   onArchive: () => void;
   onCommands: () => void;
-  /** Opens the settings dialog (the 설정 row). */
-  onSettings: () => void;
+  /** The 테마 row's popover: the chosen theme and its setter. */
+  themePref: ThemePref;
+  onThemePref: (t: ThemePref) => void;
 };
 
 const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
@@ -370,12 +373,7 @@ export function Sidebar(p: Props) {
         <SidebarModels />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton data-settings-trigger className="group/row" aria-haspopup="dialog" aria-keyshortcuts="," onClick={p.onSettings}>
-              <Settings aria-hidden />
-              <span className="truncate">설정</span>
-              {/* The key is announced through aria-keyshortcuts, so the button's name stays 설정. */}
-              <Kbd aria-hidden className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">,</Kbd>
-            </SidebarMenuButton>
+            <ThemeMenu pref={p.themePref} onPref={p.onThemePref} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
