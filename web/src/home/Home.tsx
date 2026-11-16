@@ -13,6 +13,7 @@ import { ColumnHead, DocList, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { AgentPanel } from './AgentPanel';
+import { HomeDashboard } from './HomeDashboard';
 import { agentsIn, holdersByFile } from './agents';
 import { useAgents } from './useAgents';
 import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
@@ -203,8 +204,13 @@ const LetterBadge = ({ children }: { children: React.ReactNode }) => (
 );
 
 function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
-  // With no project yet, loose files are only in 전체, so that tab opens first.
-  const [tab, setTab] = useState<DashTab>(() => (data.projects.length > 0 ? 'projects' : 'all'));
+  // 개요 (the dashboard, #685) opens first; the full list is one tab away.
+  const [tab, setTab] = useState<DashTab>('home');
+  // Searching from 개요 shows the hits in 전체.
+  const onSearch = (q: string) => {
+    onQuery(q);
+    if (q.trim() && tab === 'home') setTab('all');
+  };
   const { collapsed, toggle } = useCollapse();
   const files = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
   // Projects without documents still get the 프로젝트별 tab (their groups and + buttons); only a bare workspace is empty.
@@ -225,15 +231,16 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
         <h1 className="m-0 shrink-0 text-[15px] font-semibold">모든 파일</h1>
         {/* One row; on a narrow screen the pills scroll sideways instead of wrapping. */}
         <TabsList aria-label="보기" className="min-w-0 shrink justify-start overflow-x-auto [scrollbar-width:none] [&>*]:flex-none">
+          <TabsTrigger value="home">개요</TabsTrigger>
           <TabsTrigger value="all">전체</TabsTrigger>
           <TabsTrigger value="recent">최근</TabsTrigger>
           <TabsTrigger value="projects">프로젝트별</TabsTrigger>
         </TabsList>
-        {!p.narrow && <SearchBox value={query} onChange={onQuery} inputRef={search} placeholder="파일 찾기" />}
+        {!p.narrow && <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" />}
       </header>
       {p.narrow && (
         <div className="border-b px-3 py-2">
-          <SearchBox value={query} onChange={onQuery} inputRef={search} placeholder="파일 찾기" wide />
+          <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" wide />
         </div>
       )}
       <div role="group" aria-label="새로 만들기" className="flex items-center gap-1.5 overflow-x-auto border-b px-4 py-2.5 [scrollbar-width:none]">
@@ -258,7 +265,10 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           </Button>
         ))}
       </div>
-      {empty ? (
+      <TabsContent value="home">
+        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onTab={setTab} />
+      </TabsContent>
+      {tab === 'home' ? null : empty ? (
         <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
       ) : (
         <>
