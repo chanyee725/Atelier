@@ -1,0 +1,4 @@
+# Loaded by `npm test` through node --env-file (works on every OS shell, unlike VAR=x prefixes).
+# Polling instead of fs.watch keeps parallel test servers from exhausting the inotify instance limit.
+# Test only: see server/workspace/poll-watch.js.
+DRAW_WORKSPACE_WATCH=poll
