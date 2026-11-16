@@ -287,11 +287,24 @@ test('stepRows: each step names its model, sessions first, else the plan step or
     models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }],
   };
   const rows = stepRows(r, new Map(), T0 + 20 * MIN, new Map(), cat);
-  assert.equal(rows[0]!.model, 'claude-opus-5-5'); // ran: the session's model
+  assert.equal(rows[0]!.model, 'claude-opus-5-5'); // ran: the session's model (not in this catalog, so its id)
   assert.equal(rows[1]!.model, 'gpt-5-codex'); // its session reports no model yet: the plan's
   assert.equal(rows[2]!.model, 'Sonnet 5.5'); // pending: the role's model, by its label
   assert.equal(rows[3]!.model, 'gemini-x');
   assert.equal(rows[4]!.model, undefined); // role impl unknown, no model
   assert.equal(plannedModel(r.plan.snapshot, 'impl', cat), 'gpt-5-codex');
   assert.equal(plannedModel(r.plan.snapshot, 'nope', cat), null);
+});
+
+test('stepRows: a finished session shows its model label, not the id; an unknown id stays as is (PR #617 review)', () => {
+  const r = record();
+  r.state = 'done';
+  r.endedAt = T0 + 30 * MIN;
+  r.steps.plan!.sessions[0]!.model = 'claude-opus-5-5';
+  const cat = { models: [{ id: 'claude-opus-5-5', label: 'Opus 5.5' }] };
+  const rows = stepRows(r, new Map(), T0 + 40 * MIN, new Map(), cat);
+  assert.equal(rows[0]!.model, 'Opus 5.5');
+  assert.equal(rows[0]!.agents[0]!.model, 'Opus 5.5');
+  assert.equal(stepRows(r, new Map(), T0 + 40 * MIN, new Map(), {})[0]!.model, 'claude-opus-5-5');
+  assert.equal(sessionRows(r, new Map(), T0 + 40 * MIN, cat)[0]!.model, 'Opus 5.5');
 });

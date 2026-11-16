@@ -1,12 +1,12 @@
 // `실행` view (E22, docs/design/dispatch-integration/3-ux-flow.md §4): steps, sessions and limits side by side, the
 // run's history under them. Columns follow the view's own width (container query), so it stacks in a narrow pane.
 // Session sheets (transcripts, in memory only) load lazily on click.
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Meter, StatusBadge } from '../dispatch/parts';
-import { useDispatch } from '../dispatch/store.ts';
+import { connect, useDispatch } from '../dispatch/store.ts';
 import { until } from '../dispatch/lib/format.ts';
 import { FOCUS_RING } from '../lib/focus';
-import { limitGroups } from '../modelConnect';
+import { runLimits } from '../modelConnect';
 import { useModels } from '../SidebarModels';
 import { cn } from '../lib/utils';
 import { selectRun } from './runData.ts';
@@ -29,12 +29,13 @@ function Column({ title, children, className }: { title: string; children: React
 const fmtTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 
 function Limits({ now }: { now: number }) {
-  const online = useDispatch((s) => s.ready && !s.unavailable);
   const guard = useDispatch((s) => s.settings.guard);
-  const { providers, limits } = useModels();
-  if (!online) return <p className="text-sm text-muted-foreground">실행 중일 때 한도를 보여 줘요.</p>;
-  // One cell per connected provider, read by its id (#587): Claude (with Fable's weekly), Codex, Gemini.
-  const groups = limitGroups(providers, limits);
+  const { status, providers, limits } = useModels();
+  // One cell per connected provider, read by its id (#587): Claude (with Fable's weekly), Codex, Gemini. Shown with or
+  // without a live run.
+  const groups = runLimits(status, providers, limits);
+  if (groups === 'loading') return null;
+  if (groups === 'off') return <p className="text-sm text-muted-foreground">실행 기능이 꺼져 있어서 한도를 볼 수 없어요.</p>;
   return (
     <div className="space-y-4 text-sm">
       {groups.length === 0 && <p className="text-muted-foreground">연결된 모델이 없어요.</p>}
@@ -70,6 +71,9 @@ function Limits({ now }: { now: number }) {
 export default function RunView({ code }: { code: string | undefined }) {
   const m = useRunModel(code);
   const [sheet, setSheet] = useState<string | null>(null);
+  // Roles, models and the guard come from the Dispatch store: load it while this view is open, not only during a run,
+  // so a finished run's waiting steps still show their role's model (PR #617 review).
+  useEffect(() => connect(), []);
   if (!m.record) {
     return <p className="p-6 text-sm text-muted-foreground">아직 실행한 적이 없어요. 계획을 시작하면 여기에서 진행을 볼 수 있어요.</p>;
   }

@@ -167,8 +167,11 @@ export function plannedModel(plan: Plan, stepId: string, cat: ModelCatalog = {})
   const r = resolvedStep(plan, step);
   const id = r.model || (r.role ? cat.roles?.find((x) => x.id === r.role)?.model : undefined);
   if (!id) return null;
-  return cat.models?.find((m) => m.id === id)?.label ?? id;
+  return modelLabel(id, cat);
 }
+
+/** A model id's label from the catalog; the id itself when the catalog does not know it. */
+export const modelLabel = (id: string, cat: ModelCatalog = {}): string => cat.models?.find((m) => m.id === id)?.label ?? id;
 
 type Live = ReadonlyMap<string, LiveSession>;
 
@@ -231,7 +234,9 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     else time = `${fmtDur(now - step.startedAt)}째`;
     const agents = step.sessions.map((s) => {
       const l = live.get(s.sid);
-      const model = l?.modelLabel ?? s.model ?? l?.model;
+      // A finished session is gone from `live`: its record keeps only the id, so look the label up (PR #617 review).
+      const id = s.model ?? l?.model;
+      const model = l?.modelLabel ?? (id ? modelLabel(id, cat) : undefined);
       return { name: l?.name ?? s.name ?? s.sid, role: roleOf(plan, ps.id, s, live), ...(model ? { model } : {}) };
     });
     const label = skipped ? '건너뜀' : paused === 'limit' ? '한도로 멈춤' : paused ? '멈춤' : v.label;
@@ -274,7 +279,7 @@ export interface SessionRow {
   live: boolean;
 }
 
-export function sessionRows(record: RunRecord, live: Live = new Map(), now = Date.now()): SessionRow[] {
+export function sessionRows(record: RunRecord, live: Live = new Map(), now = Date.now(), cat: ModelCatalog = {}): SessionRow[] {
   const plan = record.plan.snapshot;
   const running = isLive(record.state);
   const out: SessionRow[] = [];
@@ -290,7 +295,7 @@ export function sessionRows(record: RunRecord, live: Live = new Map(), now = Dat
         name: l?.name ?? s.name ?? s.sid,
         role,
         roleName: roleLabel(role),
-        model: l?.modelLabel ?? s.model ?? l?.model ?? '',
+        model: l?.modelLabel ?? modelLabel(s.model ?? l?.model ?? '', cat),
         state: stateNow(s, live, running) ?? null,
         branch: l?.branch ?? s.branch ?? null,
         activity: l?.activity ? `${l.activity.label} · ${fmtDur(now - l.activity.since)}째` : null,

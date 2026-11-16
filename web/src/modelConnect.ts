@@ -3,7 +3,7 @@
 // sidebar shows (Claude, OpenAI Codex, Gemini, as in Dispatch), and state, requests, copy and usage are looked up by
 // that id. Pure, so node --test can check it.
 // Server contract: docs/design/model-connection-contract.md. Status only: no account, email or token reaches here.
-import type { LimitWindow, ProviderLimits, ProviderState } from './api';
+import type { DispatchStatus, LimitWindow, ProviderLimits, ProviderState } from './api';
 import { modelStatus, percent, type ModelTone } from './projectNav.ts';
 
 /** What the UI needs to know about one provider. `id` is the server's provider id (/api/providers/<id>/...). */
@@ -135,10 +135,11 @@ export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { win
 export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { main: LimitRow[]; fable: LimitRow[] | null; reached: boolean; reset: number | null } | null {
   if (!meta.usage) return null;
   const u = providerUsage(meta, limits);
-  const row = (w: LimitWindow, prefix = ''): LimitRow => ({ label: prefix + w.label, pct: percent(w.used), reset: w.reset ?? null });
+  // The server already names the sub-bucket windows ('Fable 주간'): use its labels as they are.
+  const row = (w: LimitWindow): LimitRow => ({ label: w.label, pct: percent(w.used), reset: w.reset ?? null });
   return {
     main: u.windows.map((w) => row(w)),
-    fable: u.extra.length ? u.extra.map((w) => row(w, 'Fable ')) : null,
+    fable: u.extra.length ? u.extra.map((w) => row(w)) : null,
     reached: u.reached,
     reset: u.reset,
   };
@@ -156,4 +157,15 @@ export function limitGroups(providers: Record<string, Pick<ProviderState, 'conne
     const r = limitRows(m, limits)!;
     return { id: m.id, name: m.short, rows: [...r.main, ...(r.fable ?? [])], reached: r.reached, reset: r.reset, windowless: !!m.windowless };
   });
+}
+
+/**
+ * The run view's 한도 column (PR #617 review): read from the provider and usage state alone, so it shows for a finished
+ * run too, not only while a run keeps the Dispatch store online. `loading` until /api/dispatch answered, `off` when the
+ * server runs without Dispatch, else the cells.
+ */
+export function runLimits(status: DispatchStatus | null, providers: Record<string, Pick<ProviderState, 'connected'> | undefined>, limits: ProviderLimits): 'loading' | 'off' | LimitGroup[] {
+  if (!status) return 'loading';
+  if (!status.enabled) return 'off';
+  return limitGroups(providers, limits);
 }

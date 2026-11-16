@@ -32,7 +32,7 @@ export function useRunModel(code: string | undefined) {
   return useMemo(() => {
     if (!record) return { data, record: null, running: false, rows: [], sessions: [], strip: null, labels, now };
     const rows = stepRows(record, live, now, labels, { roles, models });
-    const srows = sessionRows(record, live, now);
+    const srows = sessionRows(record, live, now, { models });
     return { data, record, running, rows, sessions: srows, strip: stripModel(record, rows, srows, five, now), labels, now };
   }, [data, record, running, live, now, labels, five, roles, models]);
 }
