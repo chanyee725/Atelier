@@ -246,6 +246,18 @@ test('runs: a file deleted with a folder keeps its runs in the trash', async () 
   });
 });
 
+test('runs: endRun keeps the timeline at TIMELINE_MAX when it closes steps (#437)', async () => {
+  await withRecorder({}, async ({ recorder, store }) => {
+    await store.createFile('a');
+    const { id } = await recorder.startRun({ file: 'a', plan: PLAN });
+    for (let i = 0; i < 600; i++) recorder.updateSession(id, 'impl', { sid: 's1', state: i % 2 ? 'stuck' : 'working' });
+    await recorder.endRun(id, 'done', { results: { review: { abandoned: true } } });
+    const r = await recorder.read('a', id);
+    assert.equal(r.timeline.length, 500);
+    assert.deepEqual(r.timeline.at(-1).slice(1), ['review', 'skipped']);
+  });
+});
+
 test('runs: record over the size cap drops the oldest timeline entries', () => {
   const record = { v: 1, timeline: Array.from({ length: 500 }, (_, i) => [1763000000000 + i, 'impl', 'working']) };
   const text = serializeRecord(record, 8 * 1024);

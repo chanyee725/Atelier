@@ -80,9 +80,17 @@ const row = (type: 'tableHeader' | 'tableCell', cells: string[]): DocNode => ({ 
 const prsOf = (step: SummaryStep) => [...new Set(step.sessions.map((s) => s.pr?.number).filter((n): n is number => Number.isInteger(n)))];
 
 /** The result column: "develop 3f2a1c0", "PR #92", "그만둠" or "—". */
+/**
+ * A step dropped from the run: skipped, or closed as abandoned with no session. Records from before #435 kept
+ * `abandoned` on steps whose sessions finished read-only work; those count as worked (#436).
+ */
+function isAbandoned(step: SummaryStep): boolean {
+  return step.state === 'skipped' || (!!step.result?.abandoned && step.sessions.length === 0);
+}
+
 function resultText(step: SummaryStep): string {
   const r = step.result;
-  if (r?.abandoned || step.state === 'skipped') return '그만둠';
+  if (isAbandoned(step)) return '그만둠';
   const prs = prsOf(step).map((n) => `PR #${n}`);
   if (r?.commit) return [[r.base, r.commit.slice(0, 7)].filter(Boolean).join(' '), ...prs].join(' · ');
   return prs.join(' ') || '—';
@@ -104,7 +112,7 @@ export function summaryNodes(record: SummaryRecord, opts: SummaryOptions = {}): 
     for (const n of prsOf(step)) prs.add(n);
     if (step.result?.commit) merged++;
     const title = opts.labels?.get(ps.node ?? ps.id) || firstLine(ps.task) || ps.id;
-    const abandoned = !!step.result?.abandoned || step.state === 'skipped';
+    const abandoned = isAbandoned(step);
     if (abandoned) diffs.push(`단계 ${i + 1} 그만둠${step.note ? ` ("${step.note}")` : ''}`);
     const models = [...new Set(step.sessions.map((s) => s.model).filter((m): m is string => !!m))];
     const cost = step.sessions.reduce((sum, s) => sum + (s.cost ?? 0), 0);
