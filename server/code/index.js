@@ -1,6 +1,7 @@
 // Read-only code API (E504b, issue #450): GET /api/code?path=&start=&end= returns a window of lines from a file of
 // the git project that holds the workspace, for the "기능 코드" panel. Never writes, caches or logs file content.
-import { open, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { open, readlink, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { ownGitEnv, runCli } from '../dispatch/cli.js';
 import { findProject } from '../dispatch/project.js';
@@ -11,6 +12,8 @@ export const MAX_BYTES = 1024 * 1024;
 export const MAX_WINDOW = 400;
 export const CONTEXT = 20;
 const SNIFF = 8192;
+export const MAX_PATH = 4096;
+export const MAX_SEGMENTS = 256;
 
 const LANGUAGES = {
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
@@ -25,11 +28,12 @@ export const languageOf = (file) => LANGUAGES[path.extname(file).slice(1).toLowe
 const SECRET_SEGMENT = /^(\.git|\.dispatch|\.env.*|.*\.pem|.*\.key|id_rsa.*|.*\.p12|.*\.pfx|\.npmrc|\.netrc|credentials.*|secrets.*)$/i;
 const isSecret = (segments) => segments.some((s) => SECRET_SEGMENT.test(s));
 
-/** Normalised '/'-separated repo-relative path, or null for absolute, '..', NUL, backslash or empty input. */
+/** Normalised '/'-separated repo-relative path, or null for absolute, '..', NUL, backslash, empty or over-long input
+ * (more than MAX_PATH characters or MAX_SEGMENTS segments, checked before any realpath or git run). */
 export function cleanPath(raw) {
-  if (typeof raw !== 'string' || !raw || raw.includes('\0') || raw.includes('\\') || raw.startsWith('/')) return null;
+  if (typeof raw !== 'string' || !raw || raw.length > MAX_PATH || raw.includes('\0') || raw.includes('\\') || raw.startsWith('/')) return null;
   const parts = raw.split('/').filter((s) => s && s !== '.');
-  if (!parts.length || parts.includes('..')) return null;
+  if (!parts.length || parts.length > MAX_SEGMENTS || parts.includes('..')) return null;
   return parts.join('/');
 }
 
@@ -47,11 +51,44 @@ export function windowOf(total, start, end) {
 // Git-tracked files only (keeps gitignored config, node_modules/ and .dispatch/wt/ out). No shell; literal pathspec.
 async function isTracked(root, rel) {
   try {
-    await runCli('git', ['-C', root, '--literal-pathspecs', 'ls-files', '--error-unmatch', '--', rel], { env: ownGitEnv() });
+    await runCli('git', ['--literal-pathspecs', 'ls-files', '--error-unmatch', '--', rel], { cwd: root, env: ownGitEnv() });
     return true;
   } catch {
     return false;
   }
+}
+
+// O_NOFOLLOW: the checked realpath has no symlink left, so a symlink in the last component means it was swapped in
+// after the check. O_NONBLOCK: a FIFO cannot hang the open (it is refused as not a regular file afterwards).
+const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
+
+/** True when the open handle `fh` is the file at `real` (the path that passed the checks). Linux: the kernel's own
+ * path of the descriptor (/proc/self/fd) must equal `real` and the inode must match. Elsewhere only dev/ino of the
+ * handle against a fresh stat of `real`; the residual window (swap a parent directory away and back between open and
+ * that stat) needs write access inside the project, which already allows editing the tracked files directly. */
+export async function sameFile(fh, real) {
+  const st = await fh.stat();
+  try {
+    if ((await readlink(`/proc/self/fd/${fh.fd}`)) !== real) return false;
+  } catch { /* no /proc: fall back to dev/ino */ }
+  try {
+    const now = await stat(real);
+    return now.dev === st.dev && now.ino === st.ino;
+  } catch {
+    return false;
+  }
+}
+
+/** Reads at most `max + 1` bytes from `fh`, whatever its stat said; `over` is true when the file has more than `max`. */
+export async function readCapped(fh, max) {
+  const buf = Buffer.alloc(max + 1);
+  let n = 0;
+  while (n < buf.length) {
+    const { bytesRead } = await fh.read(buf, n, buf.length - n, n);
+    if (!bytesRead) break;
+    n += bytesRead;
+  }
+  return n > max ? { over: true } : { over: false, buf: buf.subarray(0, n) };
 }
 
 async function readGuarded(root, rel) {
@@ -68,7 +105,9 @@ async function readGuarded(root, rel) {
   if (isSecret(inside.split(path.sep))) return { status: 403, error: 'forbidden' };
   let fh;
   try {
-    fh = await open(real, 'r');
+    fh = await open(real, OPEN_FLAGS);
+    // Check and read must refer to the same inode: verify what was opened, not the path again.
+    if (!(await sameFile(fh, real))) return { status: 404, error: 'not found' };
     const st = await fh.stat();
     if (st.isDirectory()) return { status: 400, error: 'is a directory' };
     if (!st.isFile()) return { status: 404, error: 'not a file' };
@@ -78,7 +117,9 @@ async function readGuarded(root, rel) {
     const realRel = inside.split(path.sep).join('/');
     if (realRel !== rel && !(await isTracked(root, realRel))) return { status: 404, error: 'not-tracked' };
     if (st.size > MAX_BYTES) return { status: 413, error: 'file too large' };
-    const buf = await fh.readFile();
+    // The file can grow after stat: the read itself is bounded too.
+    const { over, buf } = await readCapped(fh, MAX_BYTES);
+    if (over) return { status: 413, error: 'file too large' };
     if (buf.subarray(0, SNIFF).includes(0)) return { status: 415, error: 'binary file' };
     return { text: buf.toString('utf8') };
   } catch {

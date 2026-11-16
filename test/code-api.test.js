@@ -2,12 +2,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, symlink, rm, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, symlink, rm, realpath, open, appendFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
 import * as code from '../server/code/index.js';
-import { cleanPath, windowOf } from '../server/code/index.js';
+import { cleanPath, windowOf, sameFile, readCapped, MAX_PATH, MAX_SEGMENTS } from '../server/code/index.js';
 
 const lines = (n) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n') + '\n';
 
@@ -44,6 +44,7 @@ async function rig(t, { git = true } = {}) {
   await symlink('../.git/config', join(repo, 'src', 'to-git'));
   await symlink('server.pem', join(repo, 'src', 'to-key'));
   await symlink('../.npmrc', join(repo, 'src', 'Notes.TXT'));
+  await symlink('src', join(repo, 'src-link'));
   if (git) {
     const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
     g('init', '-q');
@@ -155,6 +156,46 @@ test('untracked and gitignored files are 404 not-tracked; tracked symlink inside
 test('directory is 400 (a symlinked directory too)', async (t) => {
   const { get } = await rig(t);
   assert.equal((await get('path=src')).status, 400);
+  assert.equal((await get('path=src-link')).status, 400);
+});
+
+test('over-long path: more than MAX_PATH characters or MAX_SEGMENTS segments is 400', async (t) => {
+  const { get } = await rig(t);
+  assert.equal(cleanPath('a'.repeat(MAX_PATH)), 'a'.repeat(MAX_PATH));
+  assert.equal(cleanPath('a'.repeat(MAX_PATH + 1)), null);
+  assert.equal(cleanPath(Array(MAX_SEGMENTS).fill('a').join('/')), Array(MAX_SEGMENTS).fill('a').join('/'));
+  assert.equal(cleanPath(Array(MAX_SEGMENTS + 1).fill('a').join('/')), null);
+  assert.equal((await get(`path=${'a'.repeat(MAX_PATH + 1)}`)).status, 400);
+  assert.equal((await get(`path=${Array(MAX_SEGMENTS + 1).fill('a').join('/')}`)).status, 400);
+});
+
+test('sameFile: the opened handle must be the checked file (open TOCTOU)', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'draw-code-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  await writeFile(join(base, 'a.txt'), 'a\n');
+  await writeFile(join(base, 'b.txt'), 'b\n');
+  const fh = await open(join(base, 'a.txt'), 'r');
+  try {
+    assert.equal(await sameFile(fh, join(base, 'a.txt')), true);
+    assert.equal(await sameFile(fh, join(base, 'b.txt')), false);
+    assert.equal(await sameFile(fh, join(base, 'gone.txt')), false);
+  } finally { await fh.close(); }
+});
+
+test('readCapped: the read is bounded by max + 1 whatever stat said (size TOCTOU)', async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'draw-code-')));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const f = join(base, 'grow.txt');
+  await writeFile(f, 'x'.repeat(10));
+  const fh = await open(f, 'r');
+  try {
+    const before = await fh.stat();
+    assert.equal(before.size, 10);
+    assert.equal((await readCapped(fh, 10)).buf.toString(), 'x'.repeat(10));
+    await appendFile(f, 'y'.repeat(100)); // grows after the stat
+    assert.deepEqual(await readCapped(fh, 10), { over: true });
+    assert.equal((await readCapped(fh, 200)).buf.length, 110);
+  } finally { await fh.close(); }
 });
 
 test('range errors: start past the end 416, start > end 400; empty file ok', async (t) => {
