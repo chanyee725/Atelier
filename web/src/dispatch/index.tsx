@@ -95,7 +95,7 @@ export default function DispatchApp() {
   return (
     <ScopeProvider value={ctx}>
     <div className="flex h-dvh flex-col bg-background text-foreground">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-[9.5px] max-md:px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-6 py-1.5 max-md:px-4">
         <nav aria-label="세션 화면" className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
           {NAV.map(n => (
             <a
@@ -134,8 +134,11 @@ export default function DispatchApp() {
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
           <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>
-        ) : typeof scope === 'string' && listState === 'loading' ? (
-          <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 목록을 불러오는 중이에요…</p>
+        ) : scope !== undefined && listState === 'loading' ? (
+          <p className="p-6 text-sm text-muted-foreground">프로젝트 목록을 불러오는 중이에요…</p>
+        ) : scope === null && listState === 'failed' ? (
+          // Without the project list every session would look 미분류 (#522); the notice above says why.
+          <p className="p-6 text-sm text-muted-foreground">프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.</p>
         ) : view === 'usage' ? (
           <UsagePage />
         ) : view === 'timeline' ? (
