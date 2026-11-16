@@ -6,6 +6,8 @@ import { Meter, StatusBadge } from '../dispatch/parts';
 import { useDispatch } from '../dispatch/store.ts';
 import { until } from '../dispatch/lib/format.ts';
 import { FOCUS_RING } from '../lib/focus';
+import { limitGroups } from '../modelConnect';
+import { useModels } from '../SidebarModels';
 import { cn } from '../lib/utils';
 import { selectRun } from './runData.ts';
 import { fmtClock, fmtCost, historyLines, runListText } from './runModel.ts';
@@ -27,31 +29,41 @@ function Column({ title, children, className }: { title: string; children: React
 const fmtTok = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(n));
 
 function Limits({ now }: { now: number }) {
-  const l = useDispatch((s) => s.limits);
   const online = useDispatch((s) => s.ready && !s.unavailable);
   const guard = useDispatch((s) => s.settings.guard);
+  const { providers, limits } = useModels();
   if (!online) return <p className="text-sm text-muted-foreground">실행 중일 때 한도를 보여 줘요.</p>;
-  const rows: [string, number | null | undefined, number | null | undefined][] = [
-    ['Claude 5시간', l.five, l.fiveReset],
-    ['주간', l.seven, l.sevenReset],
-    ['Fable 주간', l.fable, l.fableReset],
-  ];
+  // One cell per connected provider, read by its id (#587): Claude (with Fable's weekly), Codex, Gemini.
+  const groups = limitGroups(providers, limits);
   return (
-    <ul className="space-y-3 text-sm">
-      {rows.map(([name, v, reset]) => (
-        <li key={name}>
-          <div className="flex items-baseline justify-between gap-2">
-            <span>{name}</span>
-            <span className="tabular-nums">{v == null ? '—' : `${Math.round(v * 100)}%`}</span>
-          </div>
-          {v != null && <Meter value={v} label={`${name} 사용량`} className="mt-1" />}
-          {v != null && reset ? <p className="mt-0.5 text-xs text-muted-foreground">{until(reset, now)} 뒤 초기화돼요</p> : null}
-        </li>
+    <div className="space-y-4 text-sm">
+      {groups.length === 0 && <p className="text-muted-foreground">연결된 모델이 없어요.</p>}
+      {groups.map((g) => (
+        <section key={g.id} aria-label={`${g.name} 한도`} data-limit-provider={g.id}>
+          <h3 className="mb-1 text-xs font-medium">{g.name}</h3>
+          {g.rows.length > 0 ? (
+            <ul className="space-y-2">
+              {g.rows.map((r) => (
+                <li key={r.label}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span>{r.label}</span>
+                    <span className="tabular-nums">{r.pct == null ? '—' : `${r.pct}%`}</span>
+                  </div>
+                  {r.pct != null && <Meter value={r.pct / 100} label={`${g.name} ${r.label} 사용량`} className="mt-1" />}
+                  {r.pct != null && r.reset ? <p className="mt-0.5 text-xs text-muted-foreground">{until(r.reset, now)} 뒤 초기화돼요</p> : null}
+                </li>
+              ))}
+            </ul>
+          ) : g.reached ? null : (
+            <p className="text-xs text-muted-foreground">{g.windowless ? '한도에 닿으면 알려 줘요.' : '아직 사용량이 없어요.'}</p>
+          )}
+          {g.reached && <p className="mt-1 text-xs text-warn">한도에 도달했어요{g.reset ? ` · ${until(g.reset, now)} 뒤 풀려요` : ''}</p>}
+        </section>
       ))}
-      <li className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         한도 가까우면 막기 · {guard.enabled ? `${Math.round(guard.five * 100)}% 켜짐` : '꺼짐'}
-      </li>
-    </ul>
+      </p>
+    </div>
   );
 }
 
@@ -79,10 +91,11 @@ export default function RunView({ code }: { code: string | undefined }) {
                   </span>
                   <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{r.time}</span>
                 </div>
-                {(r.agents.length > 0 || r.waiting) && (
-                  <p className="pl-5 text-xs text-muted-foreground">
-                    {r.agents.map((a) => a.name).join(', ')}
-                    {r.waiting ? ' · 사람 기다림' : ''}
+                {(r.agents.length > 0 || r.waiting || r.model) && (
+                  <p className="truncate pl-5 text-xs text-muted-foreground">
+                    {[r.agents.map((a) => a.name).join(', '), r.model && <span key="m" data-step-model>{r.model}</span>, r.waiting && '사람 기다림']
+                      .filter(Boolean)
+                      .flatMap((x, i) => (i ? [' · ', x] : [x]))}
                   </p>
                 )}
               </li>

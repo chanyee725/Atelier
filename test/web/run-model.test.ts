@@ -8,6 +8,7 @@ import {
   nodeLabels,
   overlaySteps,
   pickRun,
+  plannedModel,
   runListText,
   sessionRows,
   stepRows,
@@ -275,4 +276,22 @@ test('applyRunEvent: the run summary carries the pause', () => {
   const n = applyRunEvent(r, { file: r.file, runId: r.id, run: { id: r.id, startedAt: T0, endedAt: null, state: 'paused', totals: r.totals, pause } });
   assert.equal(n.state, 'paused');
   assert.deepEqual(n.pause, pause);
+});
+
+test('stepRows: each step names its model, sessions first, else the plan step or its role (#587)', () => {
+  const r = record();
+  r.plan.snapshot.steps[1] = { id: 'impl', node: 'impl', model: 'gpt-5-codex' };
+  r.steps.plan!.sessions[0]!.model = 'claude-opus-5-5';
+  const cat = {
+    roles: [{ id: 'review', model: 'claude-sonnet-5-5' }, { id: 'test', model: 'gemini-x' }],
+    models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }],
+  };
+  const rows = stepRows(r, new Map(), T0 + 20 * MIN, new Map(), cat);
+  assert.equal(rows[0]!.model, 'claude-opus-5-5'); // ran: the session's model
+  assert.equal(rows[1]!.model, 'gpt-5-codex'); // its session reports no model yet: the plan's
+  assert.equal(rows[2]!.model, 'Sonnet 5.5'); // pending: the role's model, by its label
+  assert.equal(rows[3]!.model, 'gemini-x');
+  assert.equal(rows[4]!.model, undefined); // role impl unknown, no model
+  assert.equal(plannedModel(r.plan.snapshot, 'impl', cat), 'gpt-5-codex');
+  assert.equal(plannedModel(r.plan.snapshot, 'nope', cat), null);
 });

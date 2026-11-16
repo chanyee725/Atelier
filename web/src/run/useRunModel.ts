@@ -25,12 +25,14 @@ export function useRunModel(code: string | undefined) {
   const now = useNow(running);
   const sessions = useDispatch((s) => s.sessions);
   const five = useDispatch((s) => s.limits.five);
+  const roles = useDispatch((s) => s.roles);
+  const models = useDispatch((s) => s.models);
   const labels = useMemo(() => nodeLabels(code), [code]);
   const live = useMemo(() => new Map<string, LiveSession>(sessions.map((s) => [s.id, s])), [sessions]);
   return useMemo(() => {
     if (!record) return { data, record: null, running: false, rows: [], sessions: [], strip: null, labels, now };
-    const rows = stepRows(record, live, now, labels);
+    const rows = stepRows(record, live, now, labels, { roles, models });
     const srows = sessionRows(record, live, now);
     return { data, record, running, rows, sessions: srows, strip: stripModel(record, rows, srows, five, now), labels, now };
-  }, [data, record, running, live, now, labels, five]);
+  }, [data, record, running, live, now, labels, five, roles, models]);
 }

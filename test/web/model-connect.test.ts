@@ -1,7 +1,7 @@
 // #570 (E525): model connection state for the sidebar row and the 모델 연결 dialog (ported from Dispatch).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, actionFor, cliLogoutShown, keyLoginShown, connectKey, doneText, limitRows, loginUrl, metaLine, objParticle, providerMeta, rowStatus, type ProviderMeta } from '../../web/src/modelConnect.ts';
+import { PROVIDERS, actionFor, cliLogoutShown, keyLoginShown, connectKey, doneText, limitGroups, limitRows, loginUrl, metaLine, objParticle, providerMeta, rowStatus, type ProviderMeta } from '../../web/src/modelConnect.ts';
 import type { ProviderState } from '../../web/src/api.ts';
 
 const C = providerMeta('claude')!;
@@ -100,4 +100,20 @@ test('API-key field only for Codex, installed, not connected, CLI not logged in;
   assert.equal(keyLoginShown(O, P(), false), false);
   assert.equal(cliLogoutShown(P({ cliLoggedIn: true }), true), true);
   assert.equal(cliLogoutShown(P({ cliLoggedIn: false }), true), false);
+});
+
+test('limitGroups: one cell per connected provider, each with its own numbers (#587)', () => {
+  const limits = {
+    claude: { windows: [{ label: '5시간', used: 0.4, reset: 1 }] },
+    fable: { windows: [{ label: '주간', used: 0.2 }] },
+    openai: { windows: [{ label: '5시간', used: 0.9 }] },
+    gemini: { reached: true, reset: 5 },
+  };
+  const all = limitGroups({ claude: { connected: true }, openai: { connected: true }, gemini: { connected: true } }, limits);
+  assert.deepEqual(all.map((g) => g.id), ['claude', 'openai', 'gemini']);
+  assert.deepEqual(all[0]!.rows.map((r) => [r.label, r.pct]), [['5시간', 40], ['Fable 주간', 20]]);
+  assert.deepEqual(all[1]!.rows.map((r) => [r.label, r.pct]), [['5시간', 90]]);
+  assert.deepEqual({ rows: all[2]!.rows, reached: all[2]!.reached, reset: all[2]!.reset, windowless: all[2]!.windowless }, { rows: [], reached: true, reset: 5, windowless: true });
+  assert.deepEqual(limitGroups({ claude: { connected: false }, openai: { connected: true } }, limits).map((g) => g.id), ['openai']);
+  assert.deepEqual(limitGroups({}, limits), []);
 });

@@ -143,3 +143,17 @@ export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { main: L
     reset: u.reset,
   };
 }
+
+/** One provider's cell in the run view's 한도 column (#587): its usage rows, read by provider id like the dialog. */
+export type LimitGroup = { id: string; name: string; rows: LimitRow[]; reached: boolean; reset: number | null; windowless: boolean };
+
+/**
+ * 한도 cells for the run view: one per connected provider, in PROVIDERS order. Rows are the provider's own windows
+ * plus its SUB_BUCKETS ones (Claude's Fable weekly); never another provider's numbers.
+ */
+export function limitGroups(providers: Record<string, Pick<ProviderState, 'connected'> | undefined>, limits: ProviderLimits): LimitGroup[] {
+  return PROVIDERS.filter((m) => m.usage && providers[m.id]?.connected).map((m) => {
+    const r = limitRows(m, limits)!;
+    return { id: m.id, name: m.short, rows: [...r.main, ...(r.fable ?? [])], reached: r.reached, reset: r.reset, windowless: !!m.windowless };
+  });
+}
