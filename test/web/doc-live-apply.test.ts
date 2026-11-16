@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { getSchema } from '@tiptap/core';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { docExtensions } from '../../web/src/doc/extensions.ts';
-import { planLive, liveApplyPlugin } from '../../web/src/doc/liveApply.ts';
-import { closeHistory, history, undo, undoDepth } from '@tiptap/pm/history';
+import { planLive, liveApplyPlugin, liveDecorations } from '../../web/src/doc/liveApply.ts';
+import { closeHistory, history, redo, undo, undoDepth } from '@tiptap/pm/history';
 
 const schema = getSchema(docExtensions());
 const p = (t: string) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
@@ -60,7 +60,7 @@ test('a block still fading out is not matched with a new block of the same type 
   assert.equal(r1.exits, 1);
   const r2 = apply(r1.state, doc(p('a'), p('NEW'), p('c')), true)!;
   assert.deepEqual(r2.state.doc.toJSON(), doc(p('a'), p('NEW'), p('c')).toJSON());
-  const exiting = liveApplyPlugin().spec.key!.getState(r2.state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  const exiting = liveDecorations(r2.state).find(undefined, undefined, (x) => x.cls === 'live-exit');
   assert.equal(exiting.length, 0);
 });
 
@@ -71,7 +71,7 @@ test('a user edit during the fade-out takes the fading block out in the same upd
   assert.equal(r1.state.doc.childCount, 3);
   const { state } = r1.state.applyTransaction(r1.state.tr.insertText('x', 2));
   assert.deepEqual(state.doc.toJSON(), doc(p('ax'), p('c')).toJSON());
-  const exiting = liveApplyPlugin().spec.key!.getState(state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  const exiting = liveDecorations(state).find(undefined, undefined, (x) => x.cls === 'live-exit');
   assert.equal(exiting.length, 0);
 });
 
@@ -88,7 +88,7 @@ test('typing inside a fading block keeps that block and is undoable (#567)', () 
   const r1 = apply(s0, doc(p('a'), p('c')), true)!;
   const { state } = r1.state.applyTransaction(r1.state.tr.insertText('x', 5));
   assert.deepEqual(state.doc.toJSON(), doc(p('a'), p('gxone'), p('c')).toJSON());
-  const exiting = liveApplyPlugin().spec.key!.getState(state)?.find(undefined, undefined, (x) => x.cls === 'live-exit') ?? [];
+  const exiting = liveDecorations(state).find(undefined, undefined, (x) => x.cls === 'live-exit');
   assert.equal(exiting.length, 0);
   assert.equal(undoDepth(state), 1);
   // Undoing the typing finishes the outside removal (#577): the state the editor saves has no "gone".
@@ -145,4 +145,44 @@ test('typing elsewhere during the fade-out still takes the fading block out and 
   let undone: EditorState | null = null;
   assert.ok(undo(state, (tr) => (undone = state.apply(tr))));
   assert.deepEqual(undone!.doc.toJSON(), doc(p('a'), p('c')).toJSON());
+});
+
+test('an undo or a redo during the fade-out takes the fading block out too (#561, #569)', () => {
+  // The user types "x" (one undo step), then an outside change removes "gone" (it fades); undo before the fade ends.
+  const exiting = (s: EditorState) => liveDecorations(s).find(undefined, undefined, (x) => x.cls === 'live-exit');
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin(), history()] });
+  const typed = s0.applyTransaction(s0.tr.insertText('x', 2)).state;
+  const r1 = apply(typed, doc(p('ax'), p('c')), true)!;
+  assert.equal(r1.state.doc.childCount, 3);
+  let undone: EditorState | null = null;
+  assert.ok(undo(r1.state, (tr) => (undone = r1.state.applyTransaction(tr).state)));
+  assert.deepEqual(undone!.doc.toJSON(), doc(p('a'), p('c')).toJSON());
+  assert.equal(exiting(undone!).length, 0);
+  // Another outside change removes "c" (it fades); redo before the fade ends brings the typing back and takes "c" out.
+  const r2 = apply(undone!, doc(p('a')), true)!;
+  assert.equal(r2.state.doc.childCount, 2);
+  let redone: EditorState | null = null;
+  assert.ok(redo(r2.state, (tr) => (redone = r2.state.applyTransaction(tr).state)));
+  assert.deepEqual(redone!.doc.toJSON(), doc(p('ax')).toJSON());
+  assert.equal(exiting(redone!).length, 0);
+  // Going back and forth never brings an outside removal back (the history replays the take-outs backwards).
+  let s = redone!;
+  for (const [step, want] of [[undo, doc(p('a'))], [redo, doc(p('ax'))], [undo, doc(p('a'))]] as const) {
+    const cur = s;
+    assert.ok(step(cur, (tr) => (s = cur.applyTransaction(tr).state)));
+    assert.deepEqual(s.doc.toJSON(), want.toJSON());
+  }
+});
+
+test('redo after the undo that finished a kept block brings the user\'s typing back (#577, #569)', () => {
+  const s0 = EditorState.create({ schema, doc: doc(p('a'), p('gone'), p('c')), plugins: [liveApplyPlugin(), history()] });
+  const r1 = apply(s0, doc(p('a'), p('c')), true)!;
+  const typed = r1.state.applyTransaction(r1.state.tr.insertText('x', 5)).state;
+  let undone: EditorState | null = null;
+  assert.ok(undo(typed, (tr) => (undone = typed.applyTransaction(tr).state)));
+  assert.deepEqual(undone!.doc.toJSON(), doc(p('a'), p('c')).toJSON());
+  const u = undone!;
+  let redone: EditorState | null = null;
+  assert.ok(redo(u, (tr) => (redone = u.applyTransaction(tr).state)));
+  assert.deepEqual(redone!.doc.toJSON(), doc(p('a'), p('gxone'), p('c')).toJSON());
 });

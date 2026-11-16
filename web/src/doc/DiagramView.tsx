@@ -14,9 +14,12 @@ import { RunLayer, RunLegend } from '../run/RunLayer';
 import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
+import { createShownMemory } from './shownMemory';
 import type { CanvasEl } from './model';
 
 export type DocCtx = {
+  /** Workspace path of the open file (keys the last-shown pictures, #557). */
+  path: string;
   blocks: Block[];
   /** Canvas frames and what sits in them (see frameScene), for frame embeds. */
   frameScene: CanvasEl[];
@@ -27,16 +30,15 @@ export type DocCtx = {
   onShowFrame: (frameId: string) => void;
   onExport: (block: Block, kind: ImageKind) => void;
 };
-export const DocContext = createContext<DocCtx>({ blocks: [], frameScene: [], frameBlocks: [], dark: false, onShow: () => {}, onShowFrame: () => {}, onExport: () => {} });
+export const DocContext = createContext<DocCtx>({ path: '', blocks: [], frameScene: [], frameBlocks: [], dark: false, onShow: () => {}, onShowFrame: () => {}, onExport: () => {} });
 
-// The picture each block showed last, so a view that is built again (the document was re-read) still animates from
-// what the user saw instead of popping to the new drawing (E520).
-const lastShown = new Map<string, BlockPicture>();
+// The picture each block showed last (E520), per file (#557).
+const lastShown = createShownMemory<BlockPicture>();
 
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
 function DiagramView({ node, selected }: ReactNodeViewProps) {
-  const { blocks, dark, onShow, onExport } = useContext(DocContext);
+  const { path, blocks, dark, onShow, onExport } = useContext(DocContext);
   const id = typeof node.attrs.blockId === 'string' ? node.attrs.blockId : '';
   const block = blocks.find((b) => b.id === id);
   const [pic, setPic] = useState<BlockPicture | null>(null);
@@ -64,7 +66,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
     [dark],
   );
   useEffect(() => () => settle.cancel(), [settle]);
-  const memKey = `${id}\n${theme}`;
+  const memKey = lastShown.keyOf(path, id, theme);
   const fromMemory = useRef<Scene | null>(null);
   useLayoutEffect(() => {
     if (!pic) return;
@@ -78,7 +80,6 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       setMorph({ from, to: pic.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / pic.width });
     }
     lastShown.set(memKey, pic);
-    if (lastShown.size > 100) lastShown.delete(lastShown.keys().next().value!);
   }, [pic, memKey, dark]);
   useEffect(() => {
     if (!block) return;

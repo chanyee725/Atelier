@@ -38,3 +38,17 @@ test('canApplyLive: same blocks in place with new code apply live; added, moved 
   assert.equal(canApplyLive({ canvas: scene, blocks: [] }, { canvas: { elements: [] }, blocks: [] }), false);
   assert.equal(canApplyLive(null, { canvas: scene }), false);
 });
+
+test('canApplyLive: a writer that only reorders keys applies live instead of restarting the panes (#557)', async () => {
+  const { canApplyLive, sameJson } = await import('../../web/src/externalChange.ts');
+  const cur = { canvas: { elements: [{ id: 'e1', x: 1, y: 2 }], appState: { a: 1, b: 2 } }, blocks: [{ id: 'b1', x: 0, y: 0, w: 10, h: 10 }] };
+  const next = { canvas: { appState: { b: 2, a: 1 }, elements: [{ y: 2, x: 1, id: 'e1' }] }, blocks: [{ h: 10, w: 10, y: 0, x: 0, id: 'b1' }] };
+  assert.equal(canApplyLive(cur, next), true);
+  assert.equal(canApplyLive(cur, { ...next, canvas: { ...next.canvas, appState: { b: 2, a: 3 } } }), false);
+  assert.equal(sameJson({ a: 1, b: undefined }, { a: 1 }), true);
+  assert.equal(sameJson(undefined, null), true);
+  assert.equal(sameJson([1, 2], [2, 1]), false);
+  assert.equal(sameJson({ a: [1] }, { a: { 0: 1 } }), false);
+  assert.equal(sameJson({ a: 1 }, { b: 1 }), false);
+  assert.equal(sameJson(0, null), false);
+});
