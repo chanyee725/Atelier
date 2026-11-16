@@ -3,47 +3,23 @@
 // changed ones through POST /api/settings `team`; the server checks every range again. Saved values that change
 // elsewhere follow in fields not edited (#615). With Dispatch off the fields show read-only with the reason (#620).
 // Numbers and switches only: no account, email or token is read here.
-import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { connect, setState, useDispatch, api } from '../../dispatch/store';
+import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useDispatch, api } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
-import { OffNote, useDispatchStatus } from '../DispatchOff';
+import { useSettingsLoad } from '../context';
+import { LoadNote, OffNote } from '../DispatchOff';
 import { BTN, PRIMARY_BTN } from '../LimitsForm';
-import { resyncTeamForm, savedAfterSave, settingsLoad, teamForm, teamNumberErrors, teamValues, type SettingsLoad, type TeamFormState, type TeamNumberId, type TeamToggleId, type TeamValues } from '../model';
+import { resyncTeamForm, savedAfterSave, teamForm, teamNumberErrors, teamValues, type TeamFormState, type TeamNumberId, type TeamToggleId, type TeamValues } from '../model';
 import { resetSection, sectionFields, sectionSave, type TeamSectionId } from './sectionForm';
 
 /**
- * Whether the session settings are in, off or failed. Holds the session stream open while the section shows (the
- * stream is shared, so this costs nothing when the modal already holds it); `retry` opens it again after a failure.
+ * Whether the session settings are in, off or failed, and the retry: the 설정 modal's shared state (it holds the
+ * session stream open, context.ts), so every section reads one load and one retry reconnects them all.
  */
-export function useSectionLoad(): { load: SettingsLoad; retry: () => void } {
-  const status = useDispatchStatus();
-  const ready = useDispatch((s) => s.ready);
-  const unavailable = useDispatch((s) => s.unavailable);
-  const [attempt, setAttempt] = useState(0);
-  const enabled = status?.enabled === true;
-  useEffect(() => (enabled ? connect() : undefined), [enabled, attempt]);
-  return {
-    load: settingsLoad(status, ready, unavailable),
-    retry: () => {
-      setState({ unavailable: false });
-      setAttempt((a) => a + 1);
-    },
-  };
-}
+export const useSectionLoad = useSettingsLoad;
 
 /** Loading or failed (with a retry). Off has its own line (OffNote). */
-export function SectionLoadNote({ load, onRetry }: { load: SettingsLoad; onRetry: () => void }) {
-  if (load.kind === 'loading') return <p className="text-sm text-muted-foreground">불러오는 중이에요…</p>;
-  if (load.kind !== 'failed') return null;
-  return (
-    <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-      설정을 불러오지 못했어요.
-      <button type="button" onClick={onRetry} className={cn(BTN, 'border')}>
-        다시 불러오기
-      </button>
-    </p>
-  );
-}
+export const SectionLoadNote = LoadNote;
 
 /** A section's frame: heading, hint and body, named by its heading. */
 export function SectionFrame({ title, hint, testId, children }: { title: string; hint?: string; testId: string; children: (titleId: string) => ReactNode }) {
@@ -51,9 +27,9 @@ export function SectionFrame({ title, hint, testId, children }: { title: string;
   return (
     <section aria-labelledby={titleId} data-testid={testId} className="flex min-w-0 flex-col gap-4">
       <header className="flex flex-col gap-1">
-        <h2 id={titleId} className="text-[15px] font-semibold">
+        <h3 id={titleId} className="text-[15px] font-semibold">
           {title}
-        </h2>
+        </h3>
         {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
       </header>
       {children(titleId)}
@@ -187,7 +163,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
                         aria-describedby={`${id}-hint`}
                         checked={form.toggles[f.id]}
                         onChange={(e) => setToggle(f.id, e.target.checked)}
-                        className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
+                        className="mt-0.5 shrink-0 accent-primary"
                       />
                       <div className="flex min-w-0 flex-col gap-0.5">
                         <label htmlFor={id} className="text-sm">

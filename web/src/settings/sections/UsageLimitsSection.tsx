@@ -35,9 +35,9 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
   const groups = limits ? usageGroups(limits, providers) : [];
   return (
     <div role="group" aria-labelledby={headingId} data-testid="settings-usage" className="flex flex-col gap-3">
-      <h3 id={headingId} className="text-sm font-medium">
+      <h4 id={headingId} className="text-sm font-medium">
         모델별 사용량
-      </h3>
+      </h4>
       {load.kind === 'off' && <OffNote status={load.status} />}
       {ok && failed && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -52,10 +52,10 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
       {ok &&
         groups.map((g) => (
           <div key={g.id} data-provider={g.id} className="flex flex-col gap-2">
-            <h4 className="text-sm">
+            <h5 className="text-sm">
               {g.name}
               {g.plan && <span className="ml-2 text-xs text-muted-foreground">{g.plan}</span>}
-            </h4>
+            </h5>
             {g.windows.length > 0 ? (
               <ul className="flex flex-col gap-3">
                 {g.windows.map((w) => (
