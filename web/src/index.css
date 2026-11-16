@@ -11,8 +11,10 @@
 @layer base {
   *, ::before, ::after { border-color: var(--border); }
   /* Clickable things show a pointer (#546). In the base layer so a utility such as cursor-default still wins;
-     disabled controls keep the default cursor. */
-  :is(button, [role="button"], summary, a[href], label[for], select):not(:disabled, [aria-disabled="true"]) { cursor: pointer; }
+     disabled controls keep the default cursor, and so does a label whose control is disabled (#564). CSS cannot follow
+     `for` to an id, so this covers the layouts we use: the control right after the label, or inside it. */
+  :is(button, [role="button"], summary, a[href], label[for], select):not(:disabled, [aria-disabled="true"],
+    label:has(+ :disabled, :disabled)) { cursor: pointer; }
 }
 
 /*
@@ -433,8 +435,8 @@ body {
 .run-layer[data-motion-inside] .run-motion { bottom: auto; top: 4px; right: 4px; margin: 0; }
 .run-motion:hover { color: var(--foreground); background: var(--accent); }
 .run-motion:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
-/* Short colour fade on the document's and overlay's own controls (#546). Colour only, so it stays on under
-   reduced motion. */
+/* Short colour fade on the document's and overlay's own controls (#546). Under reduced motion the global rule above
+   cuts it to 0.01ms, so colours change at once there (#564). */
 :is(.doc-diagram-actions button, .doc-slash button, .doc-table-bar button, .doc-outline li > button, .doc-wikilink,
   .doc-diagram-pic, .doc-h-link, .run-motion) {
   transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
