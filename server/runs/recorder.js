@@ -51,6 +51,13 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
     }
   });
 
+  /** Appends a timeline entry, keeping only the newest TIMELINE_MAX. */
+  const pushTimeline = (run, entry) => {
+    const tl = run.record.timeline;
+    tl.push(entry);
+    if (tl.length > TIMELINE_MAX) tl.splice(0, tl.length - TIMELINE_MAX);
+  };
+
   const get = (runId) => {
     const run = active.get(runId);
     if (!run) throw new StoreError(404, 'run not running');
@@ -172,8 +179,7 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
     step.state = after;
     if (step.startedAt === null && after !== 'pending' && after !== 'skipped') step.startedAt = t;
     step.endedAt = after === 'done' || after === 'skipped' ? t : null;
-    run.record.timeline.push([t, stepId, after]);
-    if (run.record.timeline.length > TIMELINE_MAX) run.record.timeline.splice(0, run.record.timeline.length - TIMELINE_MAX);
+    pushTimeline(run, [t, stepId, after]);
     return after;
   }
 
@@ -258,8 +264,7 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
     step.state = state;
     if (state === 'blocked' && step.startedAt === null) step.startedAt = t;
     step.endedAt = state === 'skipped' ? t : null;
-    run.record.timeline.push([t, stepId, state]);
-    if (run.record.timeline.length > TIMELINE_MAX) run.record.timeline.splice(0, run.record.timeline.length - TIMELINE_MAX);
+    pushTimeline(run, [t, stepId, state]);
     scheduleWrite(run);
     hub?.broadcast('run', { file: run.record.file, runId, step: stepId, state });
   }
@@ -385,7 +390,7 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
       const step = run.record.steps[id];
       const picked = pickResult(r);
       if (!step || !picked) continue;
-      // The board closes a step without a commit when read-only work finished; only a step nobody worked on was dropped.
+      // Closed on the board without a commit: abandoned only when nobody worked on it (read-only work also closes this way).
       // A step that ended failed / stuck / waiting keeps its state and result as before.
       const worked = !step.carried && step.sessions.length > 0 && (step.state === 'resting' || step.state === 'done');
       const result = picked.abandoned && worked ? step.result ?? null : mergeResult(step.result, picked);
@@ -394,13 +399,13 @@ export function createRecorder({ runs, hub, now = Date.now, writeDelayMs = 1000,
       if (result?.abandoned && !step.carried && step.sessions.length === 0 && step.state !== 'skipped') {
         step.state = 'skipped';
         step.endedAt = now();
-        run.record.timeline.push([step.endedAt, id, 'skipped']);
+        pushTimeline(run, [step.endedAt, id, 'skipped']);
       } else if (state === 'done' && worked && !result?.abandoned && step.state === 'resting') {
         // Closed on the board: its sessions may still read resting, but the step is over (E502).
         step.state = 'done';
         step.startedAt ??= now();
         step.endedAt = now();
-        run.record.timeline.push([step.endedAt, id, 'done']);
+        pushTimeline(run, [step.endedAt, id, 'done']);
       }
     }
     run.record.state = state;
