@@ -84,15 +84,15 @@ export function newFileDir(section: Section, view: ProjectsView | null, openPath
   return '';
 }
 
-export type ShellKey = 'all' | 'recent' | 'archive' | 'new' | 'settings';
-const KEYS: Record<string, ShellKey> = { KeyA: 'all', KeyR: 'recent', KeyB: 'archive', KeyN: 'new', Comma: 'settings' };
+export type ShellKey = 'all' | 'recent' | 'archive' | 'new';
+const KEYS: Record<string, ShellKey> = { KeyA: 'all', KeyR: 'recent', KeyB: 'archive', KeyN: 'new' };
 
 // Where one-letter keys belong to something else: text fields, the editors, the canvas (its tool keys) and dialogs.
 const OWNED = '.ProseMirror, input, textarea, select, .cm-editor, [contenteditable="true"], [contenteditable=""], .excalidraw, dialog, [role="dialog"], [role="menu"], [role="listbox"]';
 
 type KeyLike = { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing: boolean; repeat: boolean; defaultPrevented: boolean; target: EventTarget | null };
 
-/** The shell action for a key press (A R B N ,), or null when the key is not one or belongs to something else. */
+/** The shell action for a key press (A R B N), or null when the key is not one or belongs to something else. */
 export function shellKey(e: KeyLike): ShellKey | null {
   if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.repeat || e.defaultPrevented) return null;
   const k = KEYS[e.code];
@@ -110,14 +110,14 @@ export const WARN_PERCENT = 75;
 /** The account's 5-hour window, picked by label (not position). */
 export const fiveHourWindow = (limits: ProviderLimits) => limits.claude?.windows.find((w) => w.label === '5시간') ?? null;
 /**
- * The one "한도 도달" rule, shared by the sidebar and the settings dialog: connected, and any window the server
+ * The one "한도 도달" rule, shared by the sidebar rows: connected, and any window the server
  * reports (account 5시간, account 주간, Fable's own weekly) is at 100%. Hidden windows still count.
  */
 export const reachedWindows = (connected: boolean, limits: ProviderLimits) =>
   connected ? [...(limits.claude?.windows ?? []), ...(limits.fable?.windows ?? [])].filter((w) => (percent(w.used) ?? 0) >= 100) : [];
 export const limitReached = (connected: boolean, limits: ProviderLimits) => reachedWindows(connected, limits).length > 0;
 
-export type ModelLine = { id: string; name: string; installed: boolean | null; connected: boolean; pct: number | null; reached: boolean };
+export type ModelLine = { id: string; name: string; installed: boolean | null; connected: boolean; pct: number | null; reached: boolean; busy?: boolean; /** The CLI's own https sign-in page while a login runs. */ url?: string | null; error?: string | null };
 export type ModelTone = 'ok' | 'warn' | 'off';
 /**
  * One sidebar model row: the short visible text next to the name (never colour alone, doc 6 §6) and the dot tone
@@ -125,6 +125,7 @@ export type ModelTone = 'ok' | 'warn' | 'off';
  */
 export function modelStatus(m: ModelLine, enabled: boolean): { text: string; long: string; tone: ModelTone } {
   if (!enabled) return { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' };
+  if (m.busy && !m.connected) return { text: '연결 중', long: '연결하는 중', tone: 'off' };
   if (!m.connected) return { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' };
   if (m.reached) return { text: '한도 도달', long: '사용 한도 도달', tone: 'warn' };
   if (m.pct == null) return { text: '연결됨', long: '연결됨', tone: 'ok' };
