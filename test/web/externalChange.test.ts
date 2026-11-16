@@ -27,3 +27,14 @@ test('other files only refresh the list', () => {
   assert.equal(externalAction({ kind: 'tree', path: 'proj2' }, open, false), 'refresh');
   assert.equal(externalAction({ kind: 'delete', path: open }, null, false), 'refresh');
 });
+
+test('canApplyLive: same blocks in place with new code apply live; added, moved blocks or a changed scene restart', async () => {
+  const { canApplyLive } = await import('../../web/src/externalChange.ts');
+  const scene = { elements: [{ id: 'e1' }] };
+  const blk = (code: string, x = 0) => ({ id: 'b1', type: 'flowchart', code, x, y: 0, w: 400, h: 300 });
+  assert.equal(canApplyLive({ canvas: scene, blocks: [blk('A')] }, { canvas: { elements: [{ id: 'e1' }] }, blocks: [{ ...blk('A > B'), type: 'sequence', layout: { n: 1 } }] }), true);
+  assert.equal(canApplyLive({ canvas: scene, blocks: [blk('A')] }, { canvas: scene, blocks: [blk('A', 50)] }), false);
+  assert.equal(canApplyLive({ canvas: scene, blocks: [blk('A')] }, { canvas: scene, blocks: [blk('A'), { ...blk('B'), id: 'b2' }] }), false);
+  assert.equal(canApplyLive({ canvas: scene, blocks: [] }, { canvas: { elements: [] }, blocks: [] }), false);
+  assert.equal(canApplyLive(null, { canvas: scene }), false);
+});

@@ -6,12 +6,13 @@ import { Node as PMNode, Slice, type Schema } from '@tiptap/pm/model';
 import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { diffBlocks, blocksOf } from './liveDiff.ts';
+import { MOTION_MS } from '../lib/liveMotion.ts';
 import { isEmptyDoc, withTrailingParagraph } from './model.ts';
 
 /** How long a removed block fades before it is taken out (matches the CSS in index.css). */
-export const EXIT_MS = 200;
-/** How long the enter / touch classes stay on a block. */
-export const ENTER_MS = 600;
+export const EXIT_MS = MOTION_MS.exit;
+/** How long the enter / touch classes stay on a block (the CSS animations are at most MOTION_MS.move long). */
+export const ENTER_MS = MOTION_MS.move + 40;
 export const LIVE_META = 'liveApply';
 
 type Cls = 'live-enter' | 'live-exit' | 'live-touch';

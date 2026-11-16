@@ -119,17 +119,49 @@ test('outside changes apply live: new file, new paragraphs, a growing diagram', 
   assert.equal(afterText.same, 'same page', 'the page reloaded');
   assert.ok(Math.abs(afterText.s - before) <= 2, `document scroll jumped: ${before} -> ${afterText.s}`);
 
+  // This page's own save (the document autosaves) must not raise an outside-writer cursor or reload anything.
+  await page.evaluate(() => {
+    const el = [...document.querySelectorAll('.doc-editor p')].find((p) => { const r = p.getBoundingClientRect(); return r.top > 250 && r.bottom < 600; });
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.collapse(false);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    document.querySelector('.doc-editor').focus();
+  });
+  await page.keyboard.type('x');
+  await page.waitForTimeout(3500);
+  assert.equal(await page.locator('[data-agent-cursor]').count(), 0, 'this page\'s own save raised a cursor');
+  assert.equal(await page.evaluate(() => window.__sentinel), 'same page', 'the page reloaded after its own save');
+
   // Step 3: a diagram grows over several writes; each shows without a page reload.
   const blockId = 'b_live1';
   let doc = docOf(head('Intro'), ...filler.slice(0, 59), head('Added heading'), para('Added by the agent, step two (changed).'));
   doc = { ...doc, content: [...doc.content, { type: 'diagram', attrs: { blockId } }] };
+  let mine = null;
+  const zoom = async () => parseInt(await page.locator('.reset-zoom-button').first().innerText(), 10);
   for (const n of [2, 4, 6]) {
     await write('open.dpx.json', { document: doc, blocks: [{ id: blockId, type: 'architecture', code: CODE(n), x: 0, y: 0, w: 400, h: 300 }] });
-    await page.waitForFunction((n) => document.querySelectorAll('figure.doc-diagram img').length > 0 && !!document.querySelector('figure.doc-diagram'), n, { timeout: 15_000 });
+    // The first write adds the diagram to the document; later ones change it while the canvas view is up.
+    if (mine === null) await page.waitForFunction(() => document.querySelectorAll('figure.doc-diagram img').length > 0, null, { timeout: 15_000 });
     await page.waitForTimeout(600);
     assert.equal(await page.evaluate(() => window.__sentinel), 'same page', `the page reloaded at ${n} nodes`);
+    if (mine === null) {
+      // The canvas is up: zoom out, the user's own zoom must survive the next outside writes.
+      const end = await page.evaluate(() => window.__scroller.scrollTop);
+      assert.ok(Math.abs(end - before) <= 2, `document scroll jumped while the diagram grew: ${before} -> ${end}`);
+      await page.getByRole('button', { name: '캔버스', exact: true }).click();
+      await page.waitForSelector('.excalidraw canvas', { timeout: 30_000 });
+      await page.waitForTimeout(1500);
+      for (let i = 0; i < 2; i++) await page.locator('.zoom-out-button').first().click();
+      await page.waitForTimeout(400);
+      mine = await zoom();
+    } else {
+      assert.equal(await zoom(), mine, `the zoom changed at ${n} nodes`);
+      // An API write with no session behind it shows the generic cursor.
+      await page.locator('[data-agent-cursor]', { hasText: '에이전트' }).first().waitFor({ timeout: 8000 });
+    }
   }
-  const end = await page.evaluate(() => window.__scroller.scrollTop);
-  assert.ok(Math.abs(end - before) <= 2, `document scroll jumped while the diagram grew: ${before} -> ${end}`);
   assert.deepEqual(errors, []);
 });
