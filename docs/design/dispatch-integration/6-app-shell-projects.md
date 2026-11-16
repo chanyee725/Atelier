@@ -1,6 +1,6 @@
 # 6. 앱 셸: 프로젝트 중심 구조와 Linear에 가까운 다크 화면 (E42, #122)
 
-> 대체됨(E505): Codex·Gemini 관련 부분은 `docs/design/fable-only-projects.md`가 대체해요. 에이전트는 claude-fable-5-2 하나만 써요.
+> 대체됨(#587): Codex·Gemini는 다시 돌아가요. 에이전트는 연결한 제공자(Claude `claude`, OpenAI Codex `codex`, Gemini `agy`)의 모델을 써요. Fable 5.2만 쓰던 규칙(`docs/design/fable-only-projects.md`)은 대체됐어요. 권한 모드 규칙은 CLAUDE.md를 따라요.
 
 상태: **안 확정(2026-11-13).** 대시보드·프로젝트 홈·사이드바는 B안, 문서·다이어그램 화면은 A안이에요(§3.1). 색은 shadcn/ui 기본 테마, 글꼴은 Pretendard, 크기는 첫 시안의 약 108%예요(§4). 구현은 §9의 티켓 5개로 나눠요. 이 문서는 설계만이고 앱 코드는 바꾸지 않았어요.
 
