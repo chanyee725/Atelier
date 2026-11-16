@@ -209,6 +209,47 @@ async function run(t, view) {
   await panel.locator('.margin-rail').click();
   await toggle.waitFor();
 
+  // 4b. 둘 다 in narrower windows (#637 review): the form follows the room the page leaves, not the window. Beside
+  // the text the panel only goes where the text keeps 360px and the canvas 430px; else it is a sheet under the text.
+  if (view === 'both') {
+    const layout = () => page.evaluate(() => {
+      const w = (sel) => document.querySelector(sel)?.getBoundingClientRect().width ?? 0;
+      const pane = document.querySelector('.split-doc');
+      return { form: document.querySelector('.doc-margin')?.getAttribute('data-form'), host: w('.doc-margin'), main: w('.doc-margin-main'), canvas: pane?.nextElementSibling?.nextElementSibling?.getBoundingClientRect().width ?? 0 };
+    });
+    for (const w of [800, 1024, 1100, 1440]) {
+      await page.setViewportSize({ width: w, height: 900 });
+      await page.waitForTimeout(400);
+      const l = await layout();
+      if (l.form === 'side') {
+        assert.ok(l.main >= 360, `${w}px: the text keeps 360px beside the panel: ${JSON.stringify(l)}`);
+        assert.ok(l.canvas >= 420, `${w}px: the canvas keeps its room: ${JSON.stringify(l)}`);
+      } else assert.ok(l.main >= l.host - 1, `${w}px: the sheet leaves the text its whole column: ${JSON.stringify(l)}`);
+      if (w <= 1100) assert.equal(l.form, 'sheet', `${w}px: no room beside the text, a sheet: ${JSON.stringify(l)}`);
+    }
+    // Dragging the divider to the far right: it stays with the pointer until the canvas minimum, then stops there.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.waitForTimeout(400);
+    assert.equal((await layout()).form, 'side');
+    const handle = await page.evaluate(() => { const r = document.querySelector('.split-doc').nextElementSibling.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 200 }; });
+    await page.mouse.move(handle.x, handle.y);
+    await page.mouse.down();
+    const divider = () => page.evaluate(() => document.querySelector('.split-doc').nextElementSibling.getBoundingClientRect().left);
+    for (const dx of [-160, -80, 1600 - handle.x - 20]) {
+      await page.mouse.move(handle.x + dx, handle.y, { steps: 4 });
+      await page.waitForTimeout(100);
+      const d = await divider();
+      const l = await layout();
+      if (dx < 0) assert.ok(Math.abs(d - (handle.x + dx)) <= 8, `the divider follows the pointer: ${JSON.stringify({ dx, d, x: handle.x + dx })}`);
+      else assert.ok(l.canvas >= 420, `the divider stops at the canvas minimum: ${JSON.stringify(l)}`);
+    }
+    await page.mouse.move(handle.x, handle.y, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    await placeCaret();
+    assert.deepEqual(await caret(), mine);
+  }
+
   // Screenshots in the default view: 1600 and 1440 wide (side panel), 700 (bottom sheet, under 768), light and dark.
   if (SHOTS && view === 'both') {
     const shot = (n) => page.screenshot({ path: join(SHOTS, `doc-margin-${n}.png`) });
