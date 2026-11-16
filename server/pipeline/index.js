@@ -177,6 +177,9 @@ export async function setup(ctx) {
     hub.on('tickets', () => syncLimit());
   }
 
+  /** A session that is finished for good: only `done` (an `error` one can be messaged back to running). */
+  const isFinished = (s) => s.status === 'done';
+
   // File moves carry the approval state along (a folder move moves every file under it).
   const unsubscribe = ws.runs.onChange((e) => {
     if (e.kind !== 'move') return;
@@ -195,6 +198,15 @@ export async function setup(ctx) {
       moved = true;
     }
     if (moved) save();
+    // Sessions follow their project when its top folder is renamed or moved (#487). A top folder moved into
+    // another folder belongs to that one's project now.
+    const hub = dispatch()?.hub;
+    for (const s of hub?.sessions ?? []) {
+      if (typeof s.folder !== 'string' || (s.folder !== e.from && !s.folder.startsWith(e.from + '/'))) continue;
+      const to = e.to + s.folder.slice(e.from.length);
+      const folder = to.includes('/') ? topFolder(to) : to;
+      if (folder !== s.folder) hub.touch(s, { folder });
+    }
   });
 
   const readOrNull = (path) =>
@@ -409,9 +421,6 @@ export async function setup(ctx) {
   }
 
   // ---- 멈추기 · 이어서 하기 · 계획 다시 열기 (E27) ----
-
-  /** A session that is finished for good: only `done` (an `error` one can be messaged back to running). */
-  const isFinished = (s) => s.status === 'done';
 
   /**
    * Board tasks this run closed: the lead's step tasks that went done after this run's 시작하기. A duplicated plan

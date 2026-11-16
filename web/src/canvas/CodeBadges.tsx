@@ -46,7 +46,7 @@ export function CodeBadges({ api, wrap, codeOf, pictureOf, hide, version, active
       {badges.map((b) => {
         const t: CodeTarget = b.blockId ? { kind: 'node', blockId: b.blockId, node: b.node } : { kind: 'shape', id: b.node };
         const on = !!active && (active.kind === 'node' ? t.kind === 'node' && active.blockId === t.blockId && active.node === t.node : t.kind === 'shape' && active.id === t.id);
-        return <CodeBadge key={`${b.blockId}\n${b.node}`} x={b.x} y={b.y} on={on} label={b.blockId ? b.node : '도형'} onOpen={() => onOpen(t)} />;
+        return <CodeBadge key={`${b.blockId}\n${b.node}`} x={b.x} y={b.y} on={on} label={b.label} onOpen={() => onOpen(t)} />;
       })}
     </div>
   );

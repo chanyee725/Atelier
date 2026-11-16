@@ -41,15 +41,36 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
     return () => ctl.abort();
   }, [ref?.path, ref?.start, end]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The highlighted range is scrolled into view inside the preview only (never the page), centred when it fits, else starting at its first line.
+  // The highlighted range is scrolled into view inside the preview only (never the page), centred when it fits, else
+  // starting at its first line. Placed again when the box resizes (window or panel height), until the user scrolls it.
   const box = useRef<HTMLDivElement>(null);
   const first = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const b = box.current;
     const f = first.current;
     if (!b || !f || preview.state !== 'ok') return;
-    const span = (Math.min(end, preview.win.end) - ref!.start + 1) * f.offsetHeight;
-    b.scrollTop = previewScrollTop({ firstTop: f.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop, span, boxHeight: b.clientHeight });
+    const lines = Math.min(end, preview.win.end) - ref!.start + 1;
+    let mine = -1;
+    let user = false;
+    const place = () => {
+      if (user || !b.isConnected || !f.isConnected) return;
+      // From the box's padding edge (scrollTop's frame), so the 1px border is left out.
+      const firstTop = f.getBoundingClientRect().top - b.getBoundingClientRect().top - b.clientTop + b.scrollTop;
+      b.scrollTop = previewScrollTop({ firstTop, span: lines * f.offsetHeight, boxHeight: b.clientHeight });
+      mine = b.scrollTop;
+    };
+    place();
+    // A scroll that did not come from place() is the user's: stop following resizes then.
+    const onScroll = () => {
+      if (Math.abs(b.scrollTop - mine) > 1) user = true;
+    };
+    b.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(place);
+    ro.observe(b);
+    return () => {
+      ro.disconnect();
+      b.removeEventListener('scroll', onScroll);
+    };
   }, [preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
