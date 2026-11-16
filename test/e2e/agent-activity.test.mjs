@@ -161,7 +161,12 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   await page.locator('[data-activity-badge]').waitFor({ timeout: 20_000 });
   await page.locator('[data-activity-bell]').click();
   await page.waitForFunction(() => [...document.querySelectorAll('[data-activity-item]')].some((e) => /끝냈어요/.test(e.textContent)), null, { timeout: 10_000 });
-  const stored = JSON.parse(readFileSync(join(ws, '.drawing', 'activity.json'), 'utf8'));
+  // The log is written a moment after a change.
+  let stored = { events: [] };
+  for (let i = 0; i < 30 && !stored.events.some((e) => e.kind === 'finish'); i++) {
+    await new Promise((r) => setTimeout(r, 200));
+    try { stored = JSON.parse(readFileSync(join(ws, '.drawing', 'activity.json'), 'utf8')); } catch { /* not yet */ }
+  }
   assert.ok(stored.events.some((e) => e.kind === 'finish'), 'the log on disk has the finish');
   assert.ok(!JSON.stringify(stored).includes('done'), 'metadata only: no reply text on disk');
   assert.deepEqual(errors, []);
