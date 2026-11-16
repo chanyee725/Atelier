@@ -6,12 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { activitySentence } from '../../../shared/dispatch/agent-activity.ts';
 import { alertsOn } from '../dispatch/lib/notify';
-import { alertRoute, type ActivityEvent } from './activity';
+import { alertRoute, MODAL_SELECTOR, type ActivityEvent } from './activity';
 import { onNewActivity } from './store';
 import './activity.css';
 
 const SHOW_MS = 6_000;
 const MAX_TOASTS = 3;
+const MODAL_CHECK_MS = 400;
+/** A modal dialog is open: the page behind it is inert, so a toast could be neither read nor closed. */
+const modalOpen = () => !!document.querySelector(MODAL_SELECTOR);
 
 type Toast = { id: string; text: string; kind: ActivityEvent['kind']; color?: string };
 
@@ -19,7 +22,11 @@ type Toast = { id: string; text: string; kind: ActivityEvent['kind']; color?: st
 function announce(text: string, region: HTMLElement | null) {
   const doc = document as Document & { ariaNotify?: (s: string) => void };
   if (typeof doc.ariaNotify === 'function') doc.ariaNotify(text);
-  else if (region) region.textContent = text;
+  else if (region) {
+    // Emptied first and filled a frame later, so the same sentence twice in a row is read again.
+    region.textContent = '';
+    requestAnimationFrame(() => (region.textContent = text));
+  }
 }
 
 export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
@@ -28,6 +35,9 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
   const live = useRef<HTMLParagraphElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const held = useRef(false);
+  // Toasts that came while a modal dialog was open wait here (newest MAX_TOASTS) until it closes.
+  const waiting = useRef<Toast[]>([]);
+  const waitTimer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const open = useRef(onOpen);
   open.current = onOpen;
 
@@ -42,6 +52,20 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
       id,
       setTimeout(() => (held.current ? later(id) : close(id)), SHOW_MS),
     );
+  };
+
+  const show = (t: Toast) => {
+    setToasts((all) => [...all.filter((x) => x.id !== t.id), t].slice(-MAX_TOASTS));
+    later(t.id);
+    announce(t.text, live.current);
+  };
+  const showWaiting = () => {
+    if (modalOpen()) return;
+    clearInterval(waitTimer.current);
+    waitTimer.current = undefined;
+    const all = waiting.current;
+    waiting.current = [];
+    all.forEach(show);
   };
 
   useEffect(
@@ -63,13 +87,24 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
           return;
         }
         if (route !== 'toast') return;
-        setToasts((t) => [...t.filter((x) => x.id !== e.id), { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}) }].slice(-MAX_TOASTS));
-        later(e.id);
-        announce(text, live.current);
+        const toast: Toast = { id: e.id, text, kind: e.kind, ...(e.color ? { color: e.color } : {}) };
+        // Not behind a modal dialog, where it could be neither read nor closed (the bell's feed keeps it anyway).
+        if (modalOpen()) {
+          waiting.current = [...waiting.current.filter((x) => x.id !== toast.id), toast].slice(-MAX_TOASTS);
+          waitTimer.current ??= setInterval(showWaiting, MODAL_CHECK_MS);
+          return;
+        }
+        show(toast);
       }),
     [],
   );
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      clearInterval(waitTimer.current);
+    },
+    [],
+  );
 
   // The region is in the top layer only while it has toasts.
   useEffect(() => {
@@ -78,6 +113,9 @@ export function ActivityAlerts({ onOpen }: { onOpen: (path: string) => void }) {
     const shown = el.matches(':popover-open');
     if (toasts.length && !shown) el.showPopover();
     else if (!toasts.length && shown) el.hidePopover();
+    // A hidden region gets no mouseleave or blur: closing the last toast under the pointer must not keep the next
+    // ones open for good.
+    if (!toasts.length) held.current = false;
   }, [toasts.length]);
 
   // Closing the focused toast moves focus to the next one, else back to the page.

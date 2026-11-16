@@ -28,17 +28,25 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
       el.style.left = `${at.left}px`;
       el.style.top = `${at.top}px`;
     };
+    // The feed has no size before it opens, so it is placed on `toggle`; hidden until then so it never shows a
+    // frame at the default spot.
+    const onBefore = (e: Event) => {
+      if ((e as ToggleEvent).newState === 'open') el.style.visibility = 'hidden';
+    };
     const onToggle = (e: Event) => {
       const isOpen = (e as ToggleEvent).newState === 'open';
       setOpen(isOpen);
       if (!isOpen) return;
       setNow(Date.now());
       place();
+      el.style.visibility = '';
       readAll();
     };
+    el.addEventListener('beforetoggle', onBefore);
     el.addEventListener('toggle', onToggle);
     addEventListener('resize', place);
     return () => {
+      el.removeEventListener('beforetoggle', onBefore);
       el.removeEventListener('toggle', onToggle);
       removeEventListener('resize', place);
     };
@@ -47,6 +55,10 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
   useEffect(() => {
     if (open && unread) readAll();
   }, [open, unread]);
+  // ...and their times are counted from now, not from when the feed opened.
+  useEffect(() => {
+    if (open) setNow(Date.now());
+  }, [open, log]);
 
   const items = feedOf(log, now);
   const go = (file: string) => {
@@ -71,7 +83,7 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
           </span>
         )}
       </button>
-      <div ref={feed} id={id} popover="auto" className="activity-feed" data-activity-feed="" aria-label="에이전트 활동">
+      <div ref={feed} id={id} popover="auto" role="dialog" className="activity-feed" data-activity-feed="" aria-label="에이전트 활동">
         <h2 className="activity-feed-title">에이전트 활동</h2>
         {items.length === 0 ? (
           <p className="activity-empty">아직 기록이 없어요.</p>

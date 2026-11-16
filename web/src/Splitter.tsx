@@ -9,7 +9,10 @@ export function Splitter({ ratio, onRatio, left, right }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLDivElement>(null);
   const clamp = (r: number) => Math.min(0.8, Math.max(0.2, r));
+  // The share when the drag started (shareAt keeps it while the pane sits at the canvas minimum).
+  const start = useRef(ratio);
   const onDown = (e: React.PointerEvent) => {
+    start.current = ratio;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onMove = (e: React.PointerEvent) => {
@@ -19,7 +22,7 @@ export function Splitter({ ratio, onRatio, left, right }: Props) {
     // the share that keeps the divider under the pointer (doc/agentMargin.ts shareAt).
     const x = e.clientX - r.left;
     const host = pane.current?.querySelector<HTMLElement>('.doc-margin[data-margin-mounted]');
-    onRatio(clamp(host ? shareAt({ ...measureRoom(host), box: r.width }, x) : x / r.width));
+    onRatio(clamp(host ? shareAt({ ...measureRoom(host), box: r.width }, x, start.current) : x / r.width));
   };
   return (
     <div ref={box} className="flex min-h-0 flex-1">

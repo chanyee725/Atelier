@@ -2,7 +2,7 @@
 // (모든 파일 A, 최근 R, 보관함 B), projects with their nested sub-documents, one row per model with its connection
 // status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -34,6 +34,20 @@ import type { Theme, ThemePref } from './theme';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
 
 export const displayName = (n: { name: string; title?: string }) => n.title || n.name.replace(/\.dpx\.json$/, '');
+
+/** Path -> shown name of every document in the projects view (for the working agents' file line). */
+export const titlesOf = (view: ProjectsView | null) => {
+  const m = new Map<string, string>();
+  const walk = (nodes: readonly DocNode[]) => {
+    for (const n of nodes) {
+      m.set(n.path, displayName(n));
+      walk(n.children);
+    }
+  };
+  for (const p of view?.projects ?? []) walk(p.docs);
+  walk(view?.loose ?? []);
+  return m;
+};
 
 type Props = {
   workspace: string | null;
@@ -326,6 +340,7 @@ export function Sidebar(p: Props) {
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
   const projects = p.view?.projects ?? [];
+  const titles = useMemo(() => titlesOf(p.view), [p.view]);
   return (
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
@@ -355,7 +370,7 @@ export function Sidebar(p: Props) {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-        <WorkingAgents current={p.current} onOpen={p.onOpen} />
+        <WorkingAgents current={p.current} onOpen={p.onOpen} titleOf={(path) => titles.get(path) ?? null} />
         <SidebarGroup className="mt-3">
           <SidebarGroupLabel>프로젝트</SidebarGroupLabel>
           <SidebarGroupAction aria-label="새 프로젝트" title="새 프로젝트" onClick={p.onNewProject}>

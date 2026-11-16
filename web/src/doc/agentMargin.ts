@@ -462,13 +462,17 @@ export const dividerAt = (r: MarginRoom & { share: number }): number => (formOf(
  * The share that puts the divider under a pointer at `x` (px from the split's left), so a drag never makes it jump.
  * Past the canvas minimum the divider stops there. Between the widest sheet layout and the narrowest side layout no
  * share puts it at `x` (the panel appears or goes); it snaps to the nearer of the two.
+ * `keep` is the share the drag started with: at the canvas minimum every share from `side` up lays the page out the
+ * same, so the larger of the two is kept, and a drag that only touched the minimum leaves the share as it was (the
+ * pane goes back to it when the margin closes, #658).
  */
-export function shareAt(r: Omit<MarginRoom, 'share'>, x: number): number {
+export function shareAt(r: Omit<MarginRoom, 'share'>, x: number, keep?: number): number {
   const sheet = x / r.box;
   if (formOf({ ...r, share: sheet }) === 'sheet') return sheet;
+  const atMin = x >= r.box - CANVAS_MIN;
   const pane = Math.min(x, r.box - CANVAS_MIN);
   const side = (r.rail ? pane - RAIL_W : pane * DOC_SHARE) / r.box;
-  if (formOf({ ...r, share: side }) === 'side') return side;
+  if (formOf({ ...r, share: side }) === 'side') return atMin && keep != null && keep > side ? keep : side;
   // The narrowest side layout: the text exactly TEXT_MIN.
   const edgePane = r.rail ? TEXT_MIN + r.chrome + RAIL_W : TEXT_MIN / DOC_SHARE + r.chrome;
   const edge = (r.rail ? edgePane - RAIL_W : edgePane * DOC_SHARE) / r.box;

@@ -191,6 +191,29 @@ test('activity module: a damaged file starts empty; a hub failure adds an error 
   assert.equal(r.hub.listenerCount('session'), 0);
 });
 
+test('activity module: a throwing broadcast does not stop later events, and close still resolves', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'activity-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const r = await moduleRig(dir);
+  const sent = r.sent;
+  let fail = true;
+  const push = sent.push.bind(sent);
+  sent.push = (x) => {
+    if (fail) {
+      fail = false;
+      throw new Error('broadcast failed');
+    }
+    return push(x);
+  };
+  r.report({ sid: 's3', file: 'a.dpx.json' });
+  r.report({ sid: 's3', file: 'b.dpx.json' });
+  await r.m.settled();
+  assert.deepEqual(sent.map((s) => s.data.kind), ['finish', 'start']);
+  const got = await r.call('GET', '/api/activity');
+  assert.equal(got.json.events.length, 3, 'the event whose broadcast threw is still stored');
+  await r.m.close();
+});
+
 test('sectionAt: the nearest non-empty heading at or above the block, clipped', async () => {
   const { sectionAt } = await import('../server/cursor/model.js');
   const blocks = [{ type: 'paragraph', text: 'x' }, { type: 'heading', text: ' 1.  개요 ' }, { type: 'paragraph', text: 'y' }, { type: 'heading', text: '' }, { type: 'paragraph', text: 'z' }];

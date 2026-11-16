@@ -51,6 +51,8 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   const start = [h('계획'), p('소개 문단이에요.')];
   const step1 = [...start, p('첫 단계를 적어요.')];
   const step2 = [...step1, h('화면 지도'), p('코덱스가 이어서 적어요.')];
+  // The agents' reply text: never on disk (a marker no session name or path contains).
+  const REPLY = 'reply-text-7f3a9c';
   const claude = [
     { type: 'system', subtype: 'init', session_id: 'fake-activity' },
     { $waitFor: gate(1) },
@@ -59,7 +61,7 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
     { $write: { file: abs, text: fileWith(step1, 50) } },
     { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] } },
     { $waitFor: gate(3) },
-    { type: 'assistant', message: { id: 'm9', content: [{ type: 'text', text: 'done' }], usage: { input_tokens: 1, output_tokens: 1 } } },
+    { type: 'assistant', message: { id: 'm9', content: [{ type: 'text', text: REPLY }], usage: { input_tokens: 1, output_tokens: 1 } } },
     { type: 'result', subtype: 'success', total_cost_usd: 0.001 },
   ];
   const codex = [
@@ -68,7 +70,7 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
     { type: 'item.completed', item: { type: 'file_change', changes: [{ kind: 'update', path: abs }] } },
     { $write: { file: abs, text: fileWith(step2, 60) } },
     { $waitFor: gate(4) },
-    { type: 'item.completed', item: { type: 'agent_message', text: 'done' } },
+    { type: 'item.completed', item: { type: 'agent_message', text: REPLY } },
     { type: 'turn.completed', usage: { input_tokens: 1, cached_input_tokens: 0, output_tokens: 1 } },
   ];
   const fake = fakeCliBin({ scenarios: { claude, codex } });
@@ -168,6 +170,6 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
     try { stored = JSON.parse(readFileSync(join(ws, '.drawing', 'activity.json'), 'utf8')); } catch { /* not yet */ }
   }
   assert.ok(stored.events.some((e) => e.kind === 'finish'), 'the log on disk has the finish');
-  assert.ok(!JSON.stringify(stored).includes('done'), 'metadata only: no reply text on disk');
+  assert.ok(!JSON.stringify(stored).includes(REPLY), 'metadata only: no reply text on disk');
   assert.deepEqual(errors, []);
 });
