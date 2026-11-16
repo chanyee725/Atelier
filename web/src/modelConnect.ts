@@ -87,7 +87,7 @@ export const cliLogoutShown = (p: ProviderState | undefined, enabled: boolean) =
 
 /** Second line under the name: CLI version and how it is logged in. Never an account name. */
 export function metaLine(meta: ProviderMeta, p: ProviderState | undefined): string {
-  if (!p || p.installed == null) return `${meta.cliName} CLI로 로그인해요`;
+  if (!p || p.installed == null) return `${meta.cliName}로 로그인해요`;
   if (p.installed === false) return `${meta.cliName} 필요`;
   return [p.cli, p.cliLoggedIn ? p.method ?? '로그인됨' : 'CLI 로그인 안 됨'].filter(Boolean).join(' · ');
 }

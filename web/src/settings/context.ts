@@ -13,6 +13,13 @@ export type SettingsCtx = { load: SettingsLoad; retry: () => void; markDirty: (k
 export const SettingsContext = createContext<SettingsCtx>({ load: { kind: 'loading' }, retry: () => {}, markDirty: () => {} });
 export const useSettingsLoad = () => useContext(SettingsContext);
 
+/**
+ * Whether this section is the one shown (#639). The modal keeps every section mounted so unsaved edits survive
+ * switching; a section that fetches on its own waits until it is shown. Outside the modal it is always shown.
+ */
+export const SectionShownContext = createContext(true);
+export const useSectionShown = () => useContext(SectionShownContext);
+
 /** Report whether this part of the 설정 modal holds unsaved input; cleared when it unmounts. */
 export function useDirtyMark(key: string, dirty: boolean) {
   const { markDirty } = useContext(SettingsContext);

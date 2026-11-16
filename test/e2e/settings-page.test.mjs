@@ -67,6 +67,11 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   const errors = [];
   const page = await browser.newPage({ viewport: { width: 1440, height: 860 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
+  // The 사용 한도 section's own GET /api/limits (the sidebar's model rows ask too, without a content-type): it must wait
+  // until that section is shown (#639), even though every section is mounted.
+  const sectionLimits = (r) => r.url().endsWith('/api/limits') && r.headers()['content-type'] === 'application/json';
+  let limitsAsked = 0;
+  page.on('request', (r) => sectionLimits(r) && limitsAsked++);
 
   // 1. The sidebar 설정 row opens the modal on 일반, with the section list on the left.
   await page.goto(BASE);
@@ -76,7 +81,7 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   const nav = dialog.getByRole('navigation', { name: '설정 항목' });
   const section = (name) => nav.getByRole('button', { name, exact: true }).click();
   assert.deepEqual(await nav.getByRole('button').allInnerTexts(), ['일반', '모델 연결', '역할별 모델', '관리자와 팀', '사용 한도', '작업 폴더', '멈춤 감지']);
-  assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'true');
   await dialog.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
 
   // 2. 일반: the answer-style switch saves at once.
@@ -197,8 +202,12 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await page.getByRole('button', { name: '설정', exact: true }).click();
   await dialog.waitFor();
 
-  // 6. 사용 한도: per-provider usage and the guard form; Dispatch on, so nothing is read-only.
+  // 6. 사용 한도: per-provider usage and the guard form; Dispatch on, so nothing is read-only. Its usage is asked for
+  // only now that it is shown.
+  assert.equal(limitsAsked, 0, 'the hidden 사용 한도 section asked for /api/limits');
+  const asked = page.waitForRequest(sectionLimits);
   await section('사용 한도');
+  await asked;
   const limits = dialog.getByRole('region', { name: '사용 한도' });
   await limits.getByRole('group', { name: '모델별 사용량' }).waitFor();
   const five = limits.getByRole('spinbutton', { name: /^5시간 한도/ });
@@ -213,7 +222,7 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await page.reload();
   await page.getByRole('button', { name: '설정', exact: true }).click();
   await dialog.waitFor();
-  assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'true');
   await section('관리자와 팀');
   assert.equal(await maxChildren.inputValue(), '4');
   await section('역할별 모델');

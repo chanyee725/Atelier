@@ -9,7 +9,7 @@ import { X } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { connect, setState, useDispatch } from '../dispatch/store';
 import { cn } from '../lib/utils';
-import { SettingsContext } from './context';
+import { SectionShownContext, SettingsContext } from './context';
 import { useDispatchStatus } from './DispatchOff';
 import { BTN, PRIMARY_BTN } from './LimitsForm';
 import { SECTION_KEY, SECTIONS, firstSection, settingsLoad, stopEscWhileOpen, type SectionId } from './model';
@@ -86,7 +86,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
     if (d && !d.open) {
       d.showModal();
       // Start on the chosen section's nav item (the <select> below 768px, where the list is hidden).
-      const item = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+      const item = navRef.current?.querySelector<HTMLElement>('[aria-current="true"]');
       (item && item.offsetParent ? item : d.querySelector<HTMLElement>(`#${CSS.escape(selectId)}`))?.focus();
     }
     // Below 768px the sidebar is a Radix Sheet that listens for Esc on document (capture), so one Esc would close
@@ -143,12 +143,12 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                     <button
                       type="button"
                       data-section={s.id}
-                      aria-current={current === s.id ? 'page' : undefined}
+                      aria-current={current === s.id ? 'true' : undefined}
                       onClick={() => pick(s.id)}
                       className={cn(
                         'flex h-8 w-full items-center rounded-md px-2.5 text-left text-sm text-muted-foreground transition-colors duration-[120ms] motion-reduce:transition-none hover:bg-muted/60 hover:text-foreground',
                         // Not by colour alone: the current item is also bold and carries a bar (WCAG 1.4.1).
-                        'aria-[current=page]:bg-muted aria-[current=page]:font-semibold aria-[current=page]:text-foreground aria-[current=page]:shadow-[inset_2px_0_0_var(--primary)]',
+                        'aria-[current=true]:bg-muted aria-[current=true]:font-semibold aria-[current=true]:text-foreground aria-[current=true]:shadow-[inset_2px_0_0_var(--primary)]',
                       )}
                     >
                       {s.label}
@@ -180,7 +180,9 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 const Section = SECTION_COMPONENTS[s.id];
                 return (
                   <div key={s.id} data-settings-section={s.id} hidden={current !== s.id}>
-                    <Section />
+                    <SectionShownContext.Provider value={current === s.id}>
+                      <Section />
+                    </SectionShownContext.Provider>
                   </div>
                 );
               })}
