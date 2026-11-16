@@ -60,7 +60,7 @@ const run = async (t, part) => {
   assert.ok(made.ok, `POST /api/file: ${made.status}`);
   const put = async (code) => {
     const cur = await (await api('GET', 'morph.dpx.json')).json();
-    const r = await api('PUT', 'morph.dpx.json', { ...cur, blocks: [blk(code)] });
+    const r = await api('PUT', 'morph.dpx.json', { ...cur, blocks: cur.blocks.map((b) => ({ ...b, code })) });
     assert.ok(r.ok, `PUT: ${r.status}`);
   };
 
@@ -103,6 +103,5 @@ const run = async (t, part) => {
 };
 
 test('an outside diagram change morphs in the document preview (E520)', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'doc'));
-// Needs the canvas to stay mounted for an outside change of block code: canApplyLive (externalChange.ts) still sends
-// those through a reload that restarts the canvas pane.
-test('an outside diagram change morphs on the canvas and the zoom stays (E520)', { skip: SKIP, todo: 'canApplyLive must allow block code changes', timeout: 180_000 }, (t) => run(t, 'canvas'));
+// The canvas pane stays mounted for an outside change of block code (canApplyLive in externalChange.ts).
+test('an outside diagram change morphs on the canvas and the zoom stays (E520)', { skip: SKIP, timeout: 180_000 }, (t) => run(t, 'canvas'));
