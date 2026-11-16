@@ -12,7 +12,9 @@ import { ensureDirInside } from "../lock.js";
 
 const REVIEW = { APPROVED: "approved", CHANGES_REQUESTED: "changes", REVIEW_REQUIRED: "required" };
 
-export const PR_DEFAULTS = { timeoutMs: 8000, cacheMs: 30000, minGapMs: 1000 };
+// minGapMs spaces gh starts and maxConcurrent caps how many run at once, so a dashboard asking for 12 branches
+// answers in a few seconds without a burst of gh calls (a 1 s gap made the first load take 12 s+).
+export const PR_DEFAULTS = { timeoutMs: 8000, cacheMs: 30000, minGapMs: 100, maxConcurrent: 4 };
 
 const settingsFile = workspaceDir => path.join(workspaceDir, ".drawing", "settings.json");
 
@@ -106,15 +108,27 @@ export function validBranch(branch) {
  *   { ok: true, pr: { number, state: "open"|"closed"|"merged", ci: "success"|"failure"|"pending"|"none", url?, review?, conflict? } }
  *   { ok: false, reason: "disabled"|"gh-missing"|"not-logged-in"|"no-pr"|"timeout"|"invalid-branch"|"error" }
  * and never throws. Answers are cached per branch (cacheMs, `force: true` skips the cache) and gh
- * starts at most once per minGapMs, so a run watching many steps does not hammer GitHub.
+ * starts at most once per minGapMs with at most maxConcurrent running, so a run watching many steps does not hammer GitHub.
  * `cwd` (required) is the git project folder (gh reads the repo from it); `env` is for tests (fake gh on PATH).
  */
-export function createPrStatus({ workspaceDir, cwd, env, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs } = {}) {
+export function createPrStatus({ workspaceDir, cwd, env, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs, maxConcurrent = PR_DEFAULTS.maxConcurrent } = {}) {
   const cache = new Map(); // branch -> { at, result }
   const inflight = new Map();
   let lastStart = 0;
+  let running = 0;
+  const waiting = []; // resolvers for calls waiting for a free gh slot
 
   async function fetchOne(branch) {
+    // A finished call hands its slot straight to the next waiter, so `running` never goes over maxConcurrent.
+    if (running >= maxConcurrent) await new Promise(r => waiting.push(r));
+    else running++;
+    try { return await fetchNow(branch); } finally {
+      const next = waiting.shift();
+      if (next) next(); else running--;
+    }
+  }
+
+  async function fetchNow(branch) {
     // Reserve this call's start slot before waiting, so overlapping calls queue up minGapMs apart.
     const start = Math.max(now(), lastStart + minGapMs);
     lastStart = start;
