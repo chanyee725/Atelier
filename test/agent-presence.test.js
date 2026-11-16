@@ -53,6 +53,78 @@ test('buildAgents: live sessions with their held file, project filter, newest fi
   assert.deepEqual(buildAgents({ sessions, held, outside, project: 'Q' }).map((a) => a.name), ['Remy']);
 });
 
+test('buildAgents: provider and the current tool activity (memory only)', () => {
+  const sessions = [
+    { id: 's1', name: 'Otto', role: 'impl', model: 'm', provider: 'claude', status: 'running' },
+    { id: 's2', name: 'Cal', role: 'lead', model: 'g', provider: '', status: 'running' },
+  ];
+  const activity = new Map([['s1', '코드 읽기'], ['s2', 7]]);
+  const [a, b] = buildAgents({ sessions, activity }).sort((x, y) => x.sid.localeCompare(y.sid));
+  assert.equal(a.provider, 'claude');
+  assert.equal(a.activity, '코드 읽기');
+  assert.equal('provider' in b, false, 'an empty provider is left out');
+  assert.equal('activity' in b, false, 'a non-text label is left out');
+  assert.equal('activity' in buildAgents({ sessions })[0], false);
+});
+
+test('agents module: activity follows the hub session events and clears between turns', async () => {
+  const r = rig();
+  r.ctx.modules.cursor = await cursor.setup(r.ctx);
+  const m = await agents.setup(r.ctx);
+  const s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', provider: 'openai', status: 'running', folder: 'P' };
+  r.hub.sessions.s1 = s1;
+  // The public session (what the hub emits) carries the activity; the stored one does not.
+  r.hub.emit('session', { ...s1, activity: { label: 'e2e 실행', since: 1 } });
+  assert.deepEqual(m.list().map((a) => [a.provider, a.activity]), [['openai', 'e2e 실행']]);
+  const last = r.sent.filter((s) => s.event === 'agents').at(-1).data.agents[0];
+  assert.equal(last.activity, 'e2e 실행');
+  r.hub.emit('session', { ...s1, activity: null });
+  assert.equal('activity' in m.list()[0], false);
+  r.hub.emit('session', { ...s1, activity: { label: '코드 읽기', since: 2 } });
+  r.hub.emit('removed', { id: 's1' });
+  r.hub.sessions.s1 = { ...s1 };
+  r.hub.emit('session', s1);
+  assert.equal('activity' in m.list()[0], false, 'removed: the label is dropped');
+  m.close();
+  r.ctx.modules.cursor.close();
+});
+
+test('buildAgents: the pipeline step title, trimmed and capped', () => {
+  const sessions = [{ id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running' }, { id: 's2', name: 'Cal', role: 'lead', model: 'm', status: 'running' }];
+  const stepOf = (s) => (s.id === 's1' ? '  화면 지도 그리기 ' : '   ');
+  const [a, b] = buildAgents({ sessions, stepOf }).sort((x, y) => x.sid.localeCompare(y.sid));
+  assert.equal(a.step, '화면 지도 그리기');
+  assert.equal('step' in b, false);
+  assert.equal(buildAgents({ sessions, stepOf: () => 'x'.repeat(200) })[0].step.length, 80);
+});
+
+test('agents module: step from the running plan link and the plan diagram label; follows a plan edit', async () => {
+  const r = rig();
+  const pipelines = {};
+  r.ctx.modules.dispatch.store = { data: { pipelines } };
+  r.ctx.modules.cursor = await cursor.setup(r.ctx);
+  const m = await agents.setup(r.ctx);
+  const plan = (label) => ({ canvas: { elements: [] }, blocks: [{ id: 'b_plan', code: `map [label: "${label}"]\nother [label: "그 밖"]` }] });
+  r.files.set('P/plan.dpx.json', plan('화면 지도'));
+  const s1 = { id: 's1', name: 'Otto', role: 'impl', model: 'm', status: 'running', folder: 'P' };
+  r.hub.sessions.s1 = s1;
+  r.hub.emit('session', s1);
+  assert.equal('step' in m.list()[0], false, 'no plan: no step');
+  pipelines['P/plan.dpx.json'] = { lead: 'L', state: 'running', links: { s1: 'map' } };
+  r.hub.emit('tasks', []);
+  await sleep(10);
+  assert.equal(m.list()[0].step, '화면 지도');
+  assert.equal(r.sent.filter((x) => x.event === 'agents').at(-1).data.agents[0].step, '화면 지도', 'broadcast once the labels are read');
+  await r.change('P/plan.dpx.json', plan('화면 지도 v2'));
+  m.list();
+  await sleep(10);
+  assert.equal(m.list()[0].step, '화면 지도 v2');
+  pipelines['P/plan.dpx.json'].state = 'done';
+  assert.equal('step' in m.list()[0], false, 'a finished plan: no step');
+  m.close();
+  r.ctx.modules.cursor.close();
+});
+
 function rig() {
   const files = new Map();
   const listeners = new Set();

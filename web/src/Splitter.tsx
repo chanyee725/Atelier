@@ -1,3 +1,5 @@
+import { shareAt } from './doc/agentMargin';
+import { measureRoom } from './doc/marginRoom';
 import { useRef, type ReactNode } from 'react';
 
 type Props = { ratio: number; onRatio: (r: number) => void; left: ReactNode; right: ReactNode };
@@ -5,6 +7,7 @@ type Props = { ratio: number; onRatio: (r: number) => void; left: ReactNode; rig
 /** Two panes with a draggable divider. `ratio` is the left pane's share (0.2 to 0.8). */
 export function Splitter({ ratio, onRatio, left, right }: Props) {
   const box = useRef<HTMLDivElement>(null);
+  const pane = useRef<HTMLDivElement>(null);
   const clamp = (r: number) => Math.min(0.8, Math.max(0.2, r));
   const onDown = (e: React.PointerEvent) => {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -12,11 +15,16 @@ export function Splitter({ ratio, onRatio, left, right }: Props) {
   const onMove = (e: React.PointerEvent) => {
     if (!(e.target as HTMLElement).hasPointerCapture(e.pointerId) || !box.current) return;
     const r = box.current.getBoundingClientRect();
-    onRatio(clamp((e.clientX - r.left) / r.width));
+    // While the agent margin shows (E532), the pane is its share plus the side panel, up to the canvas minimum; pick
+    // the share that keeps the divider under the pointer (doc/agentMargin.ts shareAt).
+    const x = e.clientX - r.left;
+    const host = pane.current?.querySelector<HTMLElement>('.doc-margin[data-margin-mounted]');
+    onRatio(clamp(host ? shareAt({ ...measureRoom(host), box: r.width }, x) : x / r.width));
   };
   return (
     <div ref={box} className="flex min-h-0 flex-1">
-      <div className="min-w-0 overflow-auto" style={{ width: `${ratio * 100}%` }}>
+      {/* .split-doc: the width is --split, plus the agent margin's while it shows (index.css, E532). */}
+      <div ref={pane} className="split-doc min-w-0 overflow-auto" style={{ '--split': `${ratio * 100}%` } as React.CSSProperties}>
         {left}
       </div>
       <div

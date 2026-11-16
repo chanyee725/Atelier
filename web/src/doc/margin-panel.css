@@ -1,0 +1,178 @@
+/* Agent activity margin (E532, issue #622; doc/MarginPanel.tsx). Flat and shadowless in the app's Linear-like chrome:
+   one hairline against the document, thin dividers between cards, colour only where it says something — the agent's
+   swatch and the line tying its changes, and one accent sentence for what it is doing now. Tokens only, so light,
+   dark and monitoring all follow. --agent is the session's colour (or its role colour). Placement, entry and exit
+   belong to the container (.doc-margin-aside). */
+
+.margin-panel {
+  --agent: var(--idle);
+  --margin-ink: color-mix(in oklab, var(--agent) 72%, var(--foreground));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  block-size: 100%;
+  max-block-size: inherit;
+}
+
+/* The hairline against the text and the scrolling are the container's (.doc-margin-aside, index.css). */
+
+/* ---- head ---- */
+.margin-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 40px;
+  padding: 0 8px 0 14px;
+  border-block-end: 1px solid var(--border);
+}
+.margin-panel[data-collapsed] .margin-head { border-block-end: 0; padding: 0; }
+.margin-title { flex: 1; min-width: 0; margin: 0; font-size: 12px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.margin-toggle,
+.margin-rail,
+.margin-sheet-bar,
+.margin-change {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.margin-toggle {
+  display: grid;
+  place-items: center;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+}
+.margin-toggle svg { inline-size: 15px; block-size: 15px; }
+.margin-toggle:hover { background: var(--accent); color: var(--foreground); }
+.margin-toggle:focus-visible,
+.margin-rail:focus-visible,
+.margin-sheet-bar:focus-visible,
+.margin-change:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* Collapsed side: a rail of swatches. */
+.margin-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 12px 0;
+}
+.margin-rail:hover { background: var(--accent); }
+.margin-rail-chevron { inline-size: 15px; block-size: 15px; color: var(--muted-foreground); rotate: 180deg; margin-block-end: 4px; }
+.margin-rail-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--agent); }
+.margin-rail-dot[data-phase='thinking'],
+.margin-rail-dot[data-phase='waiting'] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--agent); }
+
+/* Collapsed sheet: one bar with who and the first doing-now line. */
+.margin-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 0 12px 0 14px;
+  text-align: start;
+}
+.margin-sheet-bar:hover { background: var(--accent); }
+.margin-sheet-dots { display: flex; gap: 4px; }
+.margin-sheet-bar .margin-title { flex: 0 1 auto; }
+.margin-sheet-doing { flex: 1; min-width: 0; color: var(--margin-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.margin-toggle-icon { inline-size: 15px; block-size: 15px; color: var(--muted-foreground); flex: none; }
+
+/* ---- cards ---- */
+.margin-cards { list-style: none; margin: 0; padding: 0; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.margin-cards[hidden] { display: none; }
+.margin-card { --agent: var(--idle); padding: 14px 14px 12px; }
+.margin-card + .margin-card { border-block-start: 1px solid var(--border); }
+@starting-style {
+  .margin-card { opacity: 0; }
+}
+.margin-card { transition: opacity 0.2s ease-out; }
+
+.margin-who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.margin-swatch { flex: none; inline-size: 10px; block-size: 10px; border-radius: 3px; background: var(--agent); }
+.margin-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.margin-phase { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted-foreground); }
+.margin-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 0 18px; font-size: 11.5px; color: var(--muted-foreground); }
+.margin-model { display: inline-flex; align-items: center; gap: 4px; }
+.margin-model svg { inline-size: 12px; block-size: 12px; }
+
+/* The one accent: what it is doing now. */
+.margin-doing { margin: 8px 0 0 18px; color: var(--margin-ink); font-weight: 500; text-wrap: pretty; }
+.margin-card { --margin-ink: color-mix(in oklab, var(--agent) 72%, var(--foreground)); }
+.margin-sub { margin: 2px 0 0 18px; font-size: 12px; color: var(--muted-foreground); }
+
+/* Writing / thinking dots. */
+.margin-dots { display: inline-flex; gap: 2px; }
+.margin-dots span { inline-size: 3px; block-size: 3px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+.margin-phase[data-margin-phase='writing'] { color: var(--margin-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  .margin-dots span { animation: margin-dot 1s ease-in-out infinite alternate; }
+  .margin-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .margin-dots span:nth-child(3) { animation-delay: 0.4s; }
+}
+@keyframes margin-dot {
+  from { opacity: 0.25; }
+  to { opacity: 0.9; }
+}
+
+/* Recent changes: newest first, tied by the agent's line; the newest node is filled. */
+.margin-changes { position: relative; list-style: none; margin: 10px 0 0 4px; padding: 0; }
+.margin-changes::before {
+  content: '';
+  position: absolute;
+  inset-block: 10px 10px;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  border-radius: 1px;
+  background: color-mix(in oklab, var(--agent) 55%, transparent);
+}
+.margin-changes li { position: relative; }
+.margin-changes li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -2px;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1.5px var(--agent);
+}
+.margin-changes li:first-child::before { background: var(--agent); }
+.margin-change {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 3px 6px 3px 14px;
+  border-radius: 5px;
+  text-align: start;
+  font-size: 12px;
+}
+.margin-change:hover { background: var(--accent); }
+.margin-change-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.margin-change-ago { flex: none; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+/* A jump outlines the agent's cursor (the block's flash is .doc-margin-flash, index.css). */
+.doc-agent-cursor[data-margin-flash] .agent-cursor-tag { animation: margin-flash-tag 1.6s ease-out; }
+@keyframes margin-flash-tag {
+  from, 30% { outline: 2px solid var(--agent); outline-offset: 2px; }
+  to { outline: 2px solid transparent; outline-offset: 2px; }
+}
+
+@media (forced-colors: active) {
+  .margin-swatch, .margin-rail-dot, .margin-changes::before, .margin-changes li::before { forced-color-adjust: none; }
+  .margin-doing { color: CanvasText; }
+}

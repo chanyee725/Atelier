@@ -12,6 +12,8 @@ import { Button } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { asTreeNode, docPlace, newFileDir, paletteScope, shellKey, subFolderOf, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
+import { DocMargin } from './doc/DocMargin';
+import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { shownView, toCanvas } from './viewMode';
 import { createFileSession, type FilePatch, type FileSession } from './fileSession';
@@ -100,6 +102,8 @@ type DocSlotProps = {
   onShowFrame: (frameId: string) => void;
   onExportBlock: (b: Block, kind: ImageKind) => void;
   onFail: () => Promise<boolean>;
+  /** The document's editor, for the agent margin (E532). */
+  onEditor?: (editor: Editor | null) => void;
 };
 const elementsOf = (canvas: unknown): CanvasEl[] => {
   const els = (canvas as { elements?: unknown } | null | undefined)?.elements;
@@ -120,7 +124,7 @@ function useSettled<T>(value: T, ms: number, reset: string): T {
   }, [value, ms, reset]);
   return v.reset === reset ? v.value : value;
 }
-const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onNotice, onShow, onShowFrame, onExportBlock, onFail }: DocSlotProps) {
+const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onNotice, onShow, onShowFrame, onExportBlock, onFail, onEditor }: DocSlotProps) {
   const path = useSession(session, (s) => s.path ?? '');
   const key = useSession(session, (s) => `${s.path}#${s.loadSeq}`);
   const live = useSession(session, (s) => s.live);
@@ -170,6 +174,7 @@ const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, o
           frameBlocks={frameBlocks}
           onShowFrame={onShowFrame}
           onExportBlock={onExportBlock}
+          onEditor={onEditor}
         />
       </Suspense>
     </LazyBoundary>
@@ -761,8 +766,15 @@ export function App() {
   // .doc-host spans the whole doc pane (gutters included), so hovering anywhere in it reveals the 목차 button.
   const doc = hasFile && path && (
     <div className="doc-host">
-      <DocSlot session={session} dark={dark} tree={tree} jump={jump} onOpenFile={openFile} onNotice={setStatus} onShow={showBlock} onShowFrame={showFrame} onExportBlock={blockExport} onFail={flushForReload} />
-      <SubDocs node={place.node} onOpen={openFile} onAdd={() => void newFile(undefined, 'doc', true)} />
+      {/* Agents editing this document get a margin beside it (E532); the document and its sub-documents slide together. */}
+      <DocMargin file={path}>
+        {(onEditor) => (
+          <>
+            <DocSlot session={session} dark={dark} tree={tree} jump={jump} onOpenFile={openFile} onNotice={setStatus} onShow={showBlock} onShowFrame={showFrame} onExportBlock={blockExport} onFail={flushForReload} onEditor={onEditor} />
+            <SubDocs node={place.node} onOpen={openFile} onAdd={() => void newFile(undefined, 'doc', true)} />
+          </>
+        )}
+      </DocMargin>
     </div>
   );
   const canvas = <CanvasSlot session={session} focus={focus} dark={dark} handle={canvasHandle} onFail={flushForReload} />;
