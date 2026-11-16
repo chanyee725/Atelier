@@ -132,6 +132,28 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.goBack();
     await page.getByText(u1, { exact: true }).waitFor();
 
+    at('project list fails: 미분류 does not file every session (#522)');
+    await page.route('**/api/workspace/projects', (r) => r.fulfill({ status: 500, body: '{}' }));
+    await page.goto(`${BASE}/dispatch#folder=`);
+    await page.reload(); // a hash-only goto keeps the loaded page
+    await page.getByText('프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.').waitFor();
+    assert.equal(await page.getByText(u1, { exact: true }).count(), 0);
+    assert.equal(await page.getByText(a1, { exact: true }).count(), 0);
+    await page.unroute('**/api/workspace/projects');
+
+    at('project usage fails, then 다시 불러오기 (#522)');
+    let failUsage = true;
+    await page.route(/\/api\/usage\?folder=/, (r) => (failUsage ? r.fulfill({ status: 500, body: '{}' }) : r.continue()));
+    await page.goto(`${BASE}/dispatch#usage&folder=${encodeURIComponent(alpha)}`);
+    await page.reload();
+    const panel = page.getByRole('region', { name: '알파 사용량' });
+    await panel.getByText('프로젝트 사용량을 불러오지 못했어요.').waitFor();
+    failUsage = false;
+    await panel.getByRole('button', { name: '다시 불러오기' }).click();
+    await panel.getByText('2개', { exact: true }).waitFor();
+    assert.equal(await panel.getByText('프로젝트 사용량을 불러오지 못했어요.').count(), 0);
+    await page.unroute(/\/api\/usage\?folder=/);
+
     at('narrow screen: rail becomes a row');
     await page.setViewportSize({ width: 480, height: 800 });
     await page.goto(`${BASE}/dispatch`);

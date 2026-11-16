@@ -8,7 +8,8 @@ import { cn } from '../lib/utils';
 import { roleColor } from '../run/overlayModel';
 import { burnWarnText, fmtK, fmtRate, fmtUsd, pct, totalTok, until } from './lib/format.ts';
 import {
-  WEEK, aggregate, burnNow, cacheRate, createUsageRefetcher, outliers, topSessions, totals, usageKey, weekHint,
+  WEEK, aggregate, burnNow, cacheRate, createUsageRefetcher, outliers, projectUsageFail, projectUsageOk, projectUsageShown, topSessions, totals,
+  usageKey, weekHint, type ProjectUsage,
 } from './lib/usage.ts';
 import { Meter } from './parts';
 import { api, useDispatch } from './store';
@@ -116,34 +117,47 @@ type FolderUsage = { sessions: number; cost: number; tokens: { input: number; ou
 
 /** Cost and tokens of the picked project's sessions (GET /api/usage?folder=; 미분류 is summed from the sessions in view). */
 function ProjectPanel({ name, folder, sessions }: { name: string; folder: string | null; sessions: Session[] }) {
-  // Tagged with its folder, so a switch never shows the previous project's numbers while the next one loads.
-  const [got, setGot] = useState<{ folder: string; data: FolderUsage } | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const data = got && got.folder === folder ? got.data : null;
+  const [got, setGot] = useState<ProjectUsage<FolderUsage>>(null);
+  // A failed load has no session event to wait for (it may never come), so the person can ask again.
+  const [retry, setRetry] = useState(0);
   const key = usageKey(sessions);
   useEffect(() => {
-    if (folder === null) { setGot(null); return; }
-    setFailed(null);
+    if (folder === null) return;
     const ctl = new AbortController();
     api<FolderUsage>('GET', `/api/usage?folder=${encodeURIComponent(folder)}`, undefined, ctl.signal)
-      .then(d => { setGot({ folder, data: d }); setFailed(null); }, () => { if (!ctl.signal.aborted) setFailed(folder); });
+      .then(d => setGot(projectUsageOk(folder, d)), () => { if (!ctl.signal.aborted) setGot(s => projectUsageFail(s, folder)); });
     return () => ctl.abort();
-  }, [folder, key]);
+  }, [folder, key, retry]);
   const local: FolderUsage = {
     sessions: sessions.length,
     cost: sessions.reduce((a, s) => a + (s.cost ?? 0), 0),
     tokens: sessions.reduce((a, s) => ({ input: a.input + s.usage.input, output: a.output + s.usage.output, cacheRead: a.cacheRead + s.usage.cacheRead, cacheWrite: a.cacheWrite + s.usage.cacheWrite }), { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
   };
-  const u = folder === null ? local : data;
+  const shown = folder === null ? { data: local, stale: false, failed: false } : projectUsageShown(got, folder);
+  const u = shown.data;
+  const again = <Button size="sm" variant="outline" onClick={() => setRetry(n => n + 1)}>다시 불러오기</Button>;
   return (
     <Panel title={`${name} 사용량`} note="이 프로젝트의 세션만">
       {u ? (
-        <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-          <Stat label="세션" value={`${u.sessions}개`} />
-          <Stat label="비용" value={fmtUsd(u.cost)} hint="Claude API 요금으로 환산" />
-          <Stat label="토큰" value={fmtK(totalTok(u.tokens))} />
+        <>
+          <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-1">
+            <Stat label="세션" value={`${u.sessions}개`} />
+            <Stat label="비용" value={fmtUsd(u.cost)} hint="Claude API 요금으로 환산" />
+            <Stat label="토큰" value={fmtK(totalTok(u.tokens))} />
+          </div>
+          {shown.stale && (
+            <div className="mt-3 flex items-center gap-3 text-sm text-muted-foreground">
+              <p>새 숫자를 불러오지 못해서 지난 숫자예요.</p>
+              {again}
+            </div>
+          )}
+        </>
+      ) : shown.failed ? (
+        <div className="flex items-center justify-center gap-3 py-6 text-sm text-muted-foreground">
+          <p>프로젝트 사용량을 불러오지 못했어요.</p>
+          {again}
         </div>
-      ) : <Empty>{failed === folder ? '프로젝트 사용량을 불러오지 못했어요' : '불러오는 중이에요…'}</Empty>}
+      ) : <Empty>불러오는 중이에요…</Empty>}
     </Panel>
   );
 }

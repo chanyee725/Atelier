@@ -134,8 +134,11 @@ export default function DispatchApp() {
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
           <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>
-        ) : typeof scope === 'string' && listState === 'loading' ? (
-          <p role="status" className="p-6 text-sm text-muted-foreground">프로젝트 목록을 불러오는 중이에요…</p>
+        ) : scope !== undefined && listState === 'loading' ? (
+          <p className="p-6 text-sm text-muted-foreground">프로젝트 목록을 불러오는 중이에요…</p>
+        ) : scope === null && listState === 'failed' ? (
+          // Without the project list every session would look 미분류 (#522); the notice above says why.
+          <p className="p-6 text-sm text-muted-foreground">프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.</p>
         ) : view === 'usage' ? (
           <UsagePage />
         ) : view === 'timeline' ? (
