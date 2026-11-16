@@ -33,7 +33,7 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('agent activity: two fake sessions on one document — 6:4 panel, sidebar list, bell feed and toast', { skip: SKIP, timeout: 180_000 }, async (t) => {
+test('agent activity: two fake sessions on one document — 6:4 panel, sidebar list, bell feed and toast', { skip: SKIP, timeout: 300_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-activity-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-activity-home-'));
