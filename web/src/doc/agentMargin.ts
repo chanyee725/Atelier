@@ -399,6 +399,8 @@ const sideText = (r: MarginRoom) =>
   r.share == null ? r.box - r.chrome - r.panel : Math.min(r.share * r.box, r.box - CANVAS_MIN - r.panel) - r.chrome;
 /** Side panel only when the text keeps TEXT_MIN beside it (and, in 둘 다, the canvas keeps CANVAS_MIN); else a sheet. */
 export const formOf = (r: MarginRoom): MarginForm => (sideText(r) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
+/** formOf for a room measured with the open panel, while the side panel may be collapsed to its rail. */
+export const formWithRail = (r: MarginRoom, rail: boolean): MarginForm => formOf(rail ? { ...r, panel: RAIL_W } : r);
 /** Where the split's divider sits (px from the split's left) for a share, as index.css lays it out. */
 export const dividerAt = (r: MarginRoom & { share: number }): number =>
   formOf(r) === 'side' ? Math.min(r.share * r.box + r.panel, r.box - CANVAS_MIN) : r.share * r.box;

@@ -11,6 +11,8 @@ import {
   doingLines,
   editSentence,
   formOf,
+  formWithRail,
+  RAIL_W,
   dividerAt,
   shareAt,
   CANVAS_MIN,
@@ -259,7 +261,18 @@ test('measureRoom reads the rail from data-side-rail only', async () => {
       }) as unknown as HTMLElement;
     assert.deepEqual(measureRoom(host(false)), { box: 900, share: null, chrome: 0, panel: 304 });
     assert.deepEqual(measureRoom(host(true)), { box: 900, share: null, chrome: 0, panel: 44 });
+    // DocMargin measures the open panel whatever the attribute says (#648).
+    assert.deepEqual(measureRoom(host(true), false), { box: 900, share: null, chrome: 0, panel: 304 });
   } finally {
     g.getComputedStyle = saved;
   }
+});
+
+// #648: the form counts the collapsed rail in the same render as the collapse, from the open panel's room.
+test('formWithRail: the rail fits where the open panel does not', () => {
+  const room = { box: TEXT_MIN + 200, share: null, chrome: 0, panel: 304 };
+  assert.equal(formWithRail(room, false), 'sheet');
+  assert.equal(formWithRail(room, true), 'side');
+  assert.equal(formWithRail({ ...room, box: TEXT_MIN + RAIL_W - 1 }, true), 'sheet');
+  assert.equal(formWithRail(room, true), formOf({ ...room, panel: RAIL_W }));
 });
