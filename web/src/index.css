@@ -523,3 +523,8 @@ dialog.settings-dialog::backdrop {
   .doc-editor .live-exit { transition-duration: 0.12s; }
 }
 @keyframes live-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* A file or folder that just appeared in a list (freshPaths.ts, E520). */
+.live-row-enter { animation: live-row-enter 0.24s ease-out both; }
+@keyframes live-row-enter { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .live-row-enter { animation-name: live-fade; animation-duration: 0.12s; } }

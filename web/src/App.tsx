@@ -16,6 +16,7 @@ import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { shownView, toCanvas } from './viewMode';
 import { createFileSession, type FilePatch, type FileSession } from './fileSession';
 import { useSession } from './useSession';
+import { noteTree } from './freshPaths';
 import { canApplyLive, type WorkspaceEvent } from './externalChange';
 import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
@@ -230,6 +231,7 @@ export function App() {
   const refreshTree = useCallback(async () => {
     try {
       const [t, p] = await Promise.all([api.tree(), api.projects()]);
+      noteTree(t, p.projects ?? p);
       setTree(t);
       setProjects(p);
     } catch (e) {

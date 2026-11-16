@@ -1,5 +1,6 @@
 // Document lists shared by the dashboard and the project home (layout B, doc 6 §3.1): full-width 41px rows
 // with a bottom line, 24px indent per level, then 만든 때 / 고친 때 columns (만든 때 hidden on narrow screens).
+import { freshClass } from '../freshPaths';
 import { ChevronRight, File, FolderClosed, MoreHorizontal } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
@@ -117,7 +118,7 @@ function DocItem({ doc, depth, collapsed, onOpen, onToggle, onDelete, showCreate
     <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">하위 {subs}</span>
   );
   return (
-    <li data-doc-row={doc.path} data-depth={depth}>
+    <li data-doc-row={doc.path} data-depth={depth} className={freshClass(doc.path)}>
       <div className={ROW} style={{ height: ROW_HEIGHT, paddingLeft: PAD + depth * INDENT }}>
         {expandable ? (
           <Button
@@ -168,7 +169,7 @@ export function FileList({ files, label, onOpen, onDelete }: { files: RecentFile
   return (
     <ul role="list" aria-label={label} className="m-0 list-none p-0">
       {files.map((f) => (
-        <li key={f.path} data-doc-row={f.path} className={ROW} style={{ height: ROW_HEIGHT, paddingLeft: PAD }}>
+        <li key={f.path} data-doc-row={f.path} className={`${ROW} ${freshClass(f.path)}`} style={{ height: ROW_HEIGHT, paddingLeft: PAD }}>
           <span className="size-7 shrink-0" aria-hidden />
           <button type="button" onClick={() => onOpen(f.path)} className={OPEN}>
             <File className="size-4 shrink-0 text-muted-foreground" />
