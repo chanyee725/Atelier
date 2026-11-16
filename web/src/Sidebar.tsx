@@ -56,13 +56,19 @@ type Props = {
   systemTheme: Theme;
 };
 
-const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
+const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
 
-/** First letter of a project, shown on a muted square (no per-project colour, doc 6 §4.1). */
+// 새 파일 is the one raised control in the header: white with a hairline in light, a lighter square in dark and
+// 모니터링 (on --background it read as a hole in the sidebar). Hover keeps the fill and only brightens the icon.
+const NEW_FILE_BUTTON =
+  'border border-sidebar-border bg-background text-sidebar-foreground/80 shadow-xs hover:bg-background dark:bg-sidebar-accent dark:shadow-none dark:hover:bg-sidebar-accent';
+
+/** First letter of a project, shown on a tinted square (no per-project colour, doc 6 §4.1). The tint is a share of
+ *  --sidebar-foreground, so the square stays visible on the light sidebar, where --muted is almost the sidebar itself. */
 function ProjectMark({ p }: { p: Project }) {
   const letter = p.icon || [...p.name][0]?.toUpperCase() || '?';
   return (
-    <span aria-hidden className="grid size-[17px] shrink-0 place-items-center overflow-hidden rounded-sm bg-muted text-[11px] font-bold text-foreground">
+    <span aria-hidden className="grid size-[17px] shrink-0 place-items-center overflow-hidden rounded-sm bg-sidebar-foreground/8 text-[11px] font-semibold text-sidebar-foreground">
       {letter}
     </span>
   );
@@ -339,7 +345,7 @@ export function Sidebar(p: Props) {
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />
         </button>
-        <button type="button" className={cn(ICON_BUTTON, 'border bg-background text-sidebar-foreground/80')} aria-label="새 파일 (N)" title="새 파일 (N)" onClick={p.onNewFile}>
+        <button type="button" className={cn(ICON_BUTTON, NEW_FILE_BUTTON)} aria-label="새 파일 (N)" title="새 파일 (N)" onClick={p.onNewFile}>
           <SquarePen />
         </button>
       </SidebarHeader>

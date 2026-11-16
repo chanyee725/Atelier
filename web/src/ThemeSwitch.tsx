@@ -1,7 +1,8 @@
 // The sidebar's theme switch, ported from Dispatch: a segmented radio group with one icon per theme. Roving focus
 // (Tab lands on the chosen one; arrows, Home and End pick another) follows the WAI-ARIA radio group pattern. Hover only
 // brightens the icon, as in Dispatch (a hover fill would look like the raised, chosen item); forced colours mark the
-// chosen one with Highlight.
+// chosen one with Highlight. The chosen item is raised in every theme: white on a grey track in light, a lighter tint in
+// dark and 모니터링 (--card there is darker than the track, which made it look pressed in, #684).
 import { useRef, type KeyboardEvent } from 'react';
 import { Activity, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react';
 import { FOCUS_RING } from './lib/focus';
@@ -42,7 +43,7 @@ export function ThemeSwitch({ pref, onPref, system, labelledBy, className }: { p
       aria-labelledby={labelledBy}
       data-testid="theme-switch"
       onKeyDown={onKey}
-      className={cn('mx-2 mb-1 flex gap-0.5 rounded-lg bg-muted p-0.5', className)}
+      className={cn('mb-0.5 flex gap-0.5 rounded-lg bg-foreground/6 p-0.5', className)}
     >
       {THEME_CHOICES.map(({ id, label, icon: Icon }) => {
         const on = pref === id;
@@ -60,7 +61,7 @@ export function ThemeSwitch({ pref, onPref, system, labelledBy, className }: { p
             className={cn(
               'flex h-7 flex-1 cursor-pointer items-center justify-center rounded-md transition-colors max-md:h-11',
               on
-                ? 'bg-card text-foreground shadow-sm forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none'
+                ? 'bg-card text-foreground shadow-sm dark:bg-foreground/14 dark:shadow-none forced-colors:bg-[Highlight] forced-colors:text-[HighlightText] forced-colors:forced-color-adjust-none'
                 : 'text-muted-foreground hover:text-foreground',
               FOCUS_RING,
             )}
