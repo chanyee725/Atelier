@@ -820,6 +820,8 @@ export function createStore(
       if (await statOrNull(abs)) throw new StoreError(409, 'already exists');
       await mkdir(abs, { recursive: true });
       knownDirs.add(rel);
+      // Announced like any other tree change, so other tabs list the new project without a reload.
+      onExternalChange?.({ kind: 'tree', path: rel });
       return { path: rel };
     });
   }

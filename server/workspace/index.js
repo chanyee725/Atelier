@@ -114,11 +114,16 @@ export async function setup(ctx) {
       route('GET', '/api/file', (p) => store.readFile(need(p, 'path'))),
       route('PUT', '/api/file', async (p, b) => {
         const r = await store.writeFile(need(p, 'path'), b);
+        // Same as the plan patch: the store knows its own writes, so tell open tabs. A tab that saved this revision
+        // itself ignores the echo (it only reloads a strictly newer revision).
+        ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
         changed(r.path);
         return r;
       }),
       route('POST', '/api/file', async (_p, b) => {
         const r = await store.createFile(need(b?.path, 'path'), b);
+        // The store knows its own writes, so the watcher stays quiet: tell the open tabs the tree grew.
+        ctx.hub.broadcast('workspace', { kind: 'tree', path: r.path });
         changed(r.path);
         return r;
       }, 201),

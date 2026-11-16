@@ -95,9 +95,18 @@ test('outside changes apply live: new file, new paragraphs, a growing diagram', 
   assert.ok(scrolled > 300, `document did not scroll: ${scrolled}`);
   const before = await page.evaluate(() => window.__scroller.scrollTop);
 
-  // Step 1: a new file appears in the sidebar without a reload.
+  // Step 1: a new project folder appears in the open page's sidebar, and a new root file on the home page, without a reload.
+  const home2 = await browser.newPage({ viewport: { width: 1400, height: 800 } });
+  home2.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
+  await home2.goto(`${BASE}/`);
+  await home2.locator('[data-doc-row="open.dpx.json"]').waitFor({ timeout: 10_000 });
+  await home2.evaluate(() => (window.__sentinel = 'same home'));
+  await call('POST', '/api/folder', { path: 'made-by-agent' });
+  await page.locator('[data-move-path="made-by-agent"]').waitFor({ timeout: 10_000 });
   await call('POST', '/api/file', { path: 'made-by-agent.dpx.json', title: 'Made by agent', document: docOf(para('hello')) });
-  await page.locator('[data-move-path="made-by-agent.dpx.json"]').waitFor({ timeout: 10_000 });
+  await home2.locator('[data-doc-row="made-by-agent.dpx.json"]').waitFor({ timeout: 10_000 });
+  assert.equal(await home2.evaluate(() => window.__sentinel), 'same home', 'the home page reloaded');
+  await home2.close();
 
   // Step 2: paragraphs and a heading are added to the open document, then text changes in place, then a block goes.
   await write('open.dpx.json', { document: docOf(head('Intro'), ...filler, head('Added heading'), para('Added by the agent, step one.')) });
@@ -120,5 +129,7 @@ test('outside changes apply live: new file, new paragraphs, a growing diagram', 
     await page.waitForTimeout(600);
     assert.equal(await page.evaluate(() => window.__sentinel), 'same page', `the page reloaded at ${n} nodes`);
   }
+  const end = await page.evaluate(() => window.__scroller.scrollTop);
+  assert.ok(Math.abs(end - before) <= 2, `document scroll jumped while the diagram grew: ${before} -> ${end}`);
   assert.deepEqual(errors, []);
 });
