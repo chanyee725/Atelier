@@ -155,7 +155,7 @@
   --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
   /* UI type scale (doc 6 §4.2): UI 14/22 (text-sm), meta 13/17 (text-xs), kbd and badges 12 (text-2xs),
-     screen title 22/30 (text-xl); the document body is 16/1.65 (.doc-editor). */
+     screen title 22/30 (text-xl); the document body is 14/1.65 (.doc-editor; 2px smaller on the user's request). */
   --text-2xs: 12px;
   --text-2xs--line-height: 16px;
   --text-xs: 13px;
@@ -168,7 +168,7 @@
   --text-lg--line-height: 26px;
   --text-xl: 22px;
   --text-xl--line-height: 30px;
-  --text-doc: 16px;
+  --text-doc: 14px;
   --text-doc--line-height: 1.65;
   /* shadcn radius steps: sm 6px, md 8px, lg 10px, xl 14px. */
   --radius-sm: calc(var(--radius) - 4px);
@@ -263,7 +263,7 @@ body {
 .doc-editor {
   min-height: 60vh;
   outline: none;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -301,7 +301,7 @@ body {
   overflow-x: auto;
   line-height: 1.5;
 }
-.doc-editor pre code { background: none; border: none; padding: 0; font-size: 14px; }
+.doc-editor pre code { background: none; border: none; padding: 0; font-size: 12px; }
 .doc-editor table { border-collapse: collapse; width: 100%; table-layout: fixed; overflow: hidden; }
 .doc-editor th, .doc-editor td { border: 1px solid var(--border); padding: 0.35em 0.6em; vertical-align: top; position: relative; }
 .doc-editor th { background: var(--muted); font-weight: 600; text-align: left; }
