@@ -66,7 +66,8 @@ function start() {
       first = false;
       return;
     }
-    // Events missed while the stream was down: places from before the gap are stale.
+    // Events missed while the stream was down: places from before the gap are stale. The server sends the cursors of
+    // sessions still at work to the new connection, so their cards come back (E536).
     put({ map: clearFile(snap.map) });
     loadPresence();
   });

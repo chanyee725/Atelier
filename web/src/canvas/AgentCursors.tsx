@@ -1,6 +1,7 @@
 // Canvas layer for live agent cursors (E56, issue #226): a pointer and a name tag in the session's colour (one per
 // session, picked when it was created), gliding to the centre of what the agent changed, "thinking" near its last
-// edit, then fading out.
+// edit, then fading out. A live session's cursor (E536, #653) stays parked at its last edit until the session leaves
+// (a `gone` event), with a short status beside the name ("다이어그램 작성 중…").
 //
 // Placement runs in one animation-frame loop while a cursor of this file glides (a timer wakes it for phase changes):
 // it writes `translate` and the phase straight onto each cursor's node (no React render per frame). A new cursor node
@@ -92,6 +93,8 @@ export function AgentCursors({ api, wrap, file }: Props) {
           className="agent-cursor"
           data-agent-cursor={c.sid}
           data-role={c.role}
+          data-live={c.live ? '' : undefined}
+          data-status={c.status ? '' : undefined}
           style={c.color ? ({ '--agent': c.color } as CSSProperties) : undefined}
           data-phase="editing"
           aria-hidden="true"
@@ -100,7 +103,8 @@ export function AgentCursors({ api, wrap, file }: Props) {
             <path d="M1 1 L1 15 L5 11.5 L8 17 L10.5 15.8 L7.6 10.4 L13 10 Z" />
           </svg>
           <span className="agent-cursor-tag">
-            {c.name || roleLabel(c.role)}
+            <span className="agent-cursor-name">{c.name || roleLabel(c.role)}</span>
+            {c.status && <span className="agent-cursor-status">{c.status}</span>}
             <span className="agent-cursor-dots">
               <span />
               <span />

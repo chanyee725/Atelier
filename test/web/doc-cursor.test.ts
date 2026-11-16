@@ -21,7 +21,7 @@ test('applyDocCursor: a doc place creates and moves the cursor; no place keeps i
   assert.equal(applyDocCursor(m, ev(undefined, { x: 1, y: 2 }), 0), m, 'a canvas-only place is not a doc cursor');
   assert.equal(applyDocCursor(m, ev({ index: -1, offset: 0 }), 0), m, 'a bad place is ignored');
   m = applyDocCursor(m, ev({ index: 1, offset: 3 }, { color: '#0f766e' }), 100);
-  assert.deepEqual(m.get('s1'), { sid: 's1', name: 'Otto', role: 'impl', color: '#0f766e', file: 'a.dpx.json', spot: { index: 1, offset: 3 }, moveAt: 100, editAt: 100 });
+  assert.deepEqual(m.get('s1'), { sid: 's1', name: 'Otto', role: 'impl', color: '#0f766e', file: 'a.dpx.json', spot: { index: 1, offset: 3 }, moveAt: 100, editAt: 100, live: false, status: '' });
   m = applyDocCursor(m, ev(), 500);
   assert.equal(m.get('s1')!.moveAt, 100);
   assert.equal(m.get('s1')!.editAt, 500);
@@ -134,4 +134,18 @@ test('server block index matches the editor children through the editor load pat
   assert.deepEqual(spot, { index: 1, offset: 0 });
   const d = load(json(h('Plan'), { ...diagram, attrs: { blockId: 'b2' } }, table('x', 'y'), frame, rule));
   assert.deepEqual(docPos(d, spot), { pos: d.child(0).nodeSize, atom: true });
+});
+
+// E536 (#653): the live caret stays at its last place until `gone`; a canvas edit lets it fade.
+test('applyDocCursor: a live caret never fades; a canvas-only edit lets it go; status rides along', () => {
+  let m = applyDocCursor(new Map(), ev({ index: 0, offset: 1 }, { live: true, status: '글 작성 중…' }), 0);
+  assert.equal(m.get('s1')!.status, '글 작성 중…');
+  assert.equal(pruneDocGone(m, 30 * 60_000), m);
+  const kept = applyDocCursor(m, ev(undefined, { live: true }), 5000);
+  assert.equal(kept.get('s1')!.status, '글 작성 중…');
+  assert.equal(kept.get('s1')!.editAt, 5000);
+  m = applyDocCursor(m, ev(undefined, { x: 1, y: 2, live: true }), 60_000);
+  assert.equal(m.get('s1')!.live, false);
+  assert.equal(pruneDocGone(m, 60_000 + FADE_MS).size, 0);
+  assert.ok(FADE_AFTER_MS > 0);
 });
