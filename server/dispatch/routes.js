@@ -5,6 +5,7 @@ import { ROLES } from "./roles.js";
 import { patchGuard, patchTeam, teamSettings } from "./settings.js";
 
 const MAX_BODY = 1e6;
+const PR_BRANCHES = 12;
 
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const CLI_NAMES = { claude: "Claude CLI", openai: "Codex CLI", gemini: "Antigravity CLI(agy)" };
@@ -103,6 +104,14 @@ export function routeTable(d) {
     ["GET", /^\/api\/timeline$/, async () => hub.timeline()],
     ["GET", /^\/api\/tasks$/, async () => ({ tasks: hub.tasks })],
     ["GET", /^\/api\/branches$/, async () => branchGraph(root, { active: hub.sessions.filter(x => x.status !== "done" && x.branch).map(x => x.branch) })],
+    // ?branches=a,b: PR state and CI per branch (project dashboard, #686). At most PR_BRANCHES per call; each answer is
+    // { ok, pr: { number, state, ci } } or { ok: false, reason } ("disabled" when PR tracking is off).
+    ["GET", /^\/api\/prs$/, async (_, __, url) => {
+      const list = [...new Set((url?.searchParams.get("branches") || "").split(",").filter(Boolean))].slice(0, PR_BRANCHES);
+      const prs = {};
+      if (d.prStatus) await Promise.all(list.map(async b => { prs[b] = await d.prStatus(b); }));
+      return { prs };
+    }],
     ["GET", /^\/api\/tickets$/, async () => ({ tickets: hub.tickets })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/resume$/, async ([id]) => ({ ok: hub.resumeTicket(id) })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/close$/, async ([id]) => { hub.closeTicket(id); return { ok: true }; }],
