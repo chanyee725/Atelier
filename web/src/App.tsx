@@ -745,10 +745,10 @@ export function App() {
   const projectCommands = (): Command[] => [
     {
       id: 'project:all',
-      title: '모든 파일',
+      title: '홈',
       group: 'project',
       icon: Layers,
-      keywords: ['dashboard', 'home', '대시보드', '프로젝트'],
+      keywords: ['dashboard', 'home', '대시보드', '프로젝트', '모든 파일'],
       run: () => goProject(null),
     },
     ...tree
@@ -813,7 +813,7 @@ export function App() {
   );
   const openCrumb = (c: Crumb) => (c.kind === 'project' ? showSection({ kind: 'project', path: c.path }) : void open(c.path));
 
-  // Shell shortcuts (doc 6 §5): A 모든 파일, R 최근, B 보관함, N 새 파일. Never inside a text field,
+  // Shell shortcuts (doc 6 §5): A 홈, R 최근, B 보관함, N 새 파일. Never inside a text field,
   // an editor, the canvas (its own tool keys) or a dialog: see shellKey.
   const newFileRef = useRef(newFile);
   newFileRef.current = newFile;

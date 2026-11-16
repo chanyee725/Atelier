@@ -81,7 +81,7 @@ test('project view: own files only, no 미분류, live agents with held files', 
   // The file list has no 미분류 tab or group; the loose file is still in 전체.
   const dash = page.locator('main[data-screen="dashboard"]');
   await dash.waitFor();
-  assert.deepEqual(await dash.getByRole('tablist', { name: '보기' }).getByRole('tab').allInnerTexts(), ['전체', '최근', '프로젝트별']);
+  assert.deepEqual(await dash.getByRole('tablist', { name: '보기' }).getByRole('tab').allInnerTexts(), ['개요', '전체 파일', '최근', '프로젝트별']);
   assert.equal(await dash.getByText('미분류').count(), 0);
   // 프로젝트별 search with no hit in a project says so instead of a blank screen (#601).
   const search = dash.getByRole('searchbox', { name: '파일 찾기' });
@@ -92,7 +92,7 @@ test('project view: own files only, no 미분류, live agents with held files', 
   await search.fill('구성');
   assert.equal(await dash.locator('[data-no-project-match]').count(), 0);
   await search.fill('');
-  await dash.getByRole('tab', { name: '전체' }).click();
+  await dash.getByRole('tab', { name: '전체 파일' }).click();
   await dash.locator('[data-doc-row="메모.dpx.json"]').waitFor();
 
   // The project view lists only its own files and sub-documents.
