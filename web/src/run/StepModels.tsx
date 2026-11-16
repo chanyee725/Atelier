@@ -7,6 +7,7 @@ import type { FileSession } from '../fileSession';
 import { useSession } from '../useSession';
 import { providerGroups } from '../dispatch/lib/create.ts';
 import { providerName } from '../dispatch/lib/format.ts';
+import { ProviderIcon } from '../ProviderIcon';
 import { patchStepModel, stepModelRows, type ModelCatalog } from './stepModels';
 
 async function readCatalog(): Promise<ModelCatalog | null> {
@@ -67,6 +68,7 @@ export function StepModels({ id, session, path }: { id: string; session: FileSes
                 aria-label={`${r.id} 모델`}
                 className="h-7 w-56 max-w-[50vw] text-xs"
                 value={r.model}
+                start={<ProviderIcon provider={cat.models.find((m) => m.id === (r.model || r.effective))?.provider} className="size-3.5" />}
                 disabled={busy !== null}
                 onChange={(e) => void pick(r.id, e.target.value)}
               >

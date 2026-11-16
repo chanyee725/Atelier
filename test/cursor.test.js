@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { changedCentre, mentionsFile, shapesOf } from '../server/cursor/model.js';
+import { blockText, changedCentre, changedDocSpot, docBlocksOf, mentionsFile, shapesOf } from '../server/cursor/model.js';
 import { setup } from '../server/cursor/index.js';
 import { Hub } from '../server/dispatch/hub.js';
 
@@ -357,5 +357,68 @@ test('cursor module: a write nobody on this hub made gets a generic cursor at th
   // Nothing with a place changed: no cursor.
   await r.change('a.dpx.json', { ...file([rect('r1', 0, 0), rect('r2', 300, 300)]), title: 't' });
   assert.equal(r.sent.length, 1);
+  m.close();
+});
+
+// E529 (#619): document changes give the doc view a place (top-level block index + text offset).
+const para = (t) => ({ type: 'paragraph', content: t ? [{ type: 'text', text: t }] : [] });
+const head = (t, id) => ({ type: 'heading', attrs: { level: 2, ...(id ? { id } : {}) }, content: [{ type: 'text', text: t }] });
+const docFile = (...content) => ({ canvas: { elements: [] }, blocks: [], document: { type: 'doc', content } });
+const spot = (a, b) => changedDocSpot(docBlocksOf(a), docBlocksOf(b));
+
+test('changedDocSpot: appended, edited, replaced and removed blocks', () => {
+  const a = docFile(head('Plan'), para('one'));
+  assert.equal(spot(a, a), null);
+  // A new paragraph at the end: its end.
+  assert.deepEqual(spot(a, docFile(head('Plan'), para('one'), para('two!'))), { index: 2, offset: 4 });
+  // Typing inside a paragraph: just past the inserted text.
+  assert.deepEqual(spot(a, docFile(head('Plan'), para('o-n-e'))), { index: 1, offset: 4 });
+  assert.deepEqual(spot(docFile(para('hello world')), docFile(para('hello brave world'))), { index: 0, offset: 12 });
+  // Several new blocks: the last one written.
+  assert.deepEqual(spot(a, docFile(head('Plan'), para('x'), para('yz'), para('one'))), { index: 2, offset: 2 });
+  // A block replaced by one of another type: its end.
+  assert.deepEqual(spot(a, docFile(head('Plan'), head('one'))), { index: 1, offset: 3 });
+  // Removed: the start of the block now in its place; at the end, the block before.
+  assert.deepEqual(spot(docFile(para('a'), para('b'), para('c')), docFile(para('a'), para('c'))), { index: 1, offset: 0 });
+  assert.deepEqual(spot(a, docFile(head('Plan'))), { index: 0, offset: 0 });
+  assert.equal(spot(a, docFile()), null);
+  // From no document (a new file): the last block.
+  assert.deepEqual(spot({}, a), { index: 1, offset: 3 });
+  // A heading id the editor added is not a change.
+  assert.equal(spot(docFile(head('Plan')), docFile(head('Plan', 'plan'))), null);
+  // An embedded diagram (no text): offset 0.
+  assert.deepEqual(spot(a, docFile(head('Plan'), para('one'), { type: 'diagram', attrs: { blockId: 'b1' } })), { index: 2, offset: 0 });
+});
+
+test('blockText: text nodes only, nested blocks included', () => {
+  const list = { type: 'bulletList', content: [{ type: 'listItem', content: [para('ab')] }, { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'c' }, { type: 'hardBreak' }, { type: 'text', text: 'd' }] }] }] };
+  assert.equal(blockText(list), 'abcd');
+});
+
+test('cursor module: a document edit carries the doc place; a canvas-only edit does not (#619)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  r.files.set('d.dpx.json', docFile(head('Plan')));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Edit', text: '{"file_path":"/x/d.dpx.json"}' } });
+  await r.tick();
+  await r.change('d.dpx.json', docFile(head('Plan'), para('step one')));
+  const { at, ...rest } = r.sent[0].data;
+  assert.deepEqual(rest, { sid: 's1', name: 'Otto', role: 'impl', file: 'd.dpx.json', doc: { index: 1, offset: 8 } });
+  await r.change('d.dpx.json', { ...docFile(head('Plan'), para('step one')), canvas: { elements: [rect('r1', 0, 0)] } });
+  assert.equal('doc' in r.sent[1].data, false);
+  assert.equal(r.sent[1].data.x, 50);
+  m.close();
+});
+
+test('cursor module: an outside writer of the document gets a doc place too (#619)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  r.files.set('d.dpx.json', docFile(para('a')));
+  await r.change('d.dpx.json', docFile(para('a')));
+  await r.change('d.dpx.json', docFile(para('ab')), { writer: 'Cal' });
+  const last = r.sent.filter((e) => e.event === 'cursor').at(-1).data;
+  assert.equal(last.name, 'Cal');
+  assert.deepEqual(last.doc, { index: 0, offset: 2 });
   m.close();
 });

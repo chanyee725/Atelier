@@ -115,6 +115,25 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     assert.equal(await rail.getByRole('link', { name: /알파/ }).getAttribute('aria-current'), 'page');
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-board.png') });
 
+    at('forced colours: a focused rail item keeps a visible outline (#524)');
+    await page.emulateMedia({ forcedColors: 'active' });
+    const outline = (name) => rail.getByRole('link', { name }).evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { style: cs.outlineStyle, width: cs.outlineWidth, color: cs.outlineColor, offset: cs.outlineOffset };
+    });
+    const picked = await outline(/알파/);
+    assert.equal(picked.style, 'solid', 'the picked item keeps its Highlight outline');
+    await page.keyboard.press('Shift'); // keyboard modality, so programmatic focus matches :focus-visible
+    for (const name of [/베타/, /알파/]) {
+      await rail.getByRole('link', { name }).focus();
+      const o = await outline(name);
+      assert.equal(o.style, 'solid', `${name} shows a focus outline`);
+      assert.equal(o.width, '2px');
+      assert.equal(o.offset, '1px', 'focus sits outside the item, unlike the inset selected outline');
+    }
+    await page.emulateMedia({ forcedColors: 'none' });
+    await page.locator('body').focus();
+
     at('timeline and usage keep the project');
     await page.getByRole('navigation', { name: '세션 화면' }).getByRole('link', { name: '타임라인' }).click();
     await page.locator(`[data-row="${a1}"]`).waitFor();

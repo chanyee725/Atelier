@@ -10,6 +10,7 @@ import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui
 import { events } from './lib/events';
 import { cn } from './lib/utils';
 import { PROVIDERS, rowStatus, type ProviderMeta, type RowTone } from './modelConnect';
+import { ProviderIcon } from './ProviderIcon';
 import { MODELS_CHANGED } from './settings/context';
 import { pollLogins } from './settings/model';
 
@@ -95,12 +96,15 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         onClick={() => setOpen(true)}
         className="max-md:h-11"
       >
-        {/* Same 17px slot as the nav icons, so the name lines up with 모든 파일, 최근, 보관함. */}
+        {/* The provider's mark in the same 17px slot as the nav icons, so the name lines up with 모든 파일, 최근, 보관함. */}
         <span aria-hidden className="grid size-[17px] shrink-0 place-items-center">
-          <i className={cn('size-2 rounded-full', DOT[s.tone])} />
+          <ProviderIcon provider={meta.id} className="size-4" />
         </span>
         <span className="truncate">{meta.name}</span>
-        <span className={cn('ml-auto shrink-0 text-xs tabular-nums', s.tone === 'warn' || s.tone === 'bad' ? 'text-foreground' : 'text-muted-foreground')}>{s.text}</span>
+        <span className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs tabular-nums', s.tone === 'warn' || s.tone === 'bad' ? 'text-foreground' : 'text-muted-foreground')}>
+          <i aria-hidden data-testid="model-row-dot" className={cn('size-1.5 shrink-0 rounded-full', DOT[s.tone])} />
+          {s.text}
+        </span>
       </SidebarMenuButton>
       {open && (
         <ConnectDialog

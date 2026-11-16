@@ -525,6 +525,11 @@ body {
   .agent-cursor-dots span:nth-child(3) { animation-delay: 0.4s; }
 }
 @keyframes agent-think { from { opacity: 0.3; } to { opacity: 1; } }
+/* The same cursor in the document (E529, web/src/doc/DocAgentCursors.tsx): a caret of the text's line height with the
+   name tag above it. Beside the editor, never in it, and it takes no pointer events or selection. */
+.doc-agent-cursors { position: absolute; inset: 0; z-index: 2; pointer-events: none; user-select: none; overflow: visible; }
+.doc-agent-caret { display: block; width: 2px; height: var(--caret-h, 18px); border-radius: 1px; background: currentColor; }
+.doc-agent-cursor .agent-cursor-tag { left: -1px; top: auto; bottom: calc(100% + 2px); padding: 0 6px; font-size: 11px; line-height: 16px; border-bottom-left-radius: 0; }
 
 /* PDF export (print dialog): only the document column is printed while <html> has .print-doc. */
 @media print {

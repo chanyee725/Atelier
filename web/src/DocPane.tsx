@@ -13,6 +13,7 @@ import { WikiLinks } from './doc/WikiMenu';
 import { HeadingLinks } from './doc/HeadingLinks';
 import { buildHash, fileItems, figureItems, headingItems, outlineOf, type WikiKind } from './doc/outline';
 import { applyLiveDocument, LIVE_META } from './doc/liveApply';
+import { DocAgentCursors } from './doc/DocAgentCursors';
 import { copyText } from './doc/clipboard';
 import { renderBlock } from './canvas/render';
 import type { ImageKind } from './export/actions';
@@ -329,7 +330,11 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
         </p>
       ) : (
         <DocContext.Provider value={ctx}>
-          <EditorContent editor={editor} />
+          {/* Agent cursors (E529) sit beside the editable text, never in it: they cannot take the caret or a click. */}
+          <div className="relative">
+            <EditorContent editor={editor} />
+            <DocAgentCursors editor={editor} file={path} />
+          </div>
         </DocContext.Provider>
       )}
     </section>

@@ -15,7 +15,7 @@ import { questionOf } from './lib/question.ts';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
-import { canRun, READ_ONLY_NOTICE } from './lib/runnable';
+import { canRun, READ_ONLY_NOTICE } from './lib/runnable.ts';
 
 type Report = (p: Promise<unknown>) => Promise<boolean>;
 
@@ -238,7 +238,7 @@ function Chat({ s, report }: { s: Session; report: Report }) {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [entries, s.pending.length]);
-  const agent = s.provider === 'claude' ? 'Claude' : s.modelLabel || providerName(s.provider);
+  const agent = providerName(s.provider);
   const runnable = canRun(s);
   return (
     <div

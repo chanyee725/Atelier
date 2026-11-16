@@ -14,6 +14,8 @@ export type CursorEvent = {
   file?: string;
   x?: number;
   y?: number;
+  /** Where in the document the change ends (E529, #619): top-level block index and text offset in it. */
+  doc?: { index: number; offset: number };
 };
 
 type Pt = { x: number; y: number };
@@ -54,7 +56,7 @@ export function positionAt(c: Cursor, now: number, reduced: boolean): Pt {
   return { x: c.from.x + (c.to.x - c.from.x) * k, y: c.from.y + (c.to.y - c.from.y) * k };
 }
 
-export function phaseOf(c: Cursor, now: number): Phase {
+export function phaseOf(c: Pick<Cursor, 'editAt'>, now: number): Phase {
   const idle = now - c.editAt;
   if (idle >= FADE_AFTER_MS + FADE_MS) return 'gone';
   if (idle >= FADE_AFTER_MS) return 'fading';
@@ -63,7 +65,7 @@ export function phaseOf(c: Cursor, now: number): Phase {
 }
 
 /** When `c`'s phase next changes after `now` (Infinity once it is gone). */
-export function nextPhaseAt(c: Cursor, now: number): number {
+export function nextPhaseAt(c: Pick<Cursor, 'editAt'>, now: number): number {
   for (const d of [THINK_MS, FADE_AFTER_MS, FADE_AFTER_MS + FADE_MS]) if (c.editAt + d > now) return c.editAt + d;
   return Infinity;
 }

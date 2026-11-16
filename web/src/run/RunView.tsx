@@ -8,6 +8,7 @@ import { until } from '../dispatch/lib/format.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { runLimits } from '../modelConnect';
 import { useModels } from '../SidebarModels';
+import { ProviderIcon } from '../ProviderIcon';
 import { cn } from '../lib/utils';
 import { selectRun } from './runData.ts';
 import { fmtClock, fmtCost, historyLines, runListText } from './runModel.ts';
@@ -41,7 +42,10 @@ function Limits({ now }: { now: number }) {
       {groups.length === 0 && <p className="text-muted-foreground">연결된 모델이 없어요.</p>}
       {groups.map((g) => (
         <section key={g.id} aria-label={`${g.name} 한도`} data-limit-provider={g.id}>
-          <h3 className="mb-1 text-xs font-medium">{g.name}</h3>
+          <h3 className="mb-1 flex items-center gap-1.5 text-xs font-medium">
+            <ProviderIcon provider={g.id} className="size-3.5" />
+            {g.name}
+          </h3>
           {g.rows.length > 0 ? (
             <ul className="space-y-2">
               {g.rows.map((r) => (

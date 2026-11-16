@@ -8,7 +8,7 @@
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
 // parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
 import { AGENT_COLORS } from '../dispatch/colors.js';
-import { changedCentre, changedKeys, mentionsFile, shapesOf } from './model.js';
+import { changedCentre, changedDocSpot, changedKeys, docBlocksOf, mentionsFile, shapesOf } from './model.js';
 
 const ATTRIBUTE_MS = 60_000;
 const RECENT_PER_SESSION = 20;
@@ -18,6 +18,16 @@ const SETTLE_MS = 3000; // a finished call's own edit reaches onChange well with
 const LIVE = new Set(['running', 'starting', 'waiting']);
 const DPX_RE = /[^\s"'`=?&<>|;(),]*\.dpx\.json/g;
 const EMPTY = new Map();
+// What a change is diffed on: the shapes with a place (shapesOf) plus, for the document cursor (E529, #619), the
+// document's top-level blocks as `.doc`.
+const snapshotOf = (file) => Object.assign(shapesOf(file), { doc: docBlocksOf(file) });
+const docOf = (s) => s?.doc ?? [];
+// Where a change lands: `{ x, y }` on the canvas and/or `{ doc: { index, offset } }` in the document (E529, #619).
+const spotOf = (before, after) => {
+  const at = changedCentre(before, after);
+  const doc = changedDocSpot(docOf(before), docOf(after));
+  return at || doc ? { ...(at ?? {}), ...(doc ? { doc } : {}) } : null;
+};
 const OUTSIDE_NAME = '에이전트';
 
 // Whether `text` names `id` as a whole token, so a short id ("a") does not match inside other words. A path segment
@@ -56,7 +66,7 @@ export async function setup(ctx) {
     map.set(rel, s);
     if (map.size > MAX_FILES) map.delete(map.keys().next().value);
   };
-  const read = async (rel) => shapesOf(await ws.store.readFile(rel));
+  const read = async (rel) => snapshotOf(await ws.store.readFile(rel));
 
   // Before an edit lands: read the file's current shapes so the change can be diffed. The tool line arrives
   // before the tool runs. Resolves true when `rel` exists (a missing file is about to be created).
@@ -159,7 +169,7 @@ export async function setup(ctx) {
       if (app) return;
       const now = Date.now();
       if (writer) held({ sid: `outside:${writer}`, name: writer, file: rel, at: now, outside: true });
-      const spot = changedCentre(before ?? (earlier && changedCentre(earlier, after) ? earlier : EMPTY), after);
+      const spot = spotOf(before ?? (earlier && spotOf(earlier, after) ? earlier : EMPTY), after);
       const sid = writer ? `outside:${writer}` : `outside:${rel}`;
       if (spot) ctx.hub.broadcast('cursor', { sid, name: writer ?? OUTSIDE_NAME, role: '', file: rel, ...spot, at: now });
       return;
@@ -167,8 +177,8 @@ export async function setup(ctx) {
     // From the reported version when there is one. Otherwise from the tool-time read, unless that shows no change
     // (it raced the edit and read the new version) or there is none (a new file): then from an empty canvas, so a
     // first edit or a new diagram still gets a place.
-    const base = before ?? (earlier && changedCentre(earlier, after) ? earlier : EMPTY);
-    const at = changedCentre(base, after);
+    const base = before ?? (earlier && spotOf(earlier, after) ? earlier : EMPTY);
+    const at = spotOf(base, after);
     const chosen = pick(cands, base, after);
     used.add(chosen.entry);
     const s = chosen.s;
