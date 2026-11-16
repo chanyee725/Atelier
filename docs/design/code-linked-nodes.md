@@ -76,13 +76,17 @@ free-form copies each node's entry onto its shape.
   real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
   403); reject `.git` and `.dispatch` as any path segment (not only the leading one) and any segment starting with `.env`,
   case-insensitively, on both the requested path and its realpath, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
-  `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file.
+  `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file. The key/secret
+  patterns apply exactly like `.git`/`.dispatch`/`.env*`: to every path segment, case-insensitively, on both the
+  requested path and its realpath (one deny-list regex in `server/code/index.js`, `SECRET_SEGMENT`).
 - Limits: file ≤ 1 MB (exactly 1 MB is allowed, one byte more → 413), binary (NUL in first 8 KB) → 415, directory → 400.
   Returned window ≤ 400 lines: the range plus up to 20 lines of context each side, clamped to the file. A range longer
   than fits is cut at 400 lines from its start with `truncated: true` in the response (the panel says so).
   `start`/`end` missing → from line 1; non-integer, `< 1` or `start > end` → 400; `start > total` → 416. Read only, no writes, no outbound requests, no caching on disk.
 - No content is logged (path + status only at debug level).
 - Tests (E504b) cover: symlink escape (file and folder), `..` and `%2e%2e` / double encoding, `.ENV` / `.Env.local`,
+  nested segments (`sub/.git/config`, `pkg/.Dispatch/x`), the realpath case (a tracked symlink to `.git/config`, `.env`,
+  a `*.pem` or `.npmrc` file is 403 even when its own name is harmless),
   untracked and gitignored files, `a[b].txt` untracked next to tracked `ab.txt`, directory path, the 1 MB boundary, every range error above, `truncated`.
 
 ## 3. Web: node click → code panel
@@ -119,10 +123,12 @@ not exported (only `FONT_FAMILY`). So:
   transforms `web/vite.config.ts` already applies. If the vendored asset layout makes this impossible, stop and report.
 - **License:** Pretendard is OFL-1.1 with the Reserved Font Name "Pretendard". A subset is a modified version, so it
   must not carry that name as its font name. The new subset script does exactly what `scripts/subset-clean-font.py`
-  does: the font name records (name IDs 1/3/4/6) and the CFF font names become "Drawing Sans"; the copyright and
-  license records (IDs 0/13/14) are kept as-is, because the OFL forbids removing them. ID 3 (unique ID) keeps
-  `(subset of Pretendard <version>)`, as in the existing script, so "Pretendard" still appears there and in
-  the copyright/license records, never as the font name. Add to the existing Pretendard
+  does: the font name records get Drawing Sans–based names (ID 1 `Drawing Sans`, ID 2 the style, ID 3
+  `Drawing Sans <style> (subset)`, ID 4 `Drawing Sans <style>`, ID 6 and CFF `fontNames[0]` `DrawingSans-<style>`;
+  the canvas file uses `Drawing Sans Canvas Regular` / `DrawingSansCanvas-Regular`). The copyright and license records
+  (IDs 0/13/14) are kept as-is, because the OFL forbids removing them, and the source is credited in the description,
+  ID 10 (`Subset of Pretendard 1.3.9 …`). So "Pretendard" appears only in IDs 0/10/13/14, never in a font name record
+  (checked with fontTools, E504g #497). Add to the existing Pretendard
   entry in NOTICE.md and next to the Excalidraw font comment in
   `web/vite.config.ts` (source, version, subset command, OFL text path).
 - **Metrics:** Excalidraw computes line height and baseline for family 9 from its own `FONT_METADATA` (Liberation),

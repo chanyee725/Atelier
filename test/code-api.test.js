@@ -41,6 +41,9 @@ async function rig(t, { git = true } = {}) {
   await symlink('a.py', join(repo, 'src', 'inside-link'));
   await symlink('../.env', join(repo, 'src', 'to-env'));
   await symlink('local.json', join(repo, 'link-to-ignored'));
+  await symlink('../.git/config', join(repo, 'src', 'to-git'));
+  await symlink('server.pem', join(repo, 'src', 'to-key'));
+  await symlink('../.npmrc', join(repo, 'src', 'Notes.TXT'));
   if (git) {
     const g = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'pipe' });
     g('init', '-q');
@@ -104,7 +107,7 @@ test('bad path or range: 400', async (t) => {
 
 test('forbidden: .git, .env*, key and secret files, symlink escapes', async (t) => {
   const { get } = await rig(t);
-  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env', '.dispatch/x', '.DISPATCH/x', 'src/.Dispatch/wt/a.js']) {
+  for (const p of ['.git/config', '.git/HEAD', '.env', '.env.local', 'src/server.pem', 'src/credentials.json', '.npmrc', '.ENV', '.Env.local', 'src/SERVER.PEM', '.GIT/config', 'src/out-file', 'src/out-dir', 'src/out-dir/secret.txt', 'src/to-env', '.dispatch/x', '.DISPATCH/x', 'src/.Dispatch/wt/a.js', 'sub/.git/config', 'pkg/.Dispatch/x', 'src/to-git', 'src/to-key', 'src/Notes.TXT', 'src/ID_RSA.pub']) {
     assert.equal((await get(`path=${encodeURIComponent(p)}`)).status, 403, p);
   }
   assert.equal((await get('path=src/inside-link')).status, 200);
