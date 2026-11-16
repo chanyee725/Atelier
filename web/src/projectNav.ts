@@ -1,6 +1,6 @@
 // App shell navigation (design doc 6 §2.1, §5): which screen is shown, which sidebar rows are open, and the
 // one-letter shortcuts. Pure, so it is tested without a browser.
-import type { DocNode, Project, ProjectsView, ProviderLimits, TreeNode } from './api';
+import type { DocNode, Project, ProjectsView, TreeNode } from './api';
 
 /** The main panel: a sidebar view, a project home, or the open document. 보관함 opens the trash dialog. */
 export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' };
@@ -106,16 +106,6 @@ export function shellKey(e: KeyLike): ShellKey | null {
 export const percent = (used: number | null | undefined) => (used == null || !Number.isFinite(used) ? null : Math.max(0, Math.min(100, Math.round(used * 100))));
 /** Above this a usage figure turns to the warning colour (doc 6 §2.1). */
 export const WARN_PERCENT = 75;
-
-/** The account's 5-hour window, picked by label (not position). */
-export const fiveHourWindow = (limits: ProviderLimits) => limits.claude?.windows.find((w) => w.label === '5시간') ?? null;
-/**
- * The one "한도 도달" rule, shared by the sidebar rows: connected, and any window the server
- * reports (account 5시간, account 주간, Fable's own weekly) is at 100%. Hidden windows still count.
- */
-export const reachedWindows = (connected: boolean, limits: ProviderLimits) =>
-  connected ? [...(limits.claude?.windows ?? []), ...(limits.fable?.windows ?? [])].filter((w) => (percent(w.used) ?? 0) >= 100) : [];
-export const limitReached = (connected: boolean, limits: ProviderLimits) => reachedWindows(connected, limits).length > 0;
 
 export type ModelLine = { id: string; name: string; installed: boolean | null; connected: boolean; pct: number | null; reached: boolean; busy?: boolean; /** The CLI's own https sign-in page while a login runs. */ url?: string | null; error?: string | null };
 export type ModelTone = 'ok' | 'warn' | 'off';

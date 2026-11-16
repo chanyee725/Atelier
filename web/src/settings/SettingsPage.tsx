@@ -1,9 +1,14 @@
 // 설정 page of /dispatch (#587, ported from standalone Dispatch's SettingsPage): team settings, each role's default
 // model, per-provider usage and the usage-limit and session-length guards (the same form as the sidebar 설정 modal).
 // Team values are saved through POST /api/settings `team`; the server checks every range again. Status and numbers
-// only: no account, email or token is read here.
+// only: no account, email or token is read here. With Dispatch off (#620) the page still renders: the theme works,
+// and the session sections show read-only with one line saying why and what to do.
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import type { DispatchStatus } from '../api';
 import { cn } from '../lib/utils';
+import { useTheme } from '../theme';
+import { ThemeSwitch } from '../ThemeSwitch';
+import { OffNote, useDispatchStatus } from './DispatchOff';
 import { Meter } from '../dispatch/parts';
 import { pct, until } from '../dispatch/lib/format.ts';
 import { api, useDispatch } from '../dispatch/store';
@@ -26,9 +31,12 @@ function Section({ title, hint, children, labelledBy }: { title: string; hint?: 
   );
 }
 
-/** Team numbers, switches and each role's default model, saved together with one 저장 button. */
-function TeamForm() {
+/** Team numbers, switches and each role's default model, saved together with one 저장 button. `off`: read-only. */
+function TeamForm({ off }: { off: DispatchStatus | null | false }) {
   const titleId = useId();
+  const offId = useId();
+  const ro = off !== false;
+  const fs = { disabled: ro, 'aria-describedby': ro ? offId : undefined };
   const team = useDispatch((s) => s.settings.team);
   const roles = useDispatch((s) => s.roles);
   const models = useDispatch((s) => s.models);
@@ -90,8 +98,9 @@ function TeamForm() {
 
   return (
     <Section title="팀" hint="새로 여는 세션부터 적용돼요." labelledBy={titleId}>
+      {ro && <OffNote id={offId} status={off} />}
       <form ref={formRef} noValidate onSubmit={(e) => void submit(e)} aria-labelledby={titleId} data-testid="team-form" className="flex flex-col gap-4">
-        <fieldset className="flex flex-col gap-3">
+        <fieldset {...fs} className="flex flex-col gap-3 disabled:opacity-60">
           <legend className="mb-1 text-sm font-medium">대화와 팀원</legend>
           {TEAM_NUMBERS.map((f) => (
             <div key={f.id} className="flex flex-col gap-1">
@@ -130,7 +139,7 @@ function TeamForm() {
             </div>
           ))}
         </fieldset>
-        <fieldset className="flex flex-col gap-3">
+        <fieldset {...fs} className="flex flex-col gap-3 disabled:opacity-60">
           <legend className="mb-1 text-sm font-medium">작업 폴더와 답변</legend>
           {TEAM_TOGGLES.map((f) => (
             <div key={f.id} className="flex items-start gap-2">
@@ -159,9 +168,9 @@ function TeamForm() {
             </div>
           ))}
         </fieldset>
-        <fieldset className="flex flex-col gap-3">
+        <fieldset {...fs} className="flex flex-col gap-3 disabled:opacity-60">
           <legend className="mb-1 text-sm font-medium">역할별 기본 모델</legend>
-          {roles.length === 0 && <p className="text-xs text-muted-foreground">역할이 없어요.</p>}
+          {roles.length === 0 && <p className="text-xs text-muted-foreground">{ro ? '실행 기능이 켜지면 역할이 보여요.' : '역할이 없어요.'}</p>}
           {roles.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <label htmlFor={`role-model-${r.id}`} className="w-24 shrink-0 text-sm">
@@ -192,15 +201,41 @@ function TeamForm() {
             </div>
           ))}
         </fieldset>
-        <p role="status" className={cn('min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>
-          {note.text}
-        </p>
-        <div className="flex justify-end">
-          <button type="submit" disabled={saving} className={PRIMARY_BTN}>
-            저장
-          </button>
-        </div>
+        {!ro && (
+          <>
+            <p role="status" className={cn('min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>
+              {note.text}
+            </p>
+            <div className="flex justify-end">
+              <button type="submit" disabled={saving} className={PRIMARY_BTN}>
+                저장
+              </button>
+            </div>
+          </>
+        )}
       </form>
+    </Section>
+  );
+}
+
+/** With Dispatch off there is no usage to read: the reason only. */
+function UsageOff({ status }: { status: DispatchStatus | null }) {
+  return (
+    <Section title="모델별 사용량" hint="연결한 모델마다 CLI가 알려 준 사용량이에요.">
+      <OffNote status={status} />
+    </Section>
+  );
+}
+
+/** Theme choice, the same four as the sidebar switch; works with Dispatch off. */
+function ThemeSection() {
+  const id = useId();
+  const [, , pref, setPref, system] = useTheme();
+  return (
+    <Section title="화면 테마" hint="이 브라우저에만 저장돼요." labelledBy={id}>
+      <div data-testid="settings-theme">
+        <ThemeSwitch pref={pref} onPref={setPref} system={system} labelledBy={id} className="mx-0 mb-0 max-w-64" />
+      </div>
     </Section>
   );
 }
@@ -263,16 +298,32 @@ function UsageSection() {
   );
 }
 
-export function SettingsPage() {
+/** `off`: Dispatch is off on this server (the session stream is unavailable), so session sections are read-only. */
+export function SettingsPage({ off = false }: { off?: boolean }) {
   const limitsTitle = useId();
   return (
-    <div data-testid="settings-page" className="mx-auto flex max-w-[720px] flex-col gap-4 p-6 max-md:p-4">
+    <div data-testid="settings-page" data-dispatch={off ? 'off' : 'on'} className="mx-auto flex max-w-[720px] flex-col gap-4 p-6 max-md:p-4">
       <h1 className="text-lg font-semibold">설정</h1>
-      <TeamForm />
-      <UsageSection />
+      {off ? <OffSections /> : (
+        <>
+          <TeamForm off={false} />
+          <UsageSection />
+        </>
+      )}
       <Section title="한도" labelledBy={limitsTitle}>
         <LimitsForm labelledBy={limitsTitle} />
       </Section>
+      <ThemeSection />
     </div>
+  );
+}
+
+function OffSections() {
+  const status = useDispatchStatus();
+  return (
+    <>
+      <TeamForm off={status} />
+      <UsageOff status={status} />
+    </>
   );
 }

@@ -60,12 +60,18 @@ export type ProviderState = {
   cliLoggedIn?: boolean;
   /** How the CLI is logged in, e.g. 구독 계정 (claude.ai). */
   method?: string | null;
+  /** The CLI can log in with an API key (Codex). */
+  keySupported?: boolean;
 };
 export type LimitWindow = { label: string; used: number | null; reset?: number | null };
 export type ProviderLimits = {
   claude?: { windows: LimitWindow[] } | null;
   /** Fable's own weekly window; null until a Fable turn has reported it. */
   fable?: { windows: LimitWindow[] } | null;
+  /** OpenAI Codex's own windows from its CLI's session log; null until Codex is connected and has run. */
+  openai?: { windows: LimitWindow[]; plan?: string | null } | null;
+  /** Gemini reports no windows, only that its quota was hit and when it clears. */
+  gemini?: { reached: boolean; reset: number | null } | null;
 };
 
 export type ProviderInfo = { installed?: boolean | null; connected?: boolean; busy?: boolean; url?: string | null; error?: string | null };
@@ -121,6 +127,10 @@ export const api = {
   providerCancel: (id: string) => call<{ ok: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/cancel`, {}),
   /** Disconnects from Drawing only; the CLI's own login stays. */
   providerLogout: (id: string) => call<{ ok: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/logout`, {}),
+  /** Disconnect and also log the CLI itself out on this machine (`cli: true`, as in Dispatch). */
+  providerCliLogout: (id: string) => call<{ ok: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/logout`, { cli: true }),
+  /** The CLI's own API-key login: the server hands the key to the CLI on stdin. The web keeps no copy (no storage, no logs). */
+  providerKey: (id: string, key: string) => call<{ ok: boolean; connected: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/key`, { key }),
   providerRefresh: () => call<Record<string, ProviderInfo>>('POST', '/api/providers/refresh', {}),
   saveDispatchSettings: (patch: { guard?: Partial<Omit<DispatchSettings["guard"], "fable">> & { fable?: number | null }; team?: Partial<DispatchSettings['team']> }) =>
     call<DispatchSettings>('POST', '/api/settings', patch),

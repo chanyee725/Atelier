@@ -132,7 +132,10 @@ export default function DispatchApp() {
         {!unavailable && ready && <ProjectRail projects={projects} state={listState} scope={scope} view={hashOf(view).slice(1)} onPick={sc => go(view, sc)} />}
       <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         {listState === 'failed' && !unavailable && ready && <p role="status" className="m-0 border-b px-6 py-2 text-sm text-muted-foreground">프로젝트 목록을 불러오지 못했어요. 잠시 뒤에 다시 시도해요.</p>}
-        {unavailable ? (
+        {unavailable && view === 'settings' ? (
+          // Dispatch off: settings still render, session sections read-only with the reason (#620).
+          <SettingsPage off />
+        ) : unavailable ? (
           <p className="p-6 text-sm text-muted-foreground">이 서버에서는 세션 화면을 쓸 수 없어요.</p>
         ) : !ready ? (
           <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>

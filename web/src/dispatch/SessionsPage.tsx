@@ -1,11 +1,12 @@
 // 세션 board: the needs-attention strip, a state filter and session cards grouped by role, most urgent first.
 import { useMemo, useState, type ReactNode } from 'react';
-import { GitBranch, TriangleAlert } from 'lucide-react';
+import { GitBranch, Plus, TriangleAlert } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
 import { elapsed } from '../../../shared/dispatch/attention.ts';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
+import { CreateSessionDialog } from './CreateSessionDialog';
 import { fmtK, fmtUsd, isOpen, pct, stateOf, totalTok } from './lib/format.ts';
 import { byUrgency, stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
@@ -103,6 +104,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
   const roles = useDispatch(s => s.roles);
   const [filter, setFilter] = useState<'all' | SessionState>('all');
   const [showDone, setShowDone] = useState(false);
+  const [creating, setCreating] = useState(false);
   const now = useNow(20_000);
 
   const byId = useMemo(() => new Map(sessions.map(s => [s.id, s])), [sessions]);
@@ -127,6 +129,13 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
     return known;
   }, [roles, list]);
   const doneCount = counts.done ?? 0;
+  // 새 세션 (#587): starts sessions in the picked project's folder (none under 전체 / 미분류).
+  const tools = (
+    <>
+      <Button size="sm" variant="outline" onClick={() => setCreating(true)}><Plus aria-hidden />새 세션</Button>
+      {actions}
+    </>
+  );
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-6 max-md:p-4">
@@ -139,7 +148,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
           <p className="font-medium">아직 세션이 없어요</p>
           <p className="max-w-md text-sm text-muted-foreground">{scope === undefined ? '파이프라인을 시작하거나 관리자 세션이 팀을 만들면 여기에 보여요.' : '이 프로젝트의 계획에서 시작하기를 누르면 여기에 보여요.'}</p>
-          {actions && <div className="mt-2 flex items-center gap-2">{actions}</div>}
+          <div className="mt-2 flex items-center gap-2">{tools}</div>
         </div>
       ) : (
         <>
@@ -154,7 +163,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
                 ))}
               </TabsList>
             </Tabs>
-            {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+            <div className="flex shrink-0 items-center gap-2">{tools}</div>
           </div>
 
           {list.length === 0 && (
@@ -188,6 +197,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
           )}
         </>
       )}
+      {creating && <CreateSessionDialog folder={typeof scope === 'string' ? scope : undefined} onClose={() => setCreating(false)} />}
     </div>
   );
 }

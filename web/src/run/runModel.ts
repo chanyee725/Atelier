@@ -2,8 +2,8 @@
 // Dispatch sessions, what the step rows, the canvas overlay, the status strip and the history list show.
 // Pure: no DOM, no fetch, so it runs under `node --test`. Metadata only, like the record: no transcripts.
 
-import type { Plan } from '../../../shared/dispatch/plan.ts';
-import type { SessionState } from '../../../shared/dispatch/types.ts';
+import { resolvedStep, type Plan } from '../../../shared/dispatch/plan.ts';
+import type { Model, Role, SessionState } from '../../../shared/dispatch/types.ts';
 import { STEP_VIEWS, progressLabel, stepView, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import { roleLabel, runProgress, type RunAgent, type RunStep } from './overlayModel.ts';
 
@@ -153,7 +153,25 @@ export interface StepRow {
   before?: StepView;
   /** Paused mid-step: 'limit' (한도로 멈춤) or 'stop' (멈추기). */
   paused?: Pause['by'];
+  /** The model(s) it runs (#587): its sessions' models once started, else the plan's (step or defaults, then role). */
+  model?: string;
 }
+
+/** Roles and models from Dispatch, to name a step's planned model before it starts. */
+export type ModelCatalog = { roles?: readonly Pick<Role, 'id' | 'model'>[]; models?: readonly Pick<Model, 'id' | 'label'>[] };
+
+/** A step's planned model label: the step's own (or plan default), else its role's; null when neither is known. */
+export function plannedModel(plan: Plan, stepId: string, cat: ModelCatalog = {}): string | null {
+  const step = plan.steps.find((s) => s.id === stepId);
+  if (!step) return null;
+  const r = resolvedStep(plan, step);
+  const id = r.model || (r.role ? cat.roles?.find((x) => x.id === r.role)?.model : undefined);
+  if (!id) return null;
+  return modelLabel(id, cat);
+}
+
+/** A model id's label from the catalog; the id itself when the catalog does not know it. */
+export const modelLabel = (id: string, cat: ModelCatalog = {}): string => cat.models?.find((m) => m.id === id)?.label ?? id;
 
 type Live = ReadonlyMap<string, LiveSession>;
 
@@ -182,7 +200,7 @@ function roleOf(plan: Plan, stepId: string, s: RecSession, live: Live): string {
   return st?.role ?? plan.defaults?.role ?? '';
 }
 
-export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.now(), labels: ReadonlyMap<string, string> = new Map()): StepRow[] {
+export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.now(), labels: ReadonlyMap<string, string> = new Map(), cat: ModelCatalog = {}): StepRow[] {
   const plan = record.plan.snapshot;
   const running = isLive(record.state);
   const pause = record.state === 'paused' ? (record.pause ?? { by: 'stop' as const, at: now }) : null;
@@ -216,12 +234,17 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     else time = `${fmtDur(now - step.startedAt)}째`;
     const agents = step.sessions.map((s) => {
       const l = live.get(s.sid);
-      const model = l?.modelLabel ?? s.model ?? l?.model;
+      // A finished session is gone from `live`: its record keeps only the id, so look the label up (PR #617 review).
+      const id = s.model ?? l?.model;
+      const model = l?.modelLabel ?? (id ? modelLabel(id, cat) : undefined);
       return { name: l?.name ?? s.name ?? s.sid, role: roleOf(plan, ps.id, s, live), ...(model ? { model } : {}) };
     });
     const label = skipped ? '건너뜀' : paused === 'limit' ? '한도로 멈춤' : paused ? '멈춤' : v.label;
     const row: StepRow = { id: ps.id, n: i + 1, title: labels.get(node) ?? node, view, glyph: paused ? '⏸' : v.glyph, label, time, agents, waiting, skipped, node };
     if (paused) row.paused = paused;
+    const ran = [...new Set(agents.map((a) => a.model).filter((x): x is string => !!x))];
+    const model = ran.length ? ran.join(', ') : plannedModel(plan, ps.id, cat);
+    if (model) row.model = model;
     if (view === 'blocked') {
       // The timeline is capped, so a step blocked long ago can lose its history; one that started still carries 'active' weight.
       const before = beforeBlocked(record.timeline, ps.id) ?? (step.startedAt !== null || step.sessions.length > 0 ? 'active' : undefined);
@@ -256,7 +279,7 @@ export interface SessionRow {
   live: boolean;
 }
 
-export function sessionRows(record: RunRecord, live: Live = new Map(), now = Date.now()): SessionRow[] {
+export function sessionRows(record: RunRecord, live: Live = new Map(), now = Date.now(), cat: ModelCatalog = {}): SessionRow[] {
   const plan = record.plan.snapshot;
   const running = isLive(record.state);
   const out: SessionRow[] = [];
@@ -272,7 +295,7 @@ export function sessionRows(record: RunRecord, live: Live = new Map(), now = Dat
         name: l?.name ?? s.name ?? s.sid,
         role,
         roleName: roleLabel(role),
-        model: l?.modelLabel ?? s.model ?? l?.model ?? '',
+        model: l?.modelLabel ?? modelLabel(s.model ?? l?.model ?? '', cat),
         state: stateNow(s, live, running) ?? null,
         branch: l?.branch ?? s.branch ?? null,
         activity: l?.activity ? `${l.activity.label} · ${fmtDur(now - l.activity.since)}째` : null,
