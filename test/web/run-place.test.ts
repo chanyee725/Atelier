@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Scene } from '../../shared/render/index.ts';
-import { canPlace, placeRuns, samePlaced, unplaced, type PlaceEl, type PlaceView } from '../../web/src/canvas/runPlace.ts';
+import { canPlace, endMorphOpacity, MORPH_OPACITY, placeRuns, samePlaced, unplaced, type PlaceEl, type PlaceView } from '../../web/src/canvas/runPlace.ts';
 import { clearRuns, runStepsFor, setRunSteps, setStill } from '../../web/src/run/runStore.ts';
 import * as store from '../../web/src/run/runStore.ts';
 import { FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
@@ -94,4 +94,28 @@ test('unplaced: morph blocks with no placed layer are reported, placed ones are 
   const placed = placeRuns([img('e1', 'b1'), img('e2', 'b2', { angle: 0.3 })], view, wrap, runs, pictureOf, null);
   assert.deepEqual(unplaced(runs, placed), ['b2']);
   assert.deepEqual(unplaced(new Set(['b1']), placed), []);
+});
+
+test('a block rotated, hidden or deleted mid-morph is ended and gets its own opacity back (#556, #569)', () => {
+  // b1 morphs (its image at MORPH_OPACITY, its own opacity 60); mid-play the user rotates, deletes or hides it.
+  const withOpacity = (e: PlaceEl, opacity: number) => ({ ...e, opacity });
+  const playing = img('e1', 'b1', { opacity: MORPH_OPACITY });
+  for (const mid of [{ angle: 0.3 }, { isDeleted: true }]) {
+    const els = [{ ...playing, ...mid }, img('e2', 'b2', { opacity: MORPH_OPACITY })];
+    const ended = unplaced(new Set(['b1']), placeRuns(els, view, wrap, new Set(['b1']), pictureOf, null));
+    assert.deepEqual(ended, ['b1']);
+    const next = endMorphOpacity(els, 'b1', 60, withOpacity)!;
+    assert.equal(next[0]!.opacity, 60);
+    assert.equal(next[0]!.angle ?? 0, mid.angle ?? 0);
+    assert.equal(next[0]!.isDeleted, mid.isDeleted);
+    // Another block's morph is untouched.
+    assert.equal(next[1], els[1]);
+  }
+  // Hidden by the user (opacity 0): ended too, but their opacity wins over the one from before the morph.
+  const hidden = [img('e1', 'b1', { opacity: 0 })];
+  assert.deepEqual(unplaced(new Set(['b1']), placeRuns(hidden, view, wrap, new Set(['b1']), pictureOf, null)), ['b1']);
+  assert.equal(endMorphOpacity(hidden, 'b1', 60, withOpacity), null);
+  // Every copy of the block still at the morph opacity is restored.
+  const copies = endMorphOpacity([playing, img('e3', 'b1', { opacity: MORPH_OPACITY, x: 300 })], 'b1', 60, withOpacity)!;
+  assert.deepEqual(copies.map((e) => e.opacity), [60, 60]);
 });

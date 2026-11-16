@@ -537,3 +537,89 @@ test('switching a.dpx -> b.dpx -> a.dpx while a.dpx reloads applies the newer re
   assert.deepEqual(reloaded, [['a.dpx', 2]]);
   assert.equal(s.getState().file?.title, 'a2');
 });
+
+test('a read that fails still runs the queued reload, and a later event reads again (#569)', async (t) => {
+  const { s } = setup(t);
+  const gates: { ok: (f: DpxFile) => void; fail: (e: unknown) => void }[] = [];
+  const read = () => new Promise<DpxFile>((ok, fail) => gates.push({ ok, fail }));
+  const reloaded: number[] = [];
+  const onReload = (p: string, f: DpxFile) => {
+    reloaded.push(f.revision);
+    s.applyLive(p, f);
+  };
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, onReload);
+  await settle();
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, read, onReload);
+  gates.shift()!.fail(new Error('network'));
+  await settle();
+  // The failed read held nothing, so the queued event is read.
+  assert.equal(gates.length, 1);
+  gates.shift()!.ok(file({ revision: 3 }));
+  await settle();
+  assert.deepEqual(reloaded, [3]);
+  // Not stuck in "reloading": the next event starts a read of its own.
+  s.external({ kind: 'change', path: 'a.dpx', revision: 4 }, read, onReload);
+  await settle();
+  assert.equal(gates.length, 1);
+});
+
+test('a queued reload is dropped when the user edits before the read ends, and the edit is saved (#569)', async (t) => {
+  const { s, server } = setup(t);
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => new Promise<DpxFile>((ok) => gates.push(ok));
+  const reloaded: number[] = [];
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, (_p, f) => reloaded.push(f.revision));
+  await settle();
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, read, (_p, f) => reloaded.push(f.revision));
+  s.edit({ title: 'mine' });
+  gates.shift()!(file({ revision: 3 }));
+  await settle();
+  // Neither the read nor the queued event replaces the unsaved edit.
+  assert.deepEqual(reloaded, []);
+  assert.equal(gates.length, 0);
+  assert.equal(s.getState().file?.title, 'mine');
+  t.mock.timers.tick(SAVE_DELAY);
+  await settle();
+  assert.equal(server.calls.length, 1);
+});
+
+test('a queued reload is dropped while a save is in flight (#569)', async (t) => {
+  const { s, server } = setup(t);
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => new Promise<DpxFile>((ok) => gates.push(ok));
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, () => {});
+  await settle();
+  // The reload waits for queued saves before it reads, so it starts reading first; then an event queues and the user
+  // edits and saves before the read ends.
+  s.external({ kind: 'change', path: 'a.dpx', revision: 3 }, read, () => {});
+  s.edit({ title: 'mine' });
+  t.mock.timers.tick(SAVE_DELAY);
+  await settle();
+  assert.equal(server.calls.length, 1);
+  assert.equal(s.hasUnsaved(), true);
+  gates.shift()!(file({ revision: 3 }));
+  await settle();
+  assert.equal(gates.length, 0);
+  server.ok(4);
+  await settle();
+  assert.equal(gates.length, 0);
+  assert.equal(s.getState().file?.title, 'mine');
+});
+
+test('a change event without a revision always asks again after the running read (#569)', async (t) => {
+  const { s } = setup(t);
+  let reads = 0;
+  const gates: ((f: DpxFile) => void)[] = [];
+  const read = () => (reads++, new Promise<DpxFile>((ok) => gates.push(ok)));
+  s.external({ kind: 'change', path: 'a.dpx', revision: 2 }, read, (p, f) => s.applyLive(p, f));
+  await settle();
+  s.external({ kind: 'change', path: 'a.dpx' }, read, (p, f) => s.applyLive(p, f));
+  gates.shift()!(file({ revision: 9 }));
+  await settle();
+  // Revision 9 is newer than anything named, but the event did not name one: read once more.
+  assert.equal(reads, 2);
+  gates.shift()!(file({ revision: 9 }));
+  await settle();
+  assert.equal(reads, 2);
+  assert.equal(s.getState().file?.revision, 9);
+});
