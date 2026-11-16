@@ -9,7 +9,8 @@ export type ThemePref = Theme | 'system' | 'monitor';
 const KEY = 'drawing.theme';
 const QUERY = '(prefers-color-scheme: dark)';
 
-const parsePref = (s: string | null): ThemePref => (s === 'light' || s === 'dark' || s === 'monitor' ? s : 'system');
+// 모니터링 is no longer offered (user, 2026-11-16): a stored 'monitor' choice falls back to 시스템.
+const parsePref = (s: string | null): ThemePref => (s === 'light' || s === 'dark' ? s : 'system');
 
 type Snapshot = { theme: Theme; pref: ThemePref; system: Theme };
 
