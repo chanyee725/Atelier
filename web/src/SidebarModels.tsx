@@ -71,9 +71,18 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
   const s = rowStatus(meta, models.providers[meta.id], !!models.status?.enabled, models.limits);
   // Usage card on hover and keyboard focus (#698); the click still opens 모델 연결.
   const card = useUsageCard();
+  // While 모델 연결 is open, and for one frame after it closes, row events are not new interest in the card (#704):
+  // the native <dialog> returns focus to the row on Esc (closeTo() as a fallback), and the dialog sits inside this
+  // <li> in the DOM, so a pointer anywhere over the modal fires the row's pointerenter. Cleared after closeTo's own
+  // focus frame; real hover or focus moves after that still open the card.
+  const returning = useRef(false);
+  const hover = {
+    onPointerEnter: (e: React.PointerEvent) => !returning.current && card.hover.onPointerEnter(e),
+    onPointerLeave: card.hover.onPointerLeave,
+  };
   const cardId = `usage-card-${meta.id}`;
   return (
-    <SidebarMenuItem {...card.hover}>
+    <SidebarMenuItem {...hover}>
       <SidebarMenuButton
         ref={trigger}
         data-testid="model-row"
@@ -83,8 +92,12 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         aria-label={`${meta.name} ${s.text}, 연결 관리`}
         aria-describedby={card.open ? cardId : undefined}
         {...card.trigger}
+        onFocus={(e) => {
+          if (!returning.current) card.trigger.onFocus(e);
+        }}
         onClick={() => {
           card.close();
+          returning.current = true;
           setOpen(true);
         }}
         className="max-md:h-11"
@@ -100,7 +113,17 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         </span>
       </SidebarMenuButton>
       {card.open && !open && <SidebarUsageCard id={meta.id} meta={meta} anchor={trigger} hover={card.hover} statusText={s.text} />}
-      {open && <SettingsModal section="providers" onClose={closeTo(trigger, () => setOpen(false))} />}
+      {open && (
+        <SettingsModal
+          section="providers"
+          onClose={() => {
+            closeTo(trigger, () => setOpen(false))();
+            requestAnimationFrame(() => {
+              returning.current = false;
+            });
+          }}
+        />
+      )}
     </SidebarMenuItem>
   );
 }
