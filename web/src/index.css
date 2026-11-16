@@ -517,7 +517,8 @@ body {
   font: 600 12px/16px var(--font-sans); box-shadow: var(--shadow-pop);
 }
 /* The status (E536) is one line: it truncates with an ellipsis rather than growing the tag over the drawing. */
-.agent-cursor-tag { max-inline-size: 240px; }
+/* max-content: the tag sits in the 16px cursor box, whose width would otherwise squeeze the status. */
+.agent-cursor-tag { inline-size: max-content; max-inline-size: 240px; }
 .agent-cursor-name { flex: none; }
 .agent-cursor-status { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; opacity: 0.9; }
 .agent-cursor-dots { display: none; gap: 2px; }
