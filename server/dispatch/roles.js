@@ -59,6 +59,10 @@ export const CHILD_PROMPT = `
   코드 위치는 DSL 속성 code: "path:start-end#symbol" (여러 개는 ; 로 구분)로 붙인다. 블록 JSON에서는 codeRefs: {v:1, nodes:{"<노드 라벨>":{summary, refs:[{path,start,end?,symbol?,note?}]}}}.
   path는 저장소 상대 경로, start/end는 1부터. summary·note에는 코드 설명만 쓰고 비밀값·개인정보는 쓰지 않는다. 자세한 형식: Drawing 저장소 docs/agent-diagrams.md.`;
 
+// Every session: name yourself on Drawing workspace API writes, so the cursor shows your name for certain (#656).
+export const DRAWING_WRITE_NOTE = `
+- Drawing 워크스페이스 API(/api/file, /api/file/plan)에 쓰는 요청(PUT·POST·PATCH)에는 x-drawing: 1과 함께 -H "x-drawing-session: $DRAWING_SESSION" 헤더를 붙인다(스크립트 안의 요청도). 이 값은 이 세션의 id로, 커서에 내 이름이 확실히 뜨게 한다. 다른 값으로 바꾸지 않는다.`;
+
 export const PERMS = ["manual", "acceptEdits", "auto", "plan"];
 
 // Session names: short (≤ 6 letters), easy to say and tell apart. The role shows beside the name.
