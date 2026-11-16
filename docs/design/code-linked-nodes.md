@@ -65,6 +65,7 @@ free-form copies each node's entry onto its shape.
 
 `GET /api/code?path=<repo-relative>&start=&end=` →
 `{ path, start, end, total, lines: string[], language }` (language from extension, for highlighting only).
+Response `start`/`end` are the first and last line of the returned `lines` (context included), not the requested range.
 
 - Root = the git project that holds the workspace (same root the server already resolves for `.dispatch/`).
   No git project → 404 `{error:'no-project'}`.
@@ -73,14 +74,14 @@ free-form copies each node's entry onto its shape.
   (`a[b].txt` must not match tracked `ab.txt`; `:(top)x` is just a name). This keeps gitignored local config, `node_modules/` and `.dispatch/wt/` out.
   Not tracked → 404 `{error:'not-tracked'}`. The deny list below stays as a second layer.
 - Path checks: decode once (reject any `%` left after decoding, so no double encoding; this deliberately also refuses
-  real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash; `realpath` must stay inside the root (symlink escape →
+  real file names containing `%`, which code refs do not need), normalize; reject absolute, `..`, NUL, backslash, over 4096 characters or 256 segments; `realpath` must stay inside the root (symlink escape →
   403); reject `.git` and `.dispatch` as any path segment (not only the leading one) and any segment starting with `.env`,
   case-insensitively, on both the requested path and its realpath, plus key/secret files (`*.pem`, `*.key`, `id_rsa*`,
   `*.p12`, `*.pfx`, `.npmrc`, `.netrc`, `credentials*`, `secrets*`) → 403; must be a regular file.
 - Limits: file ≤ 1 MB (exactly 1 MB is allowed, one byte more → 413), binary (NUL in first 8 KB) → 415, directory → 400.
   Returned window ≤ 400 lines: the range plus up to 20 lines of context each side, clamped to the file. A range longer
   than fits is cut at 400 lines from its start with `truncated: true` in the response (the panel says so).
-  `start`/`end` missing → from line 1; non-integer, `< 1` or `start > end` → 400; `start > total` → 416. Read only, no writes, no outbound requests, no caching on disk.
+  `start` missing → line 1, `end` missing → `start` (whole file when both are missing); non-integer, `< 1` or `start > end` → 400; `start > total` → 416. Read only, no writes, no outbound requests, no caching on disk.
 - No content is logged (path + status only at debug level).
 - Tests (E504b) cover: symlink escape (file and folder), `..` and `%2e%2e` / double encoding, `.ENV` / `.Env.local`,
   untracked and gitignored files, `a[b].txt` untracked next to tracked `ab.txt`, directory path, the 1 MB boundary, every range error above, `truncated`.
