@@ -1,4 +1,4 @@
-// One status line with one writer, shared by every action that reports into it (settings dialog saves, PR/CI switch).
+// One status line with one writer, shared by every action that reports into it (today the PR/CI switch).
 //
 // announce() clears the line, then writes the text DELAY ms later, so a live region sees an empty state in between
 // (screen readers skip a same-text rewrite that lands in the same tick) and a repeated message is read again (#419 item 1).
