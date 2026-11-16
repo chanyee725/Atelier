@@ -12,6 +12,7 @@ import { until } from './dispatch/lib/format';
 import { cn } from './lib/utils';
 import { WARN_PERCENT } from './projectNav';
 import { ACTION_TEXT, STATE_TEXT, actionFor, cliLogoutShown, cliLogoutText, connectKey, connectedText, objParticle, doneText, keyDoneText, keyLoginShown, limitRows, loginUrl, metaLine, type Action, type LimitRow, type ProviderMeta, SUB_BUCKETS } from './modelConnect';
+import { ProviderIcon } from './ProviderIcon';
 import { MODELS_CHANGED } from './settings/context';
 import { oneAtATime } from './settings/model';
 import type { Models } from './SidebarModels';
@@ -129,8 +130,8 @@ export function ConnectDialog({ meta, models, onClose }: { meta: ProviderMeta; m
 
         <section aria-label={meta.name} className="flex flex-col gap-2 rounded-lg border px-3 py-3">
           <div className="flex items-center gap-3">
-            <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-md bg-foreground text-sm font-semibold text-background">
-              {meta.mark}
+            <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-md border text-foreground">
+              <ProviderIcon provider={meta.id} className="size-5" />
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2">

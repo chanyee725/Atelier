@@ -240,6 +240,44 @@ test("resumeInterrupted resumes Claude, Codex and Gemini sessions; an unknown pr
   assert.equal(bin.calls().length, 3);
 });
 
+test("send and resume refuse a saved session whose provider is disconnected or whose model is gone, before any spawn", async () => {
+  const bin = fakeCliBin();
+  dirs.push(bin.dir);
+  const root = tmp("drawing-safety-saved-");
+  const store = new Store(root);
+  await store.load();
+  const base = { role: "impl", effort: null, perm: "plan", prompt: "", canSpawn: false, cwd: root, startedAt: 0, updatedAt: 0, last: "",
+    turns: 0, ctx: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, providerSessionId: "p1", status: "idle" };
+  store.data.sessions = {
+    o: { ...base, id: "o", n: 1, name: "O", provider: "openai", model: "gpt-fake-codex" },
+    m: { ...base, id: "m", n: 2, name: "M", provider: "claude", model: "claude-gone-1" },
+    r: { ...base, id: "r", n: 3, name: "R", provider: "openai", model: "gpt-fake-codex", status: "running" },
+  };
+  store.save = () => {};
+  const hub = new Hub({ root, store, models: MODELS, roles: ROLES, port: 0, limits: new SharedLimits(path.join(root, "limits.json")), spawnCli: fakeSpawner(bin) });
+  after(() => hub.stopAll());
+  hub.isConnected = p => p === "claude";
+
+  // A disconnected provider: nothing recorded, nothing spawned.
+  const before = hub.transcript("o").length;
+  assert.throws(() => hub.send("o", "hello"), /OpenAI Codex가 Drawing에 연결되지 않았어요/);
+  assert.equal(hub.transcript("o").length, before);
+  // A model that is no longer listed never reaches -m / --model.
+  assert.throws(() => hub.send("m", "hello"), /claude-gone-1 모델을 지금은 쓸 수 없어요/);
+  hub.start(store.data.sessions.o, "hi");
+  assert.equal(store.data.sessions.o.status, "error");
+  // An interrupted session waits for its provider instead of failing; it resumes once connected.
+  hub.resumeInterrupted();
+  assert.equal(store.data.sessions.r.interrupted, true);
+  await new Promise(r => setTimeout(r, 50));
+  assert.deepEqual(bin.calls(), []);
+  hub.isConnected = () => true;
+  hub.resumeInterrupted();
+  await until(() => bin.calls().length >= 1);
+  assert.equal(store.data.sessions.r.interrupted, false);
+  assert.deepEqual(bin.calls().map(c => c.bin), ["codex"]);
+});
+
 test("hub.create refuses an unknown model, an effort the model lacks, and a provider not connected, before anything starts", async () => {
   const bin = fakeCliBin();
   dirs.push(bin.dir);
