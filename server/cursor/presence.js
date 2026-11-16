@@ -36,8 +36,9 @@ export function projectOf(rel) {
  * - held: Map sid -> { file, at } (the file each session edited last)
  * - outside: Map label -> { file, at } (named outside writers, already pruned by age)
  * - project: optional filter (top folder); a session counts for its own folder and for the folder of the file it holds
+ * - activity: Map sid -> tool activity label of its current turn (from the hub's `session` events; memory only)
  */
-export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null } = {}) {
+export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null, activity = new Map() } = {}) {
   const out = [];
   for (const s of sessions) {
     if (!s?.id || !LIVE_STATUSES.has(s.status)) continue;
@@ -51,6 +52,8 @@ export function buildAgents({ sessions = [], held = new Map(), outside = new Map
       ...(typeof s.color === 'string' && { color: s.color }),
       model: typeof s.model === 'string' ? s.model : null,
       ...(typeof s.modelLabel === 'string' && { modelLabel: s.modelLabel }),
+      ...(typeof s.provider === 'string' && s.provider && { provider: s.provider }),
+      ...(typeof activity.get(s.id) === 'string' && { activity: activity.get(s.id) }),
       status: s.status,
       state: typeof s.state === 'string' ? s.state : null,
       project: (typeof s.folder === 'string' && s.folder) || projectOf(file),
