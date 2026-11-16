@@ -1,40 +1,49 @@
 // Agent sessions working in a project right now, for the project home's 지금 작업 중 panel (#592).
 // Data: GET /api/workspace/agents (first answer) and the SSE event `agents` (a full snapshot of the whole workspace,
 // sent on connect and on every change). Memory-only on the server; nothing here is stored either.
-// The type mirrors shared/dispatch/agent-presence.ts (part b of #592); kept here until that file lands.
+// The type mirrors shared/dispatch/agent-presence.ts (part b of #592, PR #603); import it from there once that lands.
+import { STATE } from '../dispatch/lib/format.ts';
+import type { SessionState } from '../../../shared/dispatch/types.ts';
 
 export type AgentPresence = {
   sid: string;
-  /** The session's own name as created ("Otto"), or the name an outside API writer gave in x-drawing-session. */
+  /** The session's own name as created ("Otto"), or the label an outside API writer gave in x-drawing-session. */
   name: string;
+  /** Role id; '' for an outside writer. */
   role: string;
   roleName?: string;
-  /** The session's cursor colour (`#rrggbb`). */
+  /** The session's cursor colour (`#rrggbb`); absent for outside writers. */
   color?: string;
   model: string | null;
-  modelLabel?: string | null;
-  /** running | starting | waiting | idle | … (unknown values are shown as they come). */
-  state: string;
-  /** Top folder the session works for. */
+  modelLabel?: string;
+  /** Hub status: starting | running | waiting. */
+  status: string;
+  /** Monitoring state (SessionState), null when not known yet. */
+  state: string | null;
+  /** Top folder the session works in. */
   project: string | null;
-  /** Workspace-relative file it holds now; null when its turn ended. */
+  /** Workspace-relative file it edited last (held now); null before its first edit. */
   file: string | null;
-  at: number;
-  /** An API writer from outside (no model or role). */
+  /** Last activity (ms), null when unknown. */
+  at: number | null;
+  /** An API writer from outside (no role, model or colour). */
   outside?: true;
 };
 
-const STATE_LABEL: Record<string, string> = { running: '작업 중', starting: '시작 중', waiting: '기다리는 중', idle: '쉬는 중', stuck: '멈춤', failed: '실패', done: '끝남' };
-export const agentStateLabel = (s: string) => STATE_LABEL[s] ?? s;
-/** States that mean the session is doing something now (green dot); the rest are quiet. */
-export const isBusy = (s: string) => s === 'running' || s === 'starting';
+const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중' };
+/** The monitoring state when known (작업 중, 사람 기다림, 멈춤, …), else the hub status. */
+export const agentStateLabel = (a: Pick<AgentPresence, 'status' | 'state'>) =>
+  (a.state && STATE[a.state as SessionState]?.label) || STATUS_LABEL[a.status] || a.status;
+/** Doing something now (green dot): working by the monitor, or running/starting by the hub when the monitor has no word. */
+export const isBusy = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'working' : a.status === 'running' || a.status === 'starting');
+/** Needs a person or is stuck (amber dot). */
+export const needsLook = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'waiting' || a.state === 'stuck' || a.state === 'failed' : a.status === 'waiting');
 
-const ORDER: Record<string, number> = { running: 0, starting: 1, waiting: 2 };
 /** The project's agents: busy first, then whoever holds a file, then the most recent; a stable name order last. */
 export function agentsIn(all: readonly AgentPresence[], project: string): AgentPresence[] {
   return all
     .filter((a) => a.project === project || (!!a.file && a.file.startsWith(`${project}/`)))
-    .sort((a, b) => (ORDER[a.state] ?? 3) - (ORDER[b.state] ?? 3) || Number(!!b.file) - Number(!!a.file) || b.at - a.at || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(isBusy(b)) - Number(isBusy(a)) || Number(!!b.file) - Number(!!a.file) || (b.at ?? 0) - (a.at ?? 0) || a.name.localeCompare(b.name));
 }
 
 /** Who holds each file, for the marks on document rows. */
