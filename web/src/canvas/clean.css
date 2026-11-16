@@ -97,8 +97,12 @@
 
 /* Hover on canvas chrome (#546): a short colour fade and a pointer on Excalidraw's own controls. The hover fills come
    from the surface tokens above (--color-surface-mid is --muted); selected stays on the stronger --color-primary-light,
-   and disabled controls get no pointer. The fade is colour only, so it stays on under reduced motion. */
-.excalidraw.excalidraw :is(.ToolIcon__icon, .dropdown-menu-item, .zoom-button, .Island button, .excalidraw-button):not(:disabled) {
+   and disabled controls get no pointer. .ToolIcon__icon is a div inside the tool's label or button, so :disabled never
+   matches it: a disabled tool (undo/redo with nothing to undo) is a disabled button whose icon has aria-disabled, and a
+   radio tool would be a disabled input next to it. Excalidraw already drops their hover fill. Under reduced motion the
+   app's global rule (index.css) cuts the fade to 0.01ms, so colours change at once there (#564). */
+.excalidraw.excalidraw :is(.ToolIcon__icon, .dropdown-menu-item, .zoom-button, .Island button, .excalidraw-button):not(:disabled,
+  [aria-disabled="true"], :disabled > .ToolIcon__icon, :disabled + .ToolIcon__icon) {
   cursor: pointer;
 }
 .excalidraw.excalidraw :is(.ToolIcon__icon, .dropdown-menu-item, .zoom-button, .excalidraw-button) {

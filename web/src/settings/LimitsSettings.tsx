@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api, type DispatchSettings } from '../api';
 import { SidebarMenuButton } from '../components/ui/sidebar';
 import { cn } from '../lib/utils';
-import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, wholeIn, type GuardField, type GuardSaved, type GuardValues } from './model';
+import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, stopEscWhileOpen, type GuardField, type GuardSaved, type GuardValues } from './model';
 import './limits.css';
 
 const ALL = GUARD_FIELDS.flatMap((g) => g.fields);
@@ -60,11 +60,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
     // Below 768px the sidebar is a Radix Sheet that listens for Esc on document (capture), so one Esc would close
     // the Sheet too and unmount the 설정 row focus returns to (#552). Stop the key at window, before document; the
     // dialog's own close request still runs, since it is the key's default action, not a listener.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && ref.current?.open) e.stopPropagation();
-    };
-    window.addEventListener('keydown', onKey, { capture: true });
-    return () => window.removeEventListener('keydown', onKey, { capture: true });
+    return stopEscWhileOpen(window, () => !!ref.current?.open);
   }, []);
   useEffect(() => {
     let alive = true;
@@ -88,10 +84,11 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
-  // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value.
+  // While Fable follows the weekly value its field mirrors 주간 한도; typing in it gives Fable its own value, and
+  // clearing it makes it follow again (#563).
   const set = (id: GuardField['id'], v: string) => {
-    setTexts((t) => ({ ...t, [id]: v, ...(id === 'seven' && follows ? { fable: v } : {}) }));
-    if (id === 'fable') setFollows(false);
+    setTexts((t) => ({ ...t, [id]: v, ...(id === 'seven' && follows && t.fable.trim() ? { fable: v } : {}) }));
+    if (id === 'fable') setFollows(!v.trim());
     setNote({ text: '' });
   };
   const followWeekly = (t: Texts): Texts => ({ ...t, fable: t.seven });
@@ -109,15 +106,11 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!saved) return;
-    const values = {} as GuardValues;
-    for (const f of ALL) {
-      const v = wholeIn(texts[f.id], f.min, f.max);
-      if (v === null) return setNote({ text: `${f.label}: ${f.min}~${f.max} 사이 숫자를 넣어 주세요`, bad: true });
-      values[f.id] = v;
-    }
+    const read = readGuardTexts(texts, follows);
+    if ('error' in read) return setNote({ text: read.error, bad: true });
     setSaving(true);
     try {
-      const next = await api.saveDispatchSettings(guardPatch(changedValues(saved, values, follows)));
+      const next = await api.saveDispatchSettings(guardPatch(changedValues(saved, read.values, read.follows)));
       setTexts(toTexts(next));
       setSaved(toSaved(next));
       setFollows(fableFollows(next));
@@ -170,7 +163,7 @@ function LimitsDialog({ onClose }: { onClose: () => void }) {
                         step={1}
                         min={f.min}
                         max={f.max}
-                        required
+                        required={f.id !== 'fable'}
                         autoFocus={g === GUARD_FIELDS[0] && i === 0}
                         value={texts[f.id]}
                         onChange={(e) => set(f.id, e.target.value)}
