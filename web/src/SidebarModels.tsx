@@ -1,7 +1,8 @@
 // Sidebar model rows (E525, #570), ported from Dispatch's Sidebar provider list: one row per entry in PROVIDERS
 // (modelConnect.ts, keyed by provider id; only Claude for now, #587 adds more), each with a status dot and its text
 // (설치 안 됨 / 로그인 중 / 5-hour usage / 연결 안 됨). A row opens the 설정 modal at 모델 연결
-// (settings/sections/ProvidersSection.tsx), where connect, cancel and disconnect happen (#624). State comes from GET /api/state and the
+// (settings/sections/ProvidersSection.tsx), where connect, cancel and disconnect happen (#624).
+// Hovering or focusing a row shows its usage limits (SidebarUsageCard, #698). State comes from GET /api/state and the
 // `providers` SSE event (docs/design/model-connection-contract.md). Nothing here reads credentials or logs anything.
 import { useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
@@ -14,6 +15,7 @@ import { MODELS_CHANGED } from './settings/context';
 import { SettingsModal, closeTo } from './settings/SettingsEntry';
 import { pollLogins } from './settings/model';
 import { createModelsStore } from './settings/modelsStore';
+import { SidebarUsageCard, useUsageCard } from './SidebarUsageCard';
 
 const DOT: Record<RowTone, string> = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-destructive', off: 'bg-muted-foreground' };
 
@@ -67,8 +69,11 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const s = rowStatus(meta, models.providers[meta.id], !!models.status?.enabled, models.limits);
+  // Usage card on hover and keyboard focus (#698); the click still opens 모델 연결.
+  const card = useUsageCard();
+  const cardId = `usage-card-${meta.id}`;
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem {...card.hover}>
       <SidebarMenuButton
         ref={trigger}
         data-testid="model-row"
@@ -76,8 +81,12 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
         data-state-key={s.key}
         aria-haspopup="dialog"
         aria-label={`${meta.name} ${s.text}, 연결 관리`}
-        title={`${meta.name}: ${s.text}`}
-        onClick={() => setOpen(true)}
+        aria-describedby={card.open ? cardId : undefined}
+        {...card.trigger}
+        onClick={() => {
+          card.close();
+          setOpen(true);
+        }}
         className="max-md:h-11"
       >
         {/* The provider's mark in the same 17px slot as the nav icons, so the name lines up with 모든 파일, 최근, 보관함. */}
@@ -90,6 +99,7 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
           {s.text}
         </span>
       </SidebarMenuButton>
+      {card.open && !open && <SidebarUsageCard id={meta.id} meta={meta} anchor={trigger} hover={card.hover} statusText={s.text} />}
       {open && <SettingsModal section="providers" onClose={closeTo(trigger, () => setOpen(false))} />}
     </SidebarMenuItem>
   );
