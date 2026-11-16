@@ -24,6 +24,7 @@ import { LayoutEditOverlay, focusCanvas, type EditStart } from './LayoutEditOver
 import { RunOverlay } from './RunOverlay';
 import { MorphOverlay, MORPH_OPACITY, type Morphs } from './MorphOverlay';
 import { willMorph } from './MorphLayer';
+import { canPlace, type PlaceEl } from './runPlace';
 import { AgentCursors } from './AgentCursors';
 import { openLayoutSession, sessionKey, type LayoutSession } from './layoutSession';
 import { parse } from '../../../shared/dsl/index.ts';
@@ -485,7 +486,9 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         // the whole block right. Code edits, resets and error pictures leave the block where it is.
         const at = shiftForOrigin(img, old, p);
         // A code change animates (the overlay shows old → new); a layout drag, a reset or a theme switch swaps at once.
-        const animate = !layoutStale && old?.scene && p.scene && willMorph(old.scene, p.scene, darkRef.current);
+        // Only where the overlay can be placed (not rotated or hidden), and never on the block in layout edit (#556).
+        const animate =
+          !layoutStale && canPlace(img as unknown as PlaceEl) && editRef.current?.blockId !== bid && old?.scene && p.scene && willMorph(old.scene, p.scene, darkRef.current);
         let opacity: number | undefined;
         if (animate) {
           if (!morphOpacity.current.has(bid)) morphOpacity.current.set(bid, img.opacity);
