@@ -121,8 +121,9 @@ test('refused sidebar drops do not move to the root', { skip: !ON && 'set DRAW_E
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-move-path') === 'A/keep.dpx.json', null, { timeout: 5000 });
   assert.ok(existsSync(join(ws, 'A', 'keep.dpx.json')), 'keep moved to A from the keyboard');
-  await page.waitForFunction(() => /옮겼어요/.test(document.querySelector('[aria-live="polite"].sr-only')?.textContent ?? ''), null, { timeout: 3000 });
-  assert.match(await page.locator('[aria-live="polite"].sr-only').textContent(), /남길 문서을\(를\) A\(으\)로 옮겼어요/);
+  // Scope to the sidebar: ActivityAlerts has its own sr-only polite live region (#654).
+  await page.waitForFunction(() => /옮겼어요/.test(document.querySelector('nav[aria-label="사이드바"] [aria-live="polite"].sr-only')?.textContent ?? ''), null, { timeout: 3000 });
+  assert.match(await page.getByRole('navigation', { name: '사이드바' }).locator('[aria-live="polite"].sr-only').textContent(), /남길 문서을\(를\) A\(으\)로 옮겼어요/);
 
   assert.deepEqual(rootNow(), rootBefore);
 
