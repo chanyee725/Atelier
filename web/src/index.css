@@ -378,7 +378,7 @@ body {
 .doc-h-flash { animation: doc-h-flash 1.5s ease-out; }
 @keyframes doc-h-flash { from { background: var(--muted); } to { background: transparent; } }
 .doc-wikilink { color: var(--foreground); background: var(--muted); border-radius: 4px; padding: 0 4px; cursor: pointer; text-decoration: none; }
-.doc-wikilink:hover { background: var(--accent); }
+.doc-wikilink:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 8%); }
 .doc-wikilink.ProseMirror-selectednode { outline: 2px solid var(--primary); }
 
 /* The canvas `/` insert menu: the document's slash list with a search field on top. */
