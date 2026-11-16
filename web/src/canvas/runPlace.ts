@@ -52,3 +52,21 @@ export const unplaced = (want: Iterable<string>, placed: readonly Placed[]) => {
 
 export const samePlaced = (a: readonly Placed[], b: readonly Placed[]) =>
   a.length === b.length && a.every((p, i) => p.blockId === b[i]!.blockId && p.scene === b[i]!.scene && p.left === b[i]!.left && p.top === b[i]!.top && p.scale === b[i]!.scale);
+
+/** A morphing image is kept at this opacity while its overlay plays (0 would hide it from placement). */
+export const MORPH_OPACITY = 1;
+
+/**
+ * The scene once block `blockId`'s morph ended: its images that are still at MORPH_OPACITY get `orig` back, also when
+ * they were rotated, hidden or deleted mid-play (a deleted one comes back with its own opacity on undo, #556). An image
+ * whose opacity the user changed meanwhile keeps theirs. Null when nothing changes.
+ */
+export function endMorphOpacity<E extends PlaceEl>(els: readonly E[], blockId: string, orig: number, withOpacity: (e: E, opacity: number) => E): E[] | null {
+  let changed = false;
+  const next = els.map((e) => {
+    if (blockIdOf(e) !== blockId || e.opacity !== MORPH_OPACITY) return e;
+    changed = true;
+    return withOpacity(e, orig);
+  });
+  return changed ? next : null;
+}
