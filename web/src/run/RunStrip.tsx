@@ -182,7 +182,7 @@ export function RunStrip({ code, inRunView, onRunView, onOpenFile }: Props) {
           <Button
             size="sm"
             aria-disabled={busy !== null || undefined}
-            className={cn('px-3 text-sm hover:bg-primary', FOCUS_RING)}
+            className={cn('px-3 text-sm aria-disabled:hover:bg-primary', FOCUS_RING)}
             onClick={() => void act('reopen')}
           >
             계획 다시 열기

@@ -138,7 +138,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
           disabled={busy}
           aria-disabled={blocked || undefined}
           aria-describedby={blocked ? blockersId : undefined}
-          className="px-3 text-sm hover:bg-primary"
+          className="px-3 text-sm aria-disabled:hover:bg-primary"
           onClick={() => {
             if (blocked) return;
             void open();
@@ -177,7 +177,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
           size="sm"
           disabled={busy}
           aria-describedby={notice ? noticeId : undefined}
-          className="px-3 text-sm hover:bg-primary"
+          className="px-3 text-sm aria-disabled:hover:bg-primary"
           onClick={() => void start()}
         >
           시작하기

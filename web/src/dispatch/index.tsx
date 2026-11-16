@@ -104,8 +104,8 @@ export default function DispatchApp() {
               aria-current={view === n.view ? 'page' : undefined}
               onClick={e => { e.preventDefault(); go(n.view); }}
               className={cn(
-                'inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                view === n.view && 'bg-muted text-foreground',
+                'inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                view === n.view && 'bg-muted text-foreground hover:bg-muted',
               )}
             >
               {n.label}
@@ -118,7 +118,7 @@ export default function DispatchApp() {
             href="#tv"
             onClick={e => { e.preventDefault(); go('tv'); }}
             title="벽 화면처럼 크게 띄워 둬요"
-            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Monitor aria-hidden className="size-3.5" />
             <span className="max-sm:sr-only">상시 화면</span>
