@@ -83,8 +83,9 @@ export async function dropWorktree(root, dir, { strict = false, info = {} } = {}
   let st;
   if (strict) {
     // Removal nobody clicked (auto-remove): a failed status counts as dirty, and ignored files
-    // (.env, local data, …) count too unless they are known build noise.
-    try { st = (await git(dir, "status", "--porcelain", "--ignored")).stdout; } catch { return false; }
+    // (.env, local data, …) count too unless they are known build noise. `matching` lists each ignored
+    // path itself, so a folder holding only web/dist is not folded into an ignored "web/".
+    try { st = (await git(dir, "status", "--porcelain", "--ignored=matching")).stdout; } catch { return false; }
     // Commits made on a detached HEAD live only in this worktree's own reflog, which `worktree remove`
     // deletes with it. Keep it when HEAD is detached or on no branch; a failed check keeps it too.
     if (await detachedOrOrphan(dir, info)) return false;
@@ -104,8 +105,9 @@ async function detachedOrOrphan(dir, info) {
   } catch { info.unknown = true; return true; }
 }
 
-const NOISE = ["node_modules", ".next", ".next-prod", "dist", ".playwright-mcp", "test-results", "playwright-report"];
-const keep = f => !NOISE.some(n => f === n || f.startsWith(`${n}/`));
+const NOISE = new Set(["node_modules", ".next", ".next-prod", "dist", "coverage", ".playwright-mcp", "test-results", "playwright-report"]);
+// Build noise at any depth (web/node_modules, web/dist), not only at the top level.
+const keep = f => !f.split("/").some(seg => NOISE.has(seg));
 const out = p => p.then(r => r.stdout, () => "");
 
 /**

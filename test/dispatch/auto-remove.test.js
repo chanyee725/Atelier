@@ -243,6 +243,22 @@ test("dropWorktree strict (auto-remove) keeps ignored files and failed status; t
   execFileSync("mkdir", ["-p", join(noise, "node_modules", "x")]);
   writeFileSync(join(noise, "node_modules", "x", "i.js"), "");
   assert.equal(await dropWorktree(root, noise, { strict: true }), true, "node_modules is noise");
+  // Noise at any depth (#635): web/node_modules, web/dist and coverage do not keep it.
+  writeFileSync(join(root, ".gitignore"), ".env\nnode_modules/\ndist/\ncoverage/\n");
+  git("add", "."); git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "ignore more");
+  const nested = wt("w-nested");
+  for (const d of [["web", "node_modules", "x"], ["web", "dist"], ["coverage"]]) {
+    execFileSync("mkdir", ["-p", join(nested, ...d)]);
+    writeFileSync(join(nested, ...d, "f.js"), "");
+  }
+  assert.equal(await dropWorktree(root, nested, { strict: true }), true, "nested build noise is noise");
+
+  const nestedEnv = wt("w-nested-env");
+  execFileSync("mkdir", ["-p", join(nestedEnv, "web", "dist")]);
+  writeFileSync(join(nestedEnv, "web", "dist", "a.js"), "");
+  writeFileSync(join(nestedEnv, "web", ".env"), "SECRET=1");
+  assert.equal(await dropWorktree(root, nestedEnv, { strict: true }), false, "a nested .env still keeps it");
+
 
   const broken = wt("w-broken");
   writeFileSync(join(broken, ".git"), "gitdir: /nonexistent\n");
