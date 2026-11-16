@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REFETCH_DELAY_MS, REFETCH_MAX_WAIT_MS, REFETCH_TIMEOUT_MESSAGE, REFETCH_TIMEOUT_MS, aggregate, alwaysOnOrder, burnNow, cacheRate, createUsageRefetcher, hashOf, outliers, rowHistory,
+  REFETCH_DELAY_MS, REFETCH_MAX_WAIT_MS, REFETCH_TIMEOUT_MESSAGE, REFETCH_TIMEOUT_MS, aggregate, alwaysOnOrder, burnNow, cacheRate, createUsageRefetcher, hashOf, outliers, projectUsageFail, projectUsageOk,
+  projectUsageShown, rowHistory,
   topSessions, totals, usageKey, viewOf, weekHint,
 } from '../../web/src/dispatch/lib/usage.ts';
 import type { SessionState, UsageDay } from '../../shared/dispatch/types.ts';
@@ -317,4 +318,19 @@ test('usageKey moves with cost or tokens, so a cost-less session still triggers 
   assert.notEqual(usageKey([s(1, 5)]), usageKey([s(1.01, 5)]));
   // A cost step and a token step that would cancel out in one sum still read as a change.
   assert.notEqual(usageKey([s(1, 5)]), usageKey([s(0.9999, 6)]));
+});
+
+test('project usage: per-folder answers, a failed reload keeps the old numbers marked stale (#522)', () => {
+  const none = { data: null, stale: false, failed: false };
+  assert.deepEqual(projectUsageShown(null, 'a'), none, 'loading before any answer');
+  const a1 = projectUsageOk('a', 1);
+  assert.deepEqual(projectUsageShown(a1, 'a'), { data: 1, stale: false, failed: false });
+  assert.deepEqual(projectUsageShown(a1, 'b'), none, 'another project never shows a\'s numbers');
+  const aFail = projectUsageFail(a1, 'a');
+  assert.deepEqual(projectUsageShown(aFail, 'a'), { data: 1, stale: true, failed: false }, 'a failed reload says the numbers are old');
+  assert.deepEqual(projectUsageShown(projectUsageOk('a', 2), 'a'), { data: 2, stale: false, failed: false }, 'a later success clears it');
+  const bFail = projectUsageFail(a1, 'b');
+  assert.deepEqual(projectUsageShown(bFail, 'b'), { data: null, stale: false, failed: true }, 'a failed first load of b borrows nothing from a');
+  assert.deepEqual(projectUsageShown(projectUsageFail(bFail, 'b'), 'b'), { data: null, stale: false, failed: true });
+  assert.deepEqual(projectUsageShown(projectUsageFail(null, 'a'), 'a'), { data: null, stale: false, failed: true });
 });

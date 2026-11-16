@@ -247,7 +247,7 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
   const [outlineOpen, setOutlineOpen] = useState(false);
   const outline = useEditorState({ editor, selector: (s) => (s.editor ? outlineOf(s.editor.getJSON()) : []) });
   const inTable = useEditorState({ editor, selector: (s) => !!s.editor?.isActive('table') });
-  const ctx = useMemo(() => ({ blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExport: onExportBlock }), [blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExportBlock]);
+  const ctx = useMemo(() => ({ path, blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExport: onExportBlock }), [path, blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExportBlock]);
 
   const tableActions: [string, () => boolean][] = [
     ['행 추가', () => editor.chain().focus().addRowAfter().run()],

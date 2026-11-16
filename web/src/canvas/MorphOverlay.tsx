@@ -7,12 +7,10 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { Scene } from '../../../shared/render/index.ts';
 import { MorphLayer } from './MorphLayer';
 import { placeRuns, samePlaced, unplaced, type Pic, type PlaceEl, type Placed } from './runPlace';
+export { MORPH_OPACITY } from './runPlace';
 
 /** A block whose picture is turning from `from` into the one now on the canvas. */
 export type Morphs = ReadonlyMap<string, { from: Scene; fileId: string }>;
-
-/** The image element is kept at this opacity while its overlay plays (0 would hide it from placement). */
-export const MORPH_OPACITY = 1;
 
 type Props = {
   api: ExcalidrawImperativeAPI;

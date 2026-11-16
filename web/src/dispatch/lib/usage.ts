@@ -223,3 +223,19 @@ export function usageKey(sessions: readonly Pick<Session, 'cost' | 'usage'>[]): 
   }
   return `${cost.toFixed(4)}|${tokens}`;
 }
+
+/** The project panel's last answer for one folder (GET /api/usage?folder=); null before any. Tagged with its folder, so a
+ *  switch never shows the previous project's numbers while the next one loads (#522). */
+export type ProjectUsage<T> = { folder: string; data: T | null; failed: boolean } | null;
+
+export const projectUsageOk = <T>(folder: string, data: T): ProjectUsage<T> => ({ folder, data, failed: false });
+
+/** A failed load keeps the numbers of an earlier success for the same folder, marked as failed. */
+export const projectUsageFail = <T>(s: ProjectUsage<T>, folder: string): ProjectUsage<T> =>
+  ({ folder, data: s && s.folder === folder ? s.data : null, failed: true });
+
+/** What the panel shows for `folder`: numbers (stale when the last reload failed), a failure, or loading (all empty). */
+export function projectUsageShown<T>(s: ProjectUsage<T>, folder: string): { data: T | null; stale: boolean; failed: boolean } {
+  if (!s || s.folder !== folder) return { data: null, stale: false, failed: false };
+  return { data: s.data, stale: s.failed && s.data !== null, failed: s.failed && s.data === null };
+}

@@ -60,7 +60,7 @@ async function isTracked(root, rel) {
 
 // O_NOFOLLOW: the checked realpath has no symlink left, so a symlink in the last component means it was swapped in
 // after the check. O_NONBLOCK: a FIFO cannot hang the open (it is refused as not a regular file afterwards).
-const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
+export const OPEN_FLAGS = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0);
 
 /** True when the open handle `fh` is the file at `real` (the path that passed the checks). Linux: the kernel's own
  * path of the descriptor (/proc/self/fd) must equal `real` and the inode must match. Elsewhere only dev/ino of the
@@ -91,7 +91,9 @@ export async function readCapped(fh, max) {
   return n > max ? { over: true } : { over: false, buf: buf.subarray(0, n) };
 }
 
-async function readGuarded(root, rel) {
+// `race` (tests only): callbacks run at the two race windows, after the path checks and before open, and after the size
+// check and before the read, so tests can swap or grow the file there.
+export async function readGuarded(root, rel, race = {}) {
   const segments = rel.split('/');
   if (isSecret(segments)) return { status: 403, error: 'forbidden' };
   let real;
@@ -105,6 +107,7 @@ async function readGuarded(root, rel) {
   if (isSecret(inside.split(path.sep))) return { status: 403, error: 'forbidden' };
   let fh;
   try {
+    await race.beforeOpen?.(real);
     fh = await open(real, OPEN_FLAGS);
     // Check and read must refer to the same inode: verify what was opened, not the path again.
     if (!(await sameFile(fh, real))) return { status: 404, error: 'not found' };
@@ -117,6 +120,7 @@ async function readGuarded(root, rel) {
     const realRel = inside.split(path.sep).join('/');
     if (realRel !== rel && !(await isTracked(root, realRel))) return { status: 404, error: 'not-tracked' };
     if (st.size > MAX_BYTES) return { status: 413, error: 'file too large' };
+    await race.beforeRead?.(real);
     // The file can grow after stat: the read itself is bounded too.
     const { over, buf } = await readCapped(fh, MAX_BYTES);
     if (over) return { status: 413, error: 'file too large' };
@@ -146,7 +150,7 @@ export async function setup(ctx, deps = {}) {
         if (!rel || Number.isNaN(start) || Number.isNaN(endRaw) || start === 0 || endRaw === 0 || (start != null && endRaw != null && endRaw < start)) {
           return sendJson(res, 400, { error: 'bad request' });
         }
-        const out = await readGuarded(root, rel);
+        const out = await readGuarded(root, rel, deps.race);
         if (out.error) return sendJson(res, out.status, { error: out.error });
         const all = out.text.split('\n');
         if (all.length && all[all.length - 1] === '') all.pop();
