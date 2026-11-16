@@ -165,6 +165,38 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await section('관리자와 팀');
   assert.equal(await maxChildren.inputValue(), '5', 'the unsaved edit survives switching sections');
 
+  // 5b. Closing with unsaved input asks first (#638): the modal takes closedby="none"; Esc and the X button open a
+  // confirm with the safe 계속 수정하기 focused; Esc in the confirm closes only the confirm; 닫기 drops the edit.
+  const confirm = page.getByRole('dialog', { name: '저장하지 않은 내용이 있어요' });
+  assert.equal(await dialog.getAttribute('closedby'), 'none');
+  await page.keyboard.press('Escape');
+  await confirm.waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent), '계속 수정하기');
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-close-confirm-1440.png') });
+  await confirm.getByRole('button', { name: '계속 수정하기' }).click();
+  await confirm.waitFor({ state: 'hidden' });
+  assert.ok(await dialog.isVisible(), 'keep editing leaves the modal open');
+  assert.equal(await maxChildren.inputValue(), '5', 'and the edit stays');
+  await dialog.getByRole('button', { name: '설정 닫기' }).click();
+  await confirm.waitFor();
+  await page.keyboard.press('Escape');
+  await confirm.waitFor({ state: 'hidden' });
+  assert.ok(await dialog.isVisible(), 'Esc in the confirm closes only the confirm');
+  await dialog.getByRole('button', { name: '설정 닫기' }).click();
+  await confirm.getByRole('button', { name: '닫기', exact: true }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal((await state()).settings.team.maxChildren, 4, 'the dropped edit was never sent');
+  // Nothing unsaved: Esc closes at once, no confirm.
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await dialog.waitFor();
+  assert.equal(await maxChildren.inputValue(), '4');
+  assert.equal(await dialog.getAttribute('closedby'), 'closerequest');
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await confirm.count(), 0);
+  await page.getByRole('button', { name: '설정', exact: true }).click();
+  await dialog.waitFor();
+
   // 6. 사용 한도: per-provider usage and the guard form; Dispatch on, so nothing is read-only.
   await section('사용 한도');
   const limits = dialog.getByRole('region', { name: '사용 한도' });
@@ -195,6 +227,12 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await page.getByRole('button', { name: '설정', exact: true }).click();
   await dialog.waitFor();
   const select = dialog.getByRole('combobox', { name: '설정 항목' });
+  // The 일반 switches get a 20px box at this width (#638).
+  await select.selectOption({ label: '일반' });
+  for (const id of ['#settings-alerts', '#settings-reply-style']) {
+    const b = await dialog.locator(id).boundingBox();
+    assert.ok(b && b.width >= 20 && b.height >= 20, `${id} is 20px at 390px: ${JSON.stringify(b)}`);
+  }
   await select.selectOption({ label: '관리자와 팀' });
   await maxChildren.waitFor();
   const box = await dialog.boundingBox();

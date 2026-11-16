@@ -30,7 +30,7 @@ import {
 } from '../../modelConnect';
 import { ProviderIcon } from '../../ProviderIcon';
 import { useModels, type Models } from '../../SidebarModels';
-import { MODELS_CHANGED, useSettingsLoad } from '../context';
+import { MODELS_CHANGED, useDirtyMark, useSettingsLoad } from '../context';
 import { OffNote } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
 import { oneAtATime } from '../model';
@@ -77,6 +77,9 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
   const [pending, setPending] = useState<Action | 'key' | 'cliLogout' | null>(null);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
+  // Only whether the key field has text (#638), never the key itself.
+  const [keyTyped, setKeyTyped] = useState(false);
+  useDirtyMark(`provider-key-${meta.id}`, keyOpen && keyTyped);
 
   // A login that finishes while the section is open says so, like a request that connects at once.
   const wasBusy = useRef(key === 'busy');
@@ -126,6 +129,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
     const input = e.currentTarget.elements.namedItem('key') as HTMLInputElement | null;
     const k = input?.value.trim() ?? '';
     if (input) input.value = '';
+    setKeyTyped(false);
     if (!k || pending) return;
     void run('key', k);
   };
@@ -206,6 +210,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
                 spellCheck={false}
                 autoFocus
                 required
+                onInput={(e) => setKeyTyped(e.currentTarget.value !== '')}
                 className={cn('h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm max-md:h-11', FOCUS)}
               />
               <button type="submit" aria-disabled={pending ? true : undefined} className={cn(ACTION_BTN, 'bg-primary text-primary-foreground [&:not([aria-disabled])]:hover:bg-primary/90')}>
@@ -218,7 +223,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
           <button
             type="button"
             data-testid="settings-provider-key-open"
-            onClick={() => setKeyOpen(true)}
+            onClick={() => (setKeyTyped(false), setKeyOpen(true))}
             className={cn('ml-11 inline-flex w-fit items-center gap-1 rounded-sm text-xs text-muted-foreground hover:text-foreground', FOCUS)}
           >
             <KeyRound aria-hidden className="size-3" />

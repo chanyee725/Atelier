@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GUARD_FIELDS, changedValues, fableFollows, guardPatch, guardValue, readGuardTexts, stopEscWhileOpen, wholeIn } from '../../web/src/settings/model.ts';
+import { GUARD_FIELDS, changedValues, fableFollows, guardDirty, guardPatch, guardValue, readGuardTexts, stopEscWhileOpen, wholeIn } from '../../web/src/settings/model.ts';
 
 const settings = { guard: { enabled: true, five: 0.9, seven: 0.85 }, team: { ctxHandoff: 60 } };
 
@@ -94,4 +94,17 @@ test('stopEscWhileOpen stops Esc only while open, and its cleanup removes the li
   open = true;
   stop();
   assert.equal(fire('Escape'), false, 'after cleanup nothing listens');
+});
+
+test('guardDirty: unsaved input is a typed value off the saved one or a Fable follow change, not the mirrored Fable (#638)', () => {
+  const ids = GUARD_FIELDS.flatMap((g) => g.fields).map((f) => f.id);
+  const values = Object.fromEntries(ids.map((id, i) => [id, 10 + i])) as Record<(typeof ids)[number], number>;
+  values.fable = values.seven;
+  const saved = { values, fableFollows: true };
+  const texts = Object.fromEntries(ids.map((id) => [id, String(values[id])])) as Record<(typeof ids)[number], string>;
+  assert.equal(guardDirty(saved, texts, true), false);
+  assert.equal(guardDirty(saved, { ...texts, fable: '' }, true), false, 'a cleared, following Fable is not an edit');
+  assert.equal(guardDirty(saved, { ...texts, five: '0' }, true), true, 'an invalid value is still unsaved input');
+  assert.equal(guardDirty(saved, { ...texts, fable: '50' }, false), true, 'pinning Fable is an edit');
+  assert.equal(guardDirty({ values, fableFollows: false }, texts, true), true, 'following again is an edit');
 });

@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import type { SettingsLoad } from './model';
 
 /** Window event fired after a model connect, cancel or disconnect, so the sidebar rows reload at once. */
@@ -6,8 +6,18 @@ export const MODELS_CHANGED = 'drawing:models-changed';
 
 /**
  * What the 설정 modal knows about the session settings, for the prop-less section components (#624): `load` says
- * whether they are in, off (with the reason) or failed, and `retry` reconnects the session stream after a failure.
+ * whether they are in, off (with the reason) or failed, `retry` reconnects the session stream after a failure, and
+ * `markDirty` tells the modal which parts hold unsaved input, so closing it asks first (#638).
  */
-export type SettingsCtx = { load: SettingsLoad; retry: () => void };
-export const SettingsContext = createContext<SettingsCtx>({ load: { kind: 'loading' }, retry: () => {} });
+export type SettingsCtx = { load: SettingsLoad; retry: () => void; markDirty: (key: string, dirty: boolean) => void };
+export const SettingsContext = createContext<SettingsCtx>({ load: { kind: 'loading' }, retry: () => {}, markDirty: () => {} });
 export const useSettingsLoad = () => useContext(SettingsContext);
+
+/** Report whether this part of the 설정 modal holds unsaved input; cleared when it unmounts. */
+export function useDirtyMark(key: string, dirty: boolean) {
+  const { markDirty } = useContext(SettingsContext);
+  useEffect(() => {
+    markDirty(key, dirty);
+    return () => markDirty(key, false);
+  }, [key, dirty, markDirty]);
+}

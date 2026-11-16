@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { teamForm, teamValues } from '../../web/src/settings/model.ts';
-import { resetSection, sectionFields, sectionSave } from '../../web/src/settings/sections/sectionForm.ts';
+import { resetSection, sectionDirty, sectionFields, sectionSave } from '../../web/src/settings/sections/sectionForm.ts';
 import { TEAM_DEFAULTS } from '../../server/dispatch/settings.js';
 
 const saved = teamValues({}, [{ id: 'lead', model: 'claude-sonnet-5-5' }]);
@@ -109,4 +109,26 @@ test('기본값으로 resets only that section', () => {
   const f = resetSection(form, 'folders');
   assert.equal(f.toggles.shareDeps, true);
   assert.equal(f.texts.rotateLead, '2');
+});
+
+test('sectionDirty sees only this section\'s unsaved input, valid or not (#638)', () => {
+  const form = teamForm(saved);
+  assert.equal(sectionDirty(saved, form, 'team'), false);
+  const edited = { ...form, texts: { ...form.texts, maxChildren: '0' } };
+  assert.equal(sectionDirty(saved, edited, 'team'), true, 'an invalid value is still unsaved input');
+  assert.equal(sectionDirty(saved, edited, 'stuck'), false, 'another section\'s edit does not count');
+  const toggled = { ...form, toggles: { ...form.toggles, dropWorktrees: !form.toggles.dropWorktrees } };
+  assert.equal(sectionDirty(saved, toggled, 'folders'), true);
+  const back = { ...form, texts: { ...form.texts, maxChildren: ` ${saved.maxChildren} ` } };
+  assert.equal(sectionDirty(saved, back, 'team'), false, 'typing the saved value back is not an edit');
+});
+
+test('auto-remove off leaves the grace period as it is, like standalone Dispatch: still sent and still unsaved input (#638)', () => {
+  const form = teamForm({ ...saved, autoRemoveDone: false });
+  const off = { ...saved, autoRemoveDone: false };
+  assert.equal(sectionDirty(off, form, 'team'), false);
+  form.texts.autoRemoveGraceSec = '300';
+  assert.equal(sectionDirty(off, form, 'team'), true);
+  const r = sectionSave(off, form, 'team');
+  assert.deepEqual(r.kind === 'save' && r.patch, { autoRemoveGraceSec: 300 });
 });

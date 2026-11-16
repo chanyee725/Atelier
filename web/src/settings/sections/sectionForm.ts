@@ -25,6 +25,12 @@ export function sectionFields(section: TeamSectionId): { numbers: TeamNumberFiel
   return { numbers: TEAM_NUMBERS.filter((n) => f.numbers.includes(n.id)), toggles: TEAM_TOGGLES.filter((t) => f.toggles.includes(t.id)) };
 }
 
+/** Whether this section's fields differ from the saved values (unsaved input, valid or not; #638). */
+export function sectionDirty(saved: TeamValues, form: TeamFormState, section: TeamSectionId): boolean {
+  const { numbers, toggles } = sectionFields(section);
+  return numbers.some((f) => form.texts[f.id].trim() !== String(saved[f.id])) || toggles.some((f) => form.toggles[f.id] !== saved[f.id]);
+}
+
 /** The form with this section's fields back at their defaults; other sections' fields stay as they are. */
 export function resetSection(form: TeamFormState, section: TeamSectionId): TeamFormState {
   const { numbers, toggles } = sectionFields(section);
