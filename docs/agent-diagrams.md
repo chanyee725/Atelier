@@ -73,9 +73,13 @@ Free-form canvas shapes carry the same shape in `customData.codeRefs` (`{summary
 
 Read the whole file, change only the block, and send the whole file back with its `revision`. Never type `document`, `canvas` or `plan` by hand: a save rewrites the whole file, so anything missing is wiped. Every non-GET request needs the `x-drawing: 1` header. A stale `revision` gets 409 with the current one: re-read and retry. `PORT` is the port in the dispatch skill.
 
+Needs `jq`. `set -e` and `curl -f` stop the script on the first failure (HTTP error, missing block) instead of saving a broken file.
+
 ```bash
+set -e
 URL="http://127.0.0.1:$PORT/api/file?path=analysis/robot"
-curl -s "$URL" > /tmp/robot.json
+curl -sf "$URL" > /tmp/robot.json
+jq -e 'any(.blocks[]; .id == "b1")' /tmp/robot.json > /dev/null || { echo 'block b1 not found' >&2; exit 1; }
 
 # set codeRefs on one block (id "b1"); everything else stays as read
 jq '.blocks |= map(if .id == "b1" then .codeRefs = {
@@ -84,7 +88,7 @@ jq '.blocks |= map(if .id == "b1" then .codeRefs = {
         refs: [ { path: "src/record/recorder.py", start: 42, end: 118, symbol: "Recorder.record_episode" } ] } }
     } else . end)' /tmp/robot.json > /tmp/robot.next.json
 
-curl -s -X PUT "$URL" -H 'content-type: application/json' -H 'x-drawing: 1' -d @/tmp/robot.next.json
+curl -sf -X PUT "$URL" -H 'content-type: application/json' -H 'x-drawing: 1' --data-binary @/tmp/robot.next.json
 ```
 
 The GET body already holds `revision`, `title`, `document`, `canvas`, `blocks` and `plan` (if any), so the PUT body is the same JSON with the edited block. The block shown above is what `b1` looks like after the edit.
@@ -95,6 +99,7 @@ Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the re
 
 - `summary` and `note` are stored in the document. Write only a description of the code. Never include secrets, tokens, API keys, emails, real names or conversation text.
 - The DSL `code:` attribute works only in `flowchart` and `cloud-architecture` diagrams.
+- Paths are repo-relative with `/`; `./` segments are dropped (`./a.py` is stored as `a.py`). `#` starts the symbol, so paths containing `#` are not supported. `symbol`, when given, is non-empty.
 - At most 2000 nodes per block. The file format is v5 once a block has `codeRefs`; an older server opens such files read-only.
 - Refs are keyed by node name. When you rename a node, rename its `codeRefs.nodes` key too, or the refs are orphaned.
 
