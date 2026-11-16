@@ -81,7 +81,7 @@ export function CreateSessionDialog({ folder, onClose, onCreated }: { folder?: s
           {project.name && <p className="mt-0.5 truncate text-xs text-muted-foreground"><span className="font-medium text-foreground">{project.name}</span>에서 실행돼요</p>}
         </header>
 
-        <div className="overlay-body flex min-h-0 flex-col gap-5 overflow-y-auto">
+        <div className="overlay-body-mid flex min-h-0 flex-col gap-5 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <label htmlFor={promptId} className="text-sm font-medium">공통 프롬프트</label>
             <Textarea id={promptId} autoFocus value={prompt} onChange={e => setPrompt(e.target.value)} rows={4}

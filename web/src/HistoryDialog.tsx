@@ -171,7 +171,7 @@ export function HistoryDialog({ path, dark, onClose, onRestore }: Props) {
               </li>
             ))}
           </ul>
-          <section className="overlay-body min-h-0 min-w-0 flex-1 overflow-auto" aria-label="미리보기">
+          <section className="overlay-body-mid min-h-0 min-w-0 flex-1 overflow-auto" aria-label="미리보기">
             {!picked ? null : !preview ? (
               <p className="text-sm text-muted-foreground">불러오는 중이에요…</p>
             ) : (
