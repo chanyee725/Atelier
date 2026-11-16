@@ -65,6 +65,7 @@ test('view follows the hash; unknown hashes fall back to the board', () => {
   assert.equal(viewOf('#usage'), 'usage');
   assert.equal(viewOf('#timeline'), 'timeline');
   assert.equal(viewOf('#tv'), 'tv');
+  assert.equal(viewOf('#settings'), 'settings');
   assert.equal(viewOf(''), 'sessions');
   assert.equal(viewOf('#nope'), 'sessions');
   assert.equal(hashOf('sessions'), '');

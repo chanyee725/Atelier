@@ -1,5 +1,5 @@
 // The /dispatch screen: opens the event stream and shows the session board (cards or timeline), the usage screen
-// or the always-on screen, picked by the URL hash (#timeline, #usage, #tv), with the session sheet on top.
+// or the always-on screen, picked by the URL hash (#timeline, #usage, #settings, #tv), with the session sheet on top.
 // Loaded lazily from main.tsx so the editor bundle does not carry it.
 import { useEffect, useMemo, useState } from 'react';
 import { Monitor } from 'lucide-react';
@@ -18,6 +18,7 @@ import { SessionTimeline } from './SessionTimeline';
 import { PrTrackingToggle } from './PrTrackingToggle';
 import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
+import { SettingsPage } from '../settings/SettingsPage';
 import { connect, useDispatch } from './store';
 
 export { connect };
@@ -26,6 +27,7 @@ const NAV: { view: View; label: string }[] = [
   { view: 'sessions', label: '세션' },
   { view: 'timeline', label: '타임라인' },
   { view: 'usage', label: '사용량' },
+  { view: 'settings', label: '설정' },
 ];
 
 /** The hash-picked view and project scope, following back/forward and links. */
@@ -139,6 +141,8 @@ export default function DispatchApp() {
         ) : scope === null && listState === 'failed' ? (
           // Without the project list every session would look 미분류 (#522); the notice above says why.
           <p className="p-6 text-sm text-muted-foreground">프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.</p>
+        ) : view === 'settings' ? (
+          <SettingsPage />
         ) : view === 'usage' ? (
           <UsagePage />
         ) : view === 'timeline' ? (
