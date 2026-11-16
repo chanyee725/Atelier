@@ -45,6 +45,11 @@ export async function setup(ctx) {
   const pending = new Map(); // rel -> tool-time read in flight
   const queue = new Map(); // rel -> tail of that file's change handling (one change at a time per file)
   const shown = new Set(); // session ids with a cursor on screen
+  // In-process listeners for the live agent list (server/cursor/agents.js): which file each writer holds now.
+  const heldListeners = new Set();
+  const held = (e) => {
+    for (const fn of heldListeners) fn(e);
+  };
 
   const remember = (map, rel, s) => {
     map.delete(rel);
@@ -134,7 +139,7 @@ export async function setup(ctx) {
     return newest(cands);
   }
 
-  async function place(rel, cands, wait, app) {
+  async function place(rel, cands, wait, app, writer) {
     await wait; // a tool-time read still in flight when the change came: let it land in `pre` first
     let after;
     try { after = await read(rel); } catch { return; }
@@ -144,10 +149,16 @@ export async function setup(ctx) {
     pre.delete(rel);
     // No session on this hub made the change: a writer from another Dispatch or plain API calls (E520, #543). It gets
     // a generic cursor at the changed place, per file, that fades by itself. Saves from this page (`app`) are not it.
+    // A writer that names itself (`x-drawing-session`, cleaned; E528 #592) gets its own label and one cursor of its own.
+    // A request that names itself is that writer, unless the name is one of the candidate sessions on this hub.
+    if (writer && !cands.some((c) => c.s.name === writer)) cands = [];
     if (!cands.length) {
       if (app) return;
+      const now = Date.now();
+      if (writer) held({ sid: `outside:${writer}`, name: writer, file: rel, at: now, outside: true });
       const spot = changedCentre(before ?? (earlier && changedCentre(earlier, after) ? earlier : EMPTY), after);
-      if (spot) ctx.hub.broadcast('cursor', { sid: `outside:${rel}`, name: OUTSIDE_NAME, role: '', file: rel, ...spot, at: Date.now() });
+      const sid = writer ? `outside:${writer}` : `outside:${rel}`;
+      if (spot) ctx.hub.broadcast('cursor', { sid, name: writer ?? OUTSIDE_NAME, role: '', file: rel, ...spot, at: now });
       return;
     }
     // From the reported version when there is one. Otherwise from the tool-time read, unless that shows no change
@@ -161,16 +172,18 @@ export async function setup(ctx) {
     shown.add(s.id);
     // Without a place (nothing with a place changed) the cursor stays where it was.
     const color = AGENT_COLORS.includes(s.color) ? { color: s.color } : {};
-    ctx.hub.broadcast('cursor', { sid: s.id, name: s.name, role: s.role, ...color, file: rel, ...(at ?? {}), at: Date.now() });
+    const now = Date.now();
+    held({ sid: s.id, file: rel, at: now });
+    ctx.hub.broadcast('cursor', { sid: s.id, name: s.name, role: s.role, ...color, file: rel, ...(at ?? {}), at: now });
   }
 
   // Changes of one file are handled in order: each diffs against the version the one before it left in `seen`.
   // A watcher catch-up (it restarted after a failure, backoff up to 30s) reports edits made while it was down, so
   // the call finishing before it is no longer a sign of a read-only call: any call within ATTRIBUTE_MS can be it.
   // So read-only calls (jq, curl GET) that finished within that window also become candidates during a catch-up.
-  const onChange = (rel, { catchUp = false, app = false } = {}) => {
+  const onChange = (rel, { catchUp = false, app = false, writer = null } = {}) => {
     const cands = whoEdited(rel, Date.now(), catchUp ? ATTRIBUTE_MS : SETTLE_MS);
-    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app));
+    const run = (queue.get(rel) ?? Promise.resolve()).then(() => place(rel, cands, pending.get(rel), app, writer));
     const tail = run.catch(() => {});
     queue.set(rel, tail);
     tail.then(() => { if (queue.get(rel) === tail) queue.delete(rel); });
@@ -188,6 +201,7 @@ export async function setup(ctx) {
     ending.delete(id);
     recent.delete(id);
     gone(id);
+    held({ sid: id, gone: true });
   };
   const onSession = (ps) => {
     if (!ps?.id) return;
@@ -208,6 +222,11 @@ export async function setup(ctx) {
   hub.on('removed', onRemoved);
   const offChange = ws.onChange((rel, opts) => { onChange(rel, opts).catch(() => {}); });
   return {
+    /** fn({ sid, file, at, name?, outside? } | { sid, gone: true }) when a writer is credited with a change or leaves. */
+    onHeld(fn) {
+      heldListeners.add(fn);
+      return () => heldListeners.delete(fn);
+    },
     close() {
       for (const t of ending.values()) clearTimeout(t);
       hub.off('message', onMessage);
