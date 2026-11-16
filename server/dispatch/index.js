@@ -67,9 +67,12 @@ export async function createDispatch({ root, broadcast, port, deps = {} }) {
     if (closed) return;
     providers = decorate(await dep.providerStatus());
     // Codex publishes its model list through its own CLI: asked once, only after OpenAI Codex is connected here.
+    // An empty answer (codex failed) is asked again on the next refresh.
     if (providers.openai?.connected && !codexLoaded) {
       codexLoaded = true;
-      const add = (await dep.codexModels()).filter(m => !models.some(x => x.id === m.id));
+      const list = await dep.codexModels();
+      if (!list.length) codexLoaded = false;
+      const add = list.filter(m => !models.some(x => x.id === m.id));
       if (add.length) { models.push(...add); broadcast("models", models); }
     }
     broadcast("providers", providers);

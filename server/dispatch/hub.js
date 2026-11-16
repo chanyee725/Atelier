@@ -24,19 +24,21 @@ export const UNSUPPORTED_MODEL = "이 세션은 지원하지 않는 모델이에
 export const PROVIDER_NAMES = { claude: "Claude", openai: "OpenAI Codex", gemini: "Gemini" };
 
 // codex exec and agy -p run headless with no way to ask before a tool call, so neither can honour
-// manual (ask before every tool): it is refused, never run looser.
-const HEADLESS_PERMS = ["acceptEdits", "auto", "plan"];
+// manual (ask before every tool): it is refused, never run looser (CLAUDE.md).
 // agy's own names for the modes it is given (never --dangerously-skip-permissions).
 export const AGY_MODES = { acceptEdits: "accept-edits", auto: "auto", plan: "plan" };
-// Codex's sandbox per mode: plan reads only; acceptEdits and auto write inside the worktree only.
-export const CODEX_SANDBOX = { acceptEdits: "workspace-write", auto: "workspace-write", plan: "read-only" };
+// Codex's sandbox per mode. workspace-write runs commands without asking, which is looser than
+// acceptEdits (edits only), so Codex runs plan (read-only) and auto (workspace-write) only.
+export const CODEX_SANDBOX = { auto: "workspace-write", plan: "read-only" };
+const MODES_OF = { openai: CODEX_SANDBOX, gemini: AGY_MODES };
 
 // Refuse a mode that is unknown or that the provider would run looser than chosen.
 // Modes: manual, acceptEdits, auto, plan (never bypassPermissions).
 export function checkPerm(provider, perm) {
   if (!PERMS.includes(perm)) throw badRequest("알 수 없는 권한 모드예요");
-  if ((provider === "openai" || provider === "gemini") && !HEADLESS_PERMS.includes(perm)) {
-    throw badRequest(`${PROVIDER_NAMES[provider]}는 수동 승인(manual) 모드를 쓸 수 없어요. acceptEdits·auto·plan 중에서 골라 주세요`);
+  const modes = MODES_OF[provider];
+  if (modes && !modes[perm]) {
+    throw badRequest(`${PROVIDER_NAMES[provider]}는 ${perm} 모드를 쓸 수 없어요. ${Object.keys(modes).join("·")} 중에서 골라 주세요`);
   }
   return perm;
 }
@@ -1128,7 +1130,7 @@ export class Hub extends EventEmitter {
   }
 
   startCodex(s, prompt) {
-    // checkPerm (in start) already refused manual; the sandbox never runs looser than the mode.
+    // checkPerm (in start) already refused manual and acceptEdits; the sandbox never runs looser than the mode.
     const sandbox = CODEX_SANDBOX[s.perm];
     if (!sandbox) throw badRequest("알 수 없는 권한 모드예요");
     const first = !s.providerSessionId;
