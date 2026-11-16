@@ -4,48 +4,30 @@
 // flashes it (and the agent's cursor, doc/DocAgentCursors.tsx) in the agent's colour.
 //
 // Presentational: the cards come from the margin store (doc/marginStore.ts, model in doc/agentMargin.ts) and the
-// layout (side panel or bottom sheet, collapsed or not) from the document pane. It never takes focus from the editor:
-// its buttons keep focus where it is on mouse down, and the panel only reacts to what the user clicks.
-import { useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+// layout (side panel or bottom sheet, collapsed or not) from the document pane, which also owns the container
+// (`.doc-margin-aside`: placement, entry and exit). It never takes focus from the editor: its buttons keep focus where
+// it is on mouse down, and the panel only reacts to what the user clicks.
+import { useId, type CSSProperties, type MouseEvent } from 'react';
 import { ChevronDown, ChevronRight, ChevronUp, PanelRightClose } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { roleLabel } from '../run/overlayModel';
-import { now, reducedMotion } from '../canvas/cursorStore';
-import { ago, PHASE_LABEL, type MarginForm, type MarginPhase } from './agentMargin';
+import type { MarginForm } from './agentMargin';
 import type { DocSpot } from './docCursor';
+import type { MarginCard } from './marginStore';
 import './margin-panel.css';
 
-/** One recent change of a card, newest first. `at` is on the `now()` clock (canvas/cursorStore.ts). */
-export type MarginChange = { id: string; label: string; at: number; spot: DocSpot };
-
-/** One agent card as the panel shows it (built by the store from MarginAgent, marginPhase and doingLines). */
-export type MarginCard = {
-  sid: string;
-  name: string;
-  role: string;
-  /** `#rrggbb`, or '' (the role colour). */
-  color: string;
-  model?: string | null;
-  /** Provider id (claude, openai, gemini) for its mark. */
-  provider?: string | null;
-  phase: MarginPhase;
-  /** What it is doing right now, in plain words. */
-  main: string;
-  /** The step it works on, or what it just changed. */
-  sub: string | null;
-  changes: readonly MarginChange[];
-};
+export type { MarginCard };
 
 type Props = {
   agents: readonly MarginCard[];
   form: MarginForm;
   collapsed: boolean;
   onToggle: () => void;
-  /** Jump to a change; default: scroll the document's block into view and flash it. */
-  onJump?: (spot: DocSpot, card: MarginCard) => void;
+  /** A recent change was clicked: scroll to its block and flash it (marginStore.jumpTo). */
+  onJump?: (spot: DocSpot) => void;
 };
 
-/** How long a jumped-to block (and its agent's cursor) stays highlighted. */
+/** How long the agent's cursor is outlined after a jump (the block's own flash is .doc-margin-flash). */
 const FLASH_MS = 1600;
 
 /** Keep focus in the editor: a click on the panel never moves it (keyboard use still can). */
@@ -53,51 +35,14 @@ const keepFocus = (e: MouseEvent) => e.preventDefault();
 
 const agentStyle = (c: MarginCard): CSSProperties => ({ '--agent': c.color || `var(--role-${c.role}, var(--idle))` }) as CSSProperties;
 
-/** The document's top-level block elements, in order (ProseMirror widgets and gap cursors are not blocks). */
-function blockAt(from: Element, index: number): HTMLElement | null {
-  const host = from.closest('[data-doc-view], .doc-host') ?? document;
-  const editor = host.querySelector('.ProseMirror');
-  if (!editor) return null;
-  const blocks = [...editor.children].filter((el) => !el.matches('.ProseMirror-widget, .ProseMirror-gapcursor, .ProseMirror-trailingBreak'));
-  if (!blocks.length) return null;
-  return blocks[Math.min(index, blocks.length - 1)] as HTMLElement;
-}
-
-let jumpSeq = 0;
-
-/** Scroll to the change's block, then flash it and the agent's cursor (only the latest jump flashes). */
-async function jumpTo(from: Element, spot: DocSpot, card: MarginCard) {
-  const el = blockAt(from, spot.index);
+/** Outline the agent's document cursor briefly, so the jumped-to spot shows whose change it was. */
+function flashCursor(sid: string) {
+  const el = document.querySelector<HTMLElement>(`[data-doc-agent-cursor="${CSS.escape(sid)}"]`);
   if (!el) return;
-  const seq = ++jumpSeq;
-  // A Promise where scroll method promises are supported; elsewhere the flash starts with the scroll.
-  await el.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'center' });
-  if (seq !== jumpSeq) return;
-  const marks: HTMLElement[] = [el];
-  const cursor = document.querySelector<HTMLElement>(`[data-doc-agent-cursor="${CSS.escape(card.sid)}"]`);
-  if (cursor) marks.push(cursor);
-  el.style.setProperty('--margin-flash', card.color || `var(--role-${card.role}, var(--idle))`);
-  for (const m of marks) {
-    m.removeAttribute('data-margin-flash');
-    void m.offsetWidth; // restart the animation on a second click
-    m.setAttribute('data-margin-flash', '');
-  }
-  setTimeout(() => {
-    for (const m of marks) m.removeAttribute('data-margin-flash');
-    el.style.removeProperty('--margin-flash');
-  }, FLASH_MS);
-}
-
-/** Re-render every few seconds for the "12초 전" labels, only while something shows them. */
-function useClock(on: boolean): number {
-  const [t, setT] = useState(now);
-  useEffect(() => {
-    if (!on) return;
-    setT(now());
-    const id = setInterval(() => setT(now()), 5000);
-    return () => clearInterval(id);
-  }, [on]);
-  return t;
+  el.removeAttribute('data-margin-flash');
+  void el.offsetWidth; // restart on a second click
+  el.setAttribute('data-margin-flash', '');
+  setTimeout(() => el.removeAttribute('data-margin-flash'), FLASH_MS);
 }
 
 function Dots() {
@@ -110,8 +55,8 @@ function Dots() {
   );
 }
 
-function Card({ card, t, onJump }: { card: MarginCard; t: number; onJump: (e: MouseEvent<HTMLButtonElement>, spot: DocSpot, card: MarginCard) => void }) {
-  const name = card.name || roleLabel(card.role);
+function Card({ card, onJump }: { card: MarginCard; onJump: (spot: DocSpot, card: MarginCard) => void }) {
+  const name = card.name || card.roleName || roleLabel(card.role);
   return (
     <li className="margin-card" data-margin-card={card.sid} data-phase={card.phase} style={agentStyle(card)}>
       <div className="margin-who">
@@ -119,12 +64,12 @@ function Card({ card, t, onJump }: { card: MarginCard; t: number; onJump: (e: Mo
         <span className="margin-name">{name}</span>
         <span className="margin-phase" data-margin-phase={card.phase}>
           {card.phase !== 'waiting' && <Dots />}
-          {PHASE_LABEL[card.phase]}
+          {card.phaseLabel}
         </span>
       </div>
       {(card.model || card.provider || card.name) && (
         <div className="margin-meta">
-          {card.name && card.role && <span>{roleLabel(card.role)}</span>}
+          {card.name && card.role && <span>{card.roleName || roleLabel(card.role)}</span>}
           {(card.model || card.provider) && (
             <span className="margin-model">
               <ProviderIcon provider={card.provider} />
@@ -134,16 +79,16 @@ function Card({ card, t, onJump }: { card: MarginCard; t: number; onJump: (e: Mo
         </div>
       )}
       <p className="margin-doing" data-margin-doing="">
-        {card.main}
+        {card.doing}
       </p>
       {card.sub && <p className="margin-sub">{card.sub}</p>}
       {card.changes.length > 0 && (
         <ol className="margin-changes" aria-label={`${name}의 최근 변경`}>
           {card.changes.map((c) => (
             <li key={c.id}>
-              <button type="button" className="margin-change" data-margin-change={c.id} onMouseDown={keepFocus} onClick={(e) => onJump(e, c.spot, card)}>
+              <button type="button" className="margin-change" data-margin-change={c.id} onMouseDown={keepFocus} onClick={() => onJump(c.spot, card)}>
                 <span className="margin-change-label">{c.label}</span>
-                <time className="margin-change-ago">{ago(t - c.at)}</time>
+                <span className="margin-change-ago">{c.ago}</span>
               </button>
             </li>
           ))}
@@ -155,20 +100,17 @@ function Card({ card, t, onJump }: { card: MarginCard; t: number; onJump: (e: Mo
 
 export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props) {
   const listId = useId();
-  const root = useRef<HTMLElement>(null);
-  const shown = agents.length > 0;
-  const t = useClock(shown && !collapsed);
   const count = agents.length;
   const title = count > 1 ? `에이전트 ${count}명이 작업 중이에요` : '에이전트가 작업 중이에요';
-  const jump = (e: MouseEvent<HTMLButtonElement>, spot: DocSpot, card: MarginCard) => {
-    if (onJump) onJump(spot, card);
-    else void jumpTo(e.currentTarget, spot, card);
+  const jump = (spot: DocSpot, card: MarginCard) => {
+    onJump?.(spot);
+    flashCursor(card.sid);
   };
 
   // Collapsed side panel: a slim rail with one swatch per agent; the whole rail opens it.
   if (form === 'side' && collapsed) {
     return (
-      <aside ref={root} className="margin-panel" data-margin-panel="" data-form={form} data-collapsed="" hidden={!shown} aria-label="에이전트 작업">
+      <div className="margin-panel" data-margin-panel="" data-form={form} data-collapsed="">
         <button type="button" className="margin-rail" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} aria-controls={listId} title="에이전트 작업 펼치기">
           <ChevronRight className="margin-rail-chevron" aria-hidden="true" />
           {agents.map((c) => (
@@ -176,13 +118,13 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
           ))}
           <span className="sr-only">{title}, 펼치기</span>
         </button>
-      </aside>
+      </div>
     );
   }
 
   const ToggleIcon = form === 'side' ? PanelRightClose : collapsed ? ChevronUp : ChevronDown;
   return (
-    <aside ref={root} className="margin-panel" data-margin-panel="" data-form={form} data-collapsed={collapsed ? '' : undefined} hidden={!shown} aria-label="에이전트 작업">
+    <div className="margin-panel" data-margin-panel="" data-form={form} data-collapsed={collapsed ? '' : undefined}>
       <header className="margin-head">
         {form === 'sheet' && collapsed ? (
           <button type="button" className="margin-sheet-bar" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} aria-controls={listId}>
@@ -192,7 +134,7 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
               ))}
             </span>
             <span className="margin-title">{title}</span>
-            <span className="margin-sheet-doing">{agents[0]?.main}</span>
+            <span className="margin-sheet-doing">{agents[0]?.doing}</span>
             <ChevronUp className="margin-toggle-icon" aria-hidden="true" />
           </button>
         ) : (
@@ -208,9 +150,9 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
       </header>
       <ul id={listId} className="margin-cards" hidden={collapsed}>
         {agents.map((c) => (
-          <Card key={c.sid} card={c} t={t} onJump={jump} />
+          <Card key={c.sid} card={c} onJump={jump} />
         ))}
       </ul>
-    </aside>
+    </div>
   );
 }

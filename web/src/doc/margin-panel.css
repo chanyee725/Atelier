@@ -1,7 +1,8 @@
 /* Agent activity margin (E532, issue #622; doc/MarginPanel.tsx). Flat and shadowless in the app's Linear-like chrome:
    one hairline against the document, thin dividers between cards, colour only where it says something — the agent's
    swatch and the line tying its changes, and one accent sentence for what it is doing now. Tokens only, so light,
-   dark and monitoring all follow. --agent is the session's colour (or its role colour). */
+   dark and monitoring all follow. --agent is the session's colour (or its role colour). Placement, entry and exit
+   belong to the container (.doc-margin-aside). */
 
 .margin-panel {
   --agent: var(--idle);
@@ -14,42 +15,14 @@
   color: var(--foreground);
   font-size: 13px;
   line-height: 1.45;
-  /* Entry: slides in from its edge (side) or from below (sheet). Exit follows `hidden` (display: none). */
-  transition: translate 0.24s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease-out, display 0.24s;
-  transition-behavior: allow-discrete;
-}
-.margin-panel[hidden] { display: none; }
-
-/* Side: a column beside the text, a hairline on its left. */
-.margin-panel[data-form='side'] {
-  inline-size: 300px;
   block-size: 100%;
-  border-inline-start: 1px solid var(--border);
-}
-.margin-panel[data-form='side'][data-collapsed] { inline-size: 36px; }
-.margin-panel[data-form='side'][hidden] { translate: 16px 0; opacity: 0; }
-@starting-style {
-  .margin-panel[data-form='side'] { translate: 16px 0; opacity: 0; }
+  max-block-size: inherit;
 }
 
-/* Sheet: pinned to the bottom of the pane, a hairline on top; open it grows to at most half the pane. */
-.margin-panel[data-form='sheet'] {
-  inline-size: 100%;
-  max-block-size: min(50%, 420px);
-  border-block-start: 1px solid var(--border);
-}
-.margin-panel[data-form='sheet'][hidden] { translate: 0 100%; opacity: 0; }
-@starting-style {
-  .margin-panel[data-form='sheet'] { translate: 0 100%; opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .margin-panel { transition: opacity 0.2s ease-out, display 0.2s; }
-  .margin-panel[data-form][hidden] { translate: none; }
-  @starting-style {
-    .margin-panel[data-form] { translate: none; }
-  }
-}
+/* Side: fills the 300px column (.doc-margin-aside, the pane's), a hairline against the text. */
+.margin-panel[data-form='side'] { border-inline-start: 1px solid var(--border); }
+/* Sheet: fills the bottom sheet, a hairline on top. */
+.margin-panel[data-form='sheet'] { border-block-start: 1px solid var(--border); }
 
 /* ---- head ---- */
 .margin-head {
@@ -195,13 +168,8 @@
 .margin-change-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .margin-change-ago { flex: none; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 
-/* A jumped-to block in the document, and its agent's cursor, flash in the agent's colour. */
-[data-margin-flash]:not(.doc-agent-cursor) { border-radius: 4px; animation: margin-flash 1.6s ease-out; }
+/* A jump outlines the agent's cursor (the block's flash is .doc-margin-flash, index.css). */
 .doc-agent-cursor[data-margin-flash] .agent-cursor-tag { animation: margin-flash-tag 1.6s ease-out; }
-@keyframes margin-flash {
-  from, 30% { background: color-mix(in oklch, var(--margin-flash, var(--idle)) 22%, transparent); box-shadow: 0 0 0 4px color-mix(in oklch, var(--margin-flash, var(--idle)) 22%, transparent); }
-  to { background: transparent; box-shadow: 0 0 0 4px transparent; }
-}
 @keyframes margin-flash-tag {
   from, 30% { outline: 2px solid var(--agent); outline-offset: 2px; }
   to { outline: 2px solid transparent; outline-offset: 2px; }
