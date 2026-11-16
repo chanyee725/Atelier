@@ -585,15 +585,8 @@ body {
 }
 @starting-style { .doc-margin[data-form='sheet'] .doc-margin-aside { opacity: 0; translate: 0 16px; } }
 .doc-margin[data-form='sheet'] .doc-margin-aside[data-closing] { opacity: 0; translate: 0 16px; }
-/* A recent change opened from the margin: its block flashes once. */
-.doc-margin-flash { animation: doc-margin-flash 1.6s ease-out; border-radius: 4px; }
-@keyframes doc-margin-flash {
-  from { background-color: color-mix(in oklab, var(--ring, currentColor) 28%, transparent); }
-  to { background-color: transparent; }
-}
 @media (prefers-reduced-motion: reduce) {
   .doc-margin-aside { transition: opacity 0.1s linear; translate: none; }
   @starting-style { .doc-margin-aside, .doc-margin[data-form='sheet'] .doc-margin-aside { translate: none; } }
   .doc-margin-aside[data-closing], .doc-margin[data-form='sheet'] .doc-margin-aside[data-closing] { translate: none; }
-  .doc-margin-flash { animation-duration: 0.01s; outline: 2px solid var(--ring, currentColor); }
 }

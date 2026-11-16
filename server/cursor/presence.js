@@ -30,6 +30,8 @@ export function projectOf(rel) {
   return i > 0 ? rel.slice(0, i) : null;
 }
 
+const stepField = (t) => (typeof t === 'string' && t.trim() ? { step: t.trim().slice(0, 80) } : {});
+
 /**
  * The agent list (see shared/dispatch/agent-presence.ts), newest activity first.
  * - sessions: hub sessions (stored objects); only live ones are listed
@@ -37,8 +39,9 @@ export function projectOf(rel) {
  * - outside: Map label -> { file, at } (named outside writers, already pruned by age)
  * - project: optional filter (top folder); a session counts for its own folder and for the folder of the file it holds
  * - activity: Map sid -> tool activity label of its current turn (from the hub's `session` events; memory only)
+ * - stepOf: session -> title of the pipeline step it works on, or null
  */
-export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null, activity = new Map() } = {}) {
+export function buildAgents({ sessions = [], held = new Map(), outside = new Map(), project = null, activity = new Map(), stepOf = () => null } = {}) {
   const out = [];
   for (const s of sessions) {
     if (!s?.id || !LIVE_STATUSES.has(s.status)) continue;
@@ -54,6 +57,7 @@ export function buildAgents({ sessions = [], held = new Map(), outside = new Map
       ...(typeof s.modelLabel === 'string' && { modelLabel: s.modelLabel }),
       ...(typeof s.provider === 'string' && s.provider && { provider: s.provider }),
       ...(typeof activity.get(s.id) === 'string' && { activity: activity.get(s.id) }),
+      ...stepField(stepOf(s)),
       status: s.status,
       state: typeof s.state === 'string' ? s.state : null,
       project: (typeof s.folder === 'string' && s.folder) || projectOf(file),

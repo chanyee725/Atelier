@@ -180,3 +180,26 @@ test('ago, stepOf, blocksOfJson, formOf, readCollapsed', () => {
   assert.deepEqual(readCollapsed('{"side":"x","sheet":false}'), { side: false, sheet: false });
   assert.deepEqual(readCollapsed('not json'), { side: false, sheet: true });
 });
+
+test('marginCard: the pipeline step and tool activity from the live list, model and provider, recent changes', async () => {
+  const { marginCard } = await import('../../web/src/doc/agentMargin.ts');
+  const blocks: BlockInfo[] = [H('02. 화면 지도'), P('본문'), { type: 'diagram', text: '' }];
+  let m: MarginMap = new Map();
+  m = applyMarginEvent(m, ev({ index: 1, offset: 0 }), 0, 1);
+  m = applyMarginEvent(m, ev({ index: 2, offset: 0 }), 1000, 2);
+  const a = m.get('s1')!;
+  const live = { modelLabel: 'Opus 5.5', model: 'claude-opus-5-5', provider: 'claude', status: 'running', state: 'working', step: '화면 지도 그리기', activity: '코드 읽기' };
+  const writing = marginCard(a, live, 1500, blocks);
+  assert.equal(writing.phase, 'writing');
+  assert.equal(writing.doing, '02. 화면 지도 섹션에 다이어그램을 추가하는 중');
+  assert.equal(writing.sub, '단계: 화면 지도 그리기');
+  assert.deepEqual([writing.model, writing.provider, writing.name, writing.color], ['Opus 5.5', 'claude', 'Faye', '#0f766e']);
+  assert.deepEqual(writing.changes.map((c) => [c.label, c.ago]), [['02. 화면 지도 · 다이어그램', '방금'], ['02. 화면 지도 · 글', '방금']]);
+  const thinking = marginCard(a, live, 1000 + WRITING_MS + 10_000, blocks);
+  assert.deepEqual([thinking.phase, thinking.doing, thinking.sub], ['thinking', '코드 읽기 중', '단계: 화면 지도 그리기']);
+  assert.equal(thinking.changes[0].ago, '14초 전');
+  const waiting = marginCard(a, { ...live, state: 'waiting' }, 1000 + WRITING_MS + 1, blocks);
+  assert.deepEqual([waiting.phase, waiting.phaseLabel, waiting.sub], ['waiting', '기다리는 중', '단계: 화면 지도 그리기']);
+  const bare = marginCard(a, null, 1500, blocks);
+  assert.deepEqual([bare.model, bare.provider, bare.sub], [null, null, null], 'no live entry: no step, model or provider');
+});
