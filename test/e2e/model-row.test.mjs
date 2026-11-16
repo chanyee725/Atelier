@@ -1,5 +1,6 @@
-// Headless check of the sidebar model row and 테마 menu (E509): 연결 안 됨 text, 연결하기 on hover/focus, 연결 중 with 취소,
-// ⋯ menu with 연결 끊기, the 테마 menu, and that no settings dialog, "," shortcut or 설정 command is left.
+// Headless check of the sidebar model row and its 모델 연결 dialog (E525, #570, ported from Dispatch) and the 테마 menu:
+// connect (CLI login with a sign-in link), cancel, connect again, state after reload (connected and mid-login), disconnect
+// (the CLI stays logged in, so 연결 connects at once), 390px drawer; also that no settings command or "," shortcut is left.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
 // real claude, codex or agy can start. It refuses to go on unless the server log names its port and workspace.
@@ -26,7 +27,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no settings dialog, 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
+test('model row and connect dialog: connect, cancel, reload, disconnect with the fake CLI login; theme menu; 390px', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-modelrow-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-modelrow-home-'));
@@ -41,8 +42,10 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   const port = await freePort();
   // Fakes first; git's own folder after them (fakes win any name clash).
   const PATH = `${fake.dir}:${dirname(which('git'))}`;
+  // The fake claude starts logged out; its login prints a sign-in URL and finishes after FAKE_CLI_LOGIN_MS.
+  const auth = join(home, 'fake-claude-auth');
   const server = spawn(process.execPath, ['server/index.js', ws], {
-    env: { PATH, HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', FAKE_CLI_LOG: fake.env.FAKE_CLI_LOG, NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
+    env: { PATH, HOME: home, DRAW_PORT: String(port), DRAW_WORKSPACE_WATCH: 'poll', FAKE_CLI_LOG: fake.env.FAKE_CLI_LOG, FAKE_CLI_AUTH: auth, FAKE_CLI_LOGIN_MS: '2500', NODE_TEST_CONTEXT: process.env.NODE_TEST_CONTEXT ?? 'child' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let log = '';
@@ -71,10 +74,21 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   await page.goto(BASE);
   const trigger = page.getByRole('button', { name: /^테마/ });
   await trigger.waitFor();
-  const row = page.locator('ul[aria-label="모델 연결"]');
-  const connect = row.getByRole('button', { name: /연결하기$/ });
+  const row = page.getByTestId('model-row');
+  const dialog = page.getByTestId('connect-dialog');
+  const state = dialog.getByTestId('connect-state');
+  const action = dialog.getByTestId('connect-action');
+  const note = dialog.getByTestId('connect-note');
   const active = () => page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? document.activeElement?.tagName);
-  const opacity = (loc) => loc.evaluate((el) => getComputedStyle(el).opacity);
+  const rowKey = () => row.getAttribute('data-state-key');
+  const until = async (fn, what, ms = 8000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await page.waitForTimeout(50)) if (await fn()) return;
+    assert.fail(`timed out: ${what}`);
+  };
+  const shot = (name) => SHOTS && page.screenshot({ path: join(SHOTS, name) });
+  // One row per provider id; only Claude so far (#587 adds more).
+  await row.first().waitFor();
+  assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude']);
 
   // 1. 테마 menu: three choices, one checked; choosing applies at once. No settings dialog anywhere.
   await trigger.click();
@@ -97,131 +111,121 @@ test('model row and theme menu: connect, cancel, disconnect with fake CLIs, no s
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(), 0, ', opens nothing');
 
-  // 2. Not connected: text 연결 안 됨; 연결하기 shows on hover and on focus-within.
+  // 2. Not connected: the row says 연결 안 됨 and opens the dialog; its one button says 연결.
   await row.getByText('연결 안 됨', { exact: true }).waitFor();
-  await connect.waitFor({ state: 'attached' });
-  await page.mouse.move(700, 400);
-  assert.equal(await opacity(connect), '0', 'hidden until hover or focus');
-  await row.locator('li').hover();
-  assert.equal(await opacity(connect), '1', 'visible on hover');
-  await page.mouse.move(700, 400);
-  await trigger.focus();
-  await page.keyboard.press('Shift+Tab'); // 설정 row (E509c)
-  await page.keyboard.press('Shift+Tab');
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'model-connect', 'reachable by Tab');
-  assert.equal(await opacity(connect), '1', 'visible on focus-within');
-  assert.notEqual(await connect.evaluate((el) => getComputedStyle(el).boxShadow), 'none', 'visible focus ring');
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'row-not-connected-1440.png') });
+  assert.equal(await rowKey(), 'idle');
+  await shot('row-idle-1440.png');
+  await row.click();
+  await dialog.waitFor();
+  assert.equal(await page.getByRole('dialog', { name: '모델 연결' }).count(), 1, 'named by its heading');
+  assert.match(await state.innerText(), /연결 안 됨/);
+  assert.equal(await action.innerText(), '연결');
+  await shot('dialog-idle-1440.png');
 
-  // 3. Enter connects (fake CLI is logged in): one login request, then usage/connected and a ⋯ menu, no 연결하기.
+  // 3. 연결: the CLI login starts; 로그인 중 with the sign-in link, the same button now says 취소 and keeps focus.
+  await action.focus();
   await page.keyboard.press('Enter');
-  await row.getByText('연결 안 됨', { exact: true }).waitFor({ state: 'detached', timeout: 8000 });
-  assert.equal(posts.filter((p) => p === '/api/providers/claude/login').length, 1);
-  assert.equal(await connect.count(), 0);
-  const more = row.getByRole('button', { name: 'Claude · Fable 5.2 메뉴' });
-  await more.waitFor({ state: 'attached' });
-  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-menu');
-  assert.equal(await active(), 'model-menu', 'focus moves to the ⋯ button, not <body>');
+  await until(async () => (await action.innerText()) === '취소', '취소 button');
+  assert.match(await state.innerText(), /로그인 중/);
+  assert.equal(await active(), 'connect-action', 'focus stays on the action button');
+  const link = dialog.getByRole('link', { name: /로그인 페이지 열기/ });
+  await link.waitFor();
+  assert.match(await link.getAttribute('href'), /^https:\/\/login\.example\.invalid\//);
+  assert.equal(await rowKey(), 'busy');
+  await shot('dialog-busy-1440.png');
 
-  // 4. ⋯ menu: 연결 끊기 and 다시 확인; disconnect goes back to 연결 안 됨 and shows 연결하기 again.
-  await row.locator('li').hover();
-  await more.click();
-  const rowMenu = page.getByRole('menu');
-  assert.deepEqual(await rowMenu.getByRole('menuitem').allInnerTexts(), ['연결 끊기', '다시 확인']);
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'row-menu-1440.png') });
-  await rowMenu.getByRole('menuitem', { name: '다시 확인' }).click();
-  for (let i = 0; i < 50 && !posts.includes('/api/providers/refresh'); i++) await page.waitForTimeout(50);
-  assert.ok(posts.includes('/api/providers/refresh'));
-  await row.locator('li').hover();
-  await more.click();
-  await page.getByRole('menuitem', { name: '연결 끊기' }).click();
-  await row.getByText('연결 안 됨', { exact: true }).waitFor();
-  assert.ok(posts.includes('/api/providers/claude/logout'));
-  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-connect');
-  assert.equal(await active(), 'model-connect', 'after 연결 끊기 focus lands on 연결하기, not <body>');
-  await connect.waitFor({ state: 'attached' });
+  // 4. 취소: back to 연결 안 됨, said in the status line; a cancel is not an error.
+  await page.keyboard.press('Enter');
+  await until(async () => (await action.innerText()) === '연결', '연결 again after cancel');
+  assert.ok(posts.includes('/api/providers/claude/cancel'));
+  await until(async () => (await note.innerText()) === '로그인을 취소했어요.', 'cancel note');
+  assert.equal(await dialog.locator('.text-destructive').count(), 0, 'no error after a cancel');
+  assert.equal(await active(), 'connect-action');
 
-  // 5. A double click on 연결하기 sends one request (the second is dropped).
-  posts.length = 0;
-  await page.route('**/api/providers/claude/login', async (route) => {
-    await new Promise((r) => setTimeout(r, 400));
-    await route.continue();
-  });
-  await row.locator('li').hover();
-  await connect.dblclick();
-  await more.waitFor({ state: 'attached' });
-  assert.equal(posts.filter((p) => p === '/api/providers/claude/login').length, 1, `one login request: ${posts}`);
-  await page.unroute('**/api/providers/claude/login');
-  await row.locator('li').hover();
-  await more.click();
-  await page.getByRole('menuitem', { name: '연결 끊기' }).click();
-  await row.getByText('연결 안 됨', { exact: true }).waitFor();
+  // 5. 연결 again; the login finishes: 연결됨, 해제, usage section, and the note says it connected.
+  await page.keyboard.press('Enter');
+  await until(async () => (await action.innerText()) === '해제', 'connected', 12000);
+  assert.match(await state.innerText(), /연결됨/);
+  await until(async () => (await note.innerText()) === 'Claude를 연결했어요.', 'connected note');
+  await dialog.getByRole('heading', { name: '사용량' }).waitFor();
+  assert.equal(posts.filter((p) => p === '/api/providers/claude/login').length, 2);
+  await shot('dialog-connected-1440.png');
 
-  // 6. A login that runs: 연결 중 with 취소 always visible; 취소 sends cancel. When it ends unconnected the row says so, and polling stops.
-  let busy = true;
+  // 6. Esc closes the dialog and focus returns to the row; the row shows the connected state.
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(await active(), 'model-row');
+  assert.equal(await rowKey(), 'connected');
+  await shot('row-connected-1440.png');
+
+  // 7. After a reload the row is still connected.
+  await page.reload();
+  await row.waitFor();
+  await until(async () => (await rowKey()) === 'connected', 'connected after reload');
+
+  // 8. 해제 disconnects from Drawing only: the CLI stays logged in, so 연결 connects at once (no new CLI login).
+  await row.click();
+  await action.click();
+  await until(async () => (await action.innerText()) === '연결', 'disconnected');
+  assert.match(await note.innerText(), /연결을 해제했어요/);
+  assert.equal(await rowKey(), 'idle');
+  const logins = () => fake.calls().filter((c) => c.bin === 'claude' && c.args.join(' ') === 'auth login').length;
+  const before = logins();
+  await action.click();
+  await until(async () => (await action.innerText()) === '해제', 'connected at once');
+  assert.equal(logins(), before, 'no second CLI login');
+
+  // 9. A login still running survives a reload: log the fake CLI out (cli: true), connect, reload mid-login.
+  await action.click();
+  await until(async () => (await action.innerText()) === '연결', 'disconnected again');
+  await page.evaluate(() => fetch('/api/providers/claude/logout', { method: 'POST', headers: { 'x-drawing': '1', 'content-type': 'application/json' }, body: '{"cli":true}' }));
+  await action.click();
+  await until(async () => (await action.innerText()) === '취소', 'busy before reload');
+  await page.reload();
+  await row.waitFor();
+  assert.equal(await rowKey(), 'busy', 'still 로그인 중 after reload');
+  await shot('row-busy-1440.png');
+  await row.click();
+  assert.equal(await action.innerText(), '취소');
+  await until(async () => (await action.innerText()) === '해제', 'login finished after reload', 12000);
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'detached' });
+
+  // 10. Not installed (state stubbed): the row says 설치 안 됨 and the dialog offers 다시 확인.
   await page.route('**/api/state', async (route) => {
     const res = await route.fetch();
     const body = await res.json();
-    body.providers.claude = { ...body.providers.claude, busy, connected: false, error: null, url: busy ? 'https://example.test/login' : null };
+    body.providers.claude = { ...body.providers.claude, installed: false, connected: false, busy: false, cli: null, cliLoggedIn: false };
     await route.fulfill({ response: res, json: body });
   });
-  await row.locator('li').hover();
-  await connect.click();
-  await row.getByText('연결 중', { exact: true }).waitFor({ timeout: 8000 });
-  await page.waitForFunction(() => document.activeElement?.getAttribute('data-testid') === 'model-cancel');
-  assert.equal(await active(), 'model-cancel', 'focus moves to 취소, not <body>');
-  await page.mouse.move(700, 400);
-  const cancel = row.getByRole('button', { name: 'Claude · Fable 5.2 연결 취소' });
-  assert.equal(await opacity(cancel), '1', '취소 visible without hover');
-  assert.equal(await row.getByRole('link', { name: '로그인 페이지 열기' }).getAttribute('href'), 'https://example.test/login');
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'row-busy-1440.png') });
-  busy = false;
-  await row.getByText('로그인이 끝났지만 연결되지 않았어요. 다시 해 주세요.').waitFor({ timeout: 8000 });
-  await page.waitForTimeout(1000);
-  let polls = 0;
-  page.on('request', (r) => r.url().endsWith('/api/state') && polls++);
-  await page.waitForTimeout(2500);
-  assert.equal(polls, 0, 'no polling once the login ended');
-  busy = true;
-  posts.length = 0;
-  await page.evaluate(() => window.dispatchEvent(new Event('drawing:models-changed')));
-  await cancel.waitFor();
-  await cancel.focus();
-  await page.keyboard.press('Enter');
-  for (let i = 0; i < 50 && !posts.includes('/api/providers/claude/cancel'); i++) await page.waitForTimeout(50);
-  assert.ok(posts.includes('/api/providers/claude/cancel'), `cancel sent: ${posts}`);
+  await page.reload();
+  await row.waitFor();
+  await until(async () => (await rowKey()) === 'missing', 'missing');
+  await shot('row-missing-1440.png');
+  await row.click();
+  assert.equal(await action.innerText(), '다시 확인');
+  await shot('dialog-missing-1440.png');
+  await page.keyboard.press('Escape');
   await page.unroute('**/api/state');
-  await page.evaluate(() => window.dispatchEvent(new Event('drawing:models-changed')));
-  // The real login in step 6 connected the fake CLI: the row shows the ⋯ menu again; disconnect for the next step.
-  await more.waitFor({ state: 'attached', timeout: 8000 });
-  await row.locator('li').hover();
-  await more.click();
-  await page.getByRole('menuitem', { name: '연결 끊기' }).click();
-  await row.getByText('연결 안 됨', { exact: true }).waitFor({ timeout: 8000 });
+  await page.reload();
+  await row.waitFor();
 
-  // 7. 390px: in the drawer 연결하기 and 테마 are always shown, at least 44px tall; connecting keeps the drawer open.
+  // 11. 390px: in the drawer the row is at least 44px tall and opens the dialog; Esc closes only the dialog.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '메뉴 열기' }).click();
   const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
   await drawer.waitFor();
-  const dconnect = drawer.getByRole('button', { name: /연결하기$/ });
-  assert.equal(await opacity(dconnect), '1');
-  assert.ok((await dconnect.boundingBox()).height >= 44);
-  assert.ok((await drawer.getByRole('button', { name: /^테마/ }).boundingBox()).height >= 44);
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'row-not-connected-390.png') });
-  await drawer.getByRole('button', { name: /^테마/ }).click();
-  const m390 = page.getByRole('menu', { name: '테마' });
-  await m390.waitFor();
-  await page.waitForTimeout(300); // the open animation scales the menu from 95%
-  for (const it of await m390.getByRole('menuitemradio').all()) assert.ok((await it.boundingBox()).height >= 44, 'menu item ≥ 44px');
+  const drow = drawer.getByTestId('model-row');
+  assert.ok((await drow.boundingBox()).height >= 44);
+  await drow.click();
+  await dialog.waitFor();
+  assert.ok((await action.boundingBox()).height >= 44, 'action ≥ 44px');
+  await shot('dialog-connected-390.png');
   await page.keyboard.press('Escape');
-  await m390.waitFor({ state: 'detached' });
-  assert.equal(await drawer.count(), 1, 'Esc closes the menu only, not the drawer');
-  await dconnect.click({ timeout: 5000 });
-  await drawer.getByRole('button', { name: 'Claude · Fable 5.2 메뉴' }).waitFor();
-  assert.equal(await drawer.count(), 1, 'drawer stays open');
+  await dialog.waitFor({ state: 'detached' });
+  assert.equal(await drawer.count(), 1, 'Esc closes the dialog only, not the drawer');
 
-  // Only fakes ran, and none of them was asked to log out of the CLI itself.
-  assert.ok(fake.calls().every((c) => !(c.bin === 'claude' && c.args.join(' ') === 'auth logout')));
+  // Only fakes ran.
+  assert.ok(fake.calls().every((c) => ['claude', 'git', 'gh'].includes(c.bin)));
   assert.deepEqual(errors, []);
 });

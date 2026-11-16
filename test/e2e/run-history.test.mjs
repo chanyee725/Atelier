@@ -115,19 +115,15 @@ test('version labels, past runs and 복제해서 새 계획', { skip: !ON && 'se
   assert.ok((await page.locator(`[id="${descId}"]`).textContent()).length > 0);
   await start.focus();
   assert.ok(await start.evaluate((el) => el === document.activeElement), 'focusable');
-  // open() in PlanStrip is async (save, POST /api/pipeline, then the dialog), so an immediate dialog count passes even without
-  // the blocked guard. Record the requests and wait past the round trip before asserting nothing started (#421).
-  // Only writes count: the strip's own passive GET status refresh may land at any time under load (#447) and starts nothing.
-  const pipelineCalls = [];
-  page.on('request', (r) => {
-    if (r.method() !== 'GET' && new URL(r.url()).pathname.startsWith('/api/pipeline')) pipelineCalls.push(`${r.method()} ${r.url()}`);
-  });
-  await start.dispatchEvent('click');
-  await start.press('Enter');
-  await page.waitForTimeout(600);
-  assert.deepEqual(pipelineCalls, [], 'click and Enter send no /api/pipeline request while blocked');
-  assert.equal(await page.locator('dialog[open]').count(), 0, 'click and Enter do not open the confirm');
-  assert.equal(await start.evaluate((el) => el.disabled), false, 'the button did not go busy');
+  // open() in PlanStrip is async (save, GET /api/pipeline, then the dialog), so wait past the round trip before checking
+  // that nothing opened (#421). Click and Enter are checked one at a time: without the guard the click opens the confirm,
+  // which takes focus to 취소, and a following Enter would close it again before a combined check (#428).
+  // No request assertion: a clean open() writes nothing, and its GET looks like the strip's passive refresh (#447).
+  for (const act of [() => start.dispatchEvent('click'), () => start.press('Enter')]) {
+    await act();
+    await page.waitForTimeout(600);
+    assert.equal(await page.locator('dialog[open]').count(), 0, 'click or Enter does not open the confirm while blocked');
+  }
 
   // 버전 기록: labels in run order.
   await page.getByRole('button', { name: '더 보기' }).click();

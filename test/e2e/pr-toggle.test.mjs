@@ -103,6 +103,11 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
   assert.equal(await page.getByText(BROKEN).count(), 1, 'the 409 cause shows once');
   assert.equal(await page.getByText('이 서버에선 바꿀 수 없어요').count(), 0);
   assert.match(await describedBy(), /설정 파일을 읽을 수 없어요/);
+  // #431: the retry hint is only the switch's description, not also page text a screen reader meets in browse mode.
+  assert.match(await describedBy(), /고친 뒤 눌러서 다시 확인해요/);
+  assert.equal(await page.getByText('고친 뒤 눌러서 다시 확인해요').isVisible(), false, 'hint is hidden, not sr-only');
+  const snap = await page.locator('body').ariaSnapshot();
+  assert.equal((snap.match(/고친 뒤 눌러서 다시 확인해요/g) ?? []).length, 0, 'hint is not in the accessibility tree as text');
   assert.equal(await sw.isDisabled(), false);
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'switch', 'focus stays on the switch');
   assert.equal(await page.getByText(STILL).count(), 0, 'the first 409 shows no retry notice');

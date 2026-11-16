@@ -1,0 +1,58 @@
+/* 모델 연결 dialog (E525, #570): a native modal <dialog>, styled like the 설정 modal (settings/limits.css). */
+dialog.connect-dialog:modal {
+  overscroll-behavior: contain;
+}
+dialog.connect-dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: oklch(0 0 0 / 0.4);
+}
+
+/* Busy spinner next to 로그인 중 and on a pending button: slowed down, not stopped, under reduced motion. */
+.connect-spin {
+  animation: connect-spin 1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .connect-spin {
+    animation-duration: 6s;
+  }
+}
+@keyframes connect-spin {
+  to {
+    rotate: 1turn;
+  }
+}
+
+/* Usage bar: a native <progress> with custom styling (track on the element, fill on the vendor pseudo-elements). */
+progress.connect-meter {
+  appearance: none;
+  border: 0 solid;
+  overflow: clip;
+  inline-size: 100%;
+  block-size: 4px;
+  border-radius: 1e5px;
+  background: var(--muted);
+  --connect-meter-fill: var(--ok);
+}
+progress.connect-meter.is-warn {
+  --connect-meter-fill: var(--warn);
+}
+progress.connect-meter::-webkit-progress-bar {
+  background: transparent;
+}
+progress.connect-meter::-webkit-progress-value {
+  background: var(--connect-meter-fill);
+  border-radius: 1e5px;
+}
+progress.connect-meter::-moz-progress-bar {
+  background: var(--connect-meter-fill);
+  border-radius: 1e5px;
+}
+@media (forced-colors: active) {
+  progress.connect-meter {
+    forced-color-adjust: none;
+    background: Canvas;
+    outline: 1px solid CanvasText;
+    --connect-meter-fill: CanvasText;
+  }
+}
