@@ -291,3 +291,37 @@ export async function branchGraph(root, { base = "develop", limit = 80, active =
   }
   return { base: mainB, commits, tips };
 }
+
+/**
+ * Commit tree for the 브랜치 tab (#877): the newest `limit` commits reachable from `base` and `branches`, newest
+ * first, each { hash, parents, branch, at, subject }. Metadata only (no author, email or diff). A commit on `base`
+ * belongs to `base`; any other to the first branch (in the order given) that reaches it. Parents outside the window
+ * are dropped, so the oldest shown commit is a root. `tips` maps each branch that still exists to its tip hash.
+ */
+export async function commitGraph(root, { base, branches = [], limit = 150 } = {}) {
+  const ok = b => typeof b === "string" && b && !b.startsWith("-");
+  const sh = async (...a) => { try { return (await git(root, ...a)).stdout; } catch { return null; } };
+  if (!ok(base)) return { base: base ?? null, commits: [], tips: [] };
+  const tips = [];
+  for (const b of [base, ...new Set(branches)].filter(ok)) {
+    const tip = (await sh("rev-parse", "--verify", "--quiet", `${b}^{commit}`))?.trim();
+    if (tip && !tips.some(t => t.branch === b)) tips.push({ branch: b, hash: tip });
+  }
+  if (!tips.length) return { base, commits: [], tips: [] };
+  const n = Math.max(1, Math.min(500, limit | 0));
+  const log = await sh("log", "--date-order", `--max-count=${n}`, "--format=%H%x1f%P%x1f%ct%x1f%s", ...tips.map(t => t.hash), "--");
+  const commits = (log ?? "").split("\n").filter(Boolean).map(line => {
+    const [hash, parents, ct, subject] = line.split("\x1f");
+    return { hash, parents: parents ? parents.split(" ") : [], branch: null, at: +ct * 1000 || null, subject: subject ?? "" };
+  });
+  const shown = new Set(commits.map(c => c.hash));
+  for (const c of commits) c.parents = c.parents.filter(p => shown.has(p));
+  // Owner per commit: base first, then each branch's own commits (base..branch), bounded by the same window.
+  const owner = new Map();
+  const claim = (list, b) => { for (const h of (list ?? "").split("\n")) if (h && shown.has(h) && !owner.has(h)) owner.set(h, b); };
+  const baseTip = tips[0].branch === base ? tips[0].hash : null;
+  if (baseTip) claim(await sh("rev-list", `--max-count=${n}`, baseTip, "--"), base);
+  for (const t of tips) if (t.branch !== base) claim(await sh("rev-list", `--max-count=${n}`, t.hash, ...(baseTip ? [`^${baseTip}`] : []), "--"), t.branch);
+  for (const c of commits) c.branch = owner.get(c.hash) ?? base;
+  return { base, commits, tips };
+}

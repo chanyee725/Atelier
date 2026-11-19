@@ -4,8 +4,8 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createLiveBranches, prPhase } from "../../server/dispatch/live-branches.js";
-import { worktreeDirty } from "../../server/dispatch/git.js";
+import { createBranchTree, createLiveBranches, prPhase } from "../../server/dispatch/live-branches.js";
+import { commitGraph, worktreeDirty } from "../../server/dispatch/git.js";
 
 test("prPhase turns a PR answer into one word", () => {
   assert.equal(prPhase(null), null);
@@ -81,5 +81,52 @@ test("worktreeDirty reads without rewriting the index (no optional locks)", asyn
     const before = readFileSync(path.join(dir, ".git", "index"));
     assert.equal(await worktreeDirty(dir), false);
     assert.deepEqual(readFileSync(path.join(dir, ".git", "index")), before);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("commitGraph: base and branch commits with parents, owners and tips, metadata only (#877)", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "branch-tree-"));
+  const g = (...a) => execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" }).trim();
+  const commit = (f, m) => { writeFileSync(path.join(dir, f), m + "\n"); g("add", f); g("commit", "-qm", m); return g("rev-parse", "HEAD"); };
+  try {
+    g("init", "-q", "-b", "develop");
+    g("config", "user.name", "Test"); g("config", "user.email", "test@example.invalid");
+    const init = commit("a.txt", "init");
+    g("checkout", "-qb", "feat/1-a");
+    const a1 = commit("b.txt", "a one");
+    g("checkout", "-q", "develop");
+    g("merge", "-q", "--no-ff", "-m", "merge a", "feat/1-a");
+    const merge = g("rev-parse", "HEAD");
+    g("checkout", "-qb", "feat/2-b");
+    const b1 = commit("c.txt", "b one");
+    g("checkout", "-q", "develop");
+
+    const out = await commitGraph(dir, { base: "develop", branches: ["feat/2-b", "gone/branch", "--bad", "feat/2-b"] });
+    assert.equal(out.base, "develop");
+    assert.deepEqual(out.tips, [{ branch: "develop", hash: merge }, { branch: "feat/2-b", hash: b1 }]);
+    const by = new Map(out.commits.map(c => [c.hash, c]));
+    assert.equal(out.commits.length, 4);
+    assert.equal(by.get(b1).branch, "feat/2-b");
+    assert.deepEqual(by.get(b1).parents, [merge]);
+    assert.deepEqual(by.get(merge).parents, [init, a1]);
+    assert.equal(by.get(merge).branch, "develop");
+    assert.equal(by.get(a1).branch, "develop", "merged work belongs to the base");
+    assert.deepEqual(Object.keys(by.get(b1)).sort(), ["at", "branch", "hash", "parents", "subject"]);
+    assert.equal(typeof by.get(b1).at, "number");
+    assert.equal(by.get(b1).subject, "b one");
+
+    // A short window drops parents outside it.
+    const short = await commitGraph(dir, { base: "develop", branches: ["feat/2-b"], limit: 2 });
+    assert.equal(short.commits.length, 2);
+    assert.ok(short.commits.every(c => c.parents.every(p => short.commits.some(x => x.hash === p))));
+
+    // createBranchTree takes branches from liveBranches and caches.
+    let calls = 0;
+    const tree = createBranchTree({ root: dir, liveBranches: async () => { calls++; return { base: "develop", pr: "disabled", rows: [{ branch: "feat/2-b" }] }; } });
+    const t1 = await tree();
+    await tree();
+    assert.equal(calls, 1);
+    assert.equal(t1.tips.length, 2);
+    assert.deepEqual(await commitGraph(dir, { base: null }), { base: null, commits: [], tips: [] });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
