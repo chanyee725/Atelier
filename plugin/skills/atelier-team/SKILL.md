@@ -18,7 +18,7 @@ description: Start an Atelier team for normal or risky work — a lead (관리�
 ## Steps
 
 1. Pick the preset from the lane. `small` (lead, impl, review, test) fits normal; `risky` (lead, impl, review ×2) fits risky; `standard`, `ui` and `full` add a second implementer, a tester, a designer or docs for bigger work. Size down when `limits.five` or `limits.seven` is above 0.7.
-   Models: roles use the project's role models (Claude for lead, impl, review; Gemini Flash for test, design, docs when Gemini is connected). For a UI, CSS, copy or mechanical issue, run with `DISPATCH_TEAM_ROLE_MODELS='{"impl":"gemini-3.8-flash-high"}'`.
+   Models: roles use the project's role models (Claude for lead, impl, review; Gemini Flash for test, design, docs when Gemini is connected). For a UI, CSS, copy or mechanical issue, run with `DISPATCH_TEAM_ROLE_MODELS='{"impl":"gemini-3.8-flash-high"}'`. For a research-only task add `DISPATCH_TEAM_MODE=research` (any mode: plan, impl, review, docs, quickfix, research) so sessions use that mode's profile.
    Done when: you can name the lane, the preset and the implementer's model in one line.
 2. Start the team: `<skill-dir>/scripts/team.sh "<project-root>" <preset> "<task in the user's words>"`. It starts or reuses the server, creates the lead, then every teammate as the lead's child with [reference/rules.md](reference/rules.md) prepended.
    Done when: it prints one line per session (name, model, branch).

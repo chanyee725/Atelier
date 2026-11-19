@@ -41,7 +41,7 @@ async function runTeam(preset, env) {
     chmodSync(join(dir, 'plugin/scripts/start.sh'), 0o755);
     const r = await new Promise((resolve) => {
       const c = spawn('bash', [join(skill, 'scripts/team.sh'), dir, preset, 'Issue #1'], {
-        env: { ...process.env, DISPATCH_PORT: String(server.address().port), DISPATCH_TEAM_MODEL: '', ...env },
+        env: { ...process.env, DISPATCH_PORT: String(server.address().port), DISPATCH_TEAM_MODEL: '', DISPATCH_TEAM_MODE: '', ...env },
       });
       let stdout = '';
       let stderr = '';
@@ -64,6 +64,7 @@ test('team.sh small preset: lead, then impl, review and a tester as its children
   assert.deepEqual(roles(r.posts), ['lead', 'impl', 'review', 'test']);
   assert.equal(r.posts[1].parent, 'id-1');
   assert.ok(r.posts.every((p) => p.items.every((i) => !('model' in i))), 'no model override without env');
+  assert.ok(r.posts.every((p) => !('mode' in p)), 'no mode without DISPATCH_TEAM_MODE');
 });
 
 test('team.sh DISPATCH_TEAM_ROLE_MODELS sets only the named roles; DISPATCH_TEAM_MODEL still wins for all', async () => {
@@ -81,4 +82,14 @@ test('team.sh refuses DISPATCH_TEAM_ROLE_MODELS that is not JSON before creating
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /DISPATCH_TEAM_ROLE_MODELS is not JSON/);
   assert.equal(r.posts.length, 0);
+});
+
+test('team.sh DISPATCH_TEAM_MODE sends that mode with every create call (#856); an unknown mode makes nothing', async () => {
+  const r = await runTeam('small', { DISPATCH_TEAM_MODE: 'research' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(r.posts.map((p) => p.mode), ['research', 'research']);
+  const bad = await runTeam('small', { DISPATCH_TEAM_MODE: 'search' });
+  assert.notEqual(bad.status, 0);
+  assert.match(bad.stderr, /DISPATCH_TEAM_MODE is one of/);
+  assert.equal(bad.posts.length, 0);
 });

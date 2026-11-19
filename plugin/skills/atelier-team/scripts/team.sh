@@ -5,6 +5,8 @@
 # and creates the preset's sessions with the shared team rules prepended to the task.
 # Models: each role's default (the project's 설정 → roleModels), else DISPATCH_TEAM_ROLE_MODELS
 # (JSON { role: modelId }, e.g. '{"impl":"gemini-3.8-flash-high"}' for a UI issue), else DISPATCH_TEAM_MODEL for all.
+# Mode: DISPATCH_TEAM_MODE (plan | impl | review | docs | quickfix | research) gives every session that mode's
+# harness profile (#748, #856) where no model is named; unset, each session keeps its role default.
 set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -36,6 +38,11 @@ if [ -n "${DISPATCH_TEAM_ROLE_MODELS:-}" ]; then
     || { echo 'DISPATCH_TEAM_ROLE_MODELS is not JSON like {"impl":"gemini-3.8-flash-high"}' >&2; exit 2; }
 fi
 
+case "${DISPATCH_TEAM_MODE:-}" in
+  ""|plan|impl|review|docs|quickfix|research) ;;
+  *) echo "DISPATCH_TEAM_MODE is one of plan | impl | review | docs | quickfix | research" >&2; exit 2 ;;
+esac
+
 # Server: reuse when it already serves this project; start.sh prints why it can't otherwise.
 DISPATCH_PORT="$port" "$start_sh" "$project"
 
@@ -55,7 +62,7 @@ fi
 mk() { # mk <items-json> <role-note> [parent-id] → POST body
   node -e '
     const fs = require("fs");
-    const [rulesPath, task, items, note, parent, model, effort, perm, roleModelsRaw] = process.argv.slice(1);
+    const [rulesPath, task, items, note, parent, model, effort, perm, roleModelsRaw, mode] = process.argv.slice(1);
     const rules = fs.readFileSync(rulesPath, "utf8").trim();
     let roleModels = {};
     try { roleModels = roleModelsRaw ? JSON.parse(roleModelsRaw) : {}; } catch { console.error("DISPATCH_TEAM_ROLE_MODELS is not JSON"); process.exit(1); }
@@ -69,8 +76,9 @@ mk() { # mk <items-json> <role-note> [parent-id] → POST body
       worktree: true,
       items: list,
       ...(parent && { parent }),
+      ...(mode && { mode }),
     }));
-  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}" "${DISPATCH_TEAM_ROLE_MODELS:-}"
+  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}" "${DISPATCH_TEAM_ROLE_MODELS:-}" "${DISPATCH_TEAM_MODE:-}"
 }
 post() { # post <body> → prints sessions, exits on error; sets $ids
   local resp
