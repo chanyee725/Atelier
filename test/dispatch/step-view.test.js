@@ -34,6 +34,7 @@ test("stepView: five states from stage and sessions", () => {
   assert.equal(stepView({ stage: "impl", sessions: ses("working", "stuck") }), "blocked");
   assert.equal(stepView({ stage: "review", sessions: ses("failed") }), "blocked");
   assert.equal(stepView({ stage: "impl", sessions: ses("working"), paused: true }), "blocked");
+  assert.equal(stepView({ stage: "impl", sessions: ses("working"), asking: true }), "blocked", "an open document question blocks (#738)");
   assert.equal(stepView({ stage: "done", sessions: ses("failed") }), "done", "a finished step stays done");
 });
 

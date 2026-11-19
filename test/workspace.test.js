@@ -44,7 +44,7 @@ test('CRUD: create, read, list, rename, move, delete files and folders', async (
     assert.equal(r.body.path, 'proj/arch.dpx.json');
     assert.deepEqual(
       { v: r.body.version, t: r.body.title, rev: r.body.revision, doc: r.body.document, canvas: r.body.canvas, blocks: r.body.blocks },
-      { v: 5, t: 'Arch', rev: 1, doc: { type: 'doc', content: [] }, canvas: { elements: [], appState: {} }, blocks: [] },
+      { v: 6, t: 'Arch', rev: 1, doc: { type: 'doc', content: [] }, canvas: { elements: [], appState: {} }, blocks: [] },
     );
     assert.equal((await call('POST', '/api/file', { path: 'proj/arch' })).status, 409);
     assert.equal((await call('POST', '/api/folder', { path: 'proj' })).status, 409);
@@ -94,7 +94,7 @@ test('write: whole-file save bumps revision and keeps content; stale write gets 
     assert.equal(r.status, 200);
     assert.deepEqual(r.body, { path: 'a.dpx.json', revision: 2 });
     r = await call('GET', `/api/file?path=${q('a')}`);
-    assert.deepEqual({ ...r.body, path: undefined }, { ...content, path: undefined, version: 5, revision: 2 });
+    assert.deepEqual({ ...r.body, path: undefined }, { ...content, path: undefined, version: 6, revision: 2 });
 
     // a second client still holding revision 1 is rejected and told the current revision
     r = await call('PUT', `/api/file?path=${q('a')}`, { ...content, title: 'stale', revision: 1 });
@@ -641,7 +641,7 @@ test('block codeRefs: valid refs round-trip, unknown fields are dropped, bad one
     assert.equal(r.status, 200);
     const got = (await call('GET', `/api/file?path=${q('a')}`)).body;
     assert.deepEqual(got.blocks[0].codeRefs, codeRefs);
-    assert.equal(got.version, 5);
+    assert.equal(got.version, 6);
     for (const bad of [null, 'x', { v: 0 }, { v: 1, nodes: { A: { refs: [{ path: '../x', start: 1 }] } } }, { v: 1, nodes: { A: { refs: [{ path: 'x', start: 0 }] } } }]) {
       assert.equal((await put({ ...blk, codeRefs: bad }, 2)).status, 400, JSON.stringify(bad));
     }
@@ -677,7 +677,7 @@ test('a v2 file reads as is and its next save is stored as the current version w
   const layout = { v: 1, basis: { type: 'flowchart', direction: 'right', count: 1 }, items: { a: { cx: 1, cy: 2, parent: '' } } };
   const saved = normalizeContent({ ...f, blocks: [{ ...f.blocks[0], layout }] });
   assert.equal(saved.version, FORMAT_VERSION);
-  assert.equal(saved.version, 5);
+  assert.equal(saved.version, 6);
   assert.deepEqual(saved.blocks[0].layout, layout);
 });
 
@@ -687,15 +687,15 @@ test('a file reads back with the version it was written with; a write stores the
   assert.equal(parseStored(old).version, 1);
   assert.equal(parseStored(JSON.stringify({ title: 'x', revision: 1 })).version, 1);
   assert.equal(normalizeContent({ version: 1 }).version, FORMAT_VERSION);
-  assert.equal(FORMAT_VERSION, 5);
+  assert.equal(FORMAT_VERSION, 6);
 });
 
 test('a file written with a newer format version is not overwritten as ours', async () => {
   await withApp(async ({ ws, call }) => {
-    const text = JSON.stringify({ version: 6, title: 'future', document: { type: 'doc', content: [] }, canvas: {}, blocks: [], revision: 1, extra: 'keep' });
+    const text = JSON.stringify({ version: 7, title: 'future', document: { type: 'doc', content: [] }, canvas: {}, blocks: [], revision: 1, extra: 'keep' });
     await writeFile(join(ws, 'f.dpx.json'), text);
     const r = await call('GET', `/api/file?path=${q('f')}`);
-    assert.equal(r.body.version, 6);
+    assert.equal(r.body.version, 7);
     const w = await call('PUT', `/api/file?path=${q('f')}`, { title: 'x', revision: r.body.revision });
     assert.equal(w.status, 422);
     assert.match(w.body.error ?? JSON.stringify(w.body), /더 새 버전에서 만든 파일이라 저장하지 않았어요/);
@@ -709,7 +709,7 @@ test('reading a newer-format file after an outside edit leaves it untouched, and
     // The server knows this file (created here) before the newer app replaces it on disk.
     const made = await call('POST', '/api/file', { path: 'f' });
     assert.equal(made.status, 201);
-    const base = { version: 6, title: 'future', document: { type: 'doc', content: [] }, canvas: {}, blocks: [], revision: made.body.revision };
+    const base = { version: 7, title: 'future', document: { type: 'doc', content: [] }, canvas: {}, blocks: [], revision: made.body.revision };
     await writeFile(file, JSON.stringify(base));
     // Outside edit that keeps the revision: a v2 file would get its revision raised on disk here.
     const edited = JSON.stringify({ ...base, title: 'edited outside', extra: 'keep' });

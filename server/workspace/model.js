@@ -8,6 +8,8 @@ import { cleanLayout, layoutProblem } from '../../shared/render/block-layout.ts'
 import { blockCodeProblem, cleanBlockCode, salvageBlockCode } from '../../shared/render/block-code.ts';
 // Pipeline `plan` rules are shared with the web (a higher `plan.v` is kept verbatim).
 import { cleanPlan, planProblem } from '../../shared/dispatch/plan.ts';
+// In-document questions (`discussions`, #738) follow the same pattern.
+import { cleanDiscussions, discussionsProblem } from '../../shared/dispatch/discussions.ts';
 
 export const FILE_EXT = '.dpx.json';
 // 1: before the document editor (E6). 2: `document` is the editor's own content. Every write stores
@@ -18,7 +20,9 @@ export const FILE_EXT = '.dpx.json';
 // 4: an optional top-level `plan` (pipeline steps, docs/design/dispatch-integration/2-file-format-and-live-overlay.md §3).
 // 5: blocks may carry `codeRefs` (code references per node); an older server would drop it, so it must
 // treat v5 files as read-only.
-export const FORMAT_VERSION = 5;
+// 6: an optional top-level `discussions` (questions between agents and the user, #738); an older server would drop
+// it, so it must treat v6 files as read-only.
+export const FORMAT_VERSION = 6;
 
 export const emptyDocument = () => ({ type: 'doc', content: [] });
 export const emptyCanvas = () => ({ elements: [], appState: {} });
@@ -91,6 +95,13 @@ export function normalizePlan(p, at = 'plan') {
   return cleanPlan(p);
 }
 
+/** Validate a `discussions` section; throws ValidationError. */
+export function normalizeDiscussions(d, at = 'discussions') {
+  const problem = discussionsProblem(d, at);
+  if (problem) throw new ValidationError(problem);
+  return cleanDiscussions(d);
+}
+
 /** Validate client content (everything except `revision`, which the store owns). Missing sections get defaults. */
 export function normalizeContent(input, { lenient = false } = {}) {
   if (!isObj(input)) throw new ValidationError('body must be a JSON object');
@@ -119,6 +130,14 @@ export function normalizeContent(input, { lenient = false } = {}) {
       out.plan = normalizePlan(input.plan);
     } catch (e) {
       // On read, a broken plan (hand-edited file) is left out so the drawing still opens.
+      if (!lenient || !(e instanceof ValidationError)) throw e;
+    }
+  }
+  if (input.discussions !== undefined && input.discussions !== null) {
+    try {
+      out.discussions = normalizeDiscussions(input.discussions);
+    } catch (e) {
+      // On read, broken discussions (hand-edited file) are left out so the drawing still opens.
       if (!lenient || !(e instanceof ValidationError)) throw e;
     }
   }
