@@ -1,5 +1,5 @@
 // Data for one agent's live view (E559, #728): GET /api/sessions/:id/live once when it opens, then only the `live`
-// and `session` events of that sid on the shared stream. Other sids are dropped by looking at the raw event text
+// and `session` events of that sid on the shared stream. Other sids are dropped by a substring test on the raw event text
 // before any JSON.parse, so 20 busy agents cost the open panel almost nothing. A reconnect loads it again (events
 // sent while the stream was down are gone). Memory only.
 import { useCallback, useEffect, useState } from 'react';
@@ -7,8 +7,20 @@ import { applyLiveDelta, type AgentLive, type LiveDelta } from '../../../shared/
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { events } from '../lib/events.ts';
 
-/** `"id":"<sid>"` for `session` and `{"sid":"<sid>"` for `live`: the server writes the id first in both. */
-export const startsWithId = (raw: string, key: 'id' | 'sid', sid: string) => raw.startsWith(`{"${key}":${JSON.stringify(sid)}`);
+/**
+ * The event as an object when its top-level `key` is `sid`, else null. A plain substring test on the raw text
+ * (`"id":"<sid>"`, as the server's JSON.stringify writes it, at any position) drops other agents' events before any
+ * JSON.parse; the parsed top-level field then decides, so neither the server's key order nor a nested match counts.
+ */
+export function eventFor<T extends object>(raw: string, key: 'id' | 'sid', sid: string): T | null {
+  if (!raw.includes(`"${key}":${JSON.stringify(sid)}`)) return null;
+  try {
+    const d = JSON.parse(raw) as Record<string, unknown> | null;
+    return d && typeof d === 'object' && d[key] === sid ? (d as T) : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface AgentLiveState {
   live: AgentLive | null;
@@ -62,27 +74,17 @@ export function useAgentLive(sid: string | null): AgentLiveState {
         });
     };
     const offLive = events.subscribe('live', (raw) => {
-      if (!startsWithId(raw, 'sid', sid)) return;
-      let d: LiveDelta;
-      try {
-        d = JSON.parse(raw) as LiveDelta;
-      } catch {
-        return;
-      }
+      const d = eventFor<LiveDelta>(raw, 'sid', sid);
+      if (!d) return;
       if (held) held.push(d);
       else setLive((cur) => (cur ? applyLiveDelta(cur, d) : cur));
     });
     const offSession = events.subscribe('session', (raw) => {
-      if (!startsWithId(raw, 'id', sid)) return;
-      try {
-        const s = JSON.parse(raw) as Session;
-        if (s.id === sid) setSession(s);
-      } catch {
-        /* skip */
-      }
+      const s = eventFor<Session>(raw, 'id', sid);
+      if (s) setSession(s);
     });
     const offRemoved = events.subscribe('removed', (raw) => {
-      if (startsWithId(raw, 'id', sid)) setError('missing');
+      if (eventFor(raw, 'id', sid)) setError('missing');
     });
     let first = true;
     const offConn = events.onConnection((up) => {

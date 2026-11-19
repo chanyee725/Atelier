@@ -1,8 +1,9 @@
-// Agent live view client helpers (E559, #728): hash sync, the raw-prefix sid filter, display formats.
+// Agent live view client helpers (E559, #728): hash sync, the raw-text sid filter, display formats.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { agentFromHash, withAgent } from '../../web/src/live/store.ts';
-import { startsWithId } from '../../web/src/live/useAgentLive.ts';
+import { eventFor } from '../../web/src/live/useAgentLive.ts';
+import { Hub } from '../../server/dispatch/hub.js';
 import { clock, liveStateLabel, middle, span } from '../../web/src/live/format.ts';
 
 test('the agent= hash part is read and written without touching the file part', () => {
@@ -19,10 +20,24 @@ test('the agent= hash part is read and written without touching the file part', 
 
 test('events of other agents are dropped from the raw text, before parsing', () => {
   const sid = 'a1b2';
-  assert.ok(startsWithId(JSON.stringify({ sid, current: null }), 'sid', sid));
-  assert.ok(!startsWithId(JSON.stringify({ sid: 'a1b2c', current: null }), 'sid', sid));
-  assert.ok(startsWithId(JSON.stringify({ id: sid, n: 1 }), 'id', sid));
-  assert.ok(!startsWithId(JSON.stringify({ id: 'zz', parent: sid }), 'id', sid));
+  assert.equal(eventFor(JSON.stringify({ sid, current: null }), 'sid', sid)?.sid, sid);
+  assert.equal(eventFor(JSON.stringify({ sid: 'a1b2c', current: null }), 'sid', sid), null);
+  assert.equal(eventFor(JSON.stringify({ id: sid, n: 1 }), 'id', sid)?.id, sid);
+  // Key order does not matter; a nested or other-key match does not count.
+  assert.equal(eventFor(JSON.stringify({ n: 1, name: 'x', id: sid }), 'id', sid)?.id, sid);
+  assert.equal(eventFor(JSON.stringify({ id: 'zz', parent: sid }), 'id', sid), null);
+  assert.equal(eventFor(JSON.stringify({ id: 'zz', child: { id: sid } }), 'id', sid), null);
+  assert.equal(eventFor('{"id":"a1b2"', 'id', sid), null);
+});
+
+test('the sid filter matches the session events the hub really sends, whatever the stored key order', () => {
+  // A stored session whose id is not its first key (e.g. read back from an older store file).
+  const s = { name: 'x', status: 'idle', cwd: '/tmp/scratch', updatedAt: 1, id: 'k9', parent: null };
+  const hub = Object.assign(Object.create(Hub.prototype), { live: new Map(), store: { save() {}, data: { sessions: { [s.id]: s } } } });
+  const raw = JSON.stringify(hub.publicSession(s));
+  assert.equal(eventFor<{ id: string }>(raw, 'id', 'k9')?.id, 'k9');
+  assert.equal(eventFor(raw, 'id', 'k'), null);
+  assert.equal(eventFor(JSON.stringify({ id: 'k9' }), 'id', 'k9')?.id, 'k9', 'the removed event');
 });
 
 test('display formats', () => {
