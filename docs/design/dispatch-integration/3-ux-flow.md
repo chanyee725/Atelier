@@ -86,7 +86,7 @@ Replace the first bullet of "Lead (관리자) only" in `skills/dispatch-team/ref
 
 | Tool | Does |
 |---|---|
-| `write_plan { path?, goal, steps[], risks[], asks[] }` | Creates or updates the draft; returns `path`, `revision`. Refused once the plan is `실행 중`. |
+| `write_plan { path?, folder?, goal, steps[], risks[], asks[] }` | Creates or updates the draft; returns `path`, `revision`. Refused once the plan is `실행 중`. A new plan without `path` goes to `<folder>/pipelines/`: `folder` (an existing top-level workspace folder, else 400), else the lead's project folder, else the one top-level folder every step's `files` sits in, else top-level `pipelines/` (#726). |
 | `set_task { …, step }` | Existing tool (`server/mcp.js:112-135`) gains `step`; status, owner and stage show on that step in the file. |
 | `note_step { step, text }` | One plain line the record keeps (e.g. "리뷰 must-fix 1건 고쳐서 다시 올림"). Max 200 chars, no transcript text. |
 | `create_sessions` | Refused with "계획 승인 전이에요" while the lead's plan is `계획`. |

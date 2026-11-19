@@ -195,11 +195,15 @@ test('agents module: the list follows edits, sessions and named outside writers'
   r.hub.emit('session', r.hub.sessions.s1);
   assert.deepEqual(lists().at(-1).map((a) => [a.name, a.file]), [['Otto', null]]);
 
+  // The live view (#728) hears of credited document writes too.
+  const docs = [];
+  r.hub.liveView = { noteDoc: (sid, file) => docs.push([sid, file]) };
   r.files.set('P/a.dpx.json', rect('r', 0));
   r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Edit', text: '{"file_path":"/w/P/a.dpx.json"}' } });
   await sleep(5);
   await r.change('P/a.dpx.json', rect('r', 50));
   assert.deepEqual(lists().at(-1).map((a) => [a.name, a.file]), [['Otto', 'P/a.dpx.json']]);
+  assert.deepEqual(docs, [['s1', 'P/a.dpx.json']]);
 
   // A repeated session update with nothing new is not sent again (the first one may bring the status label up to date).
   r.hub.emit('session', r.hub.sessions.s1);
