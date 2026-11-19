@@ -15,7 +15,7 @@ import { Ledger } from "./ledger.js";
 import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
-import { createLiveBranches } from "./live-branches.js";
+import { createBranchTree, createLiveBranches } from "./live-branches.js";
 import { createIssueList } from "./issues.js";
 import { createAccountsComment } from "./pr-comment.js";
 import { findProject, OFF_MESSAGES } from "./project.js";
@@ -216,6 +216,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
   };
   // Session branches with ahead/behind, last commit, dirty flag and PR phase (#792); cached 3s.
   d.liveBranches = dep.liveBranches ?? createLiveBranches({ root, sessions: () => hub.sessions, prStatus: d.prStatus });
+  // Commit tree of the integration branch and those session branches (#877); cached 3s.
+  d.branchTree = dep.branchTree ?? createBranchTree({ root, liveBranches: d.liveBranches });
 
   const timers = [];
   // Each timer is guarded on its own: a Hub error must not stop the server or the drawing routes.

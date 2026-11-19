@@ -168,3 +168,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## react-git-log (`@tomplum/react-git-log`)
+
+https://github.com/TomPlum/react-git-log — draws the commit lanes of the 브랜치 tab (#877). Bundled into the web
+build. Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0); the full text
+ships in `node_modules/@tomplum/react-git-log/LICENSE`. Copyright (c) Thomas Plumpton. Not modified.

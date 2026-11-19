@@ -1,6 +1,7 @@
 // Live branch view (#792): every session branch with its owner sessions, issue, commits ahead/behind the integration
-// branch, last commit, PR phase and uncommitted-work flag. BranchesPage is the 세션 보드 › 브랜치 tab; BranchesWidget
-// is the compact list a dashboard can place (it loads its own data). Merged branches fade. Read-only, metadata only.
+// branch, last commit, PR phase and uncommitted-work flag. BranchesPage is the 세션 보드 › 브랜치 tab, drawn as a commit
+// tree (#877); BranchesWidget is the compact list a dashboard can place (it loads its own data). Merged branches fade.
+// Read-only, metadata only.
 import { useId, useMemo } from 'react';
 import { ArrowRight, GitBranch } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -11,7 +12,8 @@ import { ago, TONE_TEXT } from './lib/format.ts';
 import { aheadBehindText, PR_PHASE, prOffText, shownRows, type BranchRow, type BranchSession } from './lib/liveBranches.ts';
 import { useScoped } from './scope';
 import { useNow } from './AttentionStrip';
-import { useLiveBranches } from './useLiveBranches';
+import { useBranchTree, useLiveBranches } from './useLiveBranches';
+import { BranchTreeView } from './BranchTree';
 
 function Owners({ sessions }: { sessions: BranchSession[] }) {
   if (!sessions.length) return <span className="text-muted-foreground">—</span>;
@@ -61,85 +63,35 @@ function PrChip({ pr }: { pr: BranchRow['pr'] }) {
   );
 }
 
-const Dirty = ({ dirty }: { dirty: boolean | null }) =>
-  dirty ? (
-    <span className="whitespace-nowrap text-warn" title="커밋하지 않은 변경이 있어요">● 변경 있음</span>
-  ) : dirty === false ? (
-    <span className="text-muted-foreground">깨끗함</span>
-  ) : (
-    <span className="text-muted-foreground">—</span>
-  );
-
-const LastCommit = ({ row, now }: { row: BranchRow; now: number }) => (
-  <span className="flex min-w-0 items-baseline gap-2">
-    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{row.lastAt ? ago(row.lastAt, now) : '—'}</span>
-    <span className="truncate" title={row.subject}>{row.subject}</span>
-  </span>
-);
-
-const CELL = 'px-3 py-2 align-middle @max-[720px]/branches:flex @max-[720px]/branches:gap-2 @max-[720px]/branches:px-0 @max-[720px]/branches:py-0.5 @max-[720px]/branches:before:shrink-0 @max-[720px]/branches:before:text-muted-foreground @max-[720px]/branches:before:content-[attr(data-label)]';
-const HEAD = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-
-/** 세션 보드 › 브랜치: one row per session branch of the board's project scope, updating live. */
+/** 세션 보드 › 브랜치: the commit tree of the board's project scope (#877), lanes per session branch, updating live. */
 export function BranchesPage() {
   const data = useLiveBranches();
+  const tree = useBranchTree();
   const { sessions, scope } = useScoped();
   const now = useNow();
-  const caption = useId();
   const ids = useMemo(() => (scope === undefined ? null : new Set(sessions.map((s) => s.id))), [sessions, scope]);
   const rows = useMemo(() => (data && data !== 'failed' ? shownRows(data.rows, ids ? (s) => ids.has(s.id) : null) : []), [data, ids]);
 
-  if (data === null) return <p role="status" className="m-0 px-6 py-6 text-sm text-muted-foreground max-md:px-4">브랜치를 불러오는 중이에요.</p>;
-  if (data === 'failed') return <p role="alert" className="m-0 px-6 py-6 text-sm text-destructive max-md:px-4">브랜치를 불러오지 못했어요. 잠시 뒤 다시 시도해요.</p>;
+  if (data === null || tree === null) return <p role="status" className="m-0 px-6 py-6 text-sm text-muted-foreground max-md:px-4">브랜치를 불러오는 중이에요.</p>;
+  if (data === 'failed' || tree === 'failed') return <p role="alert" className="m-0 px-6 py-6 text-sm text-destructive max-md:px-4">브랜치를 불러오지 못했어요. 잠시 뒤 다시 시도해요.</p>;
   const off = prOffText(data.pr);
   return (
-    <section data-branches-page className="@container/branches flex min-w-0 flex-col gap-3 px-6 py-5 max-md:px-4">
+    <section data-branches-page className="flex min-w-0 flex-col gap-3 px-6 py-5 max-md:px-4">
       {off && <p className="m-0 text-xs text-muted-foreground">{off}</p>}
-      {!rows.length ? (
-        <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>
-      ) : (
-        <div tabIndex={0} role="region" aria-labelledby={caption} className="max-w-full overflow-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-          <table className="w-full border-separate border-spacing-0 text-sm @max-[720px]/branches:block">
-            <caption id={caption} className="sr-only">
-              세션 브랜치, {data.base ?? '기준 브랜치'} 기준
-            </caption>
-            <thead className="sticky top-0 z-10 bg-background @max-[720px]/branches:hidden">
-              <tr className="[&>th]:border-b">
-                <th scope="col" className={HEAD}>브랜치</th>
-                <th scope="col" className={HEAD}>세션</th>
-                <th scope="col" className={HEAD}>{data.base ?? '기준'} 대비</th>
-                <th scope="col" className={HEAD}>최근 커밋</th>
-                <th scope="col" className={HEAD}>PR</th>
-                <th scope="col" className={HEAD}>작업 폴더</th>
-              </tr>
-            </thead>
-            <tbody className="@max-[720px]/branches:block">
-              {rows.map((r) => (
-                <tr
-                  key={r.branch}
-                  data-branch-row
-                  data-merged={r.merged || undefined}
-                  className={cn('[&>*]:border-b last:[&>*]:border-b-0 @max-[720px]/branches:block @max-[720px]/branches:border-b @max-[720px]/branches:px-3 @max-[720px]/branches:py-2 @max-[720px]/branches:[&>*]:border-b-0 @max-[720px]/branches:[&>th]:block', r.merged && 'opacity-50')}
-                >
-                  <th scope="row" className="px-3 py-2 text-left font-normal @max-[720px]/branches:px-0">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <GitBranch aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate font-mono text-[13px]" title={r.branch}>{r.branch}</span>
-                      {r.issue != null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">#{r.issue}</span>}
-                      {r.merged && <span className="shrink-0 text-xs text-muted-foreground">병합됨</span>}
-                    </span>
-                  </th>
-                  <td data-label="세션 " className={CELL}><Owners sessions={r.sessions} /></td>
-                  <td data-label="앞/뒤 " className={CELL}><AheadBehind row={r} base={data.base} /></td>
-                  <td data-label="커밋 " className={cn(CELL, 'max-w-[28rem] @max-[720px]/branches:max-w-none')}><LastCommit row={r} now={now} /></td>
-                  <td data-label="PR " className={CELL}><PrChip pr={r.pr} /></td>
-                  <td data-label="작업 폴더 " className={CELL}><Dirty dirty={r.dirty} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {!rows.length && <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>}
+      <BranchTreeView
+        tree={tree}
+        rows={rows}
+        now={now}
+        renderTip={(r) => (
+          <>
+            <Owners sessions={r.sessions} />
+            <AheadBehind row={r} base={data.base} />
+            <PrChip pr={r.pr} />
+            {r.dirty && <span className="whitespace-nowrap text-warn" title="커밋하지 않은 변경이 있어요">● 변경 있음</span>}
+          </>
+        )}
+      />
     </section>
   );
 }

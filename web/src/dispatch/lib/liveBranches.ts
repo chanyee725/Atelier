@@ -52,3 +52,52 @@ export function shownRows(rows: readonly BranchRow[], keep: ((s: BranchSession) 
 /** "3↑ 1↓" text for screen readers and titles. */
 export const aheadBehindText = (r: Pick<BranchRow, 'ahead' | 'behind'>, base: string | null) =>
   `${base ?? '기준 브랜치'}보다 ${r.ahead}개 앞서고 ${r.behind}개 뒤처져 있어요`;
+
+/** GET /api/branches/tree (#877): commits newest first, metadata only. */
+export type TreeCommit = { hash: string; parents: string[]; branch: string; at: number | null; subject: string };
+export type BranchTree = { base: string | null; commits: TreeCommit[]; tips: { branch: string; hash: string }[] };
+
+/** One graph row: the commit plus, at a branch tip, that branch's live row (null on the base or a plain commit). */
+export type TreeEntry = {
+  hash: string;
+  parents: string[];
+  branch: string;
+  message: string;
+  committerDate: string;
+  at: number | null;
+  tips: string[];
+  row: BranchRow | null;
+};
+
+/**
+ * Graph rows for the 브랜치 tab: the base branch's commits and those of `rows` (already scoped and sorted), newest
+ * first. Commits of other branches go, and so do parents that are not shown, so lanes never point at nothing.
+ */
+export function treeEntries(tree: BranchTree, rows: readonly BranchRow[]): TreeEntry[] {
+  const byBranch = new Map(rows.map((r) => [r.branch, r]));
+  const keep = (b: string) => b === tree.base || byBranch.has(b);
+  const commits = tree.commits.filter((c) => keep(c.branch));
+  const shown = new Set(commits.map((c) => c.hash));
+  const tipsAt = new Map<string, string[]>();
+  for (const t of tree.tips) if (keep(t.branch) && shown.has(t.hash)) tipsAt.set(t.hash, [...(tipsAt.get(t.hash) ?? []), t.branch]);
+  return commits.map((c) => {
+    const tips = tipsAt.get(c.hash) ?? [];
+    const own = tips.find((b) => b !== tree.base);
+    return {
+      hash: c.hash,
+      parents: c.parents.filter((p) => shown.has(p)),
+      branch: c.branch,
+      message: c.subject,
+      committerDate: new Date(c.at ?? 0).toISOString(),
+      at: c.at,
+      tips,
+      row: own ? byBranch.get(own) ?? null : null,
+    };
+  });
+}
+
+/** Screen-reader summary of the tree: how many branches and commits, against which base. */
+export const treeSummary = (entries: readonly TreeEntry[], base: string | null) => {
+  const branches = new Set(entries.map((e) => e.branch));
+  return `${base ?? '기준 브랜치'} 기준, 세션 브랜치 ${Math.max(0, branches.size - (base && branches.has(base) ? 1 : 0))}개, 커밋 ${entries.length}개`;
+};

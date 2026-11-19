@@ -1,7 +1,7 @@
 // Live branch view (#792): one row per session branch with its commits ahead/behind the integration branch, the
 // tip's time and subject, the PR phase and whether the worktree holds uncommitted work. Read-only: git and gh run
 // only through cli.js (git.js, pr-status.js). Metadata only — no diff text, PR title or author is kept.
-import { branchStatus, currentBranch, integrationBranch, tipSubject, worktreeDirty } from "./git.js";
+import { branchStatus, commitGraph, currentBranch, integrationBranch, tipSubject, worktreeDirty } from "./git.js";
 import { issueOfBranch } from "./ledger.js";
 
 /** Rows answered per call; the PR lookup covers only the first PR_ROWS of them (open sessions first). */
@@ -88,6 +88,28 @@ export function createLiveBranches({ root, sessions, prStatus = null, now = Date
     if (!force && last && now() - last.at < cacheMs) return last.value;
     if (inflight) return inflight;
     inflight = collect().then(value => {
+      last = { at: now(), value };
+      return value;
+    }).finally(() => { inflight = null; });
+    return inflight;
+  };
+}
+
+/**
+ * Makes `branchTree()` (#877): the commit tree of the integration branch and the session branches `liveBranches()`
+ * lists, answering { base, commits: [{ hash, parents, branch, at, subject }], tips: [{ branch, hash }] }. Same cache
+ * and overlap sharing as liveBranches. Metadata only.
+ */
+export function createBranchTree({ root, liveBranches, now = Date.now, cacheMs = 3000, limit = 150 }) {
+  let last = null;
+  let inflight = null;
+  return async function branchTree({ force = false } = {}) {
+    if (!force && last && now() - last.at < cacheMs) return last.value;
+    if (inflight) return inflight;
+    inflight = (async () => {
+      const live = await liveBranches();
+      return commitGraph(root, { base: live.base, branches: live.rows.map(r => r.branch), limit });
+    })().then(value => {
       last = { at: now(), value };
       return value;
     }).finally(() => { inflight = null; });
