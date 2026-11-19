@@ -22,8 +22,8 @@ import { effectiveRoles, teamSettings } from "./settings.js";
 import { readLegacyTheme, UserDefaults } from "../user-defaults.js";
 
 /** Hub events forwarded to the shared SSE stream; none collides with Drawing's `workspace`. */
-export const HUB_EVENTS = ["session", "message", "limits", "removed", "tasks", "tickets"];
-const THEMES = ["system", "light", "dark"];
+export const HUB_EVENTS = ["session", "message", "live", "limits", "removed", "tasks", "tickets"];
+const THEMES = ["system", "light", "dark", "monitor"];
 
 
 /** The git top level that holds dir, or null when dir is not in a git work tree. */
@@ -56,7 +56,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   await limits.load({ claude: store.data.limits, gemini: store.data.geminiQuota }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
   // Per-project copies saved by an older version: merged into the shared file above, then dropped.
   if ("limits" in store.data || "geminiQuota" in store.data) { delete store.data.limits; delete store.data.geminiQuota; store.save(); }
-  const hub = new Hub({ root, store, models, roles: ROLES, port, limits, spawnCli: dep.spawnCli });
+  const hub = new Hub({ root, store, models, roles: ROLES, port, limits, workspaceDir, spawnCli: dep.spawnCli });
 
   // A provider counts as connected only after the user connects it here, even if its CLI is already
   // logged in on this machine (`cliLoggedIn` keeps the CLI's own state). Until one is connected no

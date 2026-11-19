@@ -225,6 +225,45 @@ test('a one-step plan with autostart starts at once', { timeout: 60_000 }, async
   }
 });
 
+test('a new plan goes into the folder write_plan names, else the one its steps\' files share (#726)', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, d, ws } = t;
+    mkdirSync(join(ws, 'Proj'));
+    mkdirSync(join(ws, 'Other'));
+    const fresh = async () => {
+      const s = (await call('POST', '/api/sessions', { items: [{ role: 'lead', task: 'plan it' }], worktree: false })).body.sessions[0];
+      await until(() => ['idle', 'done'].includes(d.hub.get(s.id).status), 10_000);
+      return s;
+    };
+    const one = [{ title: 'a', role: 'impl', files: ['Proj/doc.dpx.json'] }];
+    // A folder that is not a top-level workspace folder, or one that leaves the workspace, is refused and writes nothing.
+    for (const folder of ['Nope', '../x', 'Proj/sub', '.drawing']) {
+      const r = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, folder, goal: '틀린 폴더', steps: one });
+      assert.equal(r.status, 400, folder);
+      assert.match(r.body.error, /프로젝트 폴더/);
+    }
+    // The named folder wins over the steps' files and becomes the lead's project.
+    const named = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, folder: 'Other', title: '이름 붙인 폴더', goal: 'x', steps: one });
+    assert.equal(named.status, 200, JSON.stringify(named.body));
+    assert.equal(named.body.path, 'Other/pipelines/이름-붙인-폴더.dpx.json');
+    assert.equal(d.hub.get(t.lead.id).folder, 'Other');
+    // No folder and a lead without one: the folder every step's files share.
+    const lead2 = await fresh();
+    const inferred = await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '추론', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['./Proj/x/y.dpx.json'] }, { title: 'c', role: 'review' }] });
+    assert.equal(inferred.body.path, 'Proj/pipelines/추론.dpx.json');
+    // Files in two folders, or in a folder the workspace does not have, stay at the top level.
+    const lead3 = await fresh();
+    const mixed = await call('POST', '/api/pipeline/plan', { lead: lead3.id, title: '섞임', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['Other/z.dpx.json'] }] });
+    assert.equal(mixed.body.path, 'pipelines/섞임.dpx.json');
+    const lead4 = await fresh();
+    const code = await call('POST', '/api/pipeline/plan', { lead: lead4.id, title: '코드', goal: 'x', steps: STEPS });
+    assert.equal(code.body.path, 'pipelines/코드.dpx.json');
+  } finally {
+    await t.stop();
+  }
+});
+
 // ---- E27: 멈추기, 이어서 하기, 계획 다시 열기, the limit guard ----
 
 async function running(t, steps = STEPS) {
