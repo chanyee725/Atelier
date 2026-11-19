@@ -8,7 +8,7 @@ import { cn } from './lib/utils';
 import { SAVED_STATUS, SAVING } from './fileSession';
 import type { Crumb } from './projectNav';
 
-import type { View } from './viewMode';
+import { isPipelineView, type View } from './viewMode';
 
 export type { View };
 
@@ -16,6 +16,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'doc', label: '문서' },
   { id: 'both', label: '둘 다' },
   { id: 'canvas', label: '캔버스' },
+  { id: 'plan', label: '플랜' },
   { id: 'run', label: '실행' },
 ];
 // 390px: one pane at a time (design doc 6 §6).
@@ -40,7 +41,7 @@ type Props = {
   statusAlert?: boolean;
   /** The view shown (on narrow screens never 'both'). */
   view: View;
-  /** A pipeline file is open: offer the 실행 view. */
+  /** A pipeline file is open: offer the 플랜 and 실행 views. */
   canRun?: boolean;
   onView: (v: View) => void;
   onTitle: (t: string) => void;
@@ -126,7 +127,7 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
         role="toolbar"
         className={cn('shrink-0', narrow && 'h-12')}
       >
-        {(narrow ? NARROW_VIEWS : VIEWS).filter((v) => canRun || v.id !== 'run').map((v) => (
+        {(narrow ? NARROW_VIEWS : VIEWS).filter((v) => canRun || !isPipelineView(v.id)).map((v) => (
           <ToggleGroupItem key={v.id} value={v.id} className={cn('px-2 md:px-3', narrow && 'h-11 min-w-11', FOCUS_RING)}>
             {v.label}
           </ToggleGroupItem>

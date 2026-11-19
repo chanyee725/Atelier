@@ -716,3 +716,40 @@ body {
   /* Back to the system text colour: no brand colour, no gradient. */
   .provider-icon { color: inherit; fill: currentColor; }
 }
+/* 플랜 view (#729): the plan's steps as nodes in their state colour (#687), arrows for the run order. Quiet by design:
+   the one moving part is the pulse on a running step. */
+.plan-graph { position: relative; margin: 0 auto; }
+.plan-graph ol { margin: 0; padding: 0; list-style: none; }
+.plan-edges { position: absolute; inset: 0; overflow: visible; }
+.plan-edge { fill: none; stroke: var(--border); stroke-width: 1.5; }
+.plan-edge[data-done] { stroke: var(--step-done); }
+.plan-arrow path { fill: var(--border); }
+.plan-arrow[data-done] path { fill: var(--step-done); }
+.plan-node { position: absolute; }
+.plan-node-box {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px; block-size: 100%; padding: 8px 12px;
+  border: 1px solid color-mix(in oklch, var(--tone) 55%, var(--border)); border-radius: var(--radius);
+  background: color-mix(in oklch, var(--tone) 8%, var(--card)); color: var(--card-foreground);
+}
+.plan-node[data-tone='pending'] .plan-node-box { border-style: dashed; background: var(--card); }
+.plan-node:is([data-tone='active'], [data-tone='failed'], [data-tone='blocked']) .plan-node-box { border-width: 2px; border-color: var(--tone); }
+.plan-node-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 13px/18px var(--font-sans); }
+.plan-node-n { margin-inline-end: 6px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.plan-node-state { display: flex; align-items: center; gap: 4px; font: 400 12px/16px var(--font-sans); color: var(--muted-foreground); }
+.plan-node-glyph { inline-size: 14px; text-align: center; font-weight: 600; color: var(--tone); }
+.plan-badges { position: absolute; left: 8px; top: -10px; display: flex; }
+.plan-badge {
+  display: grid; place-items: center; inline-size: 20px; block-size: 20px; margin-inline-end: -6px; border-radius: 50%;
+  border: 2px solid var(--background); color: var(--background); font: 600 10px/1 var(--font-sans); cursor: default;
+}
+.plan-badge-more { background: var(--muted); color: var(--foreground); font-size: 9px; }
+@media (prefers-reduced-motion: no-preference) {
+  .plan-node-box.is-live { animation: run-pulse 0.8s ease-in-out infinite alternate; }
+}
+@media (forced-colors: active) {
+  .plan-node-box { border-color: CanvasText; background: Canvas; }
+  .plan-node-box.is-live { border-color: Highlight; }
+  .plan-edge { stroke: CanvasText; }
+  .plan-arrow path { fill: CanvasText; }
+  .plan-badge { background: Canvas !important; color: CanvasText; border-color: CanvasText; }
+}
