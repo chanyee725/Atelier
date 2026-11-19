@@ -114,4 +114,6 @@ test("plan steps carry a mode: shared list matches the server's, write_plan chec
 test("the lead's MCP tools list the six modes", () => {
   const src = readFileSync(new URL("../../server/dispatch/mcp.js", import.meta.url), "utf8");
   for (const id of MODE_IDS) assert.match(src, new RegExp(`id: "${id}"`));
+  // #856: with no mode given, the lead picks one from the task; research is named for search work.
+  assert.match(src, /주어지지 않으면 과제를 보고 고른다\(웹 서치·자료 조사면 research\)/);
 });
