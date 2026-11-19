@@ -7,7 +7,9 @@ import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalid
 import '@excalidraw/excalidraw/index.css';
 import type { Block } from '../api';
 import type { BlockLayout, Scene } from '../../../shared/render/index.ts';
-import { BlockEditor } from '../BlockEditor';
+import { BlockEditor, type BlockEditorHandle } from '../BlockEditor';
+import { IconPicker } from './IconPicker';
+import { setLineIcon } from '../dsl/iconPick';
 import { BlockProps } from '../BlockProps';
 import { Button } from '../components/ui/button';
 import { NativeSelect } from '../components/ui/native-select';
@@ -107,6 +109,7 @@ const cleanFontLoaded = () => Array.from(document.fonts).some((f) => f.family.re
 export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange, handle, path }: Props) {
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const editorRef = useRef<BlockEditorHandle>(null);
   // Only diagram blocks are selected: hide Excalidraw's "double-click to crop" hint, since that opens the code.
   const [blockSelected, setBlockSelected] = useState(false);
   // Excalidraw's "move the canvas" hint is for an empty canvas; with elements on it the hint only covers them (#438).
@@ -1097,7 +1100,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           onKeyDown={(e) => e.key === 'Escape' && !e.defaultPrevented && setEditing(null)}
         >
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-sm font-semibold">다이어그램 코드</span>
+            <span className="shrink-0 whitespace-nowrap text-sm font-semibold">다이어그램 코드</span>
             <NativeSelect aria-label="종류" value={block.type} onChange={(e) => patchBlock({ type: e.target.value })}>
               {!isDiagramType(block.type) && <option value={block.type}>{block.type}</option>}
               {DIAGRAM_TYPES.map((t) => (
@@ -1119,13 +1122,16 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
                 예시 넣기
               </Button>
             )}
+            {(block.type === 'architecture' || block.type === 'flowchart' || block.type === 'sequence' || block.type === 'erd') && (
+              <IconPicker onPick={(name) => patchBlock({ code: setLineIcon(block.code, editorRef.current?.cursorLine() ?? Number.MAX_SAFE_INTEGER, name).code })} />
+            )}
             <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setEditing(null)}>
               닫기
             </Button>
           </div>
           <BlockProps type={block.type} code={block.code} onChange={(code) => patchBlock({ code })} />
           <div className="min-h-0 flex-1 overflow-auto">
-            <BlockEditor key={block.id} code={block.code} type={block.type} dark={dark} onChange={(code) => patchBlock({ code })} />
+            <BlockEditor ref={editorRef} key={block.id} code={block.code} type={block.type} dark={dark} onChange={(code) => patchBlock({ code })} />
           </div>
           {resets.has(block.id) && (
             <p className="text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, tooltips, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -10,7 +10,10 @@ import { analyzeDiagram } from './dsl/adapter';
 import { syncSpec, userCode } from './codeSync';
 import { dslCompletionSource } from './dsl/completion';
 
-type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void };
+/** What the code panel asks of the editor: the line the caret is on (0-based), or null before it was focused. */
+export type BlockEditorHandle = { cursorLine: () => number | null };
+
+type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void; ref?: Ref<BlockEditorHandle> };
 
 const baseTheme = EditorView.theme({
   '&': { fontSize: '13.5px', background: 'var(--muted)', color: 'var(--foreground)' },
@@ -25,9 +28,16 @@ const baseTheme = EditorView.theme({
   '.cm-completionDetail': { color: 'var(--muted-foreground)', marginLeft: '0.75em', fontStyle: 'normal' },
 });
 
-export function BlockEditor({ code, type, dark, onChange }: Props) {
+export function BlockEditor({ code, type, dark, onChange, ref }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const focused = useRef(false);
+  useImperativeHandle(ref, () => ({
+    cursorLine: () => {
+      const v = view.current;
+      return v && focused.current ? v.state.doc.lineAt(v.state.selection.main.head).number - 1 : null;
+    },
+  }));
   const hl = useRef(new Compartment());
   const typeRef = useRef(type);
   const onChangeRef = useRef(onChange);
@@ -67,6 +77,10 @@ export function BlockEditor({ code, type, dark, onChange }: Props) {
           lintGutter(),
           lint,
           keymap.of([indentWithTab, ...completionKeymap, ...defaultKeymap, ...historyKeymap]),
+          EditorView.focusChangeEffect.of((_, focus) => {
+            if (focus) focused.current = true;
+            return null;
+          }),
           EditorView.updateListener.of((u) => {
             // An outside change synced in below is not a user edit: no onChange, so it is not saved back (#547).
             const next = userCode(u);
