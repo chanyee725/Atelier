@@ -63,6 +63,7 @@ function fieldsProblem(f: Record<string, unknown>, at: string): string | null {
     if (f[k] !== undefined && !isName(f[k])) return `${at}.${k} must be a string of 1-${MAX_PLAN_NAME} characters`;
   }
   if (f.perm !== undefined && !(PLAN_PERMS as readonly unknown[]).includes(f.perm)) return `${at}.perm must be one of ${PLAN_PERMS.join(', ')}`;
+  if (f.mode !== undefined && !(PLAN_MODES as readonly unknown[]).includes(f.mode)) return `${at}.mode must be one of ${PLAN_MODES.join(', ')}`;
   if (f.gate !== undefined && !(PLAN_GATES as readonly unknown[]).includes(f.gate)) return `${at}.gate must be one of ${PLAN_GATES.join(', ')}`;
   if (f.n !== undefined && (!Number.isInteger(f.n) || (f.n as number) < 1 || (f.n as number) > MAX_PLAN_N)) return `${at}.n must be an integer 1-${MAX_PLAN_N}`;
   if (f.task !== undefined && (typeof f.task !== 'string' || f.task.length > MAX_PLAN_TASK)) return `${at}.task must be a string of at most ${MAX_PLAN_TASK} characters`;
