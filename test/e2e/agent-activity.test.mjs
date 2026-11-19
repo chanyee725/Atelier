@@ -151,6 +151,8 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   const items = await feed.locator('[data-inbox-row]').allTextContents();
   assert.ok(items.some((x) => x.includes(a.name) && x.includes('시작했어요')), JSON.stringify(items));
   assert.ok(items.some((x) => x.includes(b.name)), JSON.stringify(items));
+  // #797: opening the 알림함 no longer marks it read; 모두 읽음 does.
+  await feed.getByRole('button', { name: '모두 읽음' }).click();
   await page.waitForFunction(() => !document.querySelector('[data-activity-badge]'), null, { timeout: 5_000 });
   const fb = await feed.boundingBox();
   assert.ok(fb.x >= 0 && fb.y >= 0 && fb.x + fb.width <= 1600 && fb.y + fb.height <= 900, `the feed stays in the viewport: ${JSON.stringify(fb)}`);
