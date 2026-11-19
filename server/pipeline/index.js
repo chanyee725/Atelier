@@ -18,6 +18,7 @@ import { redact } from '../dispatch/redact.js';
 import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
+import { inferPlanFolder, isFolderName, topFolders } from './plan-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
 import { resolvedStep } from '../../shared/dispatch/plan.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
@@ -313,8 +314,15 @@ export async function setup(ctx) {
       const own = leadEntries(lead.id, 'plan')[0];
       path = own ? own[0] : null;
     }
-    // A new plan the lead names no path for goes into its project folder (E505c), if it has one.
-    const leadFolder = lead.folder ?? null;
+    // A new plan the lead names no path for goes into a project folder (E505c, #726): the folder write_plan names,
+    // else the lead's, else the one top-level folder every file the steps name sits in.
+    const folders = await topFolders(ws.root);
+    let leadFolder;
+    if (body.folder != null && body.folder !== '') {
+      const name = typeof body.folder === 'string' ? body.folder.trim() : '';
+      if (!isFolderName(name) || !folders.includes(name)) throw new StoreError(400, `작업공간에 없는 프로젝트 폴더예요: ${String(body.folder).slice(0, 80)}`);
+      leadFolder = name;
+    } else leadFolder = lead.folder ?? inferPlanFolder(input.steps, folders);
     const existing = path ? all[path] : null;
     if (existing?.state === 'paused') throw new StoreError(409, '멈춘 계획이에요. 사용자가 계획 다시 열기를 누르면 고칠 수 있어요');
     if (existing?.state === 'running') throw new StoreError(409, '실행 중인 계획은 바꿀 수 없어요. 바뀐 점은 note_step으로 남겨 주세요');
