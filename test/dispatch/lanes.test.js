@@ -104,3 +104,16 @@ test("agent prompts call the tool Atelier, carry the lanes and the lead merge, a
     assert.match(p, /\[개인정보\]/);
   }
 });
+
+test("implementer and designer prompts carry the UI library rules (#764)", async () => {
+  const { ROLES: roles } = await import("../../server/dispatch/roles.js");
+  for (const id of ["impl", "design"]) {
+    const p = roles.find(r => r.id === id).prompt;
+    for (const lib of ["Sonner", "Vaul", "cmdk", "NumberFlow"]) assert.match(p, new RegExp(lib));
+    assert.match(p, /화면마다 눈에 띄는 요소는 하나/);
+    assert.match(p, /PR에 제안한다/);
+    assert.match(p, /docs\/design\/ui-libraries\.md/);
+    assert.doesNotMatch(p, /꼭/);
+  }
+  for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /Sonner/);
+});
