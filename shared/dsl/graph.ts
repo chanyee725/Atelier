@@ -14,9 +14,16 @@ interface Scope {
   name?: string;
 }
 
-/** Parser shared by cloud architecture and flowchart diagrams. */
-export function parseGraph(c: Cursor, type: GraphDiagram['type']): GraphDiagram {
-  c.keys = GRAPH_KEYS;
+export interface GraphParseOptions {
+  /** Attribute keys that do not warn (default GRAPH_KEYS). */
+  keys?: ReadonlySet<string>;
+  /** Extra statement keywords; returns true when it consumed the statement. */
+  keyword?: (c: Cursor) => boolean;
+}
+
+/** Parser shared by cloud architecture and flowchart diagrams (and BPMN, which reshapes the result). */
+export function parseGraph(c: Cursor, type: GraphDiagram['type'], opts: GraphParseOptions = {}): GraphDiagram {
+  c.keys = opts.keys ?? GRAPH_KEYS;
   c.checkShapes = true;
   const ast: GraphDiagram = {
     ...emptyBase(),
@@ -94,6 +101,7 @@ export function parseGraph(c: Cursor, type: GraphDiagram['type']): GraphDiagram 
       endStatement(c);
       continue;
     }
+    if (opts.keyword?.(c)) continue;
     if (parseCommonKeyword(c, ast)) continue;
 
     const first = parseEndpoints(c);

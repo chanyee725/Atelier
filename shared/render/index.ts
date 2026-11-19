@@ -1,6 +1,6 @@
 // Diagram-as-code → laid-out Scene → SVG. Pure TS; runs in Node and in the browser.
 
-import { parse } from '../dsl/index.ts';
+import { bpmnAsGraph, parse } from '../dsl/index.ts';
 import type { Diagnostic, Diagram, DiagramType } from '../dsl/index.ts';
 import { layoutErd } from './layout-erd.ts';
 import type { BlockLayout } from './block-layout.ts';
@@ -37,6 +37,9 @@ export function layoutDiagram(diagram: Diagram, options: LayoutOptions = {}): Pr
       return layoutSequence(diagram);
     case 'erd':
       return layoutErd(diagram);
+    case 'bpmn':
+      // Interim until the lane layout (#841): pools and lanes drawn as graph groups.
+      return layoutGraph(bpmnAsGraph(diagram), options.layout, { wrapGroups: options.wrapGroups });
     default:
       return layoutGraph(diagram, options.layout, { wrapGroups: options.wrapGroups });
   }

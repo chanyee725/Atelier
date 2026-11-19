@@ -2,7 +2,7 @@
 
 import type { CodeRef } from './code-refs.ts';
 
-export type DiagramType = 'cloud-architecture' | 'flowchart' | 'sequence' | 'erd';
+export type DiagramType = 'cloud-architecture' | 'flowchart' | 'sequence' | 'erd' | 'bpmn';
 export type Severity = 'error' | 'warning';
 
 /** A source range on one line. `line` and `column` are 1-based; `offset` is a 0-based UTF-16 index. */
@@ -200,7 +200,67 @@ export interface ErdDiagram extends DiagramBase {
   relationships: ErdRelationship[];
 }
 
-export type Diagram = GraphDiagram | SequenceDiagram | ErdDiagram;
+// ---------- BPMN (swimlane) ----------
+
+/** Eraser's `type:` values. `activity` is the default. */
+export type BpmnNodeType = 'activity' | 'event' | 'gateway';
+
+export interface BpmnNode {
+  id: string;
+  name: string;
+  label: string;
+  attrs: Attrs;
+  type: BpmnNodeType;
+  /** Events only: `start` has no incoming edge, `end` no outgoing edge, the rest are `intermediate`. */
+  eventRole?: 'start' | 'end' | 'intermediate';
+  /** Lane id; absent for a node outside every lane. */
+  lane?: string;
+  /** Pool id; absent for a node outside every pool. */
+  pool?: string;
+  /** True when created only because a connection mentioned it. */
+  implicit: boolean;
+  code?: CodeRef[];
+  span: Span;
+}
+
+export interface BpmnLane {
+  id: string;
+  name: string;
+  label: string;
+  attrs: Attrs;
+  /** Pool id; absent for a top-level lane (a root `{ }` holding only nodes). */
+  pool?: string;
+  /** Node ids in source order. */
+  nodes: string[];
+  span: Span;
+}
+
+export interface BpmnPool {
+  id: string;
+  name: string;
+  label: string;
+  attrs: Attrs;
+  /** Lane ids in source order. */
+  lanes: string[];
+  span: Span;
+}
+
+export interface BpmnDiagram extends DiagramBase {
+  type: 'bpmn';
+  /** `right` (default, horizontal lanes) or `down` (vertical lanes). */
+  direction: Direction;
+  /** Global `layout`: `compact` (default) or `sequential`. */
+  layout: 'compact' | 'sequential';
+  pools: BpmnPool[];
+  /** All lanes in source order, pooled or not. */
+  lanes: BpmnLane[];
+  /** All nodes in source order. */
+  nodes: BpmnNode[];
+  /** Node-to-node connections only (Eraser ignores connections to pools and lanes). */
+  edges: GraphEdge[];
+}
+
+export type Diagram = GraphDiagram | SequenceDiagram | ErdDiagram | BpmnDiagram;
 
 export interface ParseResult<D extends Diagram = Diagram> {
   ast: D;

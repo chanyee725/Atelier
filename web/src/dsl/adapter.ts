@@ -79,7 +79,7 @@ export async function renderPreview(type: string, code: string, theme: PreviewTh
     }
     // Atelier never changes the file: overrides the code no longer fits are left out here and pruned on save.
     const { ast, diagnostics } = parse(code, pt);
-    const kept = ast.type === 'sequence' || ast.type === 'erd' ? { layout: undefined } : reconcileLayout(ast, layout);
+    const kept = ast.type === 'sequence' || ast.type === 'erd' || ast.type === 'bpmn' ? { layout: undefined } : reconcileLayout(ast, layout);
     const { svg, scene } = await renderDiagram(ast, { theme, layout: kept.layout, wrapGroups: GROUP_WRAP });
     return { svg, diagnostics, scene, theme, ...('reset' in kept && kept.reset ? { reset: kept.reset } : {}) };
   } catch {
@@ -98,7 +98,7 @@ export function prunedLayout<B extends { type: string; code: string; layout?: Bl
   if (!parsed || !ast || diagnostics.some((d) => d.severity === 'error')) return null;
   const { layout: _drop, ...rest } = b;
   // A layout only belongs to graph diagrams; after switching to another kind it is dead weight.
-  if (ast.type === 'sequence' || ast.type === 'erd') return rest as B;
+  if (ast.type === 'sequence' || ast.type === 'erd' || ast.type === 'bpmn') return rest as B;
   const r = reconcileForSave({ ast, diagnostics }, b.layout);
   if (!r.changed) return null;
   return (r.layout ? { ...rest, layout: r.layout } : rest) as B;
