@@ -1,6 +1,7 @@
 // 새 프로젝트 (E554): browse the folders of the PC that runs the server (not the browser's own file picker, since the
-// app is often opened from another device) and link the folder shown as a project, or make a blank project by name.
-// Server: GET /api/local-folders, POST /api/workspace/local-project (docs/design/local-folder-projects.md).
+// app is often opened from another device) and open the folder shown as a project: the server adds it to its folder
+// list and switches to it. Or make a blank project (a top-level folder of the open one) by name.
+// Server: GET /api/local-folders, POST /api/workspaces (docs/design/local-folder-projects.md).
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, CornerLeftUp, Folder, House } from 'lucide-react';
 import { api, ApiError, type LocalFolders } from './api';
@@ -10,8 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 
 type Props = {
   onClose: () => void;
-  /** The folder is now a project: `path` is its workspace project path. */
-  onLinked: (path: string) => void;
+  /** The server now runs in the picked folder: reload the app. */
+  onOpened: () => void;
   /** 빈 프로젝트: make a plain project named `name`; resolves to an error message, or null once it is made. */
   onCreateBlank: (name: string) => Promise<string | null>;
 };
@@ -24,14 +25,18 @@ const listError = (e: unknown) => {
   if (status === 400) return '폴더가 아니에요';
   return '폴더 목록을 불러오지 못했어요';
 };
-const linkError = (e: unknown) => {
-  const status = e instanceof ApiError ? e.status : 0;
+/** Korean copy for a refused folder switch (POST /api/workspaces and /open), by `code`. */
+export const workspaceError = (e: unknown) => {
   const code = e instanceof ApiError ? e.code : undefined;
-  if (code === 'already_linked') return '이미 프로젝트로 추가한 폴더예요';
-  if (code === 'inside_workspace') return '작업 폴더 안의 폴더는 추가할 수 없어요';
-  if (code === 'filesystem_root') return '최상위 폴더는 추가할 수 없어요';
-  if (status === 403) return '프로젝트를 추가하지 못했어요. 권한을 확인해 주세요';
-  return '프로젝트를 추가하지 못했어요';
+  if (code === 'sessions_running') return '실행 중인 에이전트 세션이 있어요. 세션이 끝난 뒤에 폴더를 바꿀 수 있어요';
+  if (code === 'in_use') return '다른 Drawing 서버가 이 폴더를 열고 있어요';
+  if (code === 'home_folder') return '홈 폴더 자체는 열 수 없어요. 안의 폴더를 골라 주세요';
+  if (code === 'filesystem_root') return '최상위 폴더는 열 수 없어요';
+  if (code === 'defaults_broken') return '~/.dispatch/drawing.json 파일을 읽지 못해서 저장할 수 없어요';
+  if (code === 'not_found') return '폴더를 찾을 수 없어요';
+  if (code === 'no_permission') return '이 폴더는 열 권한이 없어요';
+  if (code === 'project_mode') return '이 화면에서는 폴더를 바꿀 수 없어요';
+  return '폴더를 열지 못했어요';
 };
 
 /** Breadcrumb steps for an absolute path: [{ label, path }] from the root down. */
@@ -48,7 +53,7 @@ export function crumbs(path: string, root: string, sep: string): { label: string
 const childPath = (dir: LocalFolders, name: string) => (dir.path.endsWith(dir.sep) ? dir.path + name : dir.path + dir.sep + name);
 const baseName = (dir: LocalFolders) => crumbs(dir.path, dir.root, dir.sep).pop()?.label ?? dir.path;
 
-export function FolderPickerDialog({ onClose, onLinked, onCreateBlank }: Props) {
+export function FolderPickerDialog({ onClose, onOpened, onCreateBlank }: Props) {
   const [blank, setBlank] = useState(false);
   const nameId = useId();
   const [dir, setDir] = useState<LocalFolders | null>(null);
@@ -84,10 +89,10 @@ export function FolderPickerDialog({ onClose, onLinked, onCreateBlank }: Props) 
     setBusy(true);
     setMessage(null);
     try {
-      const r = await api.linkLocalFolder(dir.path);
-      onLinked(r.path);
+      await api.addWorkspace(dir.path);
+      onOpened();
     } catch (e) {
-      setMessage(linkError(e));
+      setMessage(workspaceError(e));
       setBusy(false);
     }
   };
@@ -123,7 +128,7 @@ export function FolderPickerDialog({ onClose, onLinked, onCreateBlank }: Props) 
           </Button>
         </DialogHeader>
         <DialogDescription id={noteId} className="px-(--overlay-x) pt-2">
-          {blank ? '연결할 폴더 없이 이름만 정해서 프로젝트를 만들어요.' : '서버 PC의 폴더를 골라 프로젝트로 추가해요. 폴더 안의 파일은 바꾸지 않아요.'}
+          {blank ? '지금 연 폴더 안에 이름만 정해서 프로젝트를 만들어요.' : '서버 PC의 폴더를 골라 열어요. 문서와 기록은 그 폴더에 저장되고, 에이전트 세션도 그 폴더의 git 프로젝트에서 실행돼요.'}
         </DialogDescription>
         {blank ? (
           <form onSubmit={(e) => void createBlank(e)} className="flex min-h-0 flex-1 flex-col">
@@ -205,13 +210,13 @@ export function FolderPickerDialog({ onClose, onLinked, onCreateBlank }: Props) 
             </ul>
             <DialogFooter className="max-sm:flex-col max-sm:items-stretch">
               <p className="m-0 mr-auto min-w-0 truncate text-sm text-muted-foreground" title={dir?.path}>
-                {dir ? <>추가할 폴더: <span className="font-medium text-foreground">{baseName(dir)}</span></> : ' '}
+                {dir ? <>열 폴더: <span className="font-medium text-foreground">{baseName(dir)}</span></> : ' '}
               </p>
               <Button variant="outline" onClick={() => switchTo(true)} disabled={busy}>
                 빈 프로젝트
               </Button>
-              <Button onClick={() => void pick()} disabled={!dir || loading || busy || !dir.parent}>
-                {busy ? '추가하는 중이에요…' : '이 폴더 선택'}
+              <Button onClick={() => void pick()} disabled={!dir || loading || busy || !dir.parent || dir.path === dir.home}>
+                {busy ? '여는 중이에요…' : '이 폴더 열기'}
               </Button>
             </DialogFooter>
           </>

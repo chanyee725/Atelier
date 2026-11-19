@@ -46,7 +46,7 @@ import { ExportMenu } from './ExportMenu';
 import { DEFAULT_EXPORT, type ExportOptions } from './export/options';
 import { HistoryDialog } from './HistoryDialog';
 import { TrashDialog } from './TrashDialog';
-import { FolderPickerDialog } from './FolderPickerDialog';
+import { FolderPickerDialog, workspaceError } from './FolderPickerDialog';
 import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
 import { displayName } from './docTitles';
@@ -402,8 +402,8 @@ export function App() {
       setError(e instanceof ApiError && e.status === 409 ? '같은 이름의 파일이 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요');
     }
   };
-  // A project is a top-level folder (design doc 6 §1); 새 프로젝트 links a folder of the server PC to one (E554).
-  // The dialog also makes a blank project (a plain named folder, no linked folder).
+  // 새 프로젝트 opens a folder of the server PC: the server switches to it and the app reloads (E554).
+  // The dialog also makes a blank project: a top-level folder of the open workspace (design doc 6 §1).
   const newProject = () => setFolderPickerOpen(true);
   const createBlankProject = async (raw: string): Promise<string | null> => {
     const name = raw.trim();
@@ -417,6 +417,16 @@ export function App() {
     }
     await projectLinked(name);
     return null;
+  };
+  // The server now runs in another folder: everything on screen belongs to the old one, so start over at home.
+  const reloadForWorkspace = () => window.location.assign('/');
+  const switchWorkspace = async (folder: string) => {
+    try {
+      await api.openWorkspace(folder);
+      reloadForWorkspace();
+    } catch (e) {
+      setError(workspaceError(e));
+    }
   };
   const projectLinked = async (path: string) => {
     setFolderPickerOpen(false);
@@ -433,6 +443,8 @@ export function App() {
 
   // Other tabs and outside edits: keep the file list current, reload the open file when it changed and holds no unsaved edits.
   useEffect(() => {
+    // Another tab switched the server to another folder (E554).
+    const offSwitch = events.subscribeJson('workspace-switch', reloadForWorkspace);
     const offWorkspace = events.subscribeJson<WorkspaceEvent>('workspace', (e) => {
       // This tab's own move already renames the open file; the echo must not close it.
       if (e.kind === 'tree' && e.from !== undefined && ownMoves.current.delete(e.from)) {
@@ -476,6 +488,7 @@ export function App() {
       void reloadRun();
     });
     return () => {
+      offSwitch();
       offWorkspace();
       offRun();
       offCursor();
@@ -868,6 +881,7 @@ export function App() {
       onOpen={openFile}
       onNewFile={() => void newFile()}
       onNewProject={newProject}
+      onSwitchWorkspace={(f) => void switchWorkspace(f)}
       onRename={(n) => void renameEntry(n)}
       onDelete={(n) => void remove(n)}
       onMove={moveEntry}
@@ -889,7 +903,7 @@ export function App() {
         <ActivityAlerts onOpen={openFile} onSession={() => window.location.assign('/dispatch')} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
-          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onLinked={(p) => void projectLinked(p)} onCreateBlank={createBlankProject} />}
+          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onOpened={reloadForWorkspace} onCreateBlank={createBlankProject} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
           {paletteOpen && <CommandPalette commands={registry.list()} scope={paletteScope(docScreen ? section : homeSection, projects, path)} onlyGroup={paletteGroup} onClose={() => setPaletteOpen(false)} />}
           {conflict && (
