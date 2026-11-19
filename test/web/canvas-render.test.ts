@@ -41,12 +41,12 @@ test('blocks keep their own last picture', async () => {
 });
 
 test('unsupported types show the not-yet placeholder', async () => {
-  const p = await renderBlock(block('bpmn1', 'x', 'bpmn'), 'light');
+  const p = await renderBlock(block('mm1', 'x', 'mindmap'), 'light');
   assert.match(svgOf(p.dataURL), /아직 그릴 수 없어요/);
 });
 
 test('the placeholder asks for true glyph advances like diagram pictures (E63 follow-up)', async () => {
-  const svg = svgOf((await renderBlock(block('bpmn2', 'x', 'bpmn'), 'dark')).dataURL);
+  const svg = svgOf((await renderBlock(block('mm2', 'x', 'mindmap'), 'dark')).dataURL);
   assert.match(svg.slice(0, svg.indexOf('>')), /\stext-rendering="geometricPrecision"/);
 });
 
