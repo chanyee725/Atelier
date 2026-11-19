@@ -20,6 +20,7 @@ import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
 import { AlertWatcher } from './AlertWatcher';
 import { ActivityAlerts } from '../activity/ActivityAlerts';
+import { AgentLiveHost } from '../live/AgentLivePanel';
 import { connect, useDispatch } from './store';
 
 export { connect };
@@ -96,6 +97,7 @@ export default function DispatchApp() {
     <>
       <AlertWatcher onOpen={setOpen} />
       <ActivityAlerts onOpen={p => window.location.assign(`/#file=${encodeURIComponent(p)}`)} onSession={setOpen} />
+      <AgentLiveHost onOpenFile={p => window.location.assign(`/#file=${encodeURIComponent(p)}`)} />
     </>
   );
 
