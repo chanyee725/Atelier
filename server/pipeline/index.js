@@ -18,6 +18,7 @@ import { redact } from '../dispatch/redact.js';
 import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
+import { resolvePlanRoles } from './plan-roles.js';
 import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
 import { resolvedStep } from '../../shared/dispatch/plan.ts';
@@ -328,7 +329,11 @@ export async function setup(ctx) {
     if (!d) throw new StoreError(409, 'Dispatch가 꺼져 있어요');
     const lead = typeof body.lead === 'string' ? d.hub.get(body.lead) : null;
     if (!lead || !lead.canSpawn) throw new StoreError(400, '관리자 세션만 계획을 쓸 수 있어요');
-    const input = { title: body.title, goal: body.goal, steps: body.steps, risks: body.risks, asks: body.asks };
+    // Step roles must be ones the team has; common aliases (implementer, reviewer, …) map to their ids (#788).
+    const roleIds = effectiveRoles(d.hub.roles, d.store).map((r) => r.id);
+    const resolved = resolvePlanRoles(body.steps, roleIds);
+    if (resolved.error) throw new StoreError(400, resolved.error);
+    const input = { title: body.title, goal: body.goal, steps: resolved.steps, risks: body.risks, asks: body.asks };
     const problem = writePlanProblem(input);
     if (problem) throw new StoreError(400, problem);
     const all = entries();
