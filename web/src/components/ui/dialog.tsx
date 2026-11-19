@@ -22,7 +22,12 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
   );
 }
 
-function DialogContent({ className, overlayClassName, children, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { overlayClassName?: string }) {
+// An in-app confirm/prompt (#732, AppDialogHost) opened from inside this dialog is a separate native modal: its
+// clicks, focus and Esc must not close the Radix dialog underneath.
+const inAppDialog = (e: Event) => e.target instanceof Element && !!e.target.closest('dialog[data-app-dialog]');
+const appDialogOpen = () => !!document.querySelector('dialog[data-app-dialog][open]');
+
+function DialogContent({ className, overlayClassName, children, onInteractOutside, onEscapeKeyDown, ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { overlayClassName?: string }) {
   return (
     <DialogPortal>
       <DialogOverlay className={overlayClassName} />
@@ -33,6 +38,16 @@ function DialogContent({ className, overlayClassName, children, ...props }: Reac
           'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.98]',
           className,
         )}
+        onInteractOutside={(e) => {
+          if (inAppDialog(e) || appDialogOpen()) e.preventDefault();
+          else onInteractOutside?.(e);
+        }}
+        onEscapeKeyDown={(e) => {
+          // Esc belongs to the app dialog on top: keep this one open and close that one (as 취소).
+          const top = document.querySelector<HTMLDialogElement>('dialog[data-app-dialog][open]');
+          if (top) (e.preventDefault(), top.close());
+          else onEscapeKeyDown?.(e);
+        }}
         {...props}
       >
         {children}
