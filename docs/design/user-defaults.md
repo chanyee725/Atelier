@@ -32,6 +32,7 @@ Metadata only: no tokens, API keys, emails, names or transcripts.
 | `guard` | object | Usage-guard thresholds (`five`, `seven`, `fable`, `openai.five`, `openai.seven`; 0 < x ≤ 1). `enabled` stays per project. |
 | `workspaces` | array of `{ path, name }` | Registered workspace folders (see below). |
 | `lastWorkspace` | path | The workspace opened last (see below). |
+| `modeProfiles` | object | Harness profiles per mode × role (#748): `cells.<mode>.<role> = { provider, model, effort, perm }` and `hints.<model id or provider>` (≤ 40 chars). Only changed cells are stored; built-in grid in `server/dispatch/mode-profiles.js`. |
 
 ## Format rules
 
