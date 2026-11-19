@@ -237,7 +237,7 @@ export async function tipSubject(root, branch) {
 export async function worktreeDirty(dir) {
   if (!dir || !existsSync(dir)) return null;
   try {
-    const st = (await git(dir, "status", "--porcelain")).stdout;
+    const st = (await git(dir, "--no-optional-locks", "status", "--porcelain")).stdout;
     return st.split("\n").filter(Boolean).some(l => !noiseLine(l));
   } catch { return null; }
 }

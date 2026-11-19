@@ -1,10 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createLiveBranches, prPhase } from "../../server/dispatch/live-branches.js";
+import { worktreeDirty } from "../../server/dispatch/git.js";
 
 test("prPhase turns a PR answer into one word", () => {
   assert.equal(prPhase(null), null);
@@ -64,5 +65,21 @@ test("one row per session branch: worktree's current branch, ahead/behind, subje
     const o = await off();
     assert.equal(o.pr, "disabled");
     assert.equal(o.rows[0].pr, null);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("worktreeDirty reads without rewriting the index (no optional locks)", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "live-branches-lock-"));
+  const g = (...a) => execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" }).trim();
+  try {
+    g("init", "-q", "-b", "develop");
+    g("config", "user.name", "Test"); g("config", "user.email", "test@example.invalid");
+    writeFileSync(path.join(dir, "a.txt"), "a\n"); g("add", "."); g("commit", "-qm", "init");
+    // Same content, older mtime: a plain `git status` would refresh the stat info and rewrite the index.
+    const old = new Date(Date.now() - 3600_000);
+    utimesSync(path.join(dir, "a.txt"), old, old);
+    const before = readFileSync(path.join(dir, ".git", "index"));
+    assert.equal(await worktreeDirty(dir), false);
+    assert.deepEqual(readFileSync(path.join(dir, ".git", "index")), before);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
