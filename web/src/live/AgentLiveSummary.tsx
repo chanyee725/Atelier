@@ -93,7 +93,8 @@ export function useNow(active: boolean): number {
 }
 
 /** Self-loading compact summary (for hover cards, #736). */
-export function AgentLiveSummary({ sid, compact = true }: { sid: string; compact?: boolean }) {
+/** `name`: shown until the hub answers (or when it no longer knows the session). */
+export function AgentLiveSummary({ sid, name, compact = true }: { sid: string; name?: string; compact?: boolean }) {
   const { live, session } = useAgentLive(sid);
   const { agents } = useAgents();
   const p = Array.isArray(agents) ? agents.find((a) => a.sid === sid) : undefined;
@@ -101,7 +102,7 @@ export function AgentLiveSummary({ sid, compact = true }: { sid: string; compact
   const now = useNow(!!state && ticking(state));
   const d: SummaryData = {
     sid,
-    name: session?.name ?? p?.name ?? '',
+    name: session?.name ?? p?.name ?? name ?? '',
     color: session?.color ?? p?.color,
     role: session?.roleName ?? p?.roleName,
     provider: session?.provider ?? p?.provider,

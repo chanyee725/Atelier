@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, nodeBadges, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 
 async function scene(code: string): Promise<Scene> {
@@ -198,4 +198,32 @@ test('badges (#687): initial in role colour per agent, hover title with role, mo
   // One over the limit is drawn, not folded into "+1".
   assert.deepEqual(nodeBadges(five.slice(0, 4), new Map()).more, 0);
   assert.deepEqual(overlayModel(await scene('a'), [{ id: 'a', view: 'pending' }]).nodes[0]!.badges, { shown: [], more: 0 });
+});
+
+test('live targets (#736): only an in-progress node opens live views, one per agent with a session id', async () => {
+  const agents = [
+    { sid: 's1', name: 'Juno', role: 'impl' },
+    { name: 'Tali', role: 'impl' },
+    { sid: 's3', name: 'Oren', role: 'review' },
+  ];
+  assert.deepEqual(liveTargets({ view: 'active', agents }), [
+    { sid: 's1', name: 'Juno' },
+    { sid: 's3', name: 'Oren' },
+  ]);
+  assert.deepEqual(liveTargets({ view: 'review', agents: agents.slice(0, 1) }), [{ sid: 's1', name: 'Juno' }]);
+  for (const view of ['pending', 'done', 'blocked'] as const) assert.deepEqual(liveTargets({ view, agents }), []);
+  const m = overlayModel(await scene('a\nb'), [
+    { id: 'a', view: 'active', time: '8분째', agents },
+    { id: 'b', view: 'done', agents },
+  ]);
+  assert.deepEqual(m.nodes.map((n) => [n.node, n.open.length, n.time]), [
+    ['a', 2, '8분째'],
+    ['b', 0, undefined],
+  ]);
+});
+
+test('press (#736): one agent opens its live view at once, several show the list to pick from', () => {
+  assert.equal(pressAction([]), null);
+  assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }]), { kind: 'open', sid: 's1' });
+  assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }, { sid: 's3', name: 'Oren' }]), { kind: 'pick' });
 });

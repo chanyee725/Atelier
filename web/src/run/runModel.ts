@@ -272,7 +272,7 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
       const id = s.model ?? l?.model;
       const model = l?.modelLabel ?? (id ? modelLabel(id, cat) : undefined);
       const role = roleOf(plan, ps.id, s, live);
-      return { name: l?.name ?? s.name ?? s.sid, role, ...(model ? { model } : {}), ...(state ? { state } : {}), ...(running_ ? { eta: etaOf(typical.get(role), until - step.startedAt!) } : {}) };
+      return { sid: s.sid, name: l?.name ?? s.name ?? s.sid, role, ...(model ? { model } : {}), ...(state ? { state } : {}), ...(running_ ? { eta: etaOf(typical.get(role), until - step.startedAt!) } : {}) };
     });
     const label = skipped ? '건너뜀' : paused === 'limit' ? '한도로 멈춤' : paused ? '멈춤' : v.label;
     const row: StepRow = { id: ps.id, n: i + 1, title: labels.get(node) ?? node, view, glyph: paused ? '⏸' : v.glyph, label, time, agents, waiting, failed, skipped, node };
@@ -291,7 +291,7 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
 
 /** What the canvas overlay draws (runStore.setRunSteps). */
 export const overlaySteps = (rows: readonly StepRow[]): RunStep[] =>
-  rows.map((r) => ({ id: r.id, node: r.node, view: r.view, waiting: r.waiting, title: r.title, agents: r.agents, ...(r.failed ? { failed: true } : {}), ...(r.before ? { before: r.before } : {}), ...(r.skipped ? { skipped: true } : {}) }));
+  rows.map((r) => ({ id: r.id, node: r.node, view: r.view, waiting: r.waiting, title: r.title, time: r.time, agents: r.agents, ...(r.failed ? { failed: true } : {}), ...(r.before ? { before: r.before } : {}), ...(r.skipped ? { skipped: true } : {}) }));
 
 // ---- sessions ----
 

@@ -80,10 +80,11 @@ test('stepRows: views, times and agents from the record', () => {
       [5, 'Merge', 'pending', '건너뜀', '건너뜀'],
     ],
   );
-  assert.deepEqual(rows[0]!.agents, [{ name: 'Mira', role: 'lead', state: 'done' }]);
+  assert.deepEqual(rows[0]!.agents, [{ sid: 's1', name: 'Mira', role: 'lead', state: 'done' }]);
   // The step's role comes from plan defaults when the step names none.
-  assert.deepEqual(rows[1]!.agents, [{ name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }]);
-  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', agents: [{ name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }] });
+  assert.deepEqual(rows[1]!.agents, [{ sid: 's2', name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }]);
+  // The overlay gets the session id and the elapsed time, for the node's hover card and live view (#736).
+  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', time: '8분째', agents: [{ sid: 's2', name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }] });
 });
 
 test('stepRows: live Dispatch state wins while running; a done run closes its steps', () => {
