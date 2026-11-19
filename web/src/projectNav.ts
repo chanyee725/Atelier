@@ -179,3 +179,9 @@ export function modelStatus(m: ModelLine, enabled: boolean): { text: string; lon
   if (m.pct == null) return { text: '연결됨', long: '연결됨', tone: 'ok' };
   return { text: `${m.pct}%`, long: `연결됨, 5시간 한도 ${m.pct}% 사용`, tone: m.pct > WARN_PERCENT ? 'warn' : 'ok' };
 }
+
+/** A plain left click (no modifier): links to the 세션 보드 open it in the shell; other clicks keep the browser's
+ *  new tab / window behaviour through the link's real `/#board…` address. */
+export function plainClick(e: { button: number; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return e.button === 0 && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+}

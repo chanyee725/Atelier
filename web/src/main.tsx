@@ -2,13 +2,15 @@ import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { LazyBoundary } from './LazyBoundary';
+import { legacyBoardHash } from './projectNav';
 import './index.css';
 import { startThemeSync } from './userDefaultsTheme';
 
 // Excalidraw loads its fonts from here (bundled by vite.config.ts) instead of a CDN.
 (window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw/';
 
-// The Dispatch screens load only on /dispatch, so the editor bundle does not carry them.
+// /dispatch (#731): in project mode (no workspace) it is the sidebar-less 세션 보드, loaded only there so the editor
+// bundle does not carry it; in drawing mode the board lives in the shell, so old links go to `/#board…`.
 const DispatchApp = lazy(() => import('./dispatch/index'));
 const isDispatch = /^\/dispatch(\/|$)/.test(window.location.pathname);
 
@@ -23,17 +25,32 @@ if (import.meta.env.DEV) {
 // The theme follows ~/.dispatch/drawing.json and is written back to it (E555).
 startThemeSync();
 
-// Project mode: the server answers every editor URL with a 302 to /dispatch, so nothing is fetched before the first render.
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    {isDispatch ? (
-      <LazyBoundary>
-        <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>}>
-          <DispatchApp />
-        </Suspense>
-      </LazyBoundary>
-    ) : (
+const root = createRoot(document.getElementById('root')!);
+const loading = <p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>;
+
+if (!isDispatch) {
+  root.render(
+    <StrictMode>
       <App />
-    )}
-  </StrictMode>,
-);
+    </StrictMode>,
+  );
+} else {
+  root.render(loading);
+  // Project mode: the server answers every editor URL with a 302 to /dispatch, so the board renders here.
+  // Otherwise (or when /api/info cannot be read) the shell's board takes over, keeping the old hash's meaning.
+  void fetch('/api/info')
+    .then((r) => (r.ok ? (r.json() as Promise<{ mode?: string }>) : null))
+    .catch(() => null)
+    .then((info) => {
+      if (info?.mode !== 'project') return location.replace(`/${legacyBoardHash(location.hash)}`);
+      root.render(
+        <StrictMode>
+          <LazyBoundary>
+            <Suspense fallback={loading}>
+              <DispatchApp />
+            </Suspense>
+          </LazyBoundary>
+        </StrictMode>,
+      );
+    });
+}

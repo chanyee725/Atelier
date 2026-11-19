@@ -5,7 +5,8 @@
 // At a narrow main pane (under 880px) the halves stack, documents first.
 // The work column splits its height 5:3:2 (sessions, branches, PRs) and lays each card's items out 3 to a row (#720).
 import { useMemo } from 'react';
-import { ArrowUpRight, FilePlus2, FileText, GitBranch, GitPullRequest, PenTool, Plus, RotateCw } from 'lucide-react';
+import { boardHash, plainClick } from '../projectNav';
+import { ArrowRight, FilePlus2, FileText, GitBranch, GitPullRequest, PenTool, Plus, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
@@ -29,11 +30,10 @@ type Props = {
   onOpen: (path: string) => void;
   onCreate: (kind: 'doc' | 'canvas', project: string) => void;
   onDelete: (path: string, title: string) => void;
+  onBoard: (folder: string) => void;
 };
 
-const boardHref = (folder: string) => `/dispatch#folder=${encodeURIComponent(folder)}`;
-
-export function ProjectDashboard({ project, query, running, collapsed, onToggle, onOpen, onCreate, onDelete }: Props) {
+export function ProjectDashboard({ project, query, running, collapsed, onToggle, onOpen, onCreate, onDelete, onBoard }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const holders = useMemo(() => holdersByFile(Array.isArray(agents) ? agents : []), [agents]);
@@ -86,7 +86,7 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
       </DashColumn>
 
       <DashColumn label="진행 중인 작업">
-        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} />
+        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
         <BranchesCard sessions={sessions} open={open} branches={branches} />
         <PrsCard sessions={withBranch} branches={prBranches} prs={prs} tracking={tracking} />
       </DashColumn>
@@ -94,21 +94,22 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
   );
 }
 
-function BoardLink({ folder }: { folder: string }) {
+/** Opens the in-shell 세션 보드 for this project; a real link so a new tab also works (#731). */
+function BoardLink({ folder, onBoard }: { folder: string; onBoard: (folder: string) => void }) {
   return (
     <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-      <a href={boardHref(folder)}>
-        세션 보드 <ArrowUpRight aria-hidden />
+      <a href={`/${boardHash({ tab: 'sessions', folder })}`} onClick={(e) => (plainClick(e) ? (e.preventDefault(), onBoard(folder)) : undefined)}>
+        세션 보드 <ArrowRight aria-hidden />
       </a>
     </Button>
   );
 }
 
-function SessionsCard({ agents, onRetry, titleOf, onOpen, folder }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string }) {
+function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void }) {
   const list = Array.isArray(agents) ? agents : [];
   const busy = list.filter(isBusy).length;
   return (
-    <Card id="sessions" grow={5} title="실행 중인 세션" count={list.length} hint={busy > 0 ? `${busy}명이 지금 작업 중이에요` : undefined} flush actions={<BoardLink folder={folder} />}>
+    <Card id="sessions" grow={5} title="실행 중인 세션" count={list.length} hint={busy > 0 ? `${busy}명이 지금 작업 중이에요` : undefined} flush actions={<BoardLink folder={folder} onBoard={onBoard} />}>
       {agents === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : agents === 'failed' ? (

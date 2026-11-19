@@ -281,7 +281,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
           <DropdownMenuItem disabled={!doneCount} onSelect={() => void clear(false)}>
             끝난 세션 정리{doneCount ? ` (${doneCount})` : ''}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={!sessions.length} variant="destructive" onSelect={() => void clear(true)}>
+          <DropdownMenuItem disabled={!sessions.length} className="text-destructive focus:text-destructive" onSelect={() => void clear(true)}>
             모든 세션 정리
           </DropdownMenuItem>
           <DropdownMenuSeparator />

@@ -6,13 +6,14 @@ import { ArrowRight } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { fmtUsd, isOpen, STATE, stateOf } from '../dispatch/lib/format.ts';
 import { sessionsOf } from '../dispatch/lib/folder.ts';
+import { boardHash, plainClick } from '../projectNav';
 import { Block, getJson, Note, RunsBlock } from './ProjectRuns';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
 const SESSIONS_SHOWN = 8;
 const POLL_MS = 15_000;
 
-export function ProjectSessions({ folder, onOpen }: { folder: string; onOpen: (path: string) => void }) {
+export function ProjectSessions({ folder, onOpen, onBoard }: { folder: string; onOpen: (path: string) => void; onBoard: (folder: string) => void }) {
   const [sessions, setSessions] = useState<Session[] | 'failed' | null>(null);
   useEffect(() => {
     const ctl = new AbortController();
@@ -27,7 +28,7 @@ export function ProjectSessions({ folder, onOpen }: { folder: string; onOpen: (p
     };
   }, [folder]);
 
-  const board = `/dispatch#folder=${encodeURIComponent(folder)}`;
+  const board = `/${boardHash({ tab: 'sessions', folder })}`;
   const list = Array.isArray(sessions) ? sessions : [];
   const open = list.filter(isOpen).length;
   return (
@@ -35,7 +36,7 @@ export function ProjectSessions({ folder, onOpen }: { folder: string; onOpen: (p
       <Block
         title="세션"
         note={
-          <a href={board} className="inline-flex items-center gap-1 text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+          <a href={board} onClick={(e) => (plainClick(e) ? (e.preventDefault(), onBoard(folder)) : undefined)} className="inline-flex items-center gap-1 text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
             세션 보드에서 보기 <ArrowRight aria-hidden className="size-3.5" />
           </a>
         }

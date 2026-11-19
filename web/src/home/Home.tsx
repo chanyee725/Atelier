@@ -29,6 +29,8 @@ export type HomeProps = {
   onOpen: (path: string) => void;
   onCreate: (kind: CreateKind, project: string | null) => void;
   onDelete: (path: string, title: string) => void;
+  /** Opens the 세션 보드 in the shell, scoped to a project folder (#731). */
+  onBoard: (folder: string) => void;
   /** Narrow screen: the sidebar is a drawer, so the header carries its button. */
   narrow?: boolean;
 };
@@ -396,13 +398,13 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">
         <TabsContent value="docs" className="flex flex-col">
-          <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} />
+          <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
         </TabsContent>
         <TabsContent value="pipelines">
           <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>
         </TabsContent>
         <TabsContent value="sessions">
-          <ProjectSessions folder={project.path} onOpen={p.onOpen} />
+          <ProjectSessions folder={project.path} onOpen={p.onOpen} onBoard={p.onBoard} />
         </TabsContent>
         <TabsContent value="overview">
           <dl className="m-0 grid max-w-xl grid-cols-[6rem_1fr] gap-x-4 gap-y-2 px-2 text-sm">
