@@ -117,3 +117,16 @@ test("implementer and designer prompts carry the UI library rules (#764)", async
   }
   for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /Sonner/);
 });
+
+test("docs role and lead prompt carry the writing style; other roles do not (#737)", async () => {
+  const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT } = await import("../../server/dispatch/roles.js");
+  for (const p of [roles.find(r => r.id === "docs").prompt, SPAWN_PROMPT]) {
+    assert.match(p, /\[글쓰기\]/);
+    assert.match(p, /다음 행동/);
+    assert.match(p, /번호 목록/);
+    assert.match(p, /끝난 것과 남은 것/);
+    assert.match(p, /docs\/design\/writing-style\.md/);
+  }
+  for (const id of ["impl", "review", "test", "design"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /\[글쓰기\]/);
+  assert.doesNotMatch(CHILD_PROMPT, /\[글쓰기\]/);
+});
