@@ -10,7 +10,7 @@ import { renderBlock, type BlockPicture } from '../canvas/render';
 import { MorphLayer, willMorph } from '../canvas/MorphLayer';
 import { createCoalescer } from '../lib/liveMotion';
 import { DIAGRAM_TYPES } from '../dsl/templates';
-import { RunLayer, RunLegend } from '../run/RunLayer';
+import { RunEta, RunLayer, RunLegend } from '../run/RunLayer';
 import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
@@ -138,11 +138,12 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
             {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={morph ? { visibility: 'hidden' } : undefined} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
           {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
-          {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} />}
+          {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} hideEta />}
         </div>
       ) : (
         <p className="doc-diagram-gone">캔버스에서 지운 다이어그램이에요. 이 줄을 지워도 돼요.</p>
       )}
+      {block && board && box && <RunEta steps={board.steps} />}
       {block && board && box && <RunLegend steps={board.steps} />}
       <figcaption>{block ? `${label} · 누르면 캔버스로 가요` : label}</figcaption>
       {block && (

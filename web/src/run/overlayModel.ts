@@ -17,7 +17,14 @@ export interface RunAgent {
   role: string;
   /** Model label for the legend (metadata only). */
   model?: string;
+  /** Estimated time left while its step runs (#735); absent once the step is not running. */
+  eta?: AgentEta;
+  /** Title of the step it works on. */
+  step?: string;
 }
+
+/** `left`: about `ms` more; `over`: running longer than similar steps did; `unknown`: not enough finished steps yet ("추정 중"). */
+export type AgentEta = { kind: 'left'; ms: number } | { kind: 'over' } | { kind: 'unknown' };
 
 /** What the overlay needs per step: the step ↔ node link and its computed `step.view` (E24). */
 export interface RunStep {
@@ -68,6 +75,47 @@ export interface OverlayModel {
   /** Weighted progress over every step of the run, drawn or not. */
   progress: Progress;
   legend: Legend;
+  /** Per-agent time-left rows for the corner panel (#735); empty when no agent is working. */
+  etas: EtaPanel;
+}
+
+export interface EtaRow {
+  name: string;
+  role: string;
+  roleName: string;
+  color: string;
+  /** First letter of the name, the badge's initial. */
+  initial: string;
+  step: string;
+  eta: AgentEta;
+}
+
+/** `rows` are the agents shown; `more` how many are folded into "+N" (#727 style). */
+export interface EtaPanel {
+  rows: EtaRow[];
+  more: number;
+}
+
+/** Rows shown before the rest fold into "+N". */
+export const ETA_MAX = 5;
+
+/** The goal (목표) stage is never listed: it is where the aim is written, not a working step. */
+const GOAL = new Set(['목표', 'goal']);
+
+export function etaPanel(steps: readonly RunStep[], colors: ReadonlyMap<string, string> = agentColors(steps), max = ETA_MAX): EtaPanel {
+  const all: EtaRow[] = [];
+  const seen = new Set<string>();
+  for (const s of steps) {
+    if (s.skipped || (s.view !== 'active' && s.view !== 'review')) continue;
+    const title = s.title ?? stepNode(s);
+    if (GOAL.has(title) || GOAL.has(stepNode(s))) continue;
+    for (const a of s.agents ?? []) {
+      if (!a.eta || seen.has(a.name)) continue;
+      seen.add(a.name);
+      all.push({ name: a.name, role: a.role, roleName: roleLabel(a.role), color: colors.get(a.name) ?? roleColor(a.role), initial: [...a.name][0] ?? '?', step: a.step ?? title, eta: a.eta });
+    }
+  }
+  return { rows: all.slice(0, max), more: Math.max(0, all.length - max) };
 }
 
 export interface LegendAgent {
@@ -166,7 +214,7 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     if (kind === 'none') continue;
     list.forEach((p, i) => edges.push({ key: i ? `${key}#${i}` : key, points: p.points, kind, color: kind === 'done' ? 'var(--ok)' : b.color }));
   }
-  return { nodes, edges, missing, progress: runProgress(steps), legend: legendOf(steps, colors) };
+  return { nodes, edges, missing, progress: runProgress(steps), legend: legendOf(steps, colors), etas: etaPanel(steps, colors) };
 }
 
 /** The board draws only when at least one step links to a node of the picture; the legend follows the same rule. */

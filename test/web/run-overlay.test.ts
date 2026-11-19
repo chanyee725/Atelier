@@ -160,3 +160,15 @@ test('legendSpot: under the picture, else left, right, above; always inside the 
   const p = legendSpot({ left: -50, top: -50, width: 1200, height: 900 }, size, area);
   assert.deepEqual(p, { left: 8, top: area.height - size.height - 8 });
 });
+
+test('eta panel (#735): working agents only, goal step left out, extra rows fold into +N', async () => {
+  const { etaPanel } = await import('../../web/src/run/overlayModel.ts');
+  const eta = { kind: 'unknown' as const };
+  const mk = (id: string, view: 'active' | 'done' | 'pending', names: string[], title = id) => ({ id, view, title, agents: names.map((name) => ({ name, role: 'impl', eta })) });
+  const steps = [mk('목표', 'active', ['Goal']), mk('a', 'done', ['Old']), mk('b', 'active', ['Ann', 'Bo', 'Cy']), mk('c', 'active', ['Di', 'Ed', 'Flo'])];
+  const p = etaPanel(steps as never, undefined, 4);
+  assert.deepEqual(p.rows.map((r) => r.name), ['Ann', 'Bo', 'Cy', 'Di']);
+  assert.equal(p.more, 2);
+  assert.equal(p.rows[0]!.initial, 'A');
+  assert.deepEqual(etaPanel([mk('x', 'pending', ['Z'])] as never).rows, []);
+});
