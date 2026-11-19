@@ -594,7 +594,7 @@ export async function setup(ctx) {
   async function dismiss(body) {
     const [path, e] = entryAt(body);
     if (e.state !== 'plan') throw new StoreError(409, '시작을 기다리는 계획이 아니에요');
-    if (dispatch().hub.get(e.lead)) throw new StoreError(409, '관리자 세션이 아직 있어요');
+    if (dispatch()?.hub.get(e.lead)) throw new StoreError(409, '관리자 세션이 아직 있어요');
     e.reopened = true;
     save();
     changed(path);
