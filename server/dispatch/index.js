@@ -1,9 +1,9 @@
 // Dispatch module: agent sessions, task board and usage limits for the git project that holds the
 // workspace (merged from the standalone Dispatch server, issue #87). See docs/design/dispatch-integration.md.
 //
-// Writes: <project>/.dispatch/ (state.json, session worktrees) and ~/.dispatch/limits.json (usage
+// Writes: <project>/.atelier/ (state.json, session worktrees) and ~/.atelier/limits.json (usage
 // limits shared with other servers). Transcripts stay in memory. Off when the workspace is not in a
-// git project, or another server already uses the project's .dispatch/ (project.js, E13): the
+// git project, or another server already uses the project's state folder (project.js, E13): the
 // drawing tool works on its own and GET /api/dispatch says why.
 import path from "node:path";
 import { ownGitEnv, runCli } from "./cli.js";
@@ -42,7 +42,7 @@ const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: nu
  * Starts Dispatch for the project at `root`. `deps` replaces the parts that start CLIs or touch the
  * home folder, so tests run with fakes: { providerStatus, codexModels, limitsFile, login, loginWithKey,
  * logout, cancelLogin, spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
- * `deps.userDefaults` is the server's UserDefaults (~/.dispatch/drawing.json); without it nothing outside the
+ * `deps.userDefaults` is the server's UserDefaults (~/.atelier/drawing.json); without it nothing outside the
  * project is read or written for settings (memory only).
  */
 export async function createDispatch({ root, broadcast, port, workspaceDir, deps = {} }) {
@@ -55,7 +55,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   if (ud.team) store.data.settings.team = { ...(store.data.settings.team || {}), ...ud.team };
   if (ud.guard) store.data.settings.guard = { ...store.data.settings.guard, ...ud.guard };
   const models = staticModels();
-  // Claude limits and the Gemini quota live in ~/.dispatch/limits.json, shared by every server.
+  // Claude limits and the Gemini quota live in ~/.atelier/limits.json, shared by every server.
   const limits = new SharedLimits(...(dep.limitsFile ? [dep.limitsFile] : []));
   await limits.load({ claude: store.data.limits, gemini: store.data.geminiQuota }).catch(e => console.error("dispatch limits:", e.code ?? e.name));
   // Per-project copies saved by an older version: merged into the shared file above, then dropped.
@@ -118,8 +118,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   });
   hub.on("removed", ({ id }) => { lastStatus.delete(id); ledger.end(id); store.save(); });
 
-  // UI preferences: ~/.dispatch/drawing.json first, then the project's state.json, then the standalone Dispatch's
-  // ~/.dispatch/prefs.json (read only), then "system".
+  // UI preferences: ~/.atelier/drawing.json first, then the project's state.json, then the standalone Dispatch's
+  // prefs.json copied from ~/.dispatch/ (read only), then "system".
   const legacyTheme = dep.userDefaults ? await readLegacyTheme(userDefaults.file) : null;
   const readPrefs = async () => {
     const theme = [(await userDefaults.current()).theme, store.data.prefs?.theme, legacyTheme].find(t => THEMES.includes(t));
@@ -177,7 +177,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   // Only this project: other servers are no longer found by registry files or port scans.
   const projects = async () => [{ port: hub.port, name: path.basename(root), path: tilde(root), current: true }];
 
-  // Harness profiles per mode (#748), stored in ~/.dispatch/drawing.json as `modeProfiles`.
+  // Harness profiles per mode (#748), stored in ~/.atelier/drawing.json as `modeProfiles`.
   const isConnected = provider => !!providers[provider]?.connected;
   const storedProfiles = async () => readStored((await userDefaults.current()).modeProfiles);
   const modeProfiles = {

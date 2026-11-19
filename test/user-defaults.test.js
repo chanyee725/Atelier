@@ -1,4 +1,4 @@
-// E555 (#724): the user's defaults in ~/.dispatch/drawing.json. Every test uses a temp HOME; the real
+// E555 (#724): the user's defaults in ~/.atelier/drawing.json. Every test uses a temp HOME; the real
 // ~/.dispatch is never read or written. No agent CLI is started.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,16 +18,16 @@ const W = { 'content-type': 'application/json', 'x-drawing': '1' };
 
 function tempHome() {
   const home = mkdtempSync(join(tmpdir(), 'drawing-e555-home-'));
-  const file = join(home, '.dispatch', 'drawing.json');
+  const file = join(home, '.atelier', 'drawing.json');
   const put = (text) => {
-    mkdirSync(join(home, '.dispatch'), { recursive: true });
+    mkdirSync(join(home, '.atelier'), { recursive: true });
     writeFileSync(file, typeof text === 'string' ? text : JSON.stringify(text));
   };
   return { home, file, put, read: () => readFileSync(file, 'utf8'), done: () => rmSync(home, { recursive: true, force: true }) };
 }
 
-test('defaultsFile: ~/.dispatch/drawing.json under HOME; DRAWING_USER_DEFAULTS=off turns the file off', () => {
-  assert.equal(defaultsFile({ HOME: '/h' }), '/h/.dispatch/drawing.json');
+test('defaultsFile: ~/.atelier/drawing.json under HOME; DRAWING_USER_DEFAULTS=off turns the file off', () => {
+  assert.equal(defaultsFile({ HOME: '/h' }), '/h/.atelier/drawing.json');
   assert.equal(defaultsFile({ HOME: '/h', DRAWING_USER_DEFAULTS: 'off' }), null);
 });
 
@@ -148,13 +148,13 @@ test('server: drawing.json wins over state.json; 설정 changes are written back
   const h = tempHome();
   const { root, ws } = scratchRepo();
   // The old places: team settings and theme in the project's state.json, a PR switch nowhere.
-  mkdirSync(join(root, '.dispatch'), { recursive: true });
-  writeFileSync(join(root, '.dispatch', 'state.json'), JSON.stringify({ settings: { team: { rotateLead: 7, maxChildren: 3 } }, prefs: { theme: 'light' } }));
+  mkdirSync(join(root, '.atelier'), { recursive: true });
+  writeFileSync(join(root, '.atelier', 'state.json'), JSON.stringify({ settings: { team: { rotateLead: 7, maxChildren: 3 } }, prefs: { theme: 'light' } }));
   h.put({ version: 1, theme: 'dark', prStatus: false, team: { rotateLead: 2 }, guard: { five: 0.5 }, extra: { kept: true } });
   const s = await start(ws, h.file, fakeDeps(root));
   try {
     const snap = await (await fetch(`${s.base}/api/user-defaults`)).json();
-    assert.equal(snap.file, '~/.dispatch/drawing.json');
+    assert.equal(snap.file, '~/.atelier/drawing.json');
     assert.equal(snap.error, null);
     assert.equal(snap.values.theme, 'dark');
     assert.equal((await (await fetch(`${s.base}/api/prefs`)).json()).theme, 'dark');

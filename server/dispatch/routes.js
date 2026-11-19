@@ -84,7 +84,7 @@ export function routeTable(d) {
       const before = { guard: store.data.settings.guard, team: store.data.settings.team };
       if (b.guard) store.data.settings.guard = patchGuard(store.data.settings.guard, b.guard);
       if (b.team) patchTeam(store, b.team, { roles: ROLES, models });
-      // The user's defaults file (~/.dispatch/drawing.json) gets the change first; a broken file refuses it and the
+      // The user's defaults file (~/.atelier/drawing.json) gets the change first; a broken file refuses it and the
       // project's state.json stays as it was, so the two never disagree about what was saved.
       try {
         await d.saveUserDefaults({ guard: b.guard ? store.data.settings.guard : undefined, team: b.team ? store.data.settings.team : undefined });
