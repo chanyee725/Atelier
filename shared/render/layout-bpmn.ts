@@ -195,10 +195,43 @@ export function placeLanes(d: BpmnDiagram, sizes: PlacedSizes): Map<string, Rect
   return rects;
 }
 
+/** Gap between a back edge and the boxes it runs beside: inside the lane padding, off the lane wall. */
+const BACK_GAP = LANE_PAD.side / 2;
+
+/**
+ * `direction down`: a back edge would come up into the bottom of its target, next to the line that
+ * leaves it. Run it beside both boxes instead, right side to right side, when that path is clear.
+ */
+function sideBackEdges(d: BpmnDiagram, base: Awaited<ReturnType<typeof placedBase>>): void {
+  const rank = flowRanks(d);
+  const nodes = new Set(d.nodes.map((n) => n.id));
+  const hits = (r: Rect, p: { x: number; y: number }, q: { x: number; y: number }): boolean =>
+    Math.max(p.x, q.x) > r.x && Math.min(p.x, q.x) < r.x + r.w && Math.max(p.y, q.y) > r.y && Math.min(p.y, q.y) < r.y + r.h;
+  for (const be of base.edges) {
+    const { from, to } = be.edge;
+    if (from === to || (rank.get(to) ?? 0) > (rank.get(from) ?? 0)) continue;
+    const a = base.rects.get(from);
+    const b = base.rects.get(to);
+    if (!a || !b) continue;
+    const x = Math.max(a.x + a.w, b.x + b.w) + BACK_GAP;
+    const ay = Math.round(a.y + a.h / 2);
+    const by = Math.round(b.y + b.h / 2);
+    const points = [{ x: a.x + a.w, y: ay }, { x, y: ay }, { x, y: by }, { x: b.x + b.w, y: by }];
+    const clear = [...base.rects].every(
+      ([id, r]) => !nodes.has(id) || id === from || id === to || points.every((p, i) => i === 0 || !hits(r, points[i - 1]!, p)),
+    );
+    if (!clear) continue;
+    be.points = points;
+    be.forcedElbow = true;
+    be.ownRoute = true;
+  }
+}
+
 /** Lay out a BPMN diagram. Lanes are fixed bands, so no drag handles (moved boxes would leave their lane). */
 export async function layoutBpmn(d: BpmnDiagram): Promise<Scene> {
   const g = bpmnAsGraph(d);
   const base = await placedBase(g, (sizes) => placeLanes(d, sizes));
+  if (d.direction === 'down') sideBackEdges(d, base);
   const { handles: _handles, ...scene } = composeGraph(g, base);
   return { ...scene, type: 'bpmn' };
 }

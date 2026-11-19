@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseBpmnDiagram } from '../../shared/dsl/index.ts';
 import { renderDiagram } from '../../shared/render/index.ts';
-import type { Scene, SceneBox } from '../../shared/render/index.ts';
+import type { Scene, SceneBox, SceneEdge } from '../../shared/render/index.ts';
 import { flowRanks } from '../../shared/render/layout-bpmn.ts';
 import { fixture } from '../dsl/helpers.ts';
 
@@ -65,6 +65,22 @@ test('lane order: the flow starts at the start event even when its lane is decla
   assert.ok(b.get('Warehouse')!.y < b.get('Customer')!.y);
   const order = ['Start', 'Open website', 'Place order', 'Approved?', 'Pack items', 'Shipped'].map((id) => cx(b.get(id)!));
   assert.deepEqual([...order].sort((x, y) => x - y), order);
+});
+
+test('direction down: a back edge runs beside the boxes, not into the side its target leaves from', async () => {
+  const { scene } = await renderDiagram(fixture('bpmn-order-flow').replace('direction right', 'direction down'));
+  const b = boxes(scene);
+  const edges = scene.items.filter((i): i is SceneEdge => i.kind === 'edge');
+  const no = edges.find((e) => e.from === 'Approved?' && e.to === 'Open website')!;
+  const browse = edges.find((e) => e.from === 'Open website' && e.to === 'Place order')!;
+  const site = b.get('Open website')!;
+  const end = no.points[no.points.length - 1]!;
+  assert.equal(end.x, site.x + site.w);
+  assert.ok(end.y > site.y && end.y < site.y + site.h);
+  assert.equal(browse.points[0]!.y, site.y + site.h);
+  // The line stays inside the lanes.
+  const right = Math.max(...no.points.map((p) => p.x));
+  assert.ok(right < b.get('Warehouse')!.x + b.get('Warehouse')!.w);
 });
 
 test('compact: nodes of one lane in the same slot stack across the flow', async () => {
