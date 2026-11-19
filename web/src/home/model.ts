@@ -108,10 +108,6 @@ export function flatFiles(projects: ProjectInfo[], unfiled: ProjectDoc[]): Recen
     .sort((a, b) => b.modifiedAt - a.modifiedAt);
 }
 
-/** Newest-edited documents first (computed here: the server has no recent-files route). */
-export const RECENT_LIMIT = 20;
-export const recentFiles = (projects: ProjectInfo[], unfiled: ProjectDoc[], limit = RECENT_LIMIT): RecentFile[] => flatFiles(projects, unfiled).slice(0, limit);
-
 /** First letter of a project for its badge (the meta icon when it has one). */
 export const badgeOf = (p: { icon: string; name: string }) => p.icon || [...p.name][0] || '?';
 
