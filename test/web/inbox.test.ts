@@ -186,3 +186,20 @@ test('an item whose document left the tree is known as gone; an unloaded tree sa
   assert.equal(targetGone({ file: 'docs/지운.dpx.json' }, []), false);
   assert.equal(targetGone(undefined, files), false);
 });
+
+test('a session that starts waiting on a question raises a 알림함 item that opens it (#886)', () => {
+  const base = { id: 's1', name: 'Ollie', role: 'lead', provider: 'claude' };
+  const prev = { ...base, status: 'running', state: 'working' };
+  const next = { ...base, status: 'idle', state: 'waiting', ask: '머지할까요?', stateSince: 500 };
+  const [ev] = sessionEvents(prev, next, 600);
+  const t = toastOf(ev)!;
+  assert.equal(t.text, 'Ollie 세션이 답을 기다려요: 머지할까요?');
+  assert.deepEqual(t.target, { session: 's1' });
+  assert.equal(t.persist, true);
+  assert.deepEqual(itemOfToast(t, 600).target, { session: 's1' });
+  // The same question re-sent (a reconnect, a cost update) says nothing new; a new question does.
+  assert.deepEqual(sessionEvents(next, { ...next }, 700), []);
+  assert.equal(sessionEvents(next, { ...next, ask: '배포할까요?', stateSince: 800 }, 800).length, 1);
+  // A permission prompt (no ask) is not a question.
+  assert.deepEqual(sessionEvents(prev, { ...base, status: 'waiting', state: 'waiting' }, 600), []);
+});

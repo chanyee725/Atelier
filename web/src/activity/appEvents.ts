@@ -28,6 +28,7 @@ export type AppEvent =
   | { type: 'session-started'; id: string; name: string; team: boolean; role?: string; provider?: string }
   | { type: 'session-ended'; id: string; name: string; role?: string; provider?: string }
   | { type: 'session-error'; id: string; name: string; role?: string; provider?: string }
+  | { type: 'session-asks'; id: string; name: string; ask: string; since?: number; role?: string; provider?: string }
   | { type: 'model-connected'; provider: string; name: string }
   | { type: 'model-disconnected'; provider: string; name: string }
   | { type: 'model-error'; provider: string; name: string }
@@ -101,6 +102,13 @@ export function toastOf(e: AppEvent): AppToast | null {
               : info('sessions', `session-started:${e.id}`, `${e.name} 세션을 시작했어요`, { session: e.id });
       return { ...t, agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) } };
     }
+    case 'session-asks':
+      // Stays until closed: a question left unseen stalls the team (#886). 열기 goes to the session's live view.
+      return {
+        ...info('sessions', `session-asks:${e.id}:${e.since ?? e.ask}`, `${e.name} 세션이 답을 기다려요: ${e.ask}`, { session: e.id }),
+        persist: true,
+        agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) },
+      };
     case 'model-connected':
       return info('models', `model:${e.provider}:on`, `${objectOf(e.name)} 연결했어요`);
     case 'model-disconnected':
@@ -151,7 +159,13 @@ export function parseOff(raw: string | null): Set<ToastCategory> {
 
 // ---- Dispatch state → events (sessions and providers come over SSE as whole objects; these diff them) ----
 
-type SessionLike = { id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number };
+type SessionLike = {
+  id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number;
+  /** The question the session waits on the user for (server `ask`, redacted), and when the state began. */
+  ask?: string | null; stateSince?: number;
+};
+/** The question a session newly waits on the user for, or null. */
+const askOf = (s: SessionLike) => (s.state === 'waiting' && s.ask ? s.ask : null);
 type ProviderLike = { name?: string; connected?: boolean; error?: string | null };
 
 /** A session counts as new only when it started this recently (a reconnect re-sends older ones). */
@@ -169,6 +183,8 @@ export function sessionEvents(prev: SessionLike | undefined, next: SessionLike, 
   }
   if (failed(next) && !failed(prev)) return [{ type: 'session-error', ...who }];
   if (ended(next) && !ended(prev)) return [{ type: 'session-ended', ...who }];
+  const ask = askOf(next);
+  if (ask && ask !== askOf(prev)) return [{ type: 'session-asks', ...who, ask, ...(next.stateSince ? { since: next.stateSince } : {}) }];
   return [];
 }
 
