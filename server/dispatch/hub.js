@@ -7,7 +7,7 @@ import { ownGitEnv, spawnCli } from "./cli.js";
 import { redact, redactDeep } from "./redact.js";
 import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
-import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
+import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT, WRITING } from "./roles.js";
 import { MODE_IDS } from "./mode-profiles.js";
 import { replyStyle } from "./style.js";
 import { checkLane, etaHint, laneItems, recordRunTime } from "./lanes.js";
@@ -1179,7 +1179,9 @@ export class Hub extends EventEmitter {
       : "";
     // The role prompt is not saved (state.json keeps metadata only): after a restart it comes from the role.
     const prompt = s.prompt ?? effectiveRoles(this.roles, this.store, this.models).find(r => r.id === s.role)?.prompt;
-    return [prompt, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
+    // Docs mode (#856): every role writes in the documents style (i-have-adhd rules, #737), not only 문서화.
+    const writing = s.mode === "docs" && !prompt?.includes(WRITING) ? WRITING : "";
+    return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
   start(s, prompt) {

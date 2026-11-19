@@ -42,16 +42,20 @@ const CODEX = { provider: "openai", model: null };
 const FABLE = C("claude-fable-5-2");
 const OPUS = C("claude-opus-5-5");
 const SONNET = C("claude-sonnet-5-5");
+const GEMINI = { provider: "gemini", model: "gemini-3.8-flash-high" };
+// Review and test cross-check the implementer with another provider when one is connected, else Opus (#856).
+// The reviewer stays on Codex or Claude (team rules: Opus reviews code); the tester may also run on Gemini.
 const CROSS = { cross: true, chain: [CODEX, OPUS] };
+const CROSS_TEST = { cross: true, chain: [CODEX, GEMINI, OPUS] };
 
-const BASE = { lead: [SONNET], impl: [OPUS], review: CROSS, test: CROSS, design: [SONNET], docs: [SONNET] };
+const BASE = { lead: [SONNET], impl: [OPUS], review: CROSS, test: CROSS_TEST, design: [SONNET], docs: [SONNET] };
 const DEFAULT_GRID = {
   plan: { ...BASE, lead: [FABLE, OPUS], impl: [FABLE, OPUS], design: [FABLE, OPUS] },
   impl: BASE,
   review: BASE,
   docs: { ...BASE, impl: [SONNET] },
   // Quickfix (#768): one Opus 5.5 implementer, no reviewer; the lead may still pick Sonnet for a trivial change.
-  quickfix: { ...BASE, impl: [OPUS], test: { cross: true, chain: [CODEX, SONNET] } },
+  quickfix: { ...BASE, impl: [OPUS], test: { cross: true, chain: [CODEX, GEMINI, SONNET] } },
   research: { ...BASE, lead: [CODEX, SONNET], impl: [CODEX, OPUS] },
 };
 

@@ -33,7 +33,7 @@ const MODE_HELP = [
   { id: "research", name: "조사", use: "서치·자료 조사" },
 ];
 const LANE_PROP = { type: "string", enum: LANES, description: "quickfix: 1-3개 파일, 계획 승인·리뷰어 없이 구현자 하나. normal: 기능 하나, 리뷰어 1명. risky: 인증·데이터·삭제·구조, 리뷰어 2명, 병합 전 메인 세션 확인" };
-const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류. 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
+const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류. 주어지지 않으면 과제를 보고 고른다(웹 서치·자료 조사면 research). 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
 
 const brief = s => ({
   id: s.id, name: s.name, role: s.role, model: s.model, status: s.status, state: s.state,
