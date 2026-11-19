@@ -75,8 +75,12 @@ test('modelStatus: text next to every dot, warn above 75%', async () => {
   const { modelStatus } = await import('../../web/src/projectNav.ts');
   const m = { id: 'claude', name: 'Claude', installed: true, connected: true, pct: 42, reached: false };
   assert.deepEqual(modelStatus(m, true), { text: '42%', long: '연결됨, 5시간 한도 42% 사용', tone: 'ok' });
-  assert.equal(modelStatus({ ...m, pct: 81 }, true).tone, 'warn');
-  assert.equal(modelStatus({ ...m, pct: 75 }, true).tone, 'ok');
+  // Green, then yellow from 60%, red from 85%; a reached limit is red.
+  assert.equal(modelStatus({ ...m, pct: 59 }, true).tone, 'ok');
+  assert.equal(modelStatus({ ...m, pct: 60 }, true).tone, 'warn');
+  assert.equal(modelStatus({ ...m, pct: 84 }, true).tone, 'warn');
+  assert.equal(modelStatus({ ...m, pct: 85 }, true).tone, 'bad');
+  assert.equal(modelStatus({ ...m, reached: true }, true).tone, 'bad');
   assert.deepEqual(modelStatus({ ...m, pct: null }, true), { text: '연결됨', long: '연결됨', tone: 'ok' });
   assert.equal(modelStatus({ ...m, reached: true }, true).text, '한도 도달');
   assert.deepEqual(modelStatus({ ...m, connected: false }, true), { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' });

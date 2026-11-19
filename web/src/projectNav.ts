@@ -163,10 +163,12 @@ export function shellKey(e: KeyLike): ShellKey | null {
 /** "42%" from a 0..1 fraction; null when unknown. */
 export const percent = (used: number | null | undefined) => (used == null || !Number.isFinite(used) ? null : Math.max(0, Math.min(100, Math.round(used * 100))));
 /** Above this a usage figure turns to the warning colour (doc 6 §2.1). */
-export const WARN_PERCENT = 75;
+/** Sidebar usage colour steps (5-hour window): green under WARN_PERCENT, yellow from it, red from BAD_PERCENT. */
+export const WARN_PERCENT = 60;
+export const BAD_PERCENT = 85;
 
 export type ModelLine = { id: string; name: string; installed: boolean | null; connected: boolean; pct: number | null; reached: boolean; busy?: boolean; /** The CLI's own https sign-in page while a login runs. */ url?: string | null; error?: string | null };
-export type ModelTone = 'ok' | 'warn' | 'off';
+export type ModelTone = 'ok' | 'warn' | 'bad' | 'off';
 /**
  * One sidebar model row: the short visible text next to the name (never colour alone, doc 6 §6) and the dot tone
  * (--ok, --warn, --muted-foreground). `enabled` false: agent sessions are off on this server, so every model reads 연결 안 됨 (text, not colour alone).
@@ -175,9 +177,9 @@ export function modelStatus(m: ModelLine, enabled: boolean): { text: string; lon
   if (!enabled) return { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' };
   if (m.busy && !m.connected) return { text: '연결 중', long: '연결하는 중', tone: 'off' };
   if (!m.connected) return { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' };
-  if (m.reached) return { text: '한도 도달', long: '사용 한도 도달', tone: 'warn' };
+  if (m.reached) return { text: '한도 도달', long: '사용 한도 도달', tone: 'bad' };
   if (m.pct == null) return { text: '연결됨', long: '연결됨', tone: 'ok' };
-  return { text: `${m.pct}%`, long: `연결됨, 5시간 한도 ${m.pct}% 사용`, tone: m.pct > WARN_PERCENT ? 'warn' : 'ok' };
+  return { text: `${m.pct}%`, long: `연결됨, 5시간 한도 ${m.pct}% 사용`, tone: m.pct >= BAD_PERCENT ? 'bad' : m.pct >= WARN_PERCENT ? 'warn' : 'ok' };
 }
 
 /** A plain left click (no modifier): links to the 세션 보드 open it in the shell; other clicks keep the browser's
