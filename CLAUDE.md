@@ -4,7 +4,7 @@ Atelier: a local, internal-only diagramming tool that works and looks like Erase
 
 ## Rules
 
-- Talk to the user in Korean. Code, comments, identifiers, commit messages and this file in English. `README.md` in Korean. UI copy in Korean 해요체, short and plain.
+- Talk to the user in Korean. Code, comments, identifiers, commit messages and this file in English. `README.md` in Korean. UI copy in Korean 해요체, short and plain. New web components follow docs/design/ui-libraries.md (reuse primitives and specialist libraries, one standout per screen, new dependencies proposed only).
 - GitHub flow on `chanyee725/Atelier`, integration branch `develop`: one issue per ticket or bug (`gh issue create`, title `E<n>: ...`), branch off `develop` (`feat/`, `fix/`, `docs/`, `chore/`), PR against `develop` with `Closes #<issue>` and what was checked, review findings as PR comments, then `gh pr merge --merge`. No force-push, no deleting remote branches, nothing goes to `main`.
 - Commits: English conventional commits, `type(scope): summary`.
 - The server binds to 127.0.0.1 and its own code makes no outbound requests; fonts, Excalidraw assets and icons are bundled or vendored. It writes only inside the workspace folder (run records under <workspace>/.drawing/), the git project that holds it (<project>/.dispatch/ and session worktrees), and ~/.dispatch/ (shared usage limits). To add a project it may list sub-folder names only (no files, hidden entries or symlinks); it does not write into a linked local folder.
