@@ -25,6 +25,7 @@ export function defaultAccountLabel(provider) {
 // org ids), long hex runs and UUIDs (account ids, keys), and key-like prefixes.
 const CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const DIGITS = /\d{6,}/;
+const SEPARATORS = /[\s\-‐-―−.·•_/\\,:;()[\]{}+#~|'"]/gu;
 const HEX = /[0-9a-f]{16,}/i;
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const KEYLIKE = /\b(sk|pk|org|acct|user|uid)[-_][A-Za-z0-9]{6,}/i;
@@ -39,9 +40,13 @@ export function checkAccountLabel(v) {
   const value = v.trim().replace(/\s+/g, ' ');
   if (!value) return { ok: true, value: null };
   if ([...value].length > ACCOUNT_LABEL_MAX) return { ok: false, error: `계정 이름은 ${ACCOUNT_LABEL_MAX}자까지예요` };
-  if (value.includes('@') || value.includes('＠')) return { ok: false, error: '계정 이름에 이메일은 넣을 수 없어요' };
-  if (CONTROL.test(value)) return { ok: false, error: '계정 이름에 쓸 수 없는 글자가 있어요' };
-  if (DIGITS.test(value) || HEX.test(value) || UUID.test(value) || KEYLIKE.test(value)) {
+  // Checks run on the NFKC form, so full-width digits and `@` look-alikes (＠, ﹫) count as what they stand for.
+  const n = value.normalize('NFKC');
+  if (/[@\uFE6B\uFF20]/.test(n)) return { ok: false, error: '계정 이름에 이메일은 넣을 수 없어요' };
+  if (CONTROL.test(n)) return { ok: false, error: '계정 이름에 쓸 수 없는 글자가 있어요' };
+  // Digit runs are counted with separators removed: `010-1234-5678` and `1234 5678 9012` are one long number.
+  const joined = n.replace(SEPARATORS, '');
+  if (DIGITS.test(joined) || HEX.test(n) || HEX.test(joined) || UUID.test(n) || KEYLIKE.test(n)) {
     return { ok: false, error: '계정 id나 키처럼 보이는 값은 넣을 수 없어요' };
   }
   return { ok: true, value };
