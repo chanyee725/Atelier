@@ -1,8 +1,9 @@
 // Card dashboard (#686, #793): one grid of compact cards for the project, no document list (the sidebar's 문서 tree
 // has the documents). Left: the work in progress, sessions running now and the open GitHub issues as the unit of work
 // (#776, #784, #785; issues page to the rows that fit, #800). The sessions card is as tall as its cards and the issues
-// card takes the rest of the column. Right: 사용량, 이슈 없는 브랜치 and PR과 머지, whose long lists scroll inside their
-// card so the page keeps one screen; no 최근 문서 card (the sidebar has the documents). All live: agents by the event
+// card is a fixed 8 rows a page. Right: 사용량 설정 (limits per provider; usage itself is in the sidebar) and PR과 머지,
+// whose long list scrolls inside its card; no 최근 문서 card (the sidebar has the documents) and no branch card (branch
+// status is the sidebar's 브랜치 row, the board's 브랜치 tab). All live: agents by the event
 // stream, sessions by session events, branches, PRs and usage by polling while the page is visible.
 // At a narrow main pane (under 880px) the halves stack, work first. Live sessions show as small cards (#799).
 import { useMemo } from 'react';
@@ -19,8 +20,8 @@ import { agentStateLabel, agentsIn, fileStem, isBusy, isEditingDiagram, needsLoo
 import { allDocs, relativeTime } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
-import { issueRows } from './issueBoard';
-import { BranchesCard, PrsCard, UsageCard } from './WorkCards';
+import { PrsCard } from './WorkCards';
+import { UsageSettingsCard } from './UsageSettingsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches } from './projectFeeds';
 
 type Props = {
@@ -41,22 +42,16 @@ export function ProjectDashboard({ project, onOpen, onBoard }: Props) {
   const prBranches = useMemo(() => openPrBranches(issues), [issues]);
   const branches = useBranches([...open.map((s) => s.branch), ...prBranches].join(','));
   const prs = usePrs(prBranches, tracking);
-  // Branches an open issue lists (its sessions' and PRs'); the rest go to the 이슈 없는 브랜치 card.
-  const claimed = useMemo(
-    () => new Set(issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, Array.isArray(sessions) ? sessions : []).flatMap((r) => r.branches) : []),
-    [issues, sessions],
-  );
 
   return (
     <DashGrid ratio="3fr 2fr">
-      <DashColumn label="진행 중인 작업">
+      <DashColumn label="진행 중인 작업" className="*:last:grow-0">
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} />
       </DashColumn>
-      <DashColumn label="현황">
-        <UsageCard onBoard={onBoard} />
-        <BranchesCard branches={branches} claimed={claimed} />
-        <PrsCard issues={issues} prs={prs} grow={1} />
+      <DashColumn label="현황" className="*:last:grow-0">
+        <UsageSettingsCard />
+        <PrsCard issues={issues} prs={prs} />
       </DashColumn>
     </DashGrid>
   );

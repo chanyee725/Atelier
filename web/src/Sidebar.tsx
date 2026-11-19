@@ -4,7 +4,7 @@
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, GitBranch, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -340,14 +340,25 @@ export function Sidebar(p: Props) {
           <SidebarMenuItem>
             {/* The board is a section of the shell (#731); this server holds one project, so it shows all its sessions (#778). */}
             <SidebarMenuButton
-              aria-current={p.section.kind === 'board' ? 'page' : undefined}
-              onClick={() => p.onSection(p.section.kind === 'board' ? p.section : { kind: 'board', tab: 'sessions' })}
+              aria-current={p.section.kind === 'board' && p.section.tab !== 'branches' ? 'page' : undefined}
+              onClick={() => p.onSection(p.section.kind === 'board' && p.section.tab !== 'branches' ? p.section : { kind: 'board', tab: 'sessions' })}
               data-nav="board"
               className="group/row"
             >
               <LayoutGrid aria-hidden />
               <span className="truncate">세션 보드</span>
               <Kbd className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">S</Kbd>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            {/* Branch status on its own row under the board (#793): every work branch, with or without an issue (#792, #810). */}
+            <SidebarMenuButton
+              aria-current={p.section.kind === 'board' && p.section.tab === 'branches' ? 'page' : undefined}
+              onClick={() => p.onSection({ kind: 'board', tab: 'branches' })}
+              data-nav="branches"
+            >
+              <GitBranch aria-hidden />
+              <span className="truncate">브랜치</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
