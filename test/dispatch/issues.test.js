@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { closedIssues, createIssueList, joinIssues } from "../../server/dispatch/issues.js";
+import { closedIssues, createIssueList, joinIssues, referencedIssues } from "../../server/dispatch/issues.js";
 import { setPrTracking } from "../../server/dispatch/pr-status.js";
 import { FAKE_MARKER } from "../../server/dispatch/cli.js";
 
@@ -41,6 +41,21 @@ test("closedIssues reads GitHub's closing keywords only", () => {
   assert.deepEqual(closedIssues("Closes #776\nfixes: #12, see #13, resolved #14, Fixes #12"), [776, 12, 14]);
   assert.deepEqual(closedIssues(null), []);
   assert.deepEqual(closedIssues("mentions #5"), []);
+});
+
+test("referencedIssues reads Refs #n, not closing keywords (#756)", () => {
+  assert.deepEqual(referencedIssues("Refs #756\nref: #12, references #13, Closes #14, prefs #15"), [756, 12, 13]);
+  assert.deepEqual(referencedIssues(undefined), []);
+});
+
+test("listIssues.prsOf answers from the same cached gh run: branch, Closes and Refs, any issue state (#756)", async () => {
+  const f = fakeGh({ "issue list": ISSUES, "pr list": [...PRS, { number: 802, state: "OPEN", headRefName: "dispatch/impl-9", body: "Refs #640" }] });
+  const list = createIssueList({ workspaceDir: f.ws, cwd: f.ws, env: f.env, now: () => 0 });
+  assert.deepEqual((await list.prsOf(776)).prs.map(p => p.number), [801, 790]);
+  assert.deepEqual(await list.prsOf(640), { ok: true, prs: [{ number: 802, state: "open", branch: "dispatch/impl-9" }] });
+  const r = await list();
+  assert.equal(r.prs, undefined, "GET /api/issues answer stays issues only");
+  assert.equal(f.calls().length, 2);
 });
 
 test("joinIssues matches PRs by branch name and Closes, keeps metadata only", () => {

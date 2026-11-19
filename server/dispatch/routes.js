@@ -130,10 +130,10 @@ export function routeTable(d) {
     // or { ok: false, reason }. Read-only.
     ["GET", /^\/api\/issues$/, async () => (d.issues ? d.issues() : { ok: false, reason: "disabled" })],
     // Sessions, models and account labels that worked on one issue (#747), plus the PR-comment summary line.
-    // ?pr=0 skips the PR lookup through gh.
+    // PRs come from the cached issue/PR list (branch, Closes, Refs), else pr-status per branch; ?pr=0 skips both.
     ["GET", /^\/api\/issues\/(\d{1,7})\/accounts$/, async ([n], __, url) => {
-      const prOf = url?.searchParams.get("pr") === "0" ? null : d.prStatus;
-      return issueAccounts(d.ledger, Number(n), { prOf });
+      if (url?.searchParams.get("pr") === "0") return issueAccounts(d.ledger, Number(n));
+      return issueAccounts(d.ledger, Number(n), { prsOf: d.issues?.prsOf, prOf: d.prStatus });
     }],
     ["GET", /^\/api\/tickets$/, async () => ({ tickets: hub.tickets })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/resume$/, async ([id]) => ({ ok: hub.resumeTicket(id) })],

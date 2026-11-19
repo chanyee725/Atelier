@@ -122,22 +122,34 @@ export function issueSession(e, pr = null) {
 }
 
 /**
- * `{ issue, sessions, summary }` for one issue. `prOf(branch)` answers like pr-status (`{ ok, pr: { number } }`);
- * it is asked once per distinct branch, at most `maxBranches` of them, and a failure leaves `pr` null.
+ * `{ issue, prs, sessions, summary }` for one issue. `prsOf(n)` answers like issues.js's listIssues.prsOf
+ * (`{ ok, prs: [{ number, branch? }] }`, from the cached PR list, matched by branch name, Closes and Refs); a session
+ * on one of those PRs' head branches gets its number. Only when that list is not available, `prOf(branch)` (pr-status,
+ * cached per branch) is asked for the branches that name this issue, at most `maxBranches` of them. Failures leave
+ * `pr` null. `prs` is the issue's PR numbers, open ones first.
  */
-export async function issueAccounts(ledger, n, { prOf = null, maxBranches = 8 } = {}) {
+export async function issueAccounts(ledger, n, { prsOf = null, prOf = null, maxBranches = 8 } = {}) {
   const entries = ledger.forIssue(n);
-  const prs = new Map();
-  if (prOf) {
+  const byBranch = new Map();
+  let listed = null;
+  if (prsOf) {
+    try {
+      const r = await prsOf(n);
+      if (r?.ok && Array.isArray(r.prs)) listed = r.prs.filter(p => Number.isInteger(p?.number));
+    } catch { /* fall back to prOf */ }
+    for (const p of listed ?? []) if (p.branch && !byBranch.has(p.branch)) byBranch.set(p.branch, p.number);
+  }
+  if (!listed && prOf) {
     // Only branches that name this issue: a lead's own dispatch/ branch has no PR of its own.
     const branches = [...new Set(entries.map(e => e.branch).filter(b => issueOfBranch(b) === n))].slice(0, maxBranches);
     await Promise.all(branches.map(async b => {
       try {
         const r = await prOf(b);
-        if (r?.ok && Number.isInteger(r.pr?.number)) prs.set(b, r.pr.number);
+        if (r?.ok && Number.isInteger(r.pr?.number)) byBranch.set(b, r.pr.number);
       } catch { /* unknown PR */ }
     }));
   }
-  const sessions = entries.map(e => issueSession(e, prs.get(e.branch) ?? null));
-  return { issue: n, sessions, summary: accountsSummary(sessions) };
+  const sessions = entries.map(e => issueSession(e, byBranch.get(e.branch) ?? null));
+  const prs = listed ? [...new Set(listed.map(p => p.number))] : [...new Set(sessions.map(s => s.pr).filter(Boolean))];
+  return { issue: n, prs, sessions, summary: accountsSummary(sessions) };
 }

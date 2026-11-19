@@ -87,6 +87,18 @@ test('Ledger: snapshot label kept, issues from item and branch, leads included, 
   assert.deepEqual(impl.tokens, { input: 3, output: 4, cacheRead: 0, cacheWrite: 0 });
   assert.equal(r.summary, 'roles: lead Claude Sonnet 5.5 (Claude · Max), impl Codex GPT-5 (Codex · 팀)');
   assert.deepEqual(Object.keys(impl).sort(), ['accountLabel', 'branch', 'cost', 'effort', 'endedAt', 'model', 'modelLabel', 'pr', 'provider', 'role', 'sid', 'startedAt', 'tokens'].sort());
+  assert.deepEqual(r.prs, [901]);
+  // With the cached PR list (#756): a PR whose head is the session's branch counts even when only its body names the
+  // issue (Refs #747); pr-status is not asked.
+  const viaList = await issueAccounts(l, 747, {
+    prsOf: async (n) => (assert.equal(n, 747), { ok: true, prs: [{ number: 960, branch: 'feat/747-accounts' }, { number: 950, branch: 'dispatch/lead-1' }] }),
+    prOf: async () => assert.fail('prOf asked although the list answered'),
+  });
+  assert.deepEqual(viaList.sessions.map((s) => s.pr), [950, 960]);
+  assert.deepEqual(viaList.prs, [960, 950]);
+  // The list unavailable (PR tracking off, gh missing): pr-status per branch again.
+  const fallback = await issueAccounts(l, 747, { prsOf: async () => ({ ok: false, reason: 'disabled' }), prOf: async () => ({ ok: true, pr: { number: 7 } }) });
+  assert.deepEqual(fallback.sessions.map((s) => s.pr), [null, 7]);
   // Unknown issue: empty. Ledger keeps no free text: an email-shaped label never lands.
   assert.deepEqual((await issueAccounts(l, 1)).sessions, []);
   l.sync({ id: 'E', role: 'impl', accountLabel: 'x@y.z', startedAt: 4, status: 'idle' });
