@@ -1,7 +1,8 @@
-// 작업 보드: the lead's tasks by stage (plan … blocked) with owner, ETA and the time in the current stage, in a side sheet.
+// 작업 보드: the lead's tasks by stage (plan … blocked) with owner, ETA and the time in the current stage: a
+// dashboard card on the 세션 보드 (#879) that opens the full board in a side sheet.
 // Reads the live `tasks` slice of the store; shows metadata only (titles, stages, times), never transcripts.
 import { useState } from 'react';
-import { SquareKanban, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
@@ -90,23 +91,6 @@ function BoardSheet({ open, onOpenChange, tasks }: { open: boolean; onOpenChange
         <Board tasks={tasks} />
       </SheetContent>
     </Sheet>
-  );
-}
-
-/** The 작업 보드 button for the 세션 board's `actions` slot, with the sheet it opens. */
-export function TaskBoardButton() {
-  const [open, setOpen] = useState(false);
-  const { tasks } = useScoped();
-  const openCount = tasks.filter(t => t.stage !== 'done').length;
-  return (
-    <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <SquareKanban aria-hidden />
-        작업 보드
-        <span className="text-xs text-muted-foreground tabular-nums">{openCount}</span>
-      </Button>
-      <BoardSheet open={open} onOpenChange={setOpen} tasks={tasks} />
-    </>
   );
 }
 
