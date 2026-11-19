@@ -74,3 +74,17 @@ test('the full sets hold thousands of icons, every chunk loads, and nothing is f
     assert.doesNotMatch(readFileSync(new URL(f, import.meta.url), 'utf8'), /fetch\(|https?:\/\/(?!aws|learn|cloud|lucide|simpleicons)/, f);
   }
 });
+
+test('pack names and aliases do not replace curated icons for an explicit icon: name', async () => {
+  const { iconFor } = await import('../../shared/render/icons.ts');
+  const curated: [string, string][] = [
+    ['vm', 'server'], ['chart', 'chart-column'], ['ingress', 'network'], ['node', 'server'],
+    ['serverless', 'square-function'], ['composer', 'workflow'], ['ios', 'smartphone'],
+    ['opensearch', 'search'], ['looker', 'chart-column'],
+  ];
+  await loadIcons([...curated.map(([n]) => n), 'aws-ec2', 'postgres']);
+  for (const [n] of curated) assert.ok(packIcon(n), `${n} is also a pack name`);
+  for (const [n, key] of curated) assert.deepEqual([n, iconFor(n).set, iconFor(n).key], [n, 'lucide', key]);
+  assert.equal(iconFor('aws-ec2').set, 'aws');
+  assert.equal(iconFor('postgres').key, 'postgresql');
+});
