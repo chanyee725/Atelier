@@ -1155,8 +1155,9 @@ export class Hub extends EventEmitter {
 
   systemPrompt(s) {
     // A lead works in its own worktree; without the project folder spelled out it merged into its own branch.
+    // Since #768 the lead merges the PR on GitHub, then fast-forwards the project folder.
     const where = s.canSpawn && s.worktree
-      ? `\n\n[병합 위치] 너의 작업 폴더는 ${s.cwd} (브랜치 ${s.branch})이고 통합 브랜치가 아니다. 병합은 프로젝트 폴더 ${this.root}에서 한다: git -C ${this.root} merge --no-ff <브랜치> (또는 --ff-only). 병합 뒤 git -C ${this.root} log --oneline -1 로 통합 브랜치 HEAD를 확인하고 보고에 적는다.`
+      ? `\n\n[병합 위치] 네 작업 폴더 ${s.cwd}(브랜치 ${s.branch})는 통합 브랜치가 아니다. gh pr merge --merge 뒤 프로젝트 폴더를 맞춘다: git -C ${this.root} fetch, git -C ${this.root} merge --ff-only origin/develop. 보고에 git -C ${this.root} log --oneline -1 결과를 적는다.`
       : "";
     // The role prompt is not saved (state.json keeps metadata only): after a restart it comes from the role.
     const prompt = s.prompt ?? effectiveRoles(this.roles, this.store, this.models).find(r => r.id === s.role)?.prompt;

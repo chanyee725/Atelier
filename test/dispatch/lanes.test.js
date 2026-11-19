@@ -76,3 +76,20 @@ test("run times: merged tasks feed a per-lane median; capped; none yet is null",
   await hub.setTask(lead.id, { id: t.id, stage: "done" });
   assert.equal(hub.etaHint("quickfix"), null);
 });
+
+test("agent prompts call the tool Atelier, carry the lanes and the lead merge, and drop emphasis", async () => {
+  const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE } = await import("../../server/dispatch/roles.js");
+  const all = [SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE, ...roles.map(r => r.prompt)].join("\n");
+  assert.doesNotMatch(all, /Dispatch|Drawing|IMPORTANT|NEVER|반드시/);
+  assert.match(SPAWN_PROMPT, /아틀리에\(Atelier\)/);
+  for (const lane of ["quickfix", "normal", "risky"]) assert.match(SPAWN_PROMPT, new RegExp(`- ${lane}:`));
+  assert.match(SPAWN_PROMPT, /gh pr merge <번호> --merge/);
+  assert.match(SPAWN_PROMPT, /git merge --ff-only origin\/develop/);
+  assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
+  assert.doesNotMatch(SPAWN_PROMPT, /20분/);
+  for (const p of [SPAWN_PROMPT, CHILD_PROMPT]) {
+    assert.match(p, /전체 e2e는 돌리지 않는다/);
+    assert.match(p, /실제 실행 출력/);
+    assert.match(p, /\[개인정보\]/);
+  }
+});
