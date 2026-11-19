@@ -24,6 +24,8 @@ export interface IssueSession {
   cost: number | null;
   branch: string | null;
   pr: number | null;
+  /** Whole-session numbers that also cover other issues (a lead, or a session on several issues): not in the issue's totals. */
+  shared: boolean;
 }
 
 export function accountsSummary(sessions: Array<Partial<IssueSession>>): string;

@@ -1,7 +1,7 @@
 // Open GitHub issues as the unit of work (#776): for the project dashboard, each open issue with the PRs that work on
 // it. Read-only through `gh` (cli.js); the app never creates or closes issues. Follows the same per-workspace switch as
 // PR tracking (pr-status.js). Kept in memory only, never written: issue number, title and link; per PR its number,
-// state, link and head branch. PR bodies are read only to find `Closes #<n>` and dropped at once.
+// state, link and head branch. PR bodies are read only to find `Closes #<n>` / `Refs #<n>` and dropped at once.
 import { runCli } from "./cli.js";
 import { issueNumber, issueOfBranch } from "./ledger.js";
 import { classify, prTrackingEnabled, validBranch } from "./pr-status.js";
@@ -14,11 +14,19 @@ const ISSUE_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+$/;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 // GitHub's closing keywords, same-repo form only (`Closes #12`, `fixes: #12`).
 const CLOSES = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+#(\d{1,7})\b/gi;
+// A PR that works on an issue without closing it (`Refs #12`, `ref: #12`, `references #12`).
+const REFS = /\b(?:refs?|references?)\s*:?\s+#(\d{1,7})\b/gi;
 
 /** The issue numbers a PR body closes with GitHub's keywords (`Closes #776`, `Fixes #12`). */
 export function closedIssues(body) {
   if (typeof body !== "string") return [];
   return [...new Set([...body.matchAll(CLOSES)].map(m => issueNumber(Number(m[1]))).filter(Boolean))];
+}
+
+/** The issue numbers a PR body refers to without closing them (`Refs #756`). */
+export function referencedIssues(body) {
+  if (typeof body !== "string") return [];
+  return [...new Set([...body.matchAll(REFS)].map(m => issueNumber(Number(m[1]))).filter(Boolean))];
 }
 
 const cleanTitle = t => (typeof t === "string" ? t.replace(CONTROL, " ").trim().slice(0, TITLE_MAX) : "");
@@ -28,6 +36,14 @@ const cleanTitle = t => (typeof t === "string" ? t.replace(CONTROL, " ").trim().
  * closes it. Issues stay in gh's order (newest first); PRs open first, then merged, then closed, newest first.
  */
 export function joinIssues(rawIssues, rawPrs) {
+  return joinParsed(rawIssues, parsePrs(rawPrs));
+}
+
+/**
+ * gh's PRs, metadata only: `{ pr: { number, state, url?, branch? }, issues, refs }`. `issues` are the ones its branch
+ * names or its body closes; `refs` the ones its body only refers to. Open first, then merged, then closed, newest first.
+ */
+export function parsePrs(rawPrs) {
   const prs = (Array.isArray(rawPrs) ? rawPrs : []).flatMap(p => {
     const number = issueNumber(p?.number);
     const state = String(p?.state || "").toLowerCase();
@@ -37,10 +53,17 @@ export function joinIssues(rawIssues, rawPrs) {
     const issues = new Set(closedIssues(p.body));
     const own = issueOfBranch(branch);
     if (own) issues.add(own);
-    return [{ pr: { number, state, ...(url && { url }), ...(branch && { branch }) }, issues }];
+    const refs = new Set(referencedIssues(p.body));
+    return [{ pr: { number, state, ...(url && { url }), ...(branch && { branch }) }, issues, refs }];
   });
   const order = { open: 0, merged: 1, closed: 2 };
-  prs.sort((a, b) => order[a.pr.state] - order[b.pr.state] || b.pr.number - a.pr.number);
+  return prs.sort((a, b) => order[a.pr.state] - order[b.pr.state] || b.pr.number - a.pr.number);
+}
+
+/** The PRs working on issue `n` (branch, Closes or Refs), from parsePrs' list. */
+export const prsOfIssue = (prs, n) => prs.filter(p => p.issues.has(n) || p.refs.has(n)).map(p => p.pr);
+
+function joinParsed(rawIssues, prs) {
   return (Array.isArray(rawIssues) ? rawIssues : []).flatMap(i => {
     const number = issueNumber(i?.number);
     if (!number) return [];
@@ -65,14 +88,15 @@ export function createIssueList({ workspaceDir, cwd, env, prDefault = async () =
         gh(["issue", "list", "--state", "open", "--limit", String(issueLimit), "--json", "number,title,url"]),
         gh(["pr", "list", "--state", "all", "--limit", String(prLimit), "--json", "number,state,url,headRefName,body"]),
       ]);
-      return { ok: true, issues: joinIssues(issues, prs) };
+      const parsed = parsePrs(prs);
+      return { ok: true, issues: joinParsed(issues, parsed), prs: parsed };
     } catch (e) {
       const reason = e instanceof SyntaxError ? "error" : classify(e);
       return { ok: false, reason: reason === "no-pr" ? "error" : reason };
     }
   }
 
-  return async function listIssues({ force = false } = {}) {
+  async function load(force) {
     if (workspaceDir && !(await prTrackingEnabled(workspaceDir, await prDefault()))) return { ok: false, reason: "disabled" };
     if (typeof cwd !== "string" || !cwd) return { ok: false, reason: "error" };
     if (!force && cached && now() - cached.at < cacheMs) return cached.result;
@@ -81,5 +105,19 @@ export function createIssueList({ workspaceDir, cwd, env, prDefault = async () =
       return result;
     }).finally(() => { inflight = null; });
     return inflight;
+  }
+
+  async function listIssues({ force = false } = {}) {
+    const r = await load(force);
+    return r.ok ? { ok: true, issues: r.issues } : r;
+  }
+  /**
+   * `{ ok: true, prs }`: the PRs on issue `n` (any state, by branch, Closes or Refs) from the same cached gh answer,
+   * so the accounts endpoint needs no gh call of its own. Only the last prLimit PRs are seen.
+   */
+  listIssues.prsOf = async (n, { force = false } = {}) => {
+    const r = await load(force);
+    return r.ok ? { ok: true, prs: prsOfIssue(r.prs, n) } : r;
   };
+  return listIssues;
 }

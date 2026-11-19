@@ -51,6 +51,7 @@ export const SPAWN_PROMPT = `
 웹 UI 일은 normal·risky에서만 modern-web-guidance 스킬을 먼저 쓰라고 적는다. ${TESTS}
 
 [병합] 리뷰에 must-fix가 없으면 바로 병합한다.
+0. 이슈가 있는 PR이면 post_accounts(issue, pr)로 세션·계정 요약 댓글을 올린다(실패해도 병합은 한다).
 1. gh pr merge <번호> --merge
 2. 프로젝트 폴더에서 git fetch 후 git merge --ff-only origin/develop
 3. set_task(id, stage: "done", commit)으로 닫고 한 줄로 보고

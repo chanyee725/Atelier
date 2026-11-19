@@ -5,6 +5,7 @@
 // PRs are a detail of an issue. Pure functions only, so tests run without a browser.
 import { isOpen } from '../dispatch/lib/format.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
+import { issueOfBranch } from '../../../shared/dispatch/issue-branch.js';
 
 export type IssuePr = { number: number; state: 'open' | 'closed' | 'merged'; url?: string; branch?: string };
 export type ApiIssue = { number: number; title: string; url?: string; prs: IssuePr[] };
@@ -26,18 +27,8 @@ export type IssueRow = ApiIssue & {
   branches: string[];
 };
 
-/**
- * The issue a branch works on: `feat/747-x`, `fix/issue-12`, `gh-9`; a lead's `dispatch/…` branch names none.
- * Mirrors issueOfBranch in server/dispatch/ledger.js.
- */
-export function issueOfBranch(branch: string | null | undefined): number | null {
-  if (!branch || branch.startsWith('dispatch/')) return null;
-  const m = branch.match(/(?:^|\/)(?:issue-|gh-)?(\d{1,7})(?:[-_]|$)/i);
-  const n = m ? Number(m[1]) : 0;
-  return n > 0 ? n : null;
-}
-
-type WithIssue = Session & { issue?: number | null };
+/** The issue a branch works on: only `<type>/<n>-…` (`feat/747-x`, `fix/issue-12`); see shared/dispatch/issue-branch.js. */
+export { issueOfBranch };
 
 /**
  * The state of one issue from its PRs and whether a session is open on it. A merged PR makes it 머지됨 only when the
@@ -60,7 +51,7 @@ const ORDER: Record<IssueState, number> = { progress: 0, pr: 1, open: 2, merged:
 export function issueRows(issues: readonly ApiIssue[], sessions: readonly Session[]): IssueRow[] {
   const rows = issues.map((i) => {
     const prBranches = new Set(i.prs.flatMap((p) => (p.branch ? [p.branch] : [])));
-    const mine = (sessions as readonly WithIssue[])
+    const mine = sessions
       .filter((s) => s.issue === i.number || issueOfBranch(s.branch) === i.number || (!!s.branch && prBranches.has(s.branch)))
       .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
     const branches = [...new Set([...mine.flatMap((s) => (s.branch ? [s.branch] : [])), ...prBranches])];

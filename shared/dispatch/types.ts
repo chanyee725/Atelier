@@ -40,6 +40,10 @@ export interface Session {
   parent: string | null;
   /** Top-level workspace folder (project) the session works for; null = 미분류. Older servers omit it. */
   folder?: string | null;
+  /** The user's label for the provider connection the session started under (#747); never an email or account id. */
+  accountLabel?: string | null;
+  /** The GitHub issue the session works on, when its task named one (#747). */
+  issue?: number | null;
   status: Status;
   startedAt: number;
   updatedAt: number;
