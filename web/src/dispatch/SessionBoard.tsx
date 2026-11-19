@@ -512,7 +512,7 @@ function UsageStrip({ onJump }: { onJump: () => void }) {
     <button
       type="button"
       onClick={onJump}
-      className="self-start rounded-md text-left text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[960px]/board:hidden"
+      className="min-h-6 self-start rounded-md py-1 text-left text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[960px]/board:hidden"
     >
       Claude {text} <span className="underline underline-offset-2">사용량 자세히</span>
     </button>
@@ -580,7 +580,7 @@ function UsageColumn({ ref, onSettings }: { ref: React.Ref<HTMLElement>; onSetti
             ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션 멈춤`
             : '가드가 꺼져 있어요'}
         </span>
-        <button type="button" onClick={() => onSettings('limits')} className="rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
           가드 바꾸기 ›
         </button>
       </div>
