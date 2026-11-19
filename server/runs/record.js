@@ -2,6 +2,8 @@
 // Metadata only: step states, times, model, token counts, cost, branch, commit, PR number.
 // Never transcripts, prompts, a session's answers, questions, tool output, emails or keys.
 
+import { checkAccountLabel } from '../../shared/dispatch/accounts.js';
+
 export const RECORD_VERSION = 1;
 export const RUN_ID = /^\d{13}-[0-9a-f]{6,16}$/;
 export const TIMELINE_MAX = 500;
@@ -38,16 +40,23 @@ const shortNote = (v) => {
 export function pickSession(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const k of ['sid', 'name', 'provider', 'model', 'effort', 'branch', 'mode']) {
+  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch', 'mode']) {
     const v = short(s[k]);
     if (v !== undefined) out[k] = v;
   }
   if (typeof s.commit === 'string' && /^[0-9a-f]{4,40}$/.test(s.commit)) out.commit = s.commit;
   if (SESSION_STATES.includes(s.state)) out.state = s.state;
+  // The account label as the session started (#747): a user-set name like `Claude · Max`, never an email or id.
+  if (s.accountLabel === null) out.accountLabel = null;
+  else if (typeof s.accountLabel === 'string') {
+    const r = checkAccountLabel(s.accountLabel);
+    if (r.ok && r.value) out.accountLabel = r.value;
+  }
+  if (Number.isInteger(s.issue) && s.issue > 0 && s.issue < 1e7) out.issue = s.issue;
   // Why the mode's profile fell back to another model (#748): a server-written line, no transcript text.
   const note = shortNote(s.profileNote);
   if (note !== undefined) out.profileNote = note;
-  for (const k of ['stateSince', 'cost', 'ctxPct']) {
+  for (const k of ['stateSince', 'startedAt', 'endedAt', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;
   }

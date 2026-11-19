@@ -64,7 +64,9 @@ export function planFileName(title) {
 function sessionMeta(s) {
   const ctxPct = s.ctxWindow > 0 ? Math.round((100 * (s.ctx || 0)) / s.ctxWindow) : undefined;
   return {
-    sid: s.id, name: s.name, provider: s.provider, model: s.model, effort: s.effort ?? undefined, branch: s.branch ?? undefined,
+    sid: s.id, name: s.name, role: s.role, provider: s.provider, model: s.model, effort: s.effort ?? undefined, branch: s.branch ?? undefined,
+    accountLabel: s.accountLabel ?? undefined, issue: s.issue ?? undefined, startedAt: s.startedAt,
+    endedAt: s.status === 'done' ? s.updatedAt : undefined,
     mode: s.mode ?? undefined, profileNote: s.profileNote ?? undefined,
     state: s.state, stateSince: s.stateSince, cost: s.cost ?? undefined, ctxPct, tokens: s.usage,
     ...(s.pr !== undefined && { pr: s.pr }),

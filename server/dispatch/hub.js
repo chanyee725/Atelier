@@ -17,6 +17,7 @@ import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, 
 import { AGENT_COLORS, pickColor } from "./colors.js";
 import { deriveFolder } from "./session-folder.js";
 import { LiveTracker } from "./live.js";
+import { issueNumber } from "./ledger.js";
 
 const badRequest = msg => Object.assign(new Error(msg), { status: 400 });
 
@@ -588,6 +589,8 @@ export class Hub extends EventEmitter {
           color: pickColor(this.sessions.map(x => x.color)),
           provider: model.provider, model: model.id, modelLabel: model.label,
           effort: it.effort || null, perm: it.perm || role.perm,
+          // The account label of the provider connection as it is now (#747): a snapshot, never an email or id.
+          accountLabel: this.accountLabel?.(model.provider) ?? null, issue: issueNumber(it.issue),
           ...(it.mode && { mode: it.mode }), ...(it.profileNote && { profileNote: it.profileNote }),
           prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
           cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder: top,
