@@ -5,12 +5,12 @@ description: Start Atelier (local docs, diagrams and agent teams) in a project, 
 
 # Atelier setup
 
-Atelier serves `http://127.0.0.1:<port>` (4330 by default) for one project and runs agent sessions there, each in its own git worktree at `.atelier/worktrees/<role>-<n>`. `<skill-dir>` is this file's folder; `<plugin-root>` is two levels up. The workspace is `<project>/.atelier` (an older `<project>/atelier` or `<project>/pipelines` is moved into it on start).
+Atelier serves `http://127.0.0.1:<port>` (4330 by default) for one project and runs agent sessions there, each in its own git worktree at `.atelier/worktrees/<role>-<n>`. `<skill-dir>` is this file's folder; `<plugin-root>` is two levels up. The workspace is `<project>/.atelier`, created on start and kept out of git through `.git/info/exclude` when the project does not ignore it yet (an older `<project>/atelier` or `<project>/pipelines` is moved into it on start).
 
 ## Steps
 
-1. Check the CLIs: `<skill-dir>/scripts/setup.sh --status`.
-   Done when: each provider the user wants shows `logged in`. For `not logged in`, ask the user to run `! <skill-dir>/scripts/setup.sh <claude|codex>` in their own terminal (browser login; the token stays with the CLI). For `not installed`, relay the hint the script prints.
+1. Install and check the CLIs: `<skill-dir>/scripts/setup.sh --install`. On a fresh checkout it runs `npm ci` and `npm run build` (a minute or two); after that it only prints the status.
+   Done when: it exits 0 and each provider the user wants shows `logged in`. For `not logged in`, ask the user to run `! <skill-dir>/scripts/setup.sh <claude|codex>` in their own terminal (browser login; the token stays with the CLI). For `not installed`, relay the hint the script prints. `gh` is needed for issues and PRs: when it is not installed or not logged in, tell the user (installing it needs sudo, so in their own terminal; then `! gh auth login`) and go on.
 2. Start or reuse the server: `<plugin-root>/scripts/start.sh "<project-root>"`.
    Done when: it prints the URL. If the port serves another project, rerun with `DISPATCH_PORT=<next free port>` and keep that port. Log: `<project>/.atelier/server.log`.
 3. Connect providers. Providers start disconnected. Read `GET /api/state` → `providers.<claude|openai|gemini>.connected`; connect only the ones the user named with `POST /api/providers/<id>/login` (header `x-drawing: 1`).

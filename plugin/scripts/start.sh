@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Starts the Atelier server for a git project, in project mode (the whole app for that one project).
 #   start.sh <project>
-# Workspace = <project>/.atelier (created when missing; an older <project>/atelier or <project>/pipelines is moved into it
+# Workspace = <project>/.atelier (created when missing and kept out of git through .git/info/exclude; an older <project>/atelier or <project>/pipelines is moved into it
 # once, keeping its structure, #782/#773). The port is kept in
 # <project>/.atelier/server.port (or an older <project>/.dispatch/ until the server moves it, #782; its pid in server.pid, which stop.sh reads; both written only once
 # the server is ready, a failed start leaves the old files alone; reusing a server rewrites server.pid
@@ -74,6 +74,14 @@ if [ ${#olds[@]} -gt 0 ]; then
   trap - EXIT
 fi
 mkdir -p "$workspace" "$state"
+# Keep .atelier/ out of git: when the project does not ignore it yet, add it to .git/info/exclude (local only, the
+# project's own .gitignore is left alone).
+if ! git -C "$project" check-ignore -q .atelier/ 2>/dev/null; then
+  exclude=$(git -C "$project" rev-parse --git-path info/exclude)
+  case "$exclude" in /*) ;; *) exclude=$project/$exclude ;; esac
+  mkdir -p "$(dirname "$exclude")"
+  { [ ! -s "$exclude" ] || [ -z "$(tail -c1 "$exclude")" ] || echo; echo ".atelier/"; } >> "$exclude"
+fi
 
 lockfile=$workspace/.drawing/server.lock
 
@@ -98,7 +106,7 @@ ours() {
   ' "$1" "$lockfile" "${2:-}"
 }
 
-port=$(tr -dc '0-9' < "$portfile" 2>/dev/null || true)
+port=$({ tr -dc '0-9' < "$portfile"; } 2>/dev/null || true)
 if [ -n "$port" ] && reused=$(ours "$port"); then
   # Reusing: rewrite server.pid with the lock's pid so stop.sh/update.sh still find it.
   [ -n "$reused" ] && echo "$reused" > "$state/server.pid"
