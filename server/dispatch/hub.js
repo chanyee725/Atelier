@@ -179,6 +179,12 @@ export class Hub extends EventEmitter {
   get limits() { return this.shared.claude; }
   get sessions() { return Object.values(this.store.data.sessions); }
   get(id) { return this.store.data.sessions[id]; }
+  /** True while the session has a process in this server run or is mid-turn; a saved session after a restart is not. */
+  alive(id) {
+    const s = this.get(id);
+    if (!s || s.status === "done") return false;
+    return !!this.live.get(id)?.proc || ["running", "starting", "waiting"].includes(s.status);
+  }
   rt(id) {
     let r = this.live.get(id);
     if (!r) {
