@@ -28,3 +28,18 @@ export function askIndex(lines) {
   }
   return -1;
 }
+
+/**
+ * The asking sentence a final answer ends with (markdown stripped, at most `max` characters), or "" when its
+ * last lines ask nothing. When the ask sits inside a list ("1. A로 할까요?"), it is the line above the list.
+ */
+export function askLineOf(text, max = 200) {
+  const lines = linesOf(text);
+  const qi = askIndex(lines);
+  if (qi < 0) return "";
+  let start = qi;
+  const inList = ITEM.test(lines[qi]);
+  if (inList) while (start > 0 && ITEM.test(lines[start - 1])) start--;
+  const line = plain(inList && start > 0 ? lines[start - 1] : lines[qi]);
+  return line.length > max ? `${line.slice(0, max - 1)}…` : line;
+}

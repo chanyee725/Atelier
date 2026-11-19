@@ -14,7 +14,7 @@ import { checkLane, etaHint, laneItems, recordRunTime } from "./lanes.js";
 import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
-import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
+import { askOf, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
 import { AGENT_COLORS, pickColor } from "./colors.js";
 import { deriveFolder } from "./session-folder.js";
 import { LiveTracker } from "./live.js";
@@ -247,8 +247,14 @@ export class Hub extends EventEmitter {
     // A turn that ends by asking its reader something leaves the session waiting on a person, not resting.
     // Only on a real change of status: Codex/Gemini touch idle again when the process exits, after
     // reportToParent() has cleared lastText, and that must not wipe the question.
+    // The question is read from this turn's answer only and kept as `ask`, so every view shows what to answer (#886).
     if (patch.status && patch.status !== s.status && !("asksUser" in patch)) {
-      patch.asksUser = patch.status === "idle" && asksUser(this.live.get(s.id)?.lastText);
+      const r = this.live.get(s.id);
+      // A new turn drops the previous turn's answer: a turn that ends without text must not re-ask an old question.
+      if (r && patch.status === "running" && (s.status === "idle" || s.status === "error")) r.lastText = null;
+      const ask = patch.status === "idle" ? askOf(r?.lastText) : "";
+      patch.asksUser = !!ask;
+      patch.ask = ask ? redact(ask) : null;
     }
     const prev = s.status;
     // Error and reply clips reach the UI and memory only after key- and email-shaped parts are masked.
