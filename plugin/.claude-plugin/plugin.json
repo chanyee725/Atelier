@@ -15,5 +15,6 @@
     "diagrams",
     "codex",
     "gemini"
-  ]
+  ],
+  "types": "./types/index.d.ts"
 }
