@@ -21,6 +21,17 @@ async function api(method, path, body) {
   return data;
 }
 
+// Harness modes (#748; ids must match MODES in mode-profiles.js, checked by test/dispatch/mode-apply.test.js).
+const MODE_HELP = [
+  { id: "plan", name: "계획/설계", use: "설계·여러 단계의 복잡한 작업" },
+  { id: "impl", name: "구현", use: "기능 구현" },
+  { id: "review", name: "리뷰·테스트", use: "리뷰와 테스트" },
+  { id: "docs", name: "문서", use: "문서 쓰기" },
+  { id: "quickfix", name: "빠른 수정", use: "1-2개 파일의 작은 수정" },
+  { id: "research", name: "조사", use: "서치·자료 조사" },
+];
+const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류(모드). 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
+
 const brief = s => ({
   id: s.id, name: s.name, role: s.role, model: s.model, status: s.status, state: s.state,
   last: s.last, turns: s.turns, cost: s.cost, branch: s.branch, parent: s.parent,
@@ -28,6 +39,7 @@ const brief = s => ({
   // Total tokens processed, in millions; past the length guard (`long: true`) replace the session.
   mtok: Math.round((((s.usage?.input || 0) + (s.usage?.cacheRead || 0) + (s.usage?.cacheWrite || 0) + (s.usage?.output || 0)) / 1e5)) / 10,
   long: !!s.longRun,
+  ...(s.mode && { mode: s.mode }), ...(s.profileNote && { profileNote: s.profileNote }),
   pendingPermissions: (s.pending || []).length,
 });
 
@@ -51,6 +63,7 @@ const LEAD_TOOLS = [
       return {
         roles: st.roles.map(r => ({ id: r.id, name: r.name, defaultModel: r.model, perm: r.perm })),
         models: st.models.map(m => ({ id: m.id, provider: m.provider, connected: st.providers[m.provider]?.connected, efforts: m.efforts })),
+        modes: MODE_HELP,
       };
     },
   },
@@ -69,20 +82,22 @@ const LEAD_TOOLS = [
             properties: {
               role: { type: "string", description: "역할 id (list_roles 참고)" },
               task: { type: "string", description: "이 세션에게 줄 구체적인 지시" },
-              model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 역할 기본값" },
+              model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 mode의 프로필, mode도 없으면 역할 기본값" },
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
+              mode: MODE_PROP,
               count: { type: "integer", minimum: 1, maximum: 4 },
             },
           },
         },
         worktree: { type: "boolean", description: "세션마다 git worktree 분리 (기본 true)" },
         folder: { type: "string", description: "프로젝트 폴더(워크스페이스 최상위 폴더) 경로. 생략하면 이 관리자의 폴더" },
+        mode: MODE_PROP,
       },
     },
-    run: async ({ sessions, worktree = true, folder }) => {
-      const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1 }));
-      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }) });
+    run: async ({ sessions, worktree = true, folder, mode }) => {
+      const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1, ...(x.mode && { mode: x.mode }) }));
+      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }), ...(mode && { mode }) });
       return res.sessions.map(brief);
     },
   },
@@ -161,6 +176,7 @@ const LEAD_TOOLS = [
               model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 역할 기본값" },
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
+              mode: MODE_PROP,
               n: { type: "integer", minimum: 1, maximum: 4, description: "이 단계의 세션 수" },
               after: { type: "array", items: { type: "string" }, description: "먼저 끝나야 하는 단계 id" },
               files: { type: "array", items: { type: "string" }, description: "건드릴 파일. 두 단계가 같은 파일을 건드리지 않게 나눈다" },

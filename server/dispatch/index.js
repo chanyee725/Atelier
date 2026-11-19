@@ -178,6 +178,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
     },
   };
 
+  hub.resolveProfile = (mode, role) => modeProfiles.resolve(mode, role);
+
   const d = {
     modeProfiles,
     root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
