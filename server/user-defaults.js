@@ -1,4 +1,4 @@
-// The user's defaults in one human-editable file, ~/.dispatch/drawing.json (E555, issue #724).
+// The user's defaults in one human-editable file, ~/.atelier/drawing.json (E555, issue #724).
 // Schema and fallback order: docs/design/user-defaults.md.
 //
 // Metadata only: theme, default models per role, harness profiles per mode, guard thresholds, team settings, default workspace
@@ -15,6 +15,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { ACCOUNT_KEYS, checkAccountLabel, cleanAccountLabels } from '../shared/dispatch/accounts.js';
+import { userDir } from './dispatch/paths.js';
 
 export const SCHEMA_VERSION = 1;
 export const THEMES = ['system', 'light', 'dark'];
@@ -27,15 +28,15 @@ const TEAM_NUM = ['stuckEtaRatio'];
 const TEAM_BOOL = ['replyStyle', 'shareDeps', 'dropWorktrees', 'autoRemoveDone'];
 const GUARD_NUM = ['five', 'seven', 'fable'];
 
-export const BROKEN_MESSAGE = '~/.dispatch/drawing.json 파일을 읽지 못했어요. 파일을 고치거나 지우면 다시 저장할 수 있어요. 지금은 기본값을 써요.';
+export const BROKEN_MESSAGE = '~/.atelier/drawing.json 파일을 읽지 못했어요. 파일을 고치거나 지우면 다시 저장할 수 있어요. 지금은 기본값을 써요.';
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
-/** ~/.dispatch/drawing.json for this HOME, or null when DRAWING_USER_DEFAULTS=off. */
+/** ~/.atelier/drawing.json for this HOME, or null when DRAWING_USER_DEFAULTS=off. */
 export function defaultsFile(env = process.env) {
   if (env.DRAWING_USER_DEFAULTS === 'off') return null;
-  return path.join(env.HOME || os.homedir(), '.dispatch', 'drawing.json');
+  return path.join(userDir(env), 'drawing.json');
 }
 
 /** `~/x` and `~` resolve against HOME; anything else is returned as it is. */
@@ -185,7 +186,7 @@ export class UserDefaults {
   /** What GET /api/user-defaults answers: the file's place (HOME as ~), its values and any error. */
   status() {
     return {
-      file: this.file ? '~/.dispatch/drawing.json' : null,
+      file: this.file ? '~/.atelier/drawing.json' : null,
       values: this.values,
       error: this.error ? BROKEN_MESSAGE : null,
       problems: this.problems,
@@ -310,7 +311,7 @@ export function checkPatch(body) {
 export async function setup(ctx, { file } = {}) {
   const defaults = new UserDefaults(file === undefined ? defaultsFile() : file);
   await defaults.load();
-  if (defaults.error) console.error(`User defaults: ~/.dispatch/drawing.json unreadable (${defaults.error}); using built-in defaults.`);
+  if (defaults.error) console.error(`User defaults: ~/.atelier/drawing.json unreadable (${defaults.error}); using built-in defaults.`);
   const send = (res, status, body) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(body));
@@ -358,7 +359,7 @@ export async function setup(ctx, { file } = {}) {
 }
 
 /**
- * The theme the standalone Dispatch saved in ~/.dispatch/prefs.json (next to drawing.json), or null.
+ * The theme the standalone Dispatch saved in prefs.json (copied from ~/.dispatch/ next to drawing.json), or null.
  * Read only: Atelier never writes that file.
  */
 export async function readLegacyTheme(file) {

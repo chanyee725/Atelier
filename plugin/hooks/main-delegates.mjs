@@ -111,10 +111,13 @@ export function projectRoot(dir) {
 // The project's workspace folder (#782) and the older ones a server started before #782 or #773 may still run on.
 const WORKSPACES = [".atelier", "atelier", "pipelines"];
 
-// The port in <root>/.dispatch/server.port when it is plain digits in 1..65535, else null.
+// The port in <root>/.atelier/server.port (or an older .dispatch/ not moved yet, #782) when it is plain digits in 1..65535, else null.
 export function readPort(root) {
-  let raw;
-  try { raw = readFileSync(join(root, ".dispatch", "server.port"), "utf8").trim(); } catch { return null; }
+  let raw = null;
+  for (const dir of [".atelier", ".dispatch"]) {
+    try { raw = readFileSync(join(root, dir, "server.port"), "utf8").trim(); break; } catch { /* next */ }
+  }
+  if (raw === null) return null;
   if (!/^[0-9]+$/.test(raw)) return null;
   const n = Number(raw);
   return n >= 1 && n <= 65535 ? n : null;

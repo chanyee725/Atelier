@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Restart the Dispatch server for a project (to load new server code). Sessions cut off mid-turn
-# are resumed automatically, and transcripts survive in .dispatch/transcripts.
+# are resumed automatically, and session metadata survives in .atelier/state.json.
 set -euo pipefail
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=../../../scripts/server-check.sh
@@ -15,7 +15,8 @@ if [ -n "$port" ]; then
 fi
 proj="$(git -C "${1:-$PWD}" rev-parse --show-toplevel 2>/dev/null || (cd "${1:-$PWD}" && pwd -P))"
 old=""
-[ ! -f "$proj/.dispatch/server.pid" ] || old="$(tr -dc '0-9' < "$proj/.dispatch/server.pid" 2>/dev/null || true)"
+pid_file="$(state_dir "$proj")/server.pid"
+[ ! -f "$pid_file" ] || old="$(tr -dc '0-9' < "$pid_file" 2>/dev/null || true)"
 # Only wait for a pid that is our server; a recycled pid is stale and stop.sh ignores it too.
 { [ -z "$old" ] || is_our_project_server "$old" "$proj"; } || old=""
 "$here/stop.sh" "${1:-$PWD}"
