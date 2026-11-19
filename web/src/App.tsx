@@ -965,13 +965,15 @@ export function App() {
             </LazyBoundary>
           ) : !docScreen ? (
             <Home
+              projectName={projectName}
               narrow={narrow}
               project={homeProject}
               version={tree}
               onProject={goProject}
               onOpen={openFile}
               onCreate={(k, project) => void newFile(project, k)}
-              onBoard={showBoard}
+              // '' = the whole-project dashboard: the whole board, not 미분류.
+              onBoard={(f) => showBoard(f || undefined)}
               // The projects view has the document's sub-documents, so the confirm can say they go too.
               onDelete={(p, t) => void remove(docPlace(projects, p).node ?? { type: 'doc', name: p.split('/').pop() ?? p, path: p, title: t, revision: null, created: null, modified: null, count: 0, children: [] })}
             />

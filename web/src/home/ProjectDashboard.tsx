@@ -31,8 +31,10 @@ type Props = {
   collapsed: ReadonlySet<string>;
   onToggle: (path: string) => void;
   onOpen: (path: string) => void;
-  onCreate: (kind: 'doc' | 'canvas', project: string) => void;
+  /** null = the workspace root (the whole-project dashboard, #778). */
+  onCreate: (kind: 'doc' | 'canvas', project: string | null) => void;
   onDelete: (path: string, title: string) => void;
+  /** '' = the whole board (the whole-project dashboard). */
   onBoard: (folder: string) => void;
 };
 
@@ -58,10 +60,10 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
           flush
           actions={
             <>
-              <Button variant="ghost" size="sm" onClick={() => onCreate('canvas', project.id)}>
+              <Button variant="ghost" size="sm" onClick={() => onCreate('canvas', project.id || null)}>
                 <PenTool aria-hidden /> 새 캔버스
               </Button>
-              <Button variant="outline" size="sm" onClick={() => onCreate('doc', project.id)}>
+              <Button variant="outline" size="sm" onClick={() => onCreate('doc', project.id || null)}>
                 <Plus aria-hidden /> 새 문서
               </Button>
             </>
@@ -70,7 +72,7 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
           {project.docs.length === 0 ? (
             <EmptyState
               action={
-                <Button size="sm" onClick={() => onCreate('doc', project.id)}>
+                <Button size="sm" onClick={() => onCreate('doc', project.id || null)}>
                   <FilePlus2 aria-hidden /> 첫 문서 만들기
                 </Button>
               }
@@ -101,7 +103,7 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
 function BoardLink({ folder, onBoard }: { folder: string; onBoard: (folder: string) => void }) {
   return (
     <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
-      <a href={`/${boardHash({ tab: 'sessions', folder })}`} onClick={(e) => (plainClick(e) ? (e.preventDefault(), onBoard(folder)) : undefined)}>
+      <a href={`/${boardHash({ tab: 'sessions', folder: folder || undefined })}`} onClick={(e) => (plainClick(e) ? (e.preventDefault(), onBoard(folder)) : undefined)}>
         세션 보드 <ArrowRight aria-hidden />
       </a>
     </Button>

@@ -2,7 +2,7 @@
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
 
 /** 개요 is the dashboard (#685); the other three are the full file list. */
-export type DashTab = 'home' | 'all' | 'recent' | 'projects';
+export type DashTab = 'home' | 'all' | 'recent';
 
 /** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
 export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
@@ -14,6 +14,24 @@ export function allDocs(projects: ProjectInfo[], unfiled: ProjectDoc[]): Placed[
   const walk = (docs: ProjectDoc[], project: ProjectInfo | null, parent: string | null): Placed[] =>
     docs.flatMap((d) => [...(d.bundle ? [] : [{ doc: d, project, parent }]), ...walk(d.children, project, d.title)]);
   return [...projects.flatMap((p) => walk(p.docs, p, null)), ...walk(unfiled, null, null)];
+}
+
+/** The whole project this server belongs to (#778) as one ProjectInfo: its top folders become groups next to the
+ *  loose documents. Its path is '' (the workspace root), which the dashboard reads as "every session and agent". */
+export function wholeProject(data: { projects: ProjectInfo[]; unfiled: ProjectDoc[] }, name: string): ProjectInfo {
+  const folders: ProjectDoc[] = data.projects.map((p) => ({ path: p.path, name: p.name, title: p.name, bundle: true, createdAt: p.createdAt, modifiedAt: p.modifiedAt, children: p.docs }));
+  const docs = [...folders, ...data.unfiled];
+  return {
+    id: '',
+    path: '',
+    name,
+    icon: [...name][0] ?? '',
+    description: '',
+    docCount: allDocs(data.projects, data.unfiled).length,
+    createdAt: 0,
+    modifiedAt: Math.max(0, ...docs.map((d) => d.modifiedAt)),
+    docs,
+  };
 }
 
 /** Where a file sits, for the 위치 column: "프로젝트 / 상위 문서", or 최상위 for a file right in the workspace root. */
