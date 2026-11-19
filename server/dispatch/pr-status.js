@@ -116,7 +116,7 @@ export function validBranch(branch) {
  * starts at most once per minGapMs with at most maxConcurrent running, so a run watching many steps does not hammer GitHub.
  * `cwd` (required) is the git project folder (gh reads the repo from it); `env` is for tests (fake gh on PATH).
  */
-export function createPrStatus({ workspaceDir, cwd, env, prDefault = () => true, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs, maxConcurrent = PR_DEFAULTS.maxConcurrent } = {}) {
+export function createPrStatus({ workspaceDir, cwd, env, prDefault = async () => true, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs, maxConcurrent = PR_DEFAULTS.maxConcurrent } = {}) {
   const cache = new Map(); // branch -> { at, result }
   const inflight = new Map();
   let lastStart = 0;
@@ -157,7 +157,7 @@ export function createPrStatus({ workspaceDir, cwd, env, prDefault = () => true,
   }
 
   return async function prStatus(branch, { force = false } = {}) {
-    if (workspaceDir && !(await prTrackingEnabled(workspaceDir, prDefault()))) return { ok: false, reason: "disabled" };
+    if (workspaceDir && !(await prTrackingEnabled(workspaceDir, await prDefault()))) return { ok: false, reason: "disabled" };
     if (!validBranch(branch)) return { ok: false, reason: "invalid-branch" };
     // gh reads the repo from cwd; without it gh would ask about whatever repo the server runs in.
     if (typeof cwd !== "string" || !cwd) return { ok: false, reason: "error" };

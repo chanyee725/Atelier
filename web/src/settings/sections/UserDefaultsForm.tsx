@@ -122,7 +122,7 @@ export function UserDefaultsForm() {
                 className={cn(INPUT, 'w-full max-w-sm font-mono')}
               />
               <span id={`${ids.ws}-hint`} className="text-xs text-muted-foreground">
-                npm start에 폴더를 안 주면 이 폴더로 열어요. 비우면 마지막에 연 폴더를 써요.
+                npm start에 폴더를 안 주면 이 폴더로 열어요. 비워 두면 npm start에 폴더를 직접 줘야 해요.
               </span>
               {errors.workspace && (
                 <span id={`${ids.ws}-error`} className="text-xs text-destructive">
