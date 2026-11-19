@@ -30,6 +30,7 @@ Metadata only: no tokens, API keys, emails, names or transcripts.
 | `prStatus` | boolean | PR tracking default for workspaces that have no value of their own. |
 | `team` | object | Team settings from 설정 (rotate, caps, auto-remove, stall checks, `roleModels`). |
 | `guard` | object | Usage-guard thresholds (`five`, `seven`, `fable`, `openai.five`, `openai.seven`; 0 < x ≤ 1). `enabled` stays per project. |
+| `accountLabels` | object `{ claude?, openai?, gemini? }` | The user's name for each provider connection (#747), e.g. `Claude · Max`. At most 40 characters; values with `@`, control characters, 6+ digit runs, 16+ hex runs, UUIDs or key prefixes are refused (never an email or account id). Unset: the provider name. |
 | `workspaces` | array of `{ path, name }` | Registered workspace folders (see below). |
 | `lastWorkspace` | path | The workspace opened last (see below). |
 
@@ -65,7 +66,9 @@ off per workspace, so a workspace's own switch must not be overridden by a compu
 ## Writes
 
 - 설정 > 일반 > 기본값 saves `workspace`, `port` and `prStatus` through `POST /api/user-defaults`
-  (`x-drawing: 1`; `null` removes a key). The theme switch saves `theme` the same way.
+  (`x-drawing: 1`; `null` removes a key). The theme switch saves `theme` the same way. 모델 연결 saves
+  `accountLabels` as a partial patch: `{ accountLabels: { openai: "Codex · 팀 계정", gemini: null } }` changes only
+  the named providers (`null` or `""` clears one). A new session copies its provider's label as it is then.
 - Team and guard sections save through `POST /api/settings` as before; the server writes the change to
   `drawing.json` first and to the project's `state.json` after. If the file is broken the save is refused and
   `state.json` is left as it was, so the two never disagree.

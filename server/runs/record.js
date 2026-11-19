@@ -32,13 +32,17 @@ const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ?
 export function pickSession(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const k of ['sid', 'name', 'provider', 'model', 'effort', 'branch']) {
+  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch']) {
     const v = short(s[k]);
     if (v !== undefined) out[k] = v;
   }
   if (typeof s.commit === 'string' && /^[0-9a-f]{4,40}$/.test(s.commit)) out.commit = s.commit;
   if (SESSION_STATES.includes(s.state)) out.state = s.state;
-  for (const k of ['stateSince', 'cost', 'ctxPct']) {
+  // The account label as the session started (#747): a user-set name like `Claude · Max`, never an email or id.
+  if (s.accountLabel === null) out.accountLabel = null;
+  else if (typeof s.accountLabel === 'string' && s.accountLabel.length <= 80 && !s.accountLabel.includes('@') && !/[\u0000-\u001f]/.test(s.accountLabel)) out.accountLabel = s.accountLabel;
+  if (Number.isInteger(s.issue) && s.issue > 0 && s.issue < 1e7) out.issue = s.issue;
+  for (const k of ['stateSince', 'startedAt', 'endedAt', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;
   }

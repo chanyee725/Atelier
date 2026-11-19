@@ -73,6 +73,7 @@ const LEAD_TOOLS = [
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
               count: { type: "integer", minimum: 1, maximum: 4 },
+              issue: { type: "integer", description: "이 세션이 맡은 GitHub 이슈 번호. 이슈별 작업 계정 기록에 쓰인다(브랜치 이름의 번호로도 묶인다)" },
             },
           },
         },
@@ -81,7 +82,7 @@ const LEAD_TOOLS = [
       },
     },
     run: async ({ sessions, worktree = true, folder }) => {
-      const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1 }));
+      const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1, ...(x.issue && { issue: x.issue }) }));
       const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }) });
       return res.sessions.map(brief);
     },
