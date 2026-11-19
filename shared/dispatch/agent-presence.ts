@@ -8,6 +8,9 @@ export interface AgentPresence {
   sid: string;
   /** The session's own name ("Otto"), or the outside writer's cleaned label. Never a real name or email. */
   name: string;
+  /** Hub creation number (1, 2, …) and the lead that created it, for a fixed team order (#785); absent for outside writers. */
+  n?: number;
+  parent?: string;
   /** Role id (`impl`, `lead`, ...); '' for an outside writer. */
   role: string;
   roleName?: string;

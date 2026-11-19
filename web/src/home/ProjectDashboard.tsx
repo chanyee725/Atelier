@@ -13,6 +13,7 @@ import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
 import { Card, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
 import { AgentTag } from './AgentPanel';
+import { openAgentLive } from '../live/store';
 import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, type AgentPresence } from './agents';
 import { ColumnHead, DocList } from './DocList';
 import { allDocs, filterDocs } from './model';
@@ -147,19 +148,27 @@ function SessionRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: 
   const look = !busy && needsLook(a);
   const model = a.modelLabel || a.model;
   return (
-    <li data-agent={a.sid} data-busy={busy || undefined} className="flex h-9 min-w-0 items-center gap-2 px-3 text-xs">
-      <AgentTag agent={a} size="sm" className="-mt-1 max-w-[9rem]" />
-      <span className="min-w-0 shrink truncate text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
-      {model && (
-        <span className="inline-flex min-w-0 shrink items-center gap-1 text-muted-foreground" title={model}>
-          <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
-          <span className="truncate">{model}</span>
-        </span>
-      )}
-      <span className="ml-auto flex min-w-0 items-center gap-2">
-        {a.step ? (
-          <span className="min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>
-        ) : a.file && title ? (
+    <li data-agent={a.sid} data-busy={busy || undefined} className="flex h-9 min-w-0 items-center gap-2 pr-3 text-xs hover:bg-accent/40">
+      {/* The row's left part opens the session's live view, the same one a 세션 보드 card opens (#728, #785). */}
+      <button
+        type="button"
+        data-agent-live={a.sid}
+        title={`${a.name} 진행상황 보기`}
+        onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
+        className="flex h-full min-w-0 flex-1 items-center gap-2 pl-3 text-left focus-visible:bg-accent focus-visible:outline-none"
+      >
+        <AgentTag agent={a} size="sm" className="-mt-1 max-w-[9rem]" />
+        <span className="min-w-0 shrink truncate text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
+        {model && (
+          <span className="inline-flex min-w-0 shrink items-center gap-1 text-muted-foreground" title={model}>
+            <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
+            <span className="truncate">{model}</span>
+          </span>
+        )}
+        {a.step && <span className="ml-auto min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>}
+      </button>
+      <span className="flex max-w-[45%] min-w-0 items-center gap-2">
+        {!a.step && a.file && title ? (
           <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
             <span className="sr-only">잡고 있는 파일 </span>

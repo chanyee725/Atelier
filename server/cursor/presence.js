@@ -63,6 +63,9 @@ export function buildAgents({ sessions = [], held = new Map(), outside = new Map
       sid: s.id,
       name: typeof s.name === 'string' ? s.name : '',
       role: typeof s.role === 'string' ? s.role : '',
+      // Creation number and lead, for a fixed team order on the home list (#785).
+      ...(Number.isInteger(s.n) && { n: s.n }),
+      ...(typeof s.parent === 'string' && s.parent && { parent: s.parent }),
       ...(typeof s.roleName === 'string' && { roleName: s.roleName }),
       ...(typeof s.color === 'string' && { color: s.color }),
       model: typeof s.model === 'string' ? s.model : null,

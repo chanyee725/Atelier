@@ -55,6 +55,8 @@ test('buildAgents: live sessions with their held file, project filter, newest fi
   assert.equal(all[1].project, 'Q'); // no folder of its own: the held file's
   assert.deepEqual(all[0], { sid: 'outside:Ext', name: 'Ext', role: '', model: null, status: 'running', state: 'working', project: 'P', file: 'P/c.dpx.json', at: 30, outside: true });
   assert.deepEqual(buildAgents({ sessions, held, outside, project: 'P' }).map((a) => a.name), ['Ext', 'Otto', 'Cal']);
+  const team = buildAgents({ sessions: [{ id: 't', name: 'T', role: 'impl', status: 'idle', n: 7, parent: 'L' }] })[0];
+  assert.deepEqual([team.n, team.parent], [7, 'L']); // fixed team order on the home list (#785)
   const ended = [{ id: 'd', name: 'Done', role: 'impl', status: 'done' }, { id: 'e', name: 'Err', role: 'impl', status: 'error' }];
   assert.deepEqual(buildAgents({ sessions: ended }), []);
   assert.deepEqual(buildAgents({ sessions, held, outside, project: 'Q' }).map((a) => a.name), ['Remy']);
