@@ -33,7 +33,7 @@ test('rowStatus: text and tone; connected shows 5-hour usage or 한도 도달', 
   const lim = { claude: { windows: [{ label: '5시간', used: 0.42 }, { label: '주간', used: 0.1 }] } };
   assert.equal(rowStatus(C, P({ connected: true }), true, lim).text, '42%');
   const full = { claude: { windows: [{ label: '5시간', used: 0.2 }] }, fable: { windows: [{ label: 'Fable 주간', used: 1 }] } };
-  assert.deepEqual(rowStatus(C, P({ connected: true }), true, full), { key: 'connected', text: '한도 도달', tone: 'warn' });
+  assert.deepEqual(rowStatus(C, P({ connected: true }), true, full), { key: 'connected', text: '한도 도달', tone: 'bad' });
   assert.equal(rowStatus(C, P({ connected: true }), false, lim).text, '연결 안 됨');
 });
 

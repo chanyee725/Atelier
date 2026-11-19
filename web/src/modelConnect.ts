@@ -49,7 +49,7 @@ export function connectKey(p: ProviderState | undefined, enabled: boolean): Conn
   return 'idle';
 }
 
-export type RowTone = ModelTone | 'bad';
+export type RowTone = ModelTone;
 
 /** The sidebar row: short text next to the name and the dot tone. Connected shows 5-hour usage like before. */
 export function rowStatus(meta: ProviderMeta, p: ProviderState | undefined, enabled: boolean, limits: ProviderLimits): { key: ConnectKey; text: string; tone: RowTone } {
