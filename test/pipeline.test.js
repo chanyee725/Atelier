@@ -203,6 +203,33 @@ test('the 알림함 lists plans that wait for 시작하기 until they start, are
   }
 });
 
+test('the dashboard 승인 대기 card gets revision, blockers and a gone lead, and 정리 drops such a plan (#836)', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, lead, d } = t;
+    const waiting = async () => (await call('GET', '/api/pipeline/waiting')).body.plans;
+    const a = (await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '가', goal: 'x', steps: STEPS })).body;
+    let [p] = await waiting();
+    assert.equal(p.revision, a.revision);
+    assert.deepEqual(p.blockers, []);
+    assert.equal(p.leadGone, false);
+    // 정리 is only for a plan whose lead is gone.
+    assert.equal((await call('POST', '/api/pipeline/dismiss', { path: a.path })).status, 409);
+    d.hub.remove(lead.id);
+    [p] = await waiting();
+    assert.equal(p.leadGone, true);
+    assert.equal(p.lead, null);
+    assert.ok(p.blockers.includes('계획을 쓴 관리자 세션이 없어요'));
+    const gone = await call('POST', '/api/pipeline/dismiss', { path: a.path });
+    assert.equal(gone.status, 200, JSON.stringify(gone.body));
+    assert.deepEqual(await waiting(), []);
+    // The document stays.
+    assert.equal((await call('GET', `/api/pipeline?path=${encodeURIComponent(a.path)}`)).status, 200);
+  } finally {
+    await t.stop();
+  }
+});
+
 test('blockers: unknown role, cycle, no lead; moving the file keeps its approval state', { timeout: 60_000 }, async () => {
   const t = await start();
   try {

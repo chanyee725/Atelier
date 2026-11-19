@@ -587,6 +587,20 @@ export async function setup(ctx) {
     return status(path);
   }
 
+  /**
+   * 정리 on the dashboard (#836): a waiting plan whose lead session is gone can never start as it is, so the person
+   * takes it off the 승인 대기 list. The document stays; only the waiting flag goes, as after a reopen.
+   */
+  async function dismiss(body) {
+    const [path, e] = entryAt(body);
+    if (e.state !== 'plan') throw new StoreError(409, '시작을 기다리는 계획이 아니에요');
+    if (dispatch().hub.get(e.lead)) throw new StoreError(409, '관리자 세션이 아직 있어요');
+    e.reopened = true;
+    save();
+    changed(path);
+    return { path, dismissed: true };
+  }
+
   /** Paused -> plan: the run ends (stopped) and the steps the board closed carry over to the next 시작하기. */
   async function reopen(body) {
     const [path, e] = entryAt(body);
@@ -796,7 +810,8 @@ export async function setup(ctx) {
 
   /**
    * Plans that wait for 시작하기 (#786): written by a lead, not reopened by the person, document still there.
-   * Metadata only: path, title, the lead's session name and since when.
+   * Metadata only: path, title, the lead's session name and since when, plus what the dashboard's 승인 대기 card
+   * (#836) needs to start it there: the revision 시작하기 approves, the blockers and whether the lead is gone.
    */
   async function waiting() {
     const d = dispatch();
@@ -805,7 +820,17 @@ export async function setup(ctx) {
       if (e?.state !== 'plan' || e.reopened) continue;
       const file = await readOrNull(path).catch(() => null);
       if (!file) continue;
-      out.push({ path, title: typeof file.title === 'string' ? file.title : null, lead: d?.hub.get(e.lead)?.name ?? null, since: e.waitingSince ?? null });
+      const lead = d?.hub.get(e.lead) ?? null;
+      const { blockers } = await check(path, file, e).catch(() => ({ blockers: ['상태를 확인하지 못했어요'] }));
+      out.push({
+        path,
+        title: typeof file.title === 'string' ? file.title : null,
+        lead: lead?.name ?? null,
+        since: e.waitingSince ?? null,
+        revision: file.revision,
+        blockers,
+        leadGone: Boolean(d && !lead),
+      });
     }
     out.sort((a, b) => (b.since ?? 0) - (a.since ?? 0) || a.path.localeCompare(b.path));
     return { plans: out };
@@ -820,6 +845,7 @@ export async function setup(ctx) {
     stop,
     resume,
     reopen,
+    dismiss,
     duplicate,
     finishClosed,
     syncLimit,
@@ -840,6 +866,7 @@ export async function setup(ctx) {
       route('POST', '/api/pipeline/stop', (b) => stop(b)),
       route('POST', '/api/pipeline/resume', (b) => resume(b)),
       route('POST', '/api/pipeline/reopen', (b) => reopen(b)),
+      route('POST', '/api/pipeline/dismiss', (b) => dismiss(b)),
       route('POST', '/api/pipeline/duplicate', (b) => duplicate(b)),
     ],
   };
