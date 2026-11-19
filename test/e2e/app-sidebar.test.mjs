@@ -91,11 +91,12 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   const topRows = group.locator(':scope > ul > li > [data-slot="sidebar-menu-button"] > span.truncate');
   assert.deepEqual(await topRows.allInnerTexts(), ['결제 시스템', '온보딩 개편', '인프라', '아이디어 메모']);
 
-  // Dashboard home (#778): cards only, no tabs, 새로 만들기 chips or find box on the page (#793).
+  // Dashboard home (#778): cards only, no 새로 만들기 chips or find box on the page (#793); the one tablist is the
+  // PR과 머지 / 사용량 card (#819).
   const dash = page.locator('main[data-screen="dashboard"]');
   await dash.getByRole('heading', { level: 1, name: '대시보드' }).waitFor();
   for (const title of ['실행 중인 세션', '이슈']) await dash.getByRole('heading', { name: title }).first().waitFor();
-  assert.equal(await dash.getByRole('tablist').count(), 0);
+  assert.deepEqual(await dash.getByRole('tablist').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))), ['PR과 머지, 사용량']);
   assert.equal(await dash.getByRole('group', { name: '새로 만들기' }).count(), 0);
   assert.equal(await dash.locator('input[type="search"]').count(), 0);
   // `/` opens the command menu on 문서 only; typing finds a nested document (#793).
