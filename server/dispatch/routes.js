@@ -93,6 +93,7 @@ export function routeTable(d) {
       sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder }),
     })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
+    ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/diff$/, async ([id]) => diff(session(id).cwd, root)],
     ["POST", /^\/api\/sessions\/([\w-]+)\/message$/, async ([id], b) => { hub.send(id, required(b?.text)); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/interrupt$/, async ([id]) => { hub.interrupt(id); return { ok: true }; }],
