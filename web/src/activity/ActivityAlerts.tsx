@@ -146,7 +146,8 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   // shown again here; shown after the dialog, it sits above it.
   useEffect(() => {
     const el = box.current;
-    if (!el?.showPopover) return;
+    // A region portaled into a modal that has just closed is detached; showPopover would throw and take the app down.
+    if (!el?.showPopover || !el.isConnected) return;
     const shown = el.matches(':popover-open');
     if (toasts.length && !shown) el.showPopover();
     else if (!toasts.length && shown) el.hidePopover();

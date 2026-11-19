@@ -27,6 +27,7 @@ const PROJECT_MODE_BLOCKED = [
   ['POST', /^\/api\/file$/],
   ['DELETE', /^\/api\/file$/],
   ['POST', /^\/api\/folder$/],
+  ['POST', /^\/api\/workspace\/local-project$/],
   ['DELETE', /^\/api\/folder$/],
   ['POST', /^\/api\/move$/],
   ['POST', /^\/api\/trash\/restore$/],

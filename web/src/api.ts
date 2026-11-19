@@ -41,7 +41,7 @@ export type DocNode = {
   count: number;
   children: DocNode[];
 };
-export type Project = { path: string; name: string; icon: string | null; description: string; created: string | null; modified: string | null; count: number; docs: DocNode[] };
+export type Project = { path: string; name: string; icon: string | null; description: string; linkedPath?: string | null; created: string | null; modified: string | null; count: number; docs: DocNode[] };
 export type ProjectsView = { projects: Project[]; loose: DocNode[] };
 
 /** Model connection summary for the sidebar (Dispatch routes; GET only, nothing here starts a CLI). */
@@ -85,10 +85,13 @@ export type HistoryVersion = DpxFile & { id: string; time: number };
 export class ApiError extends Error {
   status: number;
   revision?: number;
-  constructor(status: number, message: string, revision?: number) {
+  /** A stable reason the server gives for some errors (e.g. 'already_linked'); branch on this, not the message. */
+  code?: string;
+  constructor(status: number, message: string, revision?: number, code?: string) {
     super(message);
     this.status = status;
     this.revision = revision;
+    this.code = code;
   }
 }
 
@@ -105,7 +108,7 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.revision);
+  if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.revision, typeof data.code === 'string' ? data.code : undefined);
   return data as T;
 }
 
@@ -113,6 +116,9 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
 export type CodeWindow = { path: string; start: number; end: number; total: number; lines: string[]; language: string; truncated?: boolean };
 
 const q = (p: string) => `?path=${encodeURIComponent(p)}`;
+
+/** Sub-folder names of a folder on the server machine (GET /api/local-folders, E554). `parent` is null at the root. */
+export type LocalFolders = { path: string; parent: string | null; home: string; root: string; sep: string; folders: string[]; truncated: boolean };
 
 export const api = {
   info: () => call<{ workspace: string; mode?: 'drawing' | 'project' }>('GET', '/api/info'),
@@ -152,6 +158,10 @@ export const api = {
   /** `withSubdocs`: the document's sub-documents folder (`X/` next to `X.dpx.json`) goes to the trash with it. */
   removeFile: (path: string, withSubdocs = false) => call<unknown>('DELETE', `/api/file${q(path)}${withSubdocs ? '&withSubdocs=1' : ''}`),
   createFolder: (path: string) => call<unknown>('POST', '/api/folder', { path }),
+  /** Folder picker for 새 프로젝트: no path = the server user's home folder. */
+  localFolders: (path?: string) => call<LocalFolders>('GET', `/api/local-folders${path ? q(path) : ''}`),
+  /** Link a server folder as a new project; the folder itself is never written to. */
+  linkLocalFolder: (path: string) => call<{ path: string; name: string; linkedPath: string }>('POST', '/api/workspace/local-project', { path }),
   removeFolder: (path: string) => call<unknown>('DELETE', `/api/folder${q(path)}`),
   history: (path: string) => call<{ versions: HistoryEntry[] }>('GET', `/api/history${q(path)}`).then((r) => r.versions),
   historyVersion: (path: string, id: string) => call<HistoryVersion>('GET', `/api/history/version${q(path)}&id=${encodeURIComponent(id)}`),
@@ -166,7 +176,7 @@ export const api = {
 
 // Project view: GET /api/workspace/projects (docs/workspace-api.md "Projects view"), mapped to the shapes the screens use.
 type DocNodeDto = { type: 'doc' | 'group'; path: string; name: string; title?: string; created: string | null; modified: string | null; children: DocNodeDto[] };
-type ProjectDto = { path: string; name: string; icon: string | null; description: string; created: string | null; modified: string | null; count: number; docs: DocNodeDto[] };
+type ProjectDto = { path: string; name: string; icon: string | null; description: string; linkedPath?: string | null; created: string | null; modified: string | null; count: number; docs: DocNodeDto[] };
 export type ProjectDoc = {
   path: string;
   name: string;
@@ -185,6 +195,8 @@ export type ProjectInfo = {
   name: string;
   icon: string;
   description: string;
+  /** The server folder this project is linked to (E554), or null. */
+  linkedPath: string | null;
   docCount: number;
   createdAt: number;
   modifiedAt: number;
@@ -214,6 +226,7 @@ export const projectsApi = {
           name: p.name,
           icon: p.icon ?? [...p.name][0] ?? '',
           description: p.description,
+          linkedPath: p.linkedPath ?? null,
           docCount: p.count,
           createdAt: time(p.created),
           modifiedAt: time(p.modified),
