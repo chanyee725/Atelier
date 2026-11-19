@@ -50,7 +50,6 @@ import { ExportMenu } from './ExportMenu';
 import { DEFAULT_EXPORT, type ExportOptions } from './export/options';
 import { HistoryDialog } from './HistoryDialog';
 import { TrashDialog } from './TrashDialog';
-import { FolderPickerDialog, workspaceError } from './FolderPickerDialog';
 import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
 import { displayName } from './docTitles';
@@ -223,7 +222,8 @@ export function App() {
   const [theme, toggleTheme, themePref, setThemePref, systemTheme] = useTheme();
   const narrow = useNarrow();
   const [navOpen, setNavOpen] = useState(false);
-  const [workspace, setWorkspace] = useState<string | null>(null);
+  // The one project this server belongs to (#778): its folder name, shown top-left.
+  const [projectName, setProjectName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [projects, setProjects] = useState<ProjectsView | null>(null);
   // What the main panel shows; opening a file switches to the document screen.
@@ -255,7 +255,6 @@ export function App() {
   const [paletteGroup, setPaletteGroup] = useState<Command['group']>(undefined);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
-  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   // Set by the canvas while it is mounted (export, palette commands).
   const canvasHandle = useRef<CanvasHandle | null>(null);
 
@@ -321,7 +320,7 @@ export function App() {
   const openFile = useCallback((p: string) => void open(p), [open]);
 
   useEffect(() => {
-    api.info().then((i) => setWorkspace(i.workspace || null)).catch(() => {});
+    api.info().then((i) => setProjectName(i.project || i.workspace || null)).catch(() => {});
     void refreshTree();
     const link = parseHash(window.location.hash);
     if (link)
@@ -438,39 +437,8 @@ export function App() {
       setError(e instanceof ApiError && e.status === 409 ? '같은 이름의 파일이 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요');
     }
   };
-  // 새 프로젝트 opens a folder of the server PC: the server switches to it and the app reloads (E554).
-  // The dialog also makes a blank project: a top-level folder of the open workspace (design doc 6 §1).
-  const newProject = () => setFolderPickerOpen(true);
-  const createBlankProject = async (raw: string): Promise<string | null> => {
-    const name = raw.trim();
-    if (!name) return '이름을 입력해 주세요';
-    const problem = nameProblem({ type: 'folder' }, name) ?? (/[\\/]/.test(name) ? '이름에 / 나 \\를 넣을 수 없어요.' : null);
-    if (problem) return problem;
-    try {
-      await api.createFolder(name);
-    } catch (e) {
-      return e instanceof ApiError && e.status === 409 ? '같은 이름의 프로젝트가 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요';
-    }
-    await projectLinked(name);
-    return null;
-  };
   // The server now runs in another folder: everything on screen belongs to the old one, so start over at home.
   const reloadForWorkspace = () => window.location.assign('/');
-  const switchWorkspace = async (folder: string) => {
-    try {
-      await api.openWorkspace(folder);
-      reloadForWorkspace();
-    } catch (e) {
-      setError(workspaceError(e));
-    }
-  };
-  const projectLinked = async (path: string) => {
-    setFolderPickerOpen(false);
-    await refreshTree();
-    setSection({ kind: 'project', path });
-    // After the picker is gone: a toast raised while a modal is open is placed inside that modal.
-    notifyApp({ type: 'created', kind: 'project', path });
-  };
   // The open file is gone (deleted or moved away): drop it and its pending save.
   const closeOpenFile = useCallback(() => {
     session.close();
@@ -939,15 +907,13 @@ export function App() {
 
   const sidebar = (
     <Sidebar
-      workspace={workspace}
+      project={projectName}
       view={projects}
       section={docScreen ? section : homeSection}
       current={docScreen ? path : null}
       onSection={showSection}
       onOpen={openFile}
       onNewFile={() => void newFile()}
-      onNewProject={newProject}
-      onSwitchWorkspace={(f) => void switchWorkspace(f)}
       onRename={(n) => void renameEntry(n)}
       onDelete={(n) => void remove(n)}
       onMove={moveEntry}
@@ -970,7 +936,6 @@ export function App() {
         <AgentLiveHost onOpenFile={openFile} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
-          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onOpened={reloadForWorkspace} onCreateBlank={createBlankProject} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
           {paletteOpen && <CommandPalette commands={registry.list()} scope={paletteScope(docScreen ? section : homeSection, projects, path)} onlyGroup={paletteGroup} onClose={() => setPaletteOpen(false)} />}
           {conflict && (
@@ -1000,13 +965,15 @@ export function App() {
             </LazyBoundary>
           ) : !docScreen ? (
             <Home
+              projectName={projectName}
               narrow={narrow}
               project={homeProject}
               version={tree}
               onProject={goProject}
               onOpen={openFile}
               onCreate={(k, project) => void newFile(project, k)}
-              onBoard={showBoard}
+              // '' = the whole-project dashboard: the whole board, not 미분류.
+              onBoard={(f) => showBoard(f || undefined)}
               // The projects view has the document's sub-documents, so the confirm can say they go too.
               onDelete={(p, t) => void remove(docPlace(projects, p).node ?? { type: 'doc', name: p.split('/').pop() ?? p, path: p, title: t, revision: null, created: null, modified: null, count: 0, children: [] })}
             />

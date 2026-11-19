@@ -18,8 +18,9 @@ export const needsLook = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.stat
 
 /** The project's agents: busy first, then whoever holds a file, then the most recent; a stable name order last. */
 export function agentsIn(all: readonly AgentPresence[], project: string): AgentPresence[] {
+  // '' = the whole project this server belongs to (#778): every agent counts.
   return all
-    .filter((a) => a.project === project || (!!a.file && a.file.startsWith(`${project}/`)))
+    .filter((a) => project === '' || a.project === project || (!!a.file && a.file.startsWith(`${project}/`)))
     .sort((a, b) => Number(isBusy(b)) - Number(isBusy(a)) || Number(!!b.file) - Number(!!a.file) || (b.at ?? 0) - (a.at ?? 0) || a.name.localeCompare(b.name));
 }
 

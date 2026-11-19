@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INDENT, ROW_HEIGHT, filterDocs, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
+import { INDENT, ROW_HEIGHT, filterDocs, wholeProject, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
 import type { ProjectDoc } from '../../web/src/api.ts';
 
 const d = (path: string, title: string, children: ProjectDoc[] = []): ProjectDoc => ({ path, name: path, title, bundle: false, createdAt: 1, modifiedAt: 2, children });
@@ -92,4 +92,15 @@ test('loose files at the workspace root stay in the flat list with 최상위 as 
   assert.deepEqual(files.map((f) => f.path).sort(), ['loose', 'p/x']);
   assert.equal(locationOf(files.find((f) => f.path === 'loose')!), '최상위');
   assert.equal(locationOf({ project: 'P', parent: 'X' }), 'P / X');
+});
+
+test('wholeProject: top folders become groups next to the loose documents, path \'\' (#778)', () => {
+  const folder = { id: 'F', path: 'F', name: 'Folder', icon: 'F', description: '', docCount: 3, createdAt: 0, modifiedAt: 7, docs };
+  const w = wholeProject({ projects: [folder], unfiled: [d('x', 'Loose')] }, 'Akaka');
+  assert.equal(w.path, '');
+  assert.equal(w.name, 'Akaka');
+  assert.deepEqual(w.docs.map((x) => [x.path, x.bundle]), [['F', true], ['x', false]]);
+  assert.equal(w.docs[0].children, docs);
+  assert.equal(w.docCount, 5);
+  assert.equal(w.modifiedAt, 7);
 });

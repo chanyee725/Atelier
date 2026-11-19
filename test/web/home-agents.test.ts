@@ -14,6 +14,8 @@ test('agentsIn keeps the project\'s agents (by folder or held file), busy first,
     a('Prefix', { file: 'PX/z.dpx.json' }),
   ];
   assert.deepEqual(agentsIn(all, 'P').map((x) => x.sid), ['ByFile', 'Busy', 'Holder', 'Idle']);
+  // '' = the whole project this server belongs to (#778): every agent.
+  assert.equal(agentsIn(all, '').length, all.length);
 });
 
 test('holdersByFile groups agents by the file they hold', () => {

@@ -2,26 +2,27 @@
 // docs/design/dispatch-integration/6-app-shell-projects.md §3.1. Built from shadcn Tabs / Button / DropdownMenu.
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, FilePlus2, FileText, Folder, Layers, Menu, PenTool, Plus, Search, Workflow } from 'lucide-react';
-import { projectsApi, type ProjectDoc, type ProjectInfo, type ProjectsResponse } from '../api';
+import { projectsApi, type ProjectInfo, type ProjectsResponse } from '../api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { SidebarTrigger } from '../components/ui/sidebar';
 import { Kbd } from '../components/ui/kbd';
 import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { ColumnHead, DocList, FileList } from './DocList';
+import { ColumnHead, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { AgentPanel } from './AgentPanel';
-import { HomeDashboard } from './HomeDashboard';
 import { ProjectDashboard } from './ProjectDashboard';
 import { agentsIn, holdersByFile } from './agents';
 import { useAgents } from './useAgents';
-import { CHORD_MS, RECENT_LIMIT, allDocs, badgeOf, chord, filterDocs, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, type DashTab } from './model';
+import { CHORD_MS, RECENT_LIMIT, chord, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, wholeProject, type DashTab } from './model';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
-  /** null = dashboard; a project id = that project's home. */
+  /** The one project this server belongs to (#778): the dashboard is its home. */
+  projectName: string | null;
+  /** null = dashboard; a top folder's path = that folder's home. */
   project: string | null;
   /** Bumps when the workspace changed, to refetch. */
   version: unknown;
@@ -172,40 +173,6 @@ function SearchBox({ value, onChange, inputRef, placeholder, wide }: { value: st
   );
 }
 
-/** Head of a 39px group: letter badge, name, document count, and an optional + (sticky while its rows scroll). */
-function GroupHead({ badge, name, count, onName, onAdd }: { badge: React.ReactNode; name: string; count: number; onName?: () => void; onAdd?: () => void }) {
-  return (
-    <div data-slot="group-head" className="sticky top-0 z-10 flex h-[39px] items-center gap-2 border-b bg-[color-mix(in_oklch,var(--muted)_50%,var(--background))] pr-3 pl-4">
-      <h2 className="m-0 flex min-w-0 items-center gap-2 text-sm font-medium text-muted-foreground">
-        {badge}
-        {onName ? (
-          <button type="button" className="truncate rounded-sm hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none" onClick={onName}>
-            {name}
-          </button>
-        ) : (
-          <span className="truncate">{name}</span>
-        )}
-        <span className="font-normal tabular-nums">
-          <span className="sr-only">문서 </span>
-          {count}
-          <span className="sr-only">개</span>
-        </span>
-      </h2>
-      {onAdd && (
-        <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={`${name}에 새 문서`} title={`${name}에 새 문서`} onClick={onAdd}>
-          <Plus />
-        </Button>
-      )}
-    </div>
-  );
-}
-
-const LetterBadge = ({ children }: { children: React.ReactNode }) => (
-  <span aria-hidden className="grid size-[17px] shrink-0 place-items-center rounded-sm bg-muted text-xs leading-none font-bold text-foreground">
-    {children}
-  </span>
-);
-
 function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   // 개요 (the dashboard, #685) opens first; the full list is one tab away.
   const [tab, setTab] = useState<DashTab>('home');
@@ -232,9 +199,10 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   // Files right in the workspace root belong to no project: they have no group (no 미분류, #592) and stay reachable
   // in 전체 파일 / 최근 and through search, with 최상위 as their 위치. Nothing on disk changes.
   const empty = files.length === 0 && data.projects.length === 0;
+  // The dashboard is the whole project's (#778): every document, session and agent of this server.
+  const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
   const found = files.filter((f) => matchesQuery(f.title, query));
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
-  const tree = (docs: ProjectDoc[], label: string) => <DocList docs={filterDocs(docs, query)} collapsed={collapsed} label={label} running={p.running} onOpen={p.onOpen} onToggle={toggle} onDelete={p.onDelete} />;
   return (
     <Tabs value={tab} onValueChange={onTab} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
@@ -246,10 +214,9 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
         <h1 className="m-0 shrink-0 text-[15px] font-semibold">홈</h1>
         {/* One row; on a narrow screen the pills scroll sideways instead of wrapping. */}
         <TabsList aria-label="보기" className="min-w-0 shrink justify-start overflow-x-auto [scrollbar-width:none] [&>*]:flex-none">
-          <TabsTrigger value="home">개요</TabsTrigger>
+          <TabsTrigger value="home">대시보드</TabsTrigger>
           <TabsTrigger value="all">전체 파일</TabsTrigger>
           <TabsTrigger value="recent">최근</TabsTrigger>
-          <TabsTrigger value="projects">프로젝트별</TabsTrigger>
         </TabsList>
         {!p.narrow && <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" />}
       </header>
@@ -281,7 +248,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
         ))}
       </div>
       <TabsContent value="home" className="flex flex-col">
-        <HomeDashboard data={data} running={p.running} onOpen={p.onOpen} onProject={(id) => p.onProject(id)} onCreateIn={(id) => p.onCreate('doc', id)} onCreate={() => p.onCreate('doc', null)} onTab={onTab} />
+        <ProjectDashboard project={whole} query="" running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
       </TabsContent>
       {tab === 'home' ? null : empty ? (
         <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
@@ -295,28 +262,6 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
               const shown = found.slice(0, RECENT_LIMIT);
               return shown.length === 0 ? noMatch : <><ColumnHead location /><FileList files={shown} label="최근에 고친 파일" onOpen={p.onOpen} onDelete={p.onDelete} /></>;
             })()}
-          </TabsContent>
-          <TabsContent value="projects">
-            {data.projects.length === 0 && <Empty>아직 프로젝트가 없어요. 파일은 전체 파일에서 볼 수 있어요.</Empty>}
-            {data.projects.length > 0 && <ColumnHead />}
-            {data.projects.map((pr) => {
-              if (query.trim() && filterDocs(pr.docs, query).length === 0) return null;
-              return (
-                <section key={pr.id} aria-label={pr.name} data-group={pr.id}>
-                  <GroupHead badge={<LetterBadge>{badgeOf(pr)}</LetterBadge>} name={pr.name} count={pr.docCount} onName={() => p.onProject(pr.id)} onAdd={() => p.onCreate('doc', pr.id)} />
-                  {pr.docs.length === 0 ? <p className="m-0 border-b py-2.5 pl-12 text-[13px] text-muted-foreground">아직 문서가 없어요</p> : tree(pr.docs, pr.name)}
-                </section>
-              );
-            })}
-            {/* A search with no hit in any project says so (a hit only in a loose top-level file points to 전체). The status
-                region stays mounted so the message is announced when it appears. */}
-            <div role="status">
-              {query.trim() && data.projects.length > 0 && !data.projects.some((pr) => filterDocs(pr.docs, query).length > 0) && (
-                <div data-no-project-match>
-                  <Empty>{found.length > 0 ? '프로젝트 안에는 맞는 파일이 없어요. 전체 탭에서 찾아보세요.' : '맞는 파일이 없어요'}</Empty>
-                </div>
-              )}
-            </div>
           </TabsContent>
         </>
       )}

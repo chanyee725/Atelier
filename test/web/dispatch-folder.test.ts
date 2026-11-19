@@ -43,6 +43,8 @@ test('open counts per project skip finished sessions', () => {
 test('project home lists open sessions first', () => {
   const list = sessionsOf([{ ...s('1', 'a', 'done'), startedAt: 9 }, { ...s('2', 'a'), startedAt: 1 }, { ...s('3', 'b c'), startedAt: 5 }] as never, 'a');
   assert.deepEqual(list.map((x) => x.id), ['2', '1']);
+  // '' = the whole project's dashboard (#778): every session, open first.
+  assert.deepEqual(sessionsOf([{ ...s('1', 'a', 'done'), startedAt: 9 }, { ...s('2', null), startedAt: 1 }, { ...s('3', 'b c'), startedAt: 5 }] as never, '').map((x) => x.id), ['3', '2', '1']);
 });
 
 test('knownFolders keeps a picked project known until the project list has arrived', async () => {
