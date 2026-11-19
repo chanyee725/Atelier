@@ -88,7 +88,8 @@ function TreeRow({ commit: c, base, now, renderTip }: { commit: Commit<TreeEntry
     <div
       data-branch-row={row ? '' : undefined}
       data-merged={row?.merged || undefined}
-      className={cn('flex h-full min-w-0 items-center gap-3 pr-3 text-foreground', row?.merged && 'opacity-50')}
+      // h-10 = the graph's fixed 40px row (react-git-log ROW_HEIGHT); a custom row gets no height from the library.
+      className={cn('flex h-10 min-w-0 shrink-0 items-center gap-3 pr-3 text-foreground', row?.merged && 'opacity-50')}
     >
       <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{c.at ? ago(c.at, now) : '—'}</span>
       {row ? (
