@@ -123,7 +123,11 @@ function place(row: DOMRect, card: { width: number; height: number }, vw: number
   return { left: Math.max(GAP, Math.min(row.left, vw - card.width - GAP)), top: below ? row.bottom + GAP : Math.max(GAP, row.top - GAP - card.height) };
 }
 
-export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: string; meta: ProviderMeta; anchor: RefObject<HTMLElement | null>; hover: { onPointerEnter: (e: React.PointerEvent) => void; onPointerLeave: (e: React.PointerEvent) => void }; statusText: string }) {
+/**
+ * The card for one provider row. It is rendered inside the row's SidebarMenuItem (the top layer moves it on screen,
+ * not in the DOM), so the item's pointer handlers already cover hovering the card; it has none of its own (#705).
+ */
+export function SidebarUsageCard({ id, meta, anchor, statusText }: { id: string; meta: ProviderMeta; anchor: RefObject<HTMLElement | null>; statusText: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const usage = useUsage();
   const settings = useGuardSettings();
@@ -174,7 +178,6 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
       role="tooltip"
       data-testid="usage-card"
       data-provider={id}
-      {...hover}
       style={{ position: 'fixed', inset: 'auto', margin: 0, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
       className="z-50 popover-box w-64 rounded-md border bg-popover text-popover-foreground shadow-md"
     >
