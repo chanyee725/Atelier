@@ -1,5 +1,6 @@
 // App event toasts (E540, #671): the one place app events go through. notifyApp(event) drops it when its category is
-// off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS and keeps it in the 알림함 (inboxStore.ts,
+// off (설정 > 일반 > 알림, this browser only; an event of a category turned off is not kept in the 알림함 either) or it
+// repeats within DEDUPE_MS and keeps it in the 알림함 (inboxStore.ts,
 // #797); nothing pops up on the page (#811). While the page is hidden and notifications are on it also goes out as a
 // browser notification. watchAppEvents() turns the server's
 // SSE `session`, `providers`, `settings` and `run` events into app events for the whole app. Metadata only.
