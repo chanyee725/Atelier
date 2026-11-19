@@ -47,14 +47,16 @@ test('buildAgents: live sessions with their held file, project filter, newest fi
   const held = new Map([['s1', { file: 'P/a.dpx.json', at: 10 }], ['s3', { file: 'Q/b.dpx.json', at: 20 }]]);
   const outside = new Map([['Ext', { file: 'P/c.dpx.json', at: 30 }]]);
   const all = buildAgents({ sessions, held, outside });
-  assert.deepEqual(all.map((a) => a.name), ['Ext', 'Remy', 'Otto']);
+  assert.deepEqual(all.map((a) => a.name), ['Ext', 'Remy', 'Otto', 'Cal']); // an idle session is live too (#785)
   assert.deepEqual(all[2], {
     sid: 's1', name: 'Otto', role: 'impl', roleName: '구현자', color: '#ff0000', model: 'm', modelLabel: 'M',
     status: 'running', state: 'working', project: 'P', file: 'P/a.dpx.json', at: 10,
   });
   assert.equal(all[1].project, 'Q'); // no folder of its own: the held file's
   assert.deepEqual(all[0], { sid: 'outside:Ext', name: 'Ext', role: '', model: null, status: 'running', state: 'working', project: 'P', file: 'P/c.dpx.json', at: 30, outside: true });
-  assert.deepEqual(buildAgents({ sessions, held, outside, project: 'P' }).map((a) => a.name), ['Ext', 'Otto']);
+  assert.deepEqual(buildAgents({ sessions, held, outside, project: 'P' }).map((a) => a.name), ['Ext', 'Otto', 'Cal']);
+  const ended = [{ id: 'd', name: 'Done', role: 'impl', status: 'done' }, { id: 'e', name: 'Err', role: 'impl', status: 'error' }];
+  assert.deepEqual(buildAgents({ sessions: ended }), []);
   assert.deepEqual(buildAgents({ sessions, held, outside, project: 'Q' }).map((a) => a.name), ['Remy']);
 });
 
@@ -241,8 +243,12 @@ test('agents module: the list follows edits, sessions and named outside writers'
   assert.equal(m.list().find((a) => a.sid === 's1').file, 'P/b.dpx.json');
   assert.equal(m.list().some((a) => a.name === 'lead-Otto'), false);
 
-  // The session leaves: gone from the list.
+  // Idle between turns: still listed (#785).
   r.hub.sessions.s1.status = 'idle';
+  r.hub.emit('session', { id: 's1' });
+  assert.deepEqual(lists().at(-1).map((a) => a.name).sort(), ['Ext', 'Otto']);
+  // The session leaves: gone from the list.
+  delete r.hub.sessions.s1;
   r.hub.emit('removed', { id: 's1' });
   assert.deepEqual(lists().at(-1).map((a) => a.name), ['Ext']);
   m.close();

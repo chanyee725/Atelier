@@ -23,7 +23,7 @@ export interface AgentPresence {
   statusLabel?: string;
   /** Title of the pipeline step it works on (the plan diagram's node label); absent outside a running plan. */
   step?: string;
-  /** Hub status: starting | running | waiting (only live sessions are listed). */
+  /** Hub status: starting | running | waiting | idle (only live sessions are listed; done and error are not). */
   status: string;
   /** Monitoring state (shared/dispatch/types.ts SessionState), null when not known yet. */
   state: string | null;

@@ -7,12 +7,15 @@ import type { SessionState } from '../../../shared/dispatch/types.ts';
 
 export type { AgentPresence };
 
-const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중' };
+const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중', idle: '쉼' };
 /** The monitoring state when known (작업 중, 사람 기다림, 멈춤, …), else the hub status. */
 export const agentStateLabel = (a: Pick<AgentPresence, 'status' | 'state'>) =>
   (a.state && STATE[a.state as SessionState]?.label) || STATUS_LABEL[a.status] || a.status;
-/** Doing something now (green dot): working by the monitor, or running/starting by the hub when the monitor has no word. */
-export const isBusy = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'working' : a.status === 'running' || a.status === 'starting');
+/**
+ * Doing something now (the spinner, #785): running or starting by the hub, and working by the monitor when it has a
+ * word. An idle or waiting session is live but never busy.
+ */
+export const isBusy = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.status === 'running' || a.status === 'starting') && (!a.state || a.state === 'working');
 /** Needs a person or is stuck (amber dot). */
 export const needsLook = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'waiting' || a.state === 'stuck' || a.state === 'failed' : a.status === 'waiting');
 

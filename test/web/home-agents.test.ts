@@ -8,7 +8,7 @@ test('agentsIn keeps the project\'s agents (by folder or held file), busy first,
   const all = [
     a('Idle', { project: 'P', at: 5 }),
     a('Holder', { project: 'P', file: 'P/x.dpx.json', at: 1 }),
-    a('Busy', { project: 'P', state: 'working', at: 0 }),
+    a('Busy', { project: 'P', status: 'running', state: 'working', at: 0 }),
     a('ByFile', { file: 'P/sub/y.dpx.json', status: 'running', state: null, at: null }),
     a('Other', { project: 'Q', state: 'working', file: 'Q/z.dpx.json' }),
     a('Prefix', { file: 'PX/z.dpx.json' }),
@@ -42,6 +42,11 @@ test('state label and dots: the monitoring state wins, the hub status fills in w
   assert.equal(agentStateLabel(a('A', { status: 'odd', state: null })), 'odd');
   assert.equal(isBusy(a('A', { status: 'running', state: 'resting' })), false);
   assert.equal(isBusy(a('A', { status: 'starting', state: null })), true);
+  // #785: an idle or waiting session is listed but never busy, whatever a stale monitor state says.
+  assert.equal(isBusy(a('A', { status: 'idle', state: 'working' })), false);
+  assert.equal(isBusy(a('A', { status: 'waiting', state: null })), false);
+  assert.equal(isBusy(a('A', { status: 'running', state: 'working' })), true);
+  assert.equal(agentStateLabel(a('A', { status: 'idle', state: null })), '쉼');
   assert.equal(needsLook(a('A', { state: 'stuck' })), true);
   assert.equal(needsLook(a('A', { status: 'waiting', state: null })), true);
 });

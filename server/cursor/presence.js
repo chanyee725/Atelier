@@ -3,8 +3,8 @@
 
 /** Longest outside-writer label, in characters. */
 export const LABEL_MAX = 32;
-/** Hub session statuses that count as working right now. */
-export const LIVE_STATUSES = new Set(['running', 'starting', 'waiting']);
+/** Hub session statuses of a live session: working now, waiting for a person, or idle between turns (#785). */
+export const LIVE_STATUSES = new Set(['running', 'starting', 'waiting', 'idle']);
 
 /**
  * The `x-drawing-session` header of an outside API writer, cleaned for a cursor label: control and format characters
