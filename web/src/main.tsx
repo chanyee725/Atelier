@@ -42,7 +42,12 @@ if (!isDispatch) {
     .then((r) => (r.ok ? (r.json() as Promise<{ mode?: string }>) : null))
     .catch(() => null)
     .then((info) => {
-      if (info?.mode !== 'project') return location.replace(`/${legacyBoardHash(location.hash)}`);
+      if (!info) {
+        // No redirect here: / would 302 back to /dispatch and loop forever.
+        root.render(<p role="alert">정보를 불러오지 못했어요. 페이지를 새로 고쳐 주세요.</p>);
+        return;
+      }
+      if (info.mode !== 'project') return location.replace(`/${legacyBoardHash(location.hash)}`);
       root.render(
         <StrictMode>
           <LazyBoundary>
