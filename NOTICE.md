@@ -116,3 +116,36 @@ itself fetches no font from outside: every font file is a local build asset serv
   `pretendard` npm package: Basic Latin, Latin-1, common punctuation, Hangul Jamo and the 2,350 KS X 1001 syllables.
   The other 8,822 modern syllables (for example 똠, 햏, 뷁, 쌰, 펲) are not in it and are drawn by a fallback font.
   Served in place of Excalidraw's Liberation Sans file (`web/vite.config.ts`, `FONT_OVERRIDES`).
+
+## eraser-diagrams (`@eraserlabs/layout`, `@eraserlabs/utils`)
+
+https://github.com/eraserlabs/eraser-diagrams, commit `6bde2841f1fb3368716d18e038aefa2214aa295f`.
+`packages/layout/src` and `packages/utils/src` (without tests) are vendored in
+`shared/vendor/eraser-layout/` for edge routing and label placement (#733); the local changes are listed
+in `shared/vendor/eraser-layout/README.md`. That code also carries parts of RBush 4.0.1 (MIT,
+Copyright (c) 2016 Vladimir Agafonkin) and Quickselect 3.0.0 (ISC, Copyright (c) 2018, Vladimir
+Agafonkin); their notices are in `shared/vendor/eraser-layout/THIRD_PARTY_NOTICES.md` and `licenses/`.
+
+```
+MIT License
+
+Copyright (c) 2026 Eraser Labs, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

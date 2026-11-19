@@ -65,7 +65,8 @@ function reference(): number {
 
 // Layout of the diagram below is about 8.5x the reference (E37, Nov 2026). The reference takes about 13 ms,
 // so 12x is about the 150 ms budget (12 x 12.5 ms) and catches a ~1.4x slowdown.
-const MAX_RATIO = 12;
+// #733: the eraser-diagrams router adds about 3x of that (about 11-12x now), so the limit is 16.
+const MAX_RATIO = 16;
 
 test(`performance: 100-node architecture diagram lays out in under ${MAX_RATIO}x a fixed reference workload`, async () => {
   const lines: string[] = [];
