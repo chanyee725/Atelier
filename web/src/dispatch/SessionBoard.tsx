@@ -21,7 +21,7 @@ import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
-import { knownFolders, UNFILED, type Scope } from './lib/folder.ts';
+import { knownFolders, scopePending, UNFILED, type Scope } from './lib/folder.ts';
 import { fmtK, fmtUsd, isOpen, pct, STATE, stateOf, TONE_TEXT, totalTok, until } from './lib/format.ts';
 import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
@@ -97,7 +97,8 @@ export default function SessionBoard(p: BoardProps) {
   const scope: Scope = p.folder;
   const known = useMemo(() => knownFolders(projects.map((x) => x.path), scope, listState === 'ready'), [projects, scope, listState]);
   const names = useMemo(() => new Map(projects.map((x) => [x.path, x.name])), [projects]);
-  const ctx = useMemo(() => ({ scope, known, names }), [scope, known, names]);
+  const pending = scopePending(scope, listState);
+  const ctx = useMemo(() => ({ scope, known, names, pending }), [scope, known, names, pending]);
   useEffect(() => connect(), []);
 
   // The one place a session opens (design §4): its live progress view (#728). The sheet (chat, stop) is reached from there.
@@ -149,11 +150,12 @@ export default function SessionBoard(p: BoardProps) {
         />
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
-          {listState === 'failed' && !unavailable && ready && (
-            <p role="status" className="m-0 border-b px-6 py-2 text-sm text-muted-foreground max-md:px-4">
-              프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.
-            </p>
-          )}
+          {/* The live region stays mounted so the notice is read when it appears. */}
+          <div role="status">
+            {listState === 'failed' && !unavailable && ready && (
+              <p className="m-0 border-b px-6 py-2 text-sm text-muted-foreground max-md:px-4">프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.</p>
+            )}
+          </div>
           {unavailable ? (
             <OffNote status={offStatus} className="m-6" />
           ) : !ready ? (
@@ -306,7 +308,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
 
 function Skeleton() {
   return (
-    <div aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-6 max-md:p-4">
+    <div role="status" aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-6 max-md:p-4">
       {[0, 1].map((g) => (
         <div key={g} className="flex flex-col gap-2">
           <div className="h-4 w-32 rounded bg-muted motion-safe:animate-pulse" />
@@ -334,7 +336,7 @@ function SessionsBody({
   onSettings: (s: SectionId) => void;
   byCwd: boolean;
 }) {
-  const { sessions, scope } = useScoped();
+  const { sessions, scope, pending } = useScoped();
   const { known, names } = useScope();
   const all = useDispatch((s) => s.sessions);
   const byId = useMemo(() => new Map(all.map((s) => [s.id, s])), [all]);
@@ -350,7 +352,7 @@ function SessionsBody({
             <UsageStrip onJump={() => usageRef.current?.scrollIntoView({ block: 'start' })} />
             <AttentionStrip onOpen={(id) => onOpen(id)} onUsage={onUsage} />
           </div>
-          {sessions.length === 0 ? (
+          {pending ? null : sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
               <p className="m-0 font-medium">실행 중인 세션이 없어요</p>
               <p className="m-0 text-sm text-muted-foreground">새 세션을 만들면 여기에 보여요.</p>
@@ -409,7 +411,7 @@ function Group({
             type="button"
             aria-expanded={!collapsed}
             aria-controls={body}
-            aria-label={`${g.label} ${collapsed ? '펼치기' : '접기'}`}
+            aria-label={`${g.label} 세션`}
             onClick={() => setCollapsed((c) => !c)}
             className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:size-9"
           >
@@ -512,7 +514,7 @@ function UsageStrip({ onJump }: { onJump: () => void }) {
     <button
       type="button"
       onClick={onJump}
-      className="self-start rounded-md text-left text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[960px]/board:hidden"
+      className="min-h-6 self-start rounded-md py-1 text-left text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[960px]/board:hidden"
     >
       Claude {text} <span className="underline underline-offset-2">사용량 자세히</span>
     </button>
@@ -577,10 +579,10 @@ function UsageColumn({ ref, onSettings }: { ref: React.Ref<HTMLElement>; onSetti
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span>
           {guardOn && settings?.guard
-            ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션 멈춤`
+            ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션을 멈춰요`
             : '가드가 꺼져 있어요'}
         </span>
-        <button type="button" onClick={() => onSettings('limits')} className="rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
           가드 바꾸기 ›
         </button>
       </div>

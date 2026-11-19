@@ -58,6 +58,10 @@ export const sessionsOf = <T extends Pick<Session, 'folder' | 'status' | 'starte
 
 /** Folders the scope may be filed under: the project paths, plus a picked project itself until the list has arrived (a
  *  `#folder=` link must not show an empty board, or count everything as 미분류, before the first answer). */
+/** 미분류 can't be told apart from a project until the project list has arrived: everything would count as 미분류 for a
+ *  moment (#761). Screens show no sessions while this is true; a failed list falls back to grouping by folder. */
+export const scopePending = (scope: Scope, listState: 'loading' | 'ready' | 'failed'): boolean => scope === null && listState === 'loading';
+
 export const knownFolders = (paths: readonly string[], scope: Scope, ready: boolean): Set<string> => {
   const k = new Set(paths);
   if (!ready && typeof scope === 'string') k.add(scope);

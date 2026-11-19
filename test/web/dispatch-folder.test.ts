@@ -54,3 +54,12 @@ test('knownFolders keeps a picked project known until the project list has arriv
   assert.deepEqual([...knownFolders(['/w/b'], null, false)], ['/w/b']);
   assert.deepEqual([...knownFolders(['/w/b'], undefined, false)], ['/w/b']);
 });
+
+test('scopePending holds 미분류 until the project list has arrived (#761)', async () => {
+  const { scopePending } = await import('../../web/src/dispatch/lib/folder.ts');
+  assert.equal(scopePending(null, 'loading'), true);
+  assert.equal(scopePending(null, 'ready'), false);
+  assert.equal(scopePending(null, 'failed'), false);
+  assert.equal(scopePending(undefined, 'loading'), false);
+  assert.equal(scopePending('/w/alpha', 'loading'), false);
+});
