@@ -166,7 +166,8 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
     await from.lock?.release().catch(() => {});
     await runListeners();
     await lock?.setPort(ctx.port).catch((err) => console.error(`Could not update the workspace lock (${err.code ?? err.name})`));
-    console.log(`Drawing: switched to workspace ${dir}`);
+    // Folder name only: the full path can hold the user name.
+    console.log(`Drawing: switched to workspace ${basename(dir)}`);
   }
 
   /** Moves the server to the workspace folder `dir` (an absolute real path). One switch at a time. */

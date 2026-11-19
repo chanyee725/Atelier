@@ -52,7 +52,7 @@ export function WorkspaceMenu({ workspace, onSwitch, onOpenFolder }: Props) {
         {!list && !failed && <DropdownMenuItem disabled>불러오는 중이에요…</DropdownMenuItem>}
         {failed && <DropdownMenuItem disabled>목록을 불러오지 못했어요</DropdownMenuItem>}
         {list && (
-          <DropdownMenuRadioGroup value={current} onValueChange={(p) => p !== current && onSwitch(p)}>
+          <DropdownMenuRadioGroup aria-label="열 수 있는 폴더" value={current} onValueChange={(p) => p !== current && onSwitch(p)}>
             {list.folders.map((f) => (
               <DropdownMenuRadioItem key={f.path} value={f.path} disabled={f.missing || (!f.current && !list.switchable)} title={f.path}>
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>

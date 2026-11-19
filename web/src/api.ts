@@ -129,7 +129,6 @@ export type CodeWindow = { path: string; start: number; end: number; total: numb
 
 const q = (p: string) => `?path=${encodeURIComponent(p)}`;
 
-/** Sub-folder names of a folder on the server machine (GET /api/local-folders, E554). `parent` is null at the root. */
 /** GET /api/workspaces: paths are absolute; `missing` = the folder is gone from disk. */
 export type WorkspaceFolders = {
   current: { path: string; name: string } | null;
@@ -137,6 +136,7 @@ export type WorkspaceFolders = {
   switchable: boolean;
   error: string | null;
 };
+/** Sub-folder names of a folder on the server machine (GET /api/local-folders, E554). `parent` is null at the root. */
 export type LocalFolders = { path: string; parent: string | null; home: string; root: string; sep: string; folders: string[]; truncated: boolean };
 
 export const api = {
