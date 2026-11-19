@@ -26,6 +26,8 @@ export function PlanStrip({ session }: { session: FileSession }) {
   const [modelsOpen, setModelsOpen] = useState(false);
   const modelsId = useId();
   const [status, setStatus] = useState<PipelineStatus | null>(null);
+  // The status could not be read: the strip still shows, says so and keeps 시작하기 blocked (#788).
+  const [unread, setUnread] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -38,10 +40,15 @@ export function PlanStrip({ session }: { session: FileSession }) {
   const blockersId = useId();
 
   const refresh = useCallback(async () => {
-    if (!path || !hasPlan) return setStatus(null);
+    if (!path || !hasPlan) {
+      setUnread(false);
+      return setStatus(null);
+    }
     const st = await readStatus(path).catch(() => null);
     // A different file may be open by the time the answer comes back.
-    if (session.getState().path === path) setStatus(st);
+    if (session.getState().path !== path) return;
+    setStatus(st);
+    setUnread(!st);
   }, [path, hasPlan, session]);
 
   // The file's own saves change blockers and changes; so does the server's `pipeline` event (start, write_plan).
@@ -73,6 +80,20 @@ export function PlanStrip({ session }: { session: FileSession }) {
     if (takePlanConfirm(path) && status.blockers.length === 0) openRef.current();
   }, [path, status, asked, busy, confirming]);
 
+  if (path && hasPlan && unread && !status) {
+    return (
+      <Alert role="status" className="bg-muted" data-testid="plan-strip">
+        <span aria-hidden="true">◐</span>
+        <span className="mr-auto">계획이에요. 시작할 수 있는지 확인하지 못했어요.</span>
+        <Button size="sm" variant="ghost" className="px-2 text-sm" onClick={() => void refresh()}>
+          다시 확인
+        </Button>
+        <Button size="sm" aria-disabled className="px-3 text-sm aria-disabled:hover:bg-primary">
+          시작하기
+        </Button>
+      </Alert>
+    );
+  }
   if (!path || !status || status.state !== 'plan') return null;
   const blocked = status.blockers.length > 0;
   const asks = unansweredAsks(document);
@@ -138,12 +159,14 @@ export function PlanStrip({ session }: { session: FileSession }) {
     <Alert role="status" className="bg-muted" data-testid="plan-strip">
       <span aria-hidden="true">◐</span>
       <span className="mr-auto">
-        {error ? (
-          <span className="text-destructive">{error}</span>
-        ) : blocked ? (
-          <>계획이에요. 지금은 시작할 수 없어요: {status.blockers[0]}</>
+        {error && <span className="text-destructive">{error} </span>}
+        {/* Every blocker in words, also after an error, so a blocked 시작하기 never goes unexplained (#788). */}
+        {blocked ? (
+          <>
+            계획이에요. 지금은 시작할 수 없어요: <span data-testid="plan-blockers">{status.blockers.join(' · ')}</span>
+          </>
         ) : (
-          <>계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.</>
+          !error && <>계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.</>
         )}
       </span>
       <span className="text-muted-foreground">예상 {status.sessions}세션</span>
