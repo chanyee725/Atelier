@@ -19,7 +19,7 @@ export function ModelTag({ provider, label, className }: { provider: string; lab
 }
 
 // Shape per state, so a badge reads without colour (shape + colour + label).
-const STATE_ICON: Record<SessionState, LucideIcon> = {
+export const STATE_ICON: Record<SessionState, LucideIcon> = {
   working: LoaderCircle, waiting: CircleAlert, stuck: TriangleAlert, failed: CircleX, resting: Circle, done: CircleCheck,
 };
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { asTreeNode, docPlace, newFileDir, openPathsFor, paletteScope, percent, projectOf, shellKey, subFolderOf } from '../../web/src/projectNav.ts';
+import { asTreeNode, boardHash, docPlace, legacyBoardHash, newFileDir, openPathsFor, paletteScope, parseBoardHash, percent, projectOf, shellKey, subFolderOf } from '../../web/src/projectNav.ts';
 import type { DocNode, ProjectsView } from '../../web/src/api.ts';
 
 const doc = (path: string, children: DocNode[] = []): DocNode => ({
@@ -54,7 +54,7 @@ const key = (code: string, more: Record<string, unknown> = {}) =>
 const inside = (match: boolean) => ({ closest: () => (match ? {} : null) }) as unknown as EventTarget;
 
 test('shellKey: A R B N outside fields, editors, the canvas and dialogs only', () => {
-  assert.deepEqual(['KeyA', 'KeyR', 'KeyB', 'KeyN'].map((c) => key(c)), ['all', 'recent', 'archive', 'new']);
+  assert.deepEqual(['KeyA', 'KeyR', 'KeyB', 'KeyN', 'KeyS'].map((c) => key(c)), ['all', 'recent', 'archive', 'new', 'board']);
   assert.equal(key('Comma'), null, ', no longer opens anything');
   assert.equal(key('KeyX'), null);
   for (const m of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey', 'isComposing', 'repeat', 'defaultPrevented']) assert.equal(key('KeyA', { [m]: true }), null, m);
@@ -110,4 +110,28 @@ test('docPlace: the path above the open document and its sub-documents', () => {
   assert.equal(docPlace(view, 'A/login/token').node?.path, 'A/login/token.dpx.json');
   assert.deepEqual(docPlace(view, 'A/login/token').trail.map((c) => c.path), ['A', 'A/login.dpx.json']);
   assert.deepEqual(docPlace(null, 'A/login.dpx.json'), { trail: [], node: null });
+});
+
+test('board hash: tabs, scope and the one-off extras read back', () => {
+  assert.deepEqual(parseBoardHash('#board'), { kind: 'board', tab: 'sessions' });
+  assert.deepEqual(parseBoardHash('#board=usage'), { kind: 'board', tab: 'usage' });
+  assert.deepEqual(parseBoardHash('#board=timeline&folder=a%20b'), { kind: 'board', tab: 'timeline', folder: 'a b' });
+  assert.deepEqual(parseBoardHash('#board&folder='), { kind: 'board', tab: 'sessions', folder: null });
+  assert.deepEqual(parseBoardHash('#board=tv'), { kind: 'board', tab: 'sessions', extra: 'tv' });
+  assert.equal(parseBoardHash('#file=a.dpx.json'), null);
+  assert.equal(parseBoardHash('#boards'), null);
+  assert.equal(parseBoardHash(''), null);
+  for (const h of ['#board', '#board=usage', '#board=timeline&folder=a%20b', '#board&folder=', '#board=settings']) assert.equal(boardHash(parseBoardHash(h)!), h);
+});
+
+test('legacy /dispatch hashes map to the board address', () => {
+  assert.equal(legacyBoardHash(''), '#board');
+  assert.equal(legacyBoardHash('#usage'), '#board=usage');
+  assert.equal(legacyBoardHash('#timeline&folder=docs'), '#board=timeline&folder=docs');
+  assert.equal(legacyBoardHash('#folder=x'), '#board&folder=x');
+  assert.equal(legacyBoardHash('#folder='), '#board&folder=');
+  assert.equal(legacyBoardHash('#tv'), '#board=tv');
+  assert.equal(legacyBoardHash('#settings'), '#board=settings');
+  assert.equal(legacyBoardHash('#nonsense'), '#board');
+  assert.equal(legacyBoardHash('#board=usage'), '#board=usage');
 });

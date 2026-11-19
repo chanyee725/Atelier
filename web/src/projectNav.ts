@@ -2,8 +2,66 @@
 // one-letter shortcuts. Pure, so it is tested without a browser.
 import type { DocNode, Project, ProjectsView, TreeNode } from './api';
 
-/** The main panel: a sidebar view, a project home, or the open document. 보관함 opens the trash dialog. */
-export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' };
+/** The main panel: a sidebar view, a project home, the 세션 보드 or the open document. 보관함 opens the trash dialog. */
+export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' } | BoardSection;
+
+/** 세션 보드 tabs (#731, docs/design/session-board-in-shell.md §1). */
+export type BoardTab = 'sessions' | 'timeline' | 'usage';
+/** The 세션 보드 in the shell. `folder`: undefined = 전체 프로젝트, null = 미분류, else a project folder path. */
+export type BoardSection = { kind: 'board'; tab: BoardTab; folder?: string | null };
+/** Something the board opens over itself once, from the address: the 상시 화면 or the 설정 dialog. */
+export type BoardExtra = 'tv' | 'settings';
+export type BoardRoute = BoardSection & { extra?: BoardExtra };
+
+const BOARD_TABS: readonly string[] = ['sessions', 'timeline', 'usage'];
+const BOARD_EXTRAS: readonly string[] = ['tv', 'settings'];
+
+/** Reads `#board`, `#board=usage`, `#board=timeline&folder=<path>` (`folder=` empty = 미분류); null for any other hash. */
+export function parseBoardHash(hash: string): BoardRoute | null {
+  const parts = hash.replace(/^#/, '').split('&');
+  const m = /^board(?:=(.*))?$/.exec(parts[0] ?? '');
+  if (!m) return null;
+  const v = m[1] ?? '';
+  const out: BoardRoute = { kind: 'board', tab: BOARD_TABS.includes(v) ? (v as BoardTab) : 'sessions' };
+  if (BOARD_EXTRAS.includes(v)) out.extra = v as BoardExtra;
+  const folder = folderPart(parts.slice(1));
+  if (folder !== undefined) out.folder = folder;
+  return out;
+}
+
+/** The `folder=` piece of a hash's parts: undefined when absent, null when empty (미분류). */
+function folderPart(parts: readonly string[]): string | null | undefined {
+  const p = parts.find((x) => x === 'folder' || x.startsWith('folder='));
+  if (p === undefined) return undefined;
+  let f = '';
+  try {
+    f = decodeURIComponent(p.slice('folder='.length));
+  } catch {
+    /* unreadable: 미분류 */
+  }
+  return f === '' ? null : f;
+}
+
+/** The address of a board route; parseBoardHash reads it back. */
+export function boardHash(r: { tab: BoardTab; folder?: string | null; extra?: BoardExtra }): string {
+  const view = r.extra ?? (r.tab === 'sessions' ? '' : r.tab);
+  const folder = r.folder === undefined ? '' : `&folder=${encodeURIComponent(r.folder ?? '')}`;
+  return `#board${view ? `=${view}` : ''}${folder}`;
+}
+
+/** The board address for an old `/dispatch` hash (`#usage&folder=x`, `#folder=x`, `#tv`, `#settings`, `#timeline`). */
+export function legacyBoardHash(hash: string): string {
+  const own = parseBoardHash(hash);
+  if (own) return boardHash(own);
+  const parts = hash.replace(/^#/, '').split('&');
+  const first = parts[0] ?? '';
+  const view = first.includes('=') || first === 'folder' ? '' : first;
+  const route: BoardRoute = { kind: 'board', tab: BOARD_TABS.includes(view) ? (view as BoardTab) : 'sessions' };
+  if (BOARD_EXTRAS.includes(view)) route.extra = view as BoardExtra;
+  const folder = folderPart(parts);
+  if (folder !== undefined) route.folder = folder;
+  return boardHash(route);
+}
 
 /** Project that holds `path` (a file path), or null for loose files. */
 export function projectOf(view: ProjectsView | null, path: string | null): Project | null {
@@ -84,15 +142,15 @@ export function newFileDir(section: Section, view: ProjectsView | null, openPath
   return '';
 }
 
-export type ShellKey = 'all' | 'recent' | 'archive' | 'new';
-const KEYS: Record<string, ShellKey> = { KeyA: 'all', KeyR: 'recent', KeyB: 'archive', KeyN: 'new' };
+export type ShellKey = 'all' | 'recent' | 'archive' | 'new' | 'board';
+const KEYS: Record<string, ShellKey> = { KeyA: 'all', KeyR: 'recent', KeyB: 'archive', KeyN: 'new', KeyS: 'board' };
 
 // Where one-letter keys belong to something else: text fields, the editors, the canvas (its tool keys) and dialogs.
 const OWNED = '.ProseMirror, input, textarea, select, .cm-editor, [contenteditable="true"], [contenteditable=""], .excalidraw, dialog, [role="dialog"], [role="menu"], [role="listbox"]';
 
 type KeyLike = { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing: boolean; repeat: boolean; defaultPrevented: boolean; target: EventTarget | null };
 
-/** The shell action for a key press (A R B N), or null when the key is not one or belongs to something else. */
+/** The shell action for a key press (A R B N S), or null when the key is not one or belongs to something else. */
 export function shellKey(e: KeyLike): ShellKey | null {
   if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.repeat || e.defaultPrevented) return null;
   const k = KEYS[e.code];
