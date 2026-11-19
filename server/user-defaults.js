@@ -8,7 +8,7 @@
 // 설정 UI shows, and writes refuse until the user fixes it (we never overwrite their file).
 //
 // DRAWING_USER_DEFAULTS=off (test/test-env) keeps the file out entirely: nothing is read or written.
-import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -118,6 +118,16 @@ export function readDefaultsSync(env = process.env) {
   return p.error ? { values: {}, problems: [], error: p.error } : { ...readValues(p.raw), error: null };
 }
 
+/** mtime, ctime, size and inode of `file` as one string ("none" when missing), to tell when it changed. */
+async function signature(file) {
+  try {
+    const s = await stat(file, { bigint: true });
+    return `${s.mtimeNs}:${s.ctimeNs}:${s.size}:${s.ino}`;
+  } catch (err) {
+    return err.code === 'ENOENT' ? 'none' : `error:${err.code ?? err.name}`;
+  }
+}
+
 export class UserDefaults {
   /** @param {string|null} file  null = memory only (nothing read or written). */
   constructor(file = defaultsFile()) {
@@ -127,31 +137,44 @@ export class UserDefaults {
     this.problems = [];
     /** null, or why the file could not be read (then values are empty and writes refuse). */
     this.error = null;
+    /** What the file looked like at the last read (see signature()); null before the first read. */
+    this.sig = null;
     this.writing = Promise.resolve();
   }
 
   /** Re-reads the file. Never throws: an unreadable file sets `error` and empty values. */
   async load() {
-    this.raw = {};
-    this.values = {};
-    this.problems = [];
-    this.error = null;
-    if (!this.file) return this;
-    let text;
-    try {
-      text = await readFile(this.file, 'utf8');
-    } catch (err) {
-      if (err.code !== 'ENOENT') this.error = err.code ?? err.name;
-      return this;
+    // Built off to the side and swapped in at once, so a reader never sees half-cleared values.
+    const next = { raw: {}, values: {}, problems: [], error: null, sig: null };
+    if (this.file) {
+      // Stat before reading: an edit that lands after the stat changes the signature, so current() reloads.
+      next.sig = await signature(this.file);
+      let text = null;
+      try {
+        text = await readFile(this.file, 'utf8');
+      } catch (err) {
+        if (err.code !== 'ENOENT') next.error = err.code ?? err.name;
+      }
+      if (text !== null) {
+        const p = parse(text);
+        if (p.error) next.error = p.error;
+        else {
+          next.raw = p.raw;
+          ({ values: next.values, problems: next.problems } = readValues(p.raw));
+        }
+      }
     }
-    const p = parse(text);
-    if (p.error) {
-      this.error = p.error;
-      return this;
-    }
-    this.raw = p.raw;
-    ({ values: this.values, problems: this.problems } = readValues(p.raw));
+    Object.assign(this, next);
     return this;
+  }
+
+  /**
+   * The values as the file holds them now: reloads when the file changed since the last read (a hand edit
+   * while the server runs), else answers from memory. Every reader goes through this, not `values`.
+   */
+  async current() {
+    if (this.file && (await signature(this.file)) !== this.sig) await this.load();
+    return this.values;
   }
 
   /** What GET /api/user-defaults answers: the file's place (HOME as ~), its values and any error. */
@@ -200,6 +223,7 @@ export class UserDefaults {
         await rm(tmp, { force: true });
         throw err;
       }
+      this.sig = await signature(this.file);
       this.raw = next;
       ({ values: this.values, problems: this.problems } = readValues(next));
       return this.values;

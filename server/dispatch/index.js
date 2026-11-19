@@ -102,7 +102,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   // ~/.dispatch/prefs.json (read only), then "system".
   const legacyTheme = dep.userDefaults ? await readLegacyTheme(userDefaults.file) : null;
   const readPrefs = async () => {
-    const theme = [userDefaults.values.theme, store.data.prefs?.theme, legacyTheme].find(t => THEMES.includes(t));
+    const theme = [(await userDefaults.current()).theme, store.data.prefs?.theme, legacyTheme].find(t => THEMES.includes(t));
     return { theme: theme ?? "system" };
   };
   async function writePrefs(patch) {
@@ -162,7 +162,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.
-    prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root, prDefault: () => userDefaults.values.prStatus ?? true }),
+    prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
   };
 
   const timers = [];

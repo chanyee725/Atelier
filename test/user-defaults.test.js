@@ -11,6 +11,7 @@ import { createApp } from '../server/app.js';
 import * as workspace from '../server/workspace/index.js';
 import * as dispatch from '../server/dispatch/index.js';
 import * as userDefaults from '../server/user-defaults.js';
+import { createPrStatus } from '../server/dispatch/pr-status.js';
 import { defaultsFile, KEY_ORDER, readDefaultsSync, serialize, startDefaults, UserDefaults } from '../server/user-defaults.js';
 
 const W = { 'content-type': 'application/json', 'x-drawing': '1' };
@@ -186,6 +187,51 @@ test('server: drawing.json wins over state.json; 설정 changes are written back
   } finally {
     await s.stop();
     rmSync(root, { recursive: true, force: true });
+    h.done();
+  }
+});
+
+test('server: a hand edit to drawing.json is seen at once, without GET /api/user-defaults', async () => {
+  const h = tempHome();
+  const { root, ws } = scratchRepo();
+  h.put({ prStatus: false });
+  const s = await start(ws, h.file, fakeDeps(root));
+  const pr = async () => (await (await fetch(`${s.base}/api/workspace/pr-tracking`)).json()).on;
+  const theme = async () => (await (await fetch(`${s.base}/api/prefs`)).json()).theme;
+  try {
+    assert.equal(await pr(), false);
+    assert.equal(await theme(), 'system');
+    // The user edits the file by hand while the server runs; no route calls GET /api/user-defaults.
+    h.put({ prStatus: true, theme: 'dark' });
+    assert.equal(await pr(), true);
+    assert.equal(await theme(), 'dark');
+    h.put({ prStatus: false, theme: 'light' });
+    assert.equal(await pr(), false);
+    assert.equal(await theme(), 'light');
+    // Deleting the file brings back the built-in defaults.
+    rmSync(h.file);
+    assert.equal(await pr(), true);
+    assert.equal(await theme(), 'system');
+  } finally {
+    await s.stop();
+    rmSync(root, { recursive: true, force: true });
+    h.done();
+  }
+});
+
+test('createPrStatus follows a hand edit to drawing.json through current()', async () => {
+  const h = tempHome();
+  const ws = mkdtempSync(join(tmpdir(), 'drawing-e555-ws-'));
+  try {
+    h.put({ prStatus: false });
+    const d = await new UserDefaults(h.file).load();
+    let calls = 0;
+    const prStatus = createPrStatus({ workspaceDir: ws, cwd: ws, prDefault: async () => (await d.current()).prStatus ?? true, run: async () => { calls++; return { code: 1, stdout: '', stderr: '' }; }, minGapMs: 0 });
+    assert.deepEqual(await prStatus('feat/x'), { ok: false, reason: 'disabled' });
+    h.put({ prStatus: true });
+    assert.notEqual((await prStatus('feat/x')).reason, 'disabled');
+  } finally {
+    rmSync(ws, { recursive: true, force: true });
     h.done();
   }
 });

@@ -101,7 +101,8 @@ export async function setup(ctx) {
       // Per-workspace PR/CI tracking switch (E57 settings dialog); stored in <workspace>/.drawing/settings.json.
       route('GET', '/api/workspace/pr-tracking', async () => {
         try {
-          return { on: await readPrTracking(ctx.workspaceDir, ctx.modules.userDefaults?.defaults?.values.prStatus ?? true) };
+          const ud = ctx.modules.userDefaults?.defaults;
+          return { on: await readPrTracking(ctx.workspaceDir, (ud ? (await ud.current()).prStatus : undefined) ?? true) };
         } catch (e) {
           if (e?.code === 'ESETTINGS') throw new StoreError(409, SETTINGS_BROKEN);
           throw e;
