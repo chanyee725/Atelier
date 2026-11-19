@@ -166,6 +166,7 @@ test('a failing dispatch call answers { error } and leaves drawing routes workin
     const miss = await fetch(`${base}/api/sessions/nope/diff`);
     assert.equal(miss.status, 404);
     assert.equal((await miss.json()).error, '세션이 없어요');
+    assert.equal((await fetch(`${base}/api/sessions/nope/live`)).status, 404);
     const empty = await fetch(`${base}/api/sessions/nope/message`, { method: 'POST', headers: W, body: JSON.stringify({ text: ' ' }) });
     assert.equal(empty.status, 400);
     const bad = await fetch(`${base}/api/tasks`, { method: 'POST', headers: W, body: '{' });

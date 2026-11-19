@@ -92,6 +92,8 @@ export async function setup(ctx, { now = Date.now } = {}) {
       held.delete(e.sid);
     } else {
       held.set(e.sid, { file: e.file, at: e.at });
+      // The live view's touched files (#728) include documents written through the API, not only file tools.
+      hub?.liveView?.noteDoc(e.sid, e.file, e.at);
     }
     update();
   });

@@ -119,7 +119,7 @@ function maskedPerm(req) {
 }
 
 export class Hub extends EventEmitter {
-  constructor({ root, store, models, roles, port, limits, spawnCli: spawner = spawnCli }) {
+  constructor({ root, store, models, roles, port, limits, workspaceDir = null, spawnCli: spawner = spawnCli }) {
     super();
     // Every agent CLI starts through this (server/dispatch/cli.js); tests pass a fake.
     this.spawnCli = spawner;
@@ -134,7 +134,7 @@ export class Hub extends EventEmitter {
     this.shared.on("change", () => { this.emit("limits", this.currentLimits()); this.checkTickets(); });
     this.live = new Map(); // id -> { proc, transcript, perms, seenMsgIds }
     // The live view per session (#728): metadata only, in memory, sent as throttled `live` events.
-    this.liveView = new LiveTracker({ emit: ev => this.emit("live", ev) });
+    this.liveView = new LiveTracker({ workspaceDir, emit: ev => this.emit("live", ev) });
     this.isConnected = () => true; // replaced by the server with the Dispatch-level connection check
     // Pipeline hooks (server/pipeline, E20). createGate(parent) -> refusal text or null: a lead whose plan
     // waits for approval may not create teammates. taskStepCheck(lead, step) -> refusal text or null.

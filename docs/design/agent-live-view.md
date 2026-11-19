@@ -124,9 +124,12 @@ export interface AgentLive {
 ```
 
 - `GET /api/sessions/:id/live` → `AgentLive` snapshot (404 for unknown ids).
-- SSE event `live` → `{ sid, action }` (a new or finished action) and `{ sid, file }`; at most **4 events/s per
-  session** (coalesce: keep the latest per action id, flush on a 250ms timer). With 20 agents that caps at ~80 small
-  events/s, far less than the `message` events the stream already carries.
+- SSE event `live` → `LiveDelta` `{ sid, current?, actions?, files? }`: one coalesced event per session holding only
+  what changed (actions upsert by id, files by path; `applyLiveDelta` in `shared/dispatch/live.ts` merges it), at most
+  **4 events/s per session** (first change sent at once, the rest flushed after 250ms). With 20 agents that caps at
+  ~80 small events/s, far less than the `message` events the stream already carries. The event is broadcast on the
+  shared `/api/events` stream (no per-panel subscription on the server); the client drops other sids at once.
+- Documents an agent writes through the workspace API (credited by the cursor module) are listed in `files` too.
 - Paths outside the project are shown as their basename only; anything matching `.env` is dropped, not shown.
 
 ## 5. Client: reusable open API
