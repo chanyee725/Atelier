@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
 import { FOCUS_RING } from '../lib/focus';
 import { openAgentLive } from '../live/store';
-import { agentMeta, agentStateLabel, fileStem, isBusy, needsLook, safeColor, type AgentPresence } from './agents';
+import { agentMeta, agentStateLabel, fileStem, isBusy, needsLook, roleBadge, safeColor, type AgentPresence, type RoleTone } from './agents';
 import { relativeTime } from './model';
 
 const FALLBACK = '#475569';
@@ -29,6 +29,34 @@ export function AgentTag({ agent, size = 'md', className }: { agent: Pick<AgentP
       >
         {agent.name}
       </span>
+    </span>
+  );
+}
+
+const ROLE_COLOR: Record<RoleTone, string> = {
+  lead: 'var(--role-lead)',
+  merge: 'var(--role-merge)',
+  impl: 'var(--role-impl)',
+  review: 'var(--role-review)',
+  test: 'var(--role-test)',
+  design: 'var(--role-design)',
+  docs: 'var(--role-docs)',
+  other: 'var(--muted-foreground)',
+};
+
+/** The session's role as a small tinted badge: the role colour plus its name, so colour is never the only cue. */
+export function RoleBadge({ agent, className }: { agent: Pick<AgentPresence, 'role' | 'roleName' | 'outside'>; className?: string }) {
+  const { tone, label } = roleBadge(agent);
+  return (
+    <span
+      data-role-tone={tone}
+      style={{ '--role': ROLE_COLOR[tone] } as CSSProperties}
+      className={cn(
+        'inline-flex max-w-full min-w-0 items-center rounded-[4px] border border-[color-mix(in_oklch,var(--role)_38%,transparent)] bg-[color-mix(in_oklch,var(--role)_14%,transparent)] px-1.5 text-[11px] leading-[18px] font-medium text-[var(--role)]',
+        className,
+      )}
+    >
+      <span className="truncate">{label}</span>
     </span>
   );
 }

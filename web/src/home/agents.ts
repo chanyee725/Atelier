@@ -2,6 +2,7 @@
 // Data: GET /api/workspace/agents (first answer) and the SSE event `agents` (a full snapshot of the whole workspace,
 // sent on connect and on every change). Memory-only on the server; nothing here is stored either.
 import { STATE } from '../dispatch/lib/format.ts';
+import { AGENT_STATUS } from '../../../shared/dispatch/agent-status.ts';
 import type { AgentPresence } from '../../../shared/dispatch/agent-presence.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 
@@ -46,6 +47,32 @@ export function holdersByFile(agents: readonly AgentPresence[]): ReadonlyMap<str
   const m = new Map<string, AgentPresence[]>();
   for (const a of agents) if (a.file) m.set(a.file, [...(m.get(a.file) ?? []), a]);
   return m;
+}
+
+/**
+ * Editing a diagram right now: the cursor module's status (server/cursor, shared/dispatch/agent-status.ts) says it is
+ * writing or planning a diagram, and it holds a file. That is exactly when its live cursor sits on a canvas, so the
+ * dashboard shows the pointer tag only then.
+ */
+export const isEditingDiagram = (a: Pick<AgentPresence, 'statusLabel' | 'file' | 'outside'>) =>
+  !a.outside && !!a.file && (a.statusLabel === AGENT_STATUS.writeDiagram || a.statusLabel === AGENT_STATUS.thinkDiagram);
+
+/** Role tones (the `--role-*` tokens in web/src/index.css). */
+export type RoleTone = 'lead' | 'merge' | 'impl' | 'review' | 'test' | 'design' | 'docs' | 'other';
+const ROLE_NAME: Record<Exclude<RoleTone, 'other'>, string> = { lead: '관리자', merge: '병합자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' };
+
+/**
+ * The role badge of a session: its tone and the label shown next to the colour (never colour alone). The server's
+ * role ids (server/dispatch/roles.js) map directly; a role named for merging (병합, 머지) gets the merge tone; an
+ * outside writer reads 외부 API.
+ */
+export function roleBadge(a: Pick<AgentPresence, 'role' | 'roleName' | 'outside'>): { tone: RoleTone; label: string } {
+  if (a.outside) return { tone: 'other', label: '외부 API' };
+  const name = a.roleName?.trim() ?? '';
+  const id = a.role in ROLE_NAME ? (a.role as Exclude<RoleTone, 'other'>) : null;
+  if (a.role === 'merge' || /병합|머지/.test(name)) return { tone: 'merge', label: name || ROLE_NAME.merge };
+  if (id) return { tone: id, label: name || ROLE_NAME[id] };
+  return { tone: 'other', label: name || a.role || '세션' };
 }
 
 /** "구현자 · Opus 5.5"; an outside writer says so instead. */

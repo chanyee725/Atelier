@@ -94,7 +94,7 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   // Dashboard home (#778): cards only, no tabs, 새로 만들기 chips or find box on the page (#793).
   const dash = page.locator('main[data-screen="dashboard"]');
   await dash.getByRole('heading', { level: 1, name: '대시보드' }).waitFor();
-  for (const title of ['실행 중인 세션', '최근 문서']) await dash.getByRole('heading', { name: title }).first().waitFor();
+  for (const title of ['실행 중인 세션', '이슈']) await dash.getByRole('heading', { name: title }).first().waitFor();
   assert.equal(await dash.getByRole('tablist').count(), 0);
   assert.equal(await dash.getByRole('group', { name: '새로 만들기' }).count(), 0);
   assert.equal(await dash.locator('input[type="search"]').count(), 0);

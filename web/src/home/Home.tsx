@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { ProjectDashboard } from './ProjectDashboard';
-import { flatFiles, plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
+import { plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
 import { isFindKey } from './dashboardRows';
 import { PlanAreas } from './PlanList';
 
@@ -125,7 +125,6 @@ type Shared = Omit<HomeProps, "project"> & { data: ProjectsResponse; running: Re
 function Dashboard({ data, ...p }: Shared) {
   // The dashboard is the whole project's (#778): every document, session and agent of this server.
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
-  const recent = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
   return (
     <>
       <header className="flex min-h-12 shrink-0 items-center gap-3 border-b px-4 py-2">
@@ -137,7 +136,7 @@ function Dashboard({ data, ...p }: Shared) {
         <h1 className="m-0 shrink-0 text-[15px] font-semibold">대시보드</h1>
         <span className="ml-auto">{p.bell}</span>
       </header>
-      <ProjectDashboard project={whole} recent={recent} onOpen={p.onOpen} onBoard={p.onBoard} />
+      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} />
     </>
   );
 }
@@ -185,7 +184,6 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
 
 function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
   const [tab, setTab] = useState<PTab>('docs');
-  const recent = useMemo(() => flatFiles([project], []), [project]);
   const plans = useMemo(() => plansByArea([project], []), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="shrink-0 grow gap-0">
@@ -217,7 +215,7 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">
         <TabsContent value="docs" className="flex flex-col">
-          <ProjectDashboard project={project} recent={recent} onOpen={p.onOpen} onBoard={p.onBoard} />
+          <ProjectDashboard project={project} onOpen={p.onOpen} onBoard={p.onBoard} />
         </TabsContent>
         <TabsContent value="plans">
           <div className="flex flex-col gap-3 px-2 pt-3">
