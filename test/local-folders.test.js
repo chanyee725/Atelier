@@ -178,6 +178,44 @@ test('workspaces: no switch while an agent session is running, none in project m
   );
 });
 
+test('workspaces: no switch while a pipeline plan is running, even with every session idle', async () => {
+  const plan = {
+    name: 'dispatch',
+    setup: () => ({ hub: { sessions: [{ status: 'idle' }] }, store: { data: { pipelines: { 'plan.dpx.json': { state: 'running' } } } } }),
+  };
+  await withApp(
+    async ({ ws, home, call }) => {
+      await mkdir(join(home, 'p'));
+      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
+      assert.deepEqual([r.status, r.body.code], [409, 'pipeline_running']);
+      assert.ok(!r.body.error.includes(home), 'no paths in error messages');
+      assert.equal((await call('GET', '/api/workspaces')).body.current.path, ws);
+    },
+    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan] },
+  );
+});
+
+test('workspaces: a failed switch whose rollback also fails answers open_failed', async () => {
+  let calls = 0;
+  const flaky = {
+    name: 'flaky',
+    setup: () => {
+      if (calls++ > 0) throw Object.assign(new Error('boom'), { code: 'EFAKE' });
+      return {};
+    },
+  };
+  await withApp(
+    async ({ home, call, app }) => {
+      await mkdir(join(home, 'p'));
+      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
+      assert.deepEqual([r.status, r.body.code], [500, 'open_failed']);
+      assert.equal(calls, 3, 'tried the new folder, then the old one again');
+      assert.deepEqual(app.ctx.modules, {});
+    },
+    { moduleList: [...modules, flaky] },
+  );
+});
+
 test('workspaces: the switch moves the workspace lock to the new folder', async () => {
   await withApp(
     async ({ ws, home, call, app }) => {

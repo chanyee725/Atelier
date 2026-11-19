@@ -29,6 +29,7 @@ const listError = (e: unknown) => {
 export const workspaceError = (e: unknown) => {
   const code = e instanceof ApiError ? e.code : undefined;
   if (code === 'sessions_running') return '실행 중인 에이전트 세션이 있어요. 세션이 끝난 뒤에 폴더를 바꿀 수 있어요';
+  if (code === 'pipeline_running') return '실행 중인 계획이 있어요. 계획을 멈춘 뒤에 폴더를 바꿀 수 있어요';
   if (code === 'in_use') return '다른 Drawing 서버가 이 폴더를 열고 있어요';
   if (code === 'home_folder') return '홈 폴더 자체는 열 수 없어요. 안의 폴더를 골라 주세요';
   if (code === 'filesystem_root') return '최상위 폴더는 열 수 없어요';
