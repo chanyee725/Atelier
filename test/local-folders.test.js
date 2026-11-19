@@ -179,19 +179,43 @@ test('workspaces: no switch while an agent session is running, none in project m
 });
 
 test('workspaces: no switch while a pipeline plan is running, even with every session idle', async () => {
-  const plan = {
+  const plan = (alive) => ({
     name: 'dispatch',
-    setup: () => ({ hub: { sessions: [{ status: 'idle' }] }, store: { data: { pipelines: { 'plan.dpx.json': { state: 'running' } } } } }),
-  };
+    setup: () => ({
+      hub: { sessions: [{ id: 'L', status: 'idle' }], alive: (id) => alive && id === 'L' },
+      store: { data: { pipelines: { 'plan.dpx.json': { state: 'running', lead: 'L' } } } },
+    }),
+  });
+  const doc = JSON.stringify({ v: 1, revision: 1, blocks: [] });
   await withApp(
     async ({ ws, home, call }) => {
+      await writeFile(join(ws, 'plan.dpx.json'), doc);
       await mkdir(join(home, 'p'));
       const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
       assert.deepEqual([r.status, r.body.code], [409, 'pipeline_running']);
       assert.ok(!r.body.error.includes(home), 'no paths in error messages');
       assert.equal((await call('GET', '/api/workspaces')).body.current.path, ws);
     },
-    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan] },
+    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(true)] },
+  );
+  // #775: a plan whose document is gone (trashed) does not block, even with its lead alive.
+  await withApp(
+    async ({ home, call }) => {
+      await mkdir(join(home, 'p'));
+      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+    },
+    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(true)] },
+  );
+  // #775: after a restart the lead has no process: a stale `running` entry does not block either.
+  await withApp(
+    async ({ ws, home, call }) => {
+      await writeFile(join(ws, 'plan.dpx.json'), doc);
+      await mkdir(join(home, 'p'));
+      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
+      assert.equal(r.status, 200, JSON.stringify(r.body));
+    },
+    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(false)] },
   );
 });
 

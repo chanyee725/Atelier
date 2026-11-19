@@ -185,6 +185,16 @@ export async function setup(ctx) {
 
   // File moves carry the approval state along (a folder move moves every file under it).
   const unsubscribe = ws.runs.onChange((e) => {
+    // A trashed plan document pauses its run: nothing is left to approve or resume from, and it must not keep
+    // blocking a folder switch. Restoring it shows 이어서 하기 again.
+    if (e.kind === 'trash') {
+      const entry = entries()?.[e.path];
+      if (entry?.state === 'running') {
+        pauseEntry(e.path, entry, 'stop').catch((err) => console.error('pipeline pause on trash:', err?.code ?? err?.name));
+        interruptTeam(entry.lead);
+      }
+      return;
+    }
     if (e.kind !== 'move') return;
     const all = entries();
     if (!all) return;
@@ -507,6 +517,8 @@ export async function setup(ctx) {
     // Paused first, so the reports the interrupted teammates hand over are held until 이어서 하기.
     await pauseEntry(path, e, 'stop');
     interruptTeam(e.lead);
+    // The document may be in the trash: the entry still stops, the answer then has no file fields.
+    if (!(await readOrNull(path))) return { path, state: e.state, lead: e.lead ?? null, runId: e.runId ?? null, pause: e.pause ?? null };
     return status(path);
   }
 

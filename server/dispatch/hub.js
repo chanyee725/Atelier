@@ -179,6 +179,18 @@ export class Hub extends EventEmitter {
   get limits() { return this.shared.claude; }
   get sessions() { return Object.values(this.store.data.sessions); }
   get(id) { return this.store.data.sessions[id]; }
+  /**
+   * True while the session can still carry its team: it has a process, is mid-turn, waits for its auto-resume after a
+   * restart (interrupted), or has run in this server run (Codex and Gemini start one process per turn, so they sit idle
+   * without one between turns). A session saved idle before a restart that never ran since, or a done one, is not.
+   */
+  alive(id) {
+    const s = this.get(id);
+    if (!s || s.status === "done") return false;
+    if (s.interrupted || ["running", "starting", "waiting"].includes(s.status)) return true;
+    const r = this.live.get(id);
+    return !!(r?.proc || r?.ran);
+  }
   rt(id) {
     let r = this.live.get(id);
     if (!r) {
@@ -1195,6 +1207,7 @@ export class Hub extends EventEmitter {
   attach(s, proc) {
     const r = this.rt(s.id);
     r.proc = proc;
+    r.ran = true; // see alive(): a per-turn CLI keeps its team alive between turns
     let stderr = "";
     proc.stderr.on("data", d => { stderr = (stderr + d).slice(-2000); });
     proc.on("error", e => {
