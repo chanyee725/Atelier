@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentMeta, agentStateLabel, agentsIn, isBusy, needsLook, fileStem, holdersByFile, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
+import { agentMeta, agentStateLabel, agentsIn, isBusy, isEditingDiagram, roleBadge, needsLook, fileStem, holdersByFile, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
 
 const a = (sid: string, x: Partial<AgentPresence> = {}): AgentPresence => ({ sid, name: sid, role: 'impl', model: null, status: 'waiting', state: 'resting', project: null, file: null, at: 0, ...x });
 
@@ -66,4 +66,25 @@ test('state label and dots: the monitoring state wins, the hub status fills in w
   assert.equal(agentStateLabel(a('A', { status: 'idle', state: null })), '쉼');
   assert.equal(needsLook(a('A', { state: 'stuck' })), true);
   assert.equal(needsLook(a('A', { status: 'waiting', state: null })), true);
+});
+
+test('isEditingDiagram: only while the cursor status says diagram and a file is held (#793)', () => {
+  const f = 'P/x.dpx.json';
+  assert.equal(isEditingDiagram(a('w', { status: 'running', file: f, statusLabel: '다이어그램 작성 중…' })), true);
+  assert.equal(isEditingDiagram(a('t', { status: 'running', file: f, statusLabel: '다이어그램 생각 중…' })), true);
+  assert.equal(isEditingDiagram(a('doc', { status: 'running', file: f, statusLabel: '글 작성 중…' })), false);
+  assert.equal(isEditingDiagram(a('code', { status: 'running', file: f, statusLabel: '코드 작성 중…' })), false);
+  assert.equal(isEditingDiagram(a('idle', { status: 'idle', file: f })), false);
+  assert.equal(isEditingDiagram(a('nofile', { status: 'running', statusLabel: '다이어그램 작성 중…' })), false);
+  assert.equal(isEditingDiagram(a('ext', { outside: true, file: f, statusLabel: '다이어그램 작성 중…' })), false);
+});
+
+test('roleBadge: tone from the role id, label always text (#793)', () => {
+  assert.deepEqual(roleBadge({ role: 'lead', roleName: '관리자' }), { tone: 'lead', label: '관리자' });
+  assert.deepEqual(roleBadge({ role: 'impl' }), { tone: 'impl', label: '구현자' });
+  assert.deepEqual(roleBadge({ role: 'docs', roleName: '문서화' }), { tone: 'docs', label: '문서화' });
+  assert.deepEqual(roleBadge({ role: 'lead', roleName: '병합 관리자' }), { tone: 'merge', label: '병합 관리자' });
+  assert.deepEqual(roleBadge({ role: 'merge' }), { tone: 'merge', label: '병합자' });
+  assert.deepEqual(roleBadge({ role: 'custom', roleName: '분석가' }), { tone: 'other', label: '분석가' });
+  assert.deepEqual(roleBadge({ role: '', outside: true }), { tone: 'other', label: '외부 API' });
 });
