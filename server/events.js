@@ -43,5 +43,10 @@ export function createHub() {
     attachers.push(fn);
   }
 
-  return { attach, broadcast, closeAll, onAttach, get size() { return clients.size; } };
+  // A workspace switch sets the modules up again; their old snapshot senders must go.
+  function clearAttachers() {
+    attachers.length = 0;
+  }
+
+  return { attach, broadcast, closeAll, onAttach, clearAttachers, get size() { return clients.size; } };
 }

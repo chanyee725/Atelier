@@ -1,7 +1,7 @@
 // Workspace module: HTTP API over the file store + SSE "workspace" events for outside changes.
 import { createStore, StoreError } from './store.js';
 import { listProjects } from './projects.js';
-import { linkLocalFolder, listLocalFolders } from './local-folders.js';
+import { listLocalFolders } from './local-folders.js';
 import { cleanSessionLabel, sessionIdOf } from '../cursor/presence.js';
 // The PR/CI switch lives with the Dispatch PR tracker (it reads the same settings.json), so the route reuses it.
 import { readPrTracking, setPrTracking } from '../dispatch/pr-status.js';
@@ -78,9 +78,6 @@ export async function setup(ctx) {
         if (!(err instanceof StoreError)) throw err;
         const out = { error: err.message };
         if (err.revision !== undefined) out.revision = err.revision;
-        if (err.project !== undefined) out.project = err.project;
-        // A stable reason for the client to branch on (messages are English and may change).
-        if (typeof err.code === 'string') out.code = err.code;
         send(res, err.status, out);
       }
     },
@@ -102,14 +99,8 @@ export async function setup(ctx) {
       route('GET', '/api/tree', async () => ({ tree: await store.tree() })),
       // Projects view (top-level folders, nested sub-documents). Not /api/projects: Dispatch owns that path.
       route('GET', '/api/workspace/projects', () => listProjects(store)),
-      // Folder picker for 새 프로젝트 (E554): sub-folder names of a folder on the server machine, read-only.
+      // Folder picker for 폴더 열기 (E554): sub-folder names of a folder on the server machine, read-only.
       route('GET', '/api/local-folders', (p) => listLocalFolders(p)),
-      // Link a local folder as a new project; writes only <workspace>/<name>/.project.json, never into the folder.
-      route('POST', '/api/workspace/local-project', async (_p, b) => {
-        const r = await linkLocalFolder(store, b?.path);
-        ctx.hub.broadcast('workspace', { kind: 'tree', path: r.path });
-        return r;
-      }, 201),
       // Per-workspace PR/CI tracking switch (E57 settings dialog); stored in <workspace>/.drawing/settings.json.
       route('GET', '/api/workspace/pr-tracking', async () => {
         try {

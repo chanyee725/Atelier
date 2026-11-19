@@ -2,19 +2,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, symlink, readdir, readFile, realpath, chmod } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { createApp } from '../server/app.js';
 import { modules } from '../server/modules.js';
-import { createStore } from '../server/workspace/store.js';
-import { linkLocalFolder } from '../server/workspace/local-folders.js';
+import { claimWorkspace } from '../server/lock.js';
+import { execFileSync } from 'node:child_process';
 
 // Scratch folders only (never a real project): a workspace and a fake "home" with folders to browse.
-async function withApp(fn, opts = {}) {
-  const ws = await mkdtemp(join(tmpdir(), 'draw-lf-ws-'));
+// `defaults: true` turns ~/.dispatch/drawing.json on for the test; HOME is the scratch home, never the real one.
+async function withApp(fn, { defaults = false, moduleList = modules, deps = {}, ...opts } = {}) {
+  const ws = await realpath(await mkdtemp(join(tmpdir(), 'draw-lf-ws-')));
   const home = await realpath(await mkdtemp(join(tmpdir(), 'draw-lf-home-')));
   const oldHome = process.env.HOME;
+  const oldDefaults = process.env.DRAWING_USER_DEFAULTS;
   process.env.HOME = home;
-  const app = await createApp({ workspaceDir: ws, ...opts }, { publicDir: ws, moduleList: modules });
+  if (defaults) delete process.env.DRAWING_USER_DEFAULTS;
+  const app = await createApp({ workspaceDir: ws, ...opts }, { publicDir: ws, moduleList, ...deps });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
   const call = async (method, path, body, headers = { 'x-drawing': '1' }) => {
@@ -26,9 +29,11 @@ async function withApp(fn, opts = {}) {
     return { status: res.status, body: await res.json() };
   };
   try {
-    await fn({ ws, home, call });
+    await fn({ ws, home, call, app });
   } finally {
     process.env.HOME = oldHome;
+    if (oldDefaults === undefined) delete process.env.DRAWING_USER_DEFAULTS;
+    else process.env.DRAWING_USER_DEFAULTS = oldDefaults;
     await app.close();
     await rm(ws, { recursive: true, force: true });
     await rm(home, { recursive: true, force: true });
@@ -89,57 +94,113 @@ test('local folders: bad paths are client errors without absolute paths in the m
   });
 });
 
-test('local project: links a folder, writes only inside the workspace, shows up in projects', async () => {
-  await withApp(async ({ ws, home, call }) => {
-    const target = join(home, 'my-app');
-    await mkdir(target);
-    await writeFile(join(target, 'README.md'), 'x');
+test('workspaces: picking a folder adds it to drawing.json and switches the server to it', async () => {
+  await withApp(
+    async ({ ws, home, call }) => {
+      const other = join(home, 'code', 'app');
+      await mkdir(other, { recursive: true });
+      assert.equal((await call('POST', '/api/file', { path: 'a' })).status, 201);
 
-    // Writes need the header.
-    assert.equal((await call('POST', '/api/workspace/local-project', { path: target }, {})).status, 403);
+      const before = await call('GET', '/api/workspaces');
+      assert.deepEqual(before.body.folders.map((f) => [f.path, f.current]), [[ws, true]]);
 
-    const r = await call('POST', '/api/workspace/local-project', { path: target });
-    assert.equal(r.status, 201);
-    assert.deepEqual(r.body, { path: 'my-app', name: 'my-app', linkedPath: target });
-    // The linked folder is untouched; the workspace holds the project and its meta.
-    assert.deepEqual(await readdir(target), ['README.md']);
-    assert.deepEqual(JSON.parse(await readFile(join(ws, 'my-app', '.project.json'), 'utf8')), { name: 'my-app', linkedPath: target });
+      const r = await call('POST', '/api/workspaces', { path: other });
+      assert.equal(r.status, 200);
+      assert.equal(r.body.current.path, other);
+      assert.equal((await call('GET', '/api/info')).body.workspace, 'app');
+      // The new folder has its own documents and .drawing/ data.
+      assert.deepEqual((await call('GET', '/api/tree')).body.tree, []);
+      assert.equal((await call('POST', '/api/file', { path: 'b' })).status, 201);
+      assert.ok((await readdir(other)).includes('b.dpx.json'));
 
-    const p = (await call('GET', '/api/workspace/projects')).body.projects;
-    assert.deepEqual(p.map((x) => [x.path, x.name, x.linkedPath]), [['my-app', 'my-app', target]]);
+      // Metadata only: `~/…` path and folder name; both folders listed, the last one opened remembered.
+      const saved = JSON.parse(await readFile(join(home, '.dispatch', 'drawing.json'), 'utf8'));
+      assert.deepEqual(saved.workspaces, [{ path: ws, name: basename(ws) }, { path: '~/code/app', name: 'app' }]);
+      assert.equal(saved.lastWorkspace, '~/code/app');
 
-    // Same folder again: 409 with the existing project.
-    const again = await call('POST', '/api/workspace/local-project', { path: target });
-    assert.deepEqual([again.status, again.body.project, again.body.code], [409, 'my-app', 'already_linked']);
+      // Back to the first folder: its documents are still there, the other folder's are not.
+      const back = await call('POST', '/api/workspaces/open', { path: ws });
+      assert.equal(back.status, 200);
+      const names = (await call('GET', '/api/tree')).body.tree.map((n) => n.name);
+      assert.deepEqual(names, ['a.dpx.json']);
+      assert.equal(JSON.parse(await readFile(join(home, '.dispatch', 'drawing.json'), 'utf8')).lastWorkspace, ws);
 
-    // Another folder with the same name gets a free project name.
-    const other = join(home, 'b', 'my-app');
-    await mkdir(other, { recursive: true });
-    assert.equal((await call('POST', '/api/workspace/local-project', { path: other })).body.path, 'my-app 2');
-
-    // Refused: the workspace itself, the root, missing folders, relative paths.
-    for (const [path, status] of [[ws, 400], ['/', 400], [join(home, 'nope'), 404], ['x/y', 400], [undefined, 400]]) {
-      assert.equal((await call('POST', '/api/workspace/local-project', { path })).status, status, String(path));
-    }
-    // Stable reason codes for the client.
-    assert.equal((await call('POST', '/api/workspace/local-project', { path: ws })).body.code, 'inside_workspace');
-    assert.equal((await call('POST', '/api/workspace/local-project', { path: '/' })).body.code, 'filesystem_root');
-  });
+      // Removing takes it off the list only; the open folder cannot be removed.
+      assert.equal((await call('DELETE', `/api/workspaces?path=${encodeURIComponent(ws)}`)).body.code, 'current');
+      const del = await call('DELETE', `/api/workspaces?path=${encodeURIComponent(other)}`);
+      assert.equal(del.status, 200);
+      assert.deepEqual(del.body.folders.map((f) => f.path), [ws]);
+      assert.ok((await readdir(other)).includes('b.dpx.json'));
+    },
+    { defaults: true },
+  );
 });
 
-test('local project: links of the same folder at once make one project', async () => {
-  await withApp(async ({ ws, home }) => {
-    const target = join(home, 'twice');
-    await mkdir(target, { recursive: true });
-    const store = createStore(ws);
-    const rs = await Promise.allSettled([1, 2, 3].map(() => linkLocalFolder(store, target)));
-    assert.deepEqual(rs.map((r) => (r.status === 'fulfilled' ? 'ok' : r.reason.code)).sort(), ['already_linked', 'already_linked', 'ok']);
-    assert.deepEqual((await store.tree()).map((n) => n.name), ['twice']);
-  });
-});
-
-test('local project: closed in project mode', async () => {
+test('workspaces: refuses home, root, files, unknown folders and writes without the header', async () => {
   await withApp(async ({ home, call }) => {
-    assert.equal((await call('POST', '/api/workspace/local-project', { path: home })).status, 403);
-  }, { projectMode: true });
+    await writeFile(join(home, 'f.txt'), 'x');
+    await mkdir(join(home, 'p'));
+    const cases = [
+      ['POST', '/api/workspaces', { path: home }, 400, 'home_folder'],
+      ['POST', '/api/workspaces', { path: '/' }, 400, 'filesystem_root'],
+      ['POST', '/api/workspaces', { path: join(home, 'f.txt') }, 400, 'bad_path'],
+      ['POST', '/api/workspaces', { path: join(home, 'missing') }, 404, 'not_found'],
+      ['POST', '/api/workspaces', { path: 'rel/p' }, 400, 'bad_path'],
+      ['POST', '/api/workspaces/open', { path: join(home, 'p') }, 404, 'not_registered'],
+    ];
+    for (const [m, path, body, status, code] of cases) {
+      const r = await call(m, path, body);
+      assert.deepEqual([r.status, r.body.code], [status, code], `${m} ${JSON.stringify(body)}`);
+      assert.ok(!r.body.error.includes(home), 'no paths in error messages');
+    }
+    assert.equal((await call('POST', '/api/workspaces', { path: join(home, 'p') }, {})).status, 403);
+  });
+});
+
+test('workspaces: no switch while an agent session is running, none in project mode', async () => {
+  const busy = { name: 'dispatch', setup: () => ({ hub: { sessions: [{ status: 'running' }] } }) };
+  await withApp(
+    async ({ ws, home, call }) => {
+      await mkdir(join(home, 'p'));
+      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
+      assert.deepEqual([r.status, r.body.code], [409, 'sessions_running']);
+      assert.equal((await call('GET', '/api/workspaces')).body.current.path, ws);
+    },
+    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), busy] },
+  );
+  await withApp(
+    async ({ home, call }) => {
+      await mkdir(join(home, 'p'));
+      assert.equal((await call('POST', '/api/workspaces', { path: join(home, 'p') })).status, 403);
+      assert.equal((await call('GET', '/api/workspaces')).body.switchable, false);
+    },
+    { projectMode: true },
+  );
+});
+
+test('workspaces: the switch moves the workspace lock to the new folder', async () => {
+  await withApp(
+    async ({ ws, home, call, app }) => {
+      const other = join(home, 'p');
+      await mkdir(other);
+      assert.equal((await call('POST', '/api/workspaces', { path: other })).status, 200);
+      assert.ok((await readdir(join(other, '.drawing'))).includes('server.lock'));
+      assert.ok(!(await readdir(join(ws, '.drawing')).catch(() => [])).includes('server.lock'));
+      assert.equal(app.ctx.lock !== null, true);
+    },
+    { deps: { claimWorkspace } },
+  );
+});
+
+test('workspaces: agent sessions follow the open folder: on in a git project, off outside one', async () => {
+  await withApp(async ({ home, call }) => {
+    const repo = join(home, 'repo');
+    await mkdir(join(repo, 'docs'), { recursive: true });
+    const git = (...a) => execFileSync('git', ['-C', repo, ...a], { stdio: 'ignore' });
+    git('init', '-q');
+    git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init');
+    assert.equal((await call('GET', '/api/dispatch')).body.enabled, false);
+    assert.equal((await call('POST', '/api/workspaces', { path: join(repo, 'docs') })).status, 200);
+    assert.equal((await call('GET', '/api/dispatch')).body.enabled, true);
+  });
 });

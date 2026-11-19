@@ -30,6 +30,7 @@ import { SidebarModels } from './SidebarModels';
 import { ActivityBell } from './activity/ActivityBell';
 import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
+import { WorkspaceMenu } from './WorkspaceMenu';
 import type { Theme, ThemePref } from './theme';
 import { displayName, titlesOf } from './docTitles';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
@@ -44,6 +45,8 @@ type Props = {
   onOpen: (path: string) => void;
   onNewFile: () => void;
   onNewProject: () => void;
+  /** Switch the server to another registered folder (E554). */
+  onSwitchWorkspace: (path: string) => void;
   onRename: (n: DocNode | Project) => void;
   onDelete: (n: DocNode | Project) => void;
   /** Move a document (with its sub-documents) or group into folder `dir`; resolves true when it moved. */
@@ -341,12 +344,7 @@ export function Sidebar(p: Props) {
   return (
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
-        <div className="flex h-[35px] min-w-0 flex-1 items-center gap-2 px-2">
-          <span aria-hidden className="grid size-[22px] shrink-0 place-items-center rounded-sm bg-primary text-xs font-semibold text-primary-foreground">
-            {[...(p.workspace ?? 'D')][0]?.toUpperCase()}
-          </span>
-          <span className="truncate text-sm font-semibold">{p.workspace ?? 'Drawing'}</span>
-        </div>
+        <WorkspaceMenu workspace={p.workspace} onSwitch={p.onSwitchWorkspace} onOpenFolder={p.onNewProject} />
         <ActivityBell className={ICON_BUTTON} onOpen={p.onOpen} />
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />

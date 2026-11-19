@@ -412,12 +412,6 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
             <dd className="m-0">{project.docCount}개</dd>
             <dt className="text-muted-foreground">폴더</dt>
             <dd className="m-0 font-mono text-[13px]">{project.path}/</dd>
-            {project.linkedPath && (
-              <>
-                <dt className="text-muted-foreground">연결한 폴더</dt>
-                <dd className="m-0 font-mono text-[13px] break-all">{project.linkedPath}</dd>
-              </>
-            )}
             <dt className="text-muted-foreground">고친 때</dt>
             <dd className="m-0">{relativeTime(project.modifiedAt)}</dd>
           </dl>

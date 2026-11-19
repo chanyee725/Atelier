@@ -1,12 +1,11 @@
 // Projects view of the workspace (docs/design/dispatch-integration/6-app-shell-projects.md §1):
-// - a top-level folder is a project; `<project>/.project.json` may give it a name, icon, description and the
-//   local folder it is linked to (linkedPath, E554)
+// - a top-level folder is a project; `<project>/.project.json` may give it a name, icon and description
 // - files right in the workspace root are "loose" (미분류)
 // - a folder `X/` next to `X.dpx.json` holds X's sub-documents; a folder without such a file is a "group"
 // Built from the store's tree, so the same hidden-name and symlink rules apply. Nothing is written.
 import { constants } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
 import { FILE_EXT } from './model.js';
 
 export const PROJECT_META = '.project.json';
@@ -43,9 +42,6 @@ export async function readProjectMeta(dir) {
       const v = typeof raw[k] === 'string' ? raw[k].trim() : '';
       if (v) out[k] = [...v].slice(0, max).join('');
     }
-    // A linked local folder (E554): an absolute path, stored as given by the server's own link route.
-    const lp = raw.linkedPath;
-    if (typeof lp === 'string' && lp.length <= 4096 && !lp.includes('\0') && isAbsolute(lp)) out.linkedPath = lp;
     return out;
   } catch {
     return {};
@@ -140,7 +136,6 @@ export async function listProjects(store) {
       name: meta.name ?? n.name,
       icon: meta.icon ?? null,
       description: meta.description ?? '',
-      linkedPath: meta.linkedPath ?? null,
       created: iso(minOf([born, ...all.map((d) => ms(d.created))])),
       modified: iso(maxOf([st.mtimeMs, ...all.map((d) => ms(d.modified))])),
       count: countOf(docs),

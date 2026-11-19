@@ -45,14 +45,15 @@ try {
   console.error(`Could not lock the workspace (${err.code ?? err.name}); not guarding against a second server.`);
 }
 let app = null;
+// A folder switch (E554) replaces the workspace lock; app.ctx.lock is the one held now.
 const releaseLocks = () => {
-  lock?.releaseSync();
+  (app ? app.ctx.lock : lock)?.releaseSync();
   app?.ctx.modules.dispatch?.releaseSync?.();
 };
 process.on('exit', releaseLocks);
 
 const port = start.port;
-app = await createApp(opts);
+app = await createApp({ ...opts, lock }, { claimWorkspace });
 app.server.on('error', async (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Pick another one: DRAW_PORT=<port> npm start -- <workspace-dir>`);
@@ -63,7 +64,7 @@ app.server.on('error', async (err) => {
   process.exit(1);
 });
 app.server.listen(port, HOST, () => {
-  lock?.setPort(port).catch((err) => console.error(`Could not update the workspace lock (${err.code ?? err.name})`));
+  app.ctx.lock?.setPort(port).catch((err) => console.error(`Could not update the workspace lock (${err.code ?? err.name})`));
   console.log(`Drawing: http://${HOST}:${port}/  (workspace ${opts.workspaceDir}${opts.projectMode ? ', project mode' : ''})`);
 });
 
