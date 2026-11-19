@@ -172,6 +172,14 @@ test('compose: routes for a layout do not depend on the layouts composed before 
   assert.equal(sceneToSvg(composeGraph(d, base, a)), first);
   // A fresh base (no cache at all) draws the same picture.
   assert.equal(sceneToSvg(composeGraph(d, await graphBase(d), a)), first);
+  // #867: the other order too. A cache keyed on the base alone hands `a` the routes made for `b` here
+  // (the order above only ever reads routes made for `a`).
+  const other = await graphBase(d);
+  composeGraph(d, other, b);
+  assert.equal(sceneToSvg(composeGraph(d, other, a)), first, 'a after b on one base');
+  const still = await graphBase(d);
+  composeGraph(d, still, b);
+  assert.equal(sceneToSvg(composeGraph(d, still)), sceneToSvg(composeGraph(d, await graphBase(d))), 'no layout after b on one base');
 });
 
 test('compose: an elbow edge with a moved end is rerouted orthogonally with at most 3 bends', async () => {
