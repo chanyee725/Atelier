@@ -7,20 +7,22 @@ import type { BoardTask } from './types';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
 /** `names`: display name per project folder path (the folder path is the identity, the name is for labels). */
-type Value = { scope: Scope; known: ReadonlySet<string>; names: ReadonlyMap<string, string> };
+/** `pending`: 미분류 is picked but the project list has not arrived, so no session can be filed yet (scopePending). */
+type Value = { scope: Scope; known: ReadonlySet<string>; names: ReadonlyMap<string, string>; pending?: boolean };
 const Ctx = createContext<Value>({ scope: undefined, known: new Set(), names: new Map() });
 export const ScopeProvider = Ctx.Provider;
 export const useScope = () => useContext(Ctx);
 
 /** Sessions and tasks of the picked project (everything under 전체). A task follows its lead; one with no lead in view stays under 전체. */
-export function useScoped(): { sessions: Session[]; tasks: BoardTask[]; scope: Scope } {
+export function useScoped(): { sessions: Session[]; tasks: BoardTask[]; scope: Scope; pending: boolean } {
   const all = useDispatch(s => s.sessions);
   const tasks = useDispatch(s => s.tasks);
-  const { scope, known } = useScope();
+  const { scope, known, pending = false } = useScope();
   return useMemo(() => {
+    if (pending) return { sessions: [], tasks: [], scope, pending };
     const sessions = inScope(all, scope, known);
-    if (scope === undefined) return { sessions, tasks, scope };
+    if (scope === undefined) return { sessions, tasks, scope, pending };
     const ids = new Set(sessions.map(s => s.id));
-    return { sessions, tasks: tasks.filter(t => t.lead != null && ids.has(t.lead)), scope };
-  }, [all, tasks, scope, known]);
+    return { sessions, tasks: tasks.filter(t => t.lead != null && ids.has(t.lead)), scope, pending };
+  }, [all, tasks, scope, known, pending]);
 }

@@ -58,7 +58,8 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
   const at = (s) => { step = s; };
   t.after(async () => {
     await browser?.close();
-    server.kill();
+    // Wait for the server to exit: it can still be writing run records into the repo, which made rmSync fail (#761).
+    if (server.exitCode === null && server.signalCode === null) await new Promise((ok) => { server.once('exit', ok); server.kill(); });
     fake.cleanup();
     rmSync(repo, { recursive: true, force: true });
     rmSync(home, { recursive: true, force: true });
@@ -80,8 +81,9 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     const projects = (await call('GET', '/api/workspace/projects')).projects;
     const alpha = projects.find((p) => p.name === '알파').path;
     const beta = projects.find((p) => p.name === '베타').path;
-    // Session names are picked by the server, so the test reads them back.
-    const mk = async (folder) => (await call('POST', '/api/sessions', { worktree: false, folder, items: [{ role: 'impl', task: 'x' }] })).sessions[0].name;
+    // Session names are picked by the server at random, so the test reads them back. Rows are found by session id:
+    // one name can hold another (Leo, Cleo), and hasText matches substrings, which once matched two rows (#761).
+    const mk = async (folder) => (await call('POST', '/api/sessions', { worktree: false, folder, items: [{ role: 'impl', task: 'x' }] })).sessions[0];
     const [a1, a2] = [await mk(alpha), await mk(alpha)];
     const b1 = await mk(beta);
     const u1 = await mk(undefined);
@@ -95,35 +97,35 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.waitForURL(`${BASE}/#board`);
     const board = page.locator('[data-session-board]');
     const scope = board.getByLabel('프로젝트');
-    const rows = board.locator('button[data-session]');
+    const row = (x) => board.locator(`button[data-session="${x.id}"]`);
     const tabs = board.getByRole('navigation', { name: '세션 보드 화면' });
 
     at('board lists 전체, projects and 미분류');
-    await rows.filter({ hasText: a1 }).waitFor();
+    await row(a1).waitFor();
     assert.equal(await page.locator('[data-nav="board"]').getAttribute('aria-current'), 'page');
     const options = await scope.locator('option').allTextContents();
     assert.equal(options[0], '전체 프로젝트');
     assert.equal(options.at(-1), '미분류');
     assert.ok(options.includes('알파') && options.includes('베타'), options.join());
-    await rows.filter({ hasText: b1 }).waitFor();
-    await rows.filter({ hasText: u1 }).waitFor();
+    await row(b1).waitFor();
+    await row(u1).waitFor();
     // The model tag names the provider by its display name, not the raw id (#521).
-    const tag = rows.filter({ hasText: a1 }).locator('[data-provider]');
+    const tag = row(a1).locator('[data-provider]');
     assert.equal(await tag.getAttribute('data-provider'), 'claude');
     assert.equal(await tag.innerText(), 'Claude');
 
     at('pick a project');
     await scope.selectOption(alpha);
     await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
-    await rows.filter({ hasText: a2 }).waitFor();
-    assert.equal(await rows.filter({ hasText: b1 }).count(), 0);
-    assert.equal(await rows.filter({ hasText: u1 }).count(), 0);
+    await row(a2).waitFor();
+    assert.equal(await row(b1).count(), 0);
+    assert.equal(await row(u1).count(), 0);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-board.png') });
 
     at('timeline and usage keep the project');
     await tabs.getByRole('link', { name: '타임라인' }).click();
-    await page.locator(`[data-row="${a1}"]`).waitFor();
-    assert.equal(await page.locator(`[data-row="${b1}"]`).count(), 0);
+    await page.locator(`[data-row="${a1.name}"]`).waitFor();
+    assert.equal(await page.locator(`[data-row="${b1.name}"]`).count(), 0);
     assert.match(await page.evaluate(() => location.hash), /^#board=timeline&folder=/);
     assert.equal(await tabs.getByRole('link', { name: '타임라인' }).getAttribute('aria-current'), 'page');
     await tabs.getByRole('link', { name: '사용량' }).click();
@@ -134,21 +136,21 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
 
     at('back walks the board, then leaves it');
     await page.goBack();
-    await page.locator(`[data-row="${a1}"]`).waitFor();
+    await page.locator(`[data-row="${a1.name}"]`).waitFor();
     await page.locator('[data-nav="all"]').click();
     await page.waitForFunction(() => !location.hash.startsWith('#board'));
     assert.equal(await page.locator('[data-session-board]').count(), 0);
     await page.goBack();
-    await page.locator(`[data-row="${a1}"]`).waitFor();
+    await page.locator(`[data-row="${a1.name}"]`).waitFor();
 
     at('old links: #folder= (미분류) and #folder=<path> open the board');
     await page.goto(`${BASE}/dispatch#folder=`);
     await page.waitForURL(`${BASE}/#board&folder=`);
-    await rows.filter({ hasText: u1 }).waitFor();
-    assert.equal(await rows.filter({ hasText: a1 }).count(), 0);
+    await row(u1).waitFor();
+    assert.equal(await row(a1).count(), 0);
     await page.goto(`${BASE}/dispatch#folder=${encodeURIComponent(beta)}`);
-    await rows.filter({ hasText: b1 }).waitFor();
-    assert.equal(await rows.filter({ hasText: a1 }).count(), 0);
+    await row(b1).waitFor();
+    assert.equal(await row(a1).count(), 0);
 
     at('project list fails: a notice, sessions grouped by folder name');
     await page.route('**/api/workspace/projects', (r) => r.fulfill({ status: 500, body: '{}' }));
@@ -174,7 +176,7 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto(`${BASE}/#board`);
     await page.reload();
-    await rows.filter({ hasText: a1 }).waitFor();
+    await row(a1).waitFor();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal overflow');
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-narrow.png') });
 
@@ -182,19 +184,25 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`${BASE}/`);
     await page.reload();
-    await page.getByText('알파').first().waitFor();
+    // The sidebar's project row; its name also carries the file count.
+    const alphaNav = page.getByRole('button').filter({ has: page.getByText('알파', { exact: true }) });
+    await alphaNav.waitFor();
     await page.keyboard.press('s');
     await page.waitForFunction(() => location.hash === '#board');
-    await rows.filter({ hasText: a1 }).waitFor();
+    await row(a1).waitFor();
 
     at('project home 세션 tab links to the board in the shell');
     await page.goto(`${BASE}/`);
     await page.reload();
-    await page.getByText('알파').first().waitFor();
-    await page.getByRole('link', { name: /알파/ }).first().click().catch(async () => { await page.getByText('알파').first().click(); });
+    await alphaNav.waitFor();
+    // G P opens the command menu on projects only (listed by folder name); picking one opens its home.
+    await page.keyboard.press('g');
+    await page.keyboard.press('p');
+    await page.getByRole('combobox', { name: '명령 찾기' }).waitFor();
+    await page.getByRole('option', { name: 'alpha', exact: true }).click();
     await page.getByRole('tab', { name: '세션' }).click();
-    await page.getByRole('region', { name: '세션' }).getByText(a1, { exact: true }).waitFor();
-    assert.equal(await page.getByRole('region', { name: '세션' }).getByText(b1, { exact: true }).count(), 0);
+    await page.getByRole('region', { name: '세션' }).getByText(a1.name, { exact: true }).waitFor();
+    assert.equal(await page.getByRole('region', { name: '세션' }).getByText(b1.name, { exact: true }).count(), 0);
     await page.getByRole('region', { name: '실행 기록' }).getByText('아직 없어요', { exact: false }).waitFor();
     const link = page.getByRole('link', { name: /세션 보드에서 보기/ });
     assert.equal(await link.getAttribute('href'), `/#board&folder=${encodeURIComponent(alpha)}`);
@@ -202,8 +210,8 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await link.click();
     await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
     assert.equal(await scope.inputValue(), alpha);
-    await rows.filter({ hasText: a1 }).waitFor();
-    assert.equal(await rows.filter({ hasText: b1 }).count(), 0);
+    await row(a1).waitFor();
+    assert.equal(await row(b1).count(), 0);
     assert.deepEqual(errors, []);
   } catch (e) {
     const shot = join(tmpdir(), `dispatch-projects-fail-${Date.now()}.png`);
