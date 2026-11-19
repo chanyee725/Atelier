@@ -80,7 +80,7 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await dialog.waitFor();
   const nav = dialog.getByRole('navigation', { name: '설정 항목' });
   const section = (name) => nav.getByRole('button', { name, exact: true }).click();
-  assert.deepEqual(await nav.getByRole('button').allInnerTexts(), ['일반', '모델 연결', '역할별 모델', '관리자와 팀', '사용 한도', '작업 폴더', '멈춤 감지']);
+  assert.deepEqual(await nav.getByRole('button').allInnerTexts(), ['일반', '모델 연결', '모드별 모델', '관리자와 팀', '사용 한도', '작업 폴더', '멈춤 감지']);
   assert.equal(await nav.getByRole('button', { name: '일반' }).getAttribute('aria-current'), 'true');
   await dialog.getByRole('radiogroup', { name: '화면 테마' }).waitFor();
 
@@ -153,19 +153,28 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   await team.getByRole('button', { name: '저장' }).click();
   await team.getByText('바뀐 게 없어요.').waitFor();
 
-  // 5. 역할별 모델: pick another model for a role and save it; an unsaved edit in another section survives switching.
+  // 5. 모드별 모델 (#748): pick another model for a role in the open mode (구현) and save it; an unsaved edit in another
+  // section survives switching.
   await maxChildren.fill('5');
-  await section('역할별 모델');
-  const roles = dialog.getByRole('form', { name: '역할별 모델' });
+  // A provider's models can be picked only once it is connected (#676); the fake claude is logged in, so this connects.
+  const conn = await fetch(`${BASE}/api/providers/claude/login`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-drawing': '1' }, body: '{}' });
+  assert.equal((await conn.json()).connected, true);
+  await section('모드별 모델');
+  const roles = dialog.getByRole('form', { name: '모드별 모델' });
+  await roles.getByRole('tablist', { name: '모드' }).waitFor();
+  assert.equal(await roles.getByRole('tab', { name: '구현' }).getAttribute('aria-selected'), 'true');
   const role = before.roles[0];
-  const other = before.models.find((m) => m.id !== role.model);
+  const roleSelect = roles.getByRole('combobox', { name: role.name, exact: true });
+  const was = await roleSelect.inputValue();
+  const other = before.models.find((m) => m.id !== was && m.provider === 'claude');
   assert.ok(other, 'a second model to pick');
-  await roles.getByRole('combobox', { name: role.name }).selectOption(other.id);
+  await roleSelect.selectOption(other.id);
+  assert.match(await roles.getByRole('tab', { name: /구현/ }).innerText(), /구현/);
   await roles.getByRole('button', { name: '저장' }).click();
   await roles.getByText('저장했어요.').waitFor();
+  const mp = await (await fetch(`${BASE}/api/mode-profiles`)).json();
+  assert.equal(mp.stored.cells.impl[role.id].model, other.id);
   s = await state();
-  assert.equal(s.settings.team.roleModels[role.id], other.id);
-  assert.equal(s.roles.find((r) => r.id === role.id).model, other.id);
   assert.equal(s.settings.team.maxChildren, 4, 'another section\'s edit is not sent');
   await section('관리자와 팀');
   assert.equal(await maxChildren.inputValue(), '5', 'the unsaved edit survives switching sections');
@@ -225,8 +234,8 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   assert.equal(await nav.getByRole('button', { name: '사용 한도' }).getAttribute('aria-current'), 'true');
   await section('관리자와 팀');
   assert.equal(await maxChildren.inputValue(), '4');
-  await section('역할별 모델');
-  assert.equal(await roles.getByRole('combobox', { name: role.name }).inputValue(), other.id);
+  await section('모드별 모델');
+  assert.equal(await roleSelect.inputValue(), other.id);
 
   // 8. Narrow width: the modal fits, a <select> picks the section, nothing overflows sideways.
   // Below 768px the sidebar becomes a drawer (a different tree), so open the modal again from there.
