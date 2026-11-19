@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { newlyWaiting, parseWaiting, planFolder, planTitle, planWaitingText } from '../../web/src/activity/plans.ts';
 import { toastOf } from '../../web/src/activity/appEvents.ts';
-import { requestPlanConfirm, takePlanConfirm } from '../../web/src/run/planConfirmRequest.ts';
+import { REQUEST_MS, requestPlanConfirm, takePlanConfirm } from '../../web/src/run/planConfirmRequest.ts';
 
 test('parseWaiting keeps well-formed plans; newlyWaiting picks the ones not seen before', () => {
   const list = parseWaiting({ plans: [{ path: 'web/run/로그인.dpx.json', title: '로그인 개편', lead: 'Jae', since: 5 }, { title: 'x' }, null, { path: 'a.dpx.json', title: '', lead: 3 }] });
@@ -32,4 +32,12 @@ test('a confirm request is taken once, by the same file only', () => {
   assert.equal(takePlanConfirm('web/run/다른.dpx.json'), false);
   assert.equal(takePlanConfirm('web/run/로그인'), true, 'with or without the extension');
   assert.equal(takePlanConfirm('web/run/로그인.dpx.json'), false, 'used up');
+});
+
+test('a confirm request nobody takes in time is dropped (#803)', () => {
+  requestPlanConfirm('a.dpx.json', 1_000);
+  assert.equal(takePlanConfirm('a.dpx.json', 1_000 + REQUEST_MS + 1), false, 'too late');
+  assert.equal(takePlanConfirm('a.dpx.json', 1_001), false, 'and gone');
+  requestPlanConfirm('a.dpx.json', 1_000);
+  assert.equal(takePlanConfirm('a.dpx.json', 1_000 + REQUEST_MS), true);
 });
