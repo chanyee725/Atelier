@@ -78,9 +78,9 @@ export default function GeneralSection() {
         </div>
       </div>
       <fieldset className="flex flex-col gap-2" aria-describedby={toastHint} data-testid="settings-toast-categories">
-        <legend className="text-sm font-medium">화면 알림</legend>
+        <legend className="text-sm font-medium">알림 종류</legend>
         <span id={toastHint} className="text-xs text-muted-foreground">
-          오른쪽 위에 잠깐 보여 줘요. 오류는 닫을 때까지 남아요.
+          켠 알림만 알림함에 쌓여요. 끈 알림은 알림함에도 남지 않아요.
         </span>
         {TOAST_CATEGORIES.map((c) => (
           <label key={c.id} className="flex items-center gap-2 text-sm">

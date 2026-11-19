@@ -2,7 +2,8 @@
 // and clear, and survives a round trip through this browser's storage.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sessionEvents, toastOf } from '../../web/src/activity/appEvents.ts';
+import { DEDUPE_MS, sessionEvents, toastOf } from '../../web/src/activity/appEvents.ts';
+import { createInboxSync, INBOX_KEY } from '../../web/src/activity/inboxSync.ts';
 import {
   addItems,
   bellCount,
@@ -16,15 +17,16 @@ import {
   parseInbox,
   removeItem,
   takeActivity,
+  targetGone,
 } from '../../web/src/activity/inbox.ts';
 
 const ev = (id: string, at: number, kind: 'start' | 'progress' | 'finish' | 'error' = 'finish') => ({ id, at, kind, sid: 's1', name: 'Jae', file: 'docs/설계.dpx.json' });
 
 test('app toasts and agent events become items, newest first, with their target; read, delete and clear', () => {
-  const saved = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'a/설계.dpx.json' })!, 10, 1);
-  const team = itemOfToast(toastOf({ type: 'session-started', id: 'x1', name: 'Jae', team: true })!, 30, 2);
-  const plan = itemOfToast(toastOf({ type: 'plan-waiting', file: 'p.dpx.json', text: '계획이 기다려요' })!, 40, 3);
-  const failed = itemOfToast(toastOf({ type: 'save-failed', path: 'a.dpx.json' })!, 50, 4);
+  const saved = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'a/설계.dpx.json' })!, 10);
+  const team = itemOfToast(toastOf({ type: 'session-started', id: 'x1', name: 'Jae', team: true })!, 30);
+  const plan = itemOfToast(toastOf({ type: 'plan-waiting', file: 'p.dpx.json', text: '계획이 기다려요' })!, 40);
+  const failed = itemOfToast(toastOf({ type: 'save-failed', path: 'a.dpx.json' })!, 50);
   let box = addItems(EMPTY_INBOX, [saved, team]);
   box = takeActivity(box, { events: [ev('e1', 20), ev('e2', 45, 'error')], readAt: 20 });
   box = addItems(box, [plan, failed]);
@@ -55,7 +57,7 @@ test('app toasts and agent events become items, newest first, with their target;
 });
 
 test('the inbox keeps the newest INBOX_MAX and round-trips through storage, dropping malformed items', () => {
-  const many = Array.from({ length: INBOX_MAX + 5 }, (_, n) => itemOfToast(toastOf({ type: 'settings-saved' })!, n, n));
+  const many = Array.from({ length: INBOX_MAX + 5 }, (_, n) => itemOfToast(toastOf({ type: 'saved', path: `f${n}.dpx.json` })!, n));
   const box = addItems(EMPTY_INBOX, many);
   assert.equal(box.items.length, INBOX_MAX);
   assert.equal(box.items[0].at, INBOX_MAX + 4);
@@ -68,8 +70,8 @@ test('the inbox keeps the newest INBOX_MAX and round-trips through storage, drop
 });
 
 test('a waiting plan counts once on the bell, even with its plan-waiting toast unread (#802)', () => {
-  const plan = itemOfToast(toastOf({ type: 'plan-waiting', file: 'p.dpx.json', text: '계획이 기다려요' })!, 40, 1);
-  const saved = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'a.dpx.json' })!, 10, 2);
+  const plan = itemOfToast(toastOf({ type: 'plan-waiting', file: 'p.dpx.json', text: '계획이 기다려요' })!, 40);
+  const saved = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'a.dpx.json' })!, 10);
   const box = addItems(EMPTY_INBOX, [plan, saved]);
   assert.equal(bellCount(box, ['p.dpx.json']), 2);
   assert.equal(bellCount(addItems(EMPTY_INBOX, [plan]), ['p.dpx.json']), 1);
@@ -85,12 +87,102 @@ test('items keep who raised them: name, role and provider ids, through storage (
   assert.equal(box.items[1].agent, undefined);
 
   const [started] = sessionEvents(undefined, { id: 's9', name: 'Chan', role: 'lead', provider: 'openai', startedAt: 100 }, 100);
-  const item = itemOfToast(toastOf(started)!, 30, 1);
+  const item = itemOfToast(toastOf(started)!, 30);
   assert.deepEqual(item.agent, { name: 'Chan', role: 'lead', provider: 'openai' });
   // App events with no agent (a save) have none: the Atelier mark is shown.
-  assert.equal(itemOfToast(toastOf({ type: 'settings-saved' })!, 31, 2).agent, undefined);
+  assert.equal(itemOfToast(toastOf({ type: 'settings-saved' })!, 31).agent, undefined);
 
   box = addItems(box, [item]);
   const back = parseInbox(JSON.stringify({ ...box, items: [...box.items, { id: 'b', kind: 'agents', text: 't', at: 1, agent: { role: 'x' } }] }));
   assert.deepEqual(back.items.map((i) => i.agent), [item.agent, { name: 'Jae', role: 'lead', provider: 'claude' }, undefined, undefined]);
+});
+
+test('agent events of the same ms that come in separately are all kept; a deleted one still stays out (#803)', () => {
+  let box = takeActivity(EMPTY_INBOX, { events: [ev('a', 50)], readAt: 0 });
+  box = takeActivity(box, { events: [ev('a', 50), ev('b', 50)], readAt: 0 });
+  assert.deepEqual(box.items.map((i) => i.id).sort(), ['agent:a', 'agent:b']);
+  const gone = removeItem(box, 'agent:b');
+  assert.equal(takeActivity(gone, { events: [ev('a', 50), ev('b', 50)], readAt: 0 }), gone);
+  // Survives storage too.
+  const back = parseInbox(JSON.stringify(gone));
+  assert.equal(takeActivity(back, { events: [ev('b', 50)], readAt: 0 }).items.length, 1);
+  // A newer event resets the same-ms list.
+  assert.deepEqual(takeActivity(box, { events: [ev('c', 60)], readAt: 0 }).agentSeenIds, ['c']);
+});
+
+test('one app event seen by two tabs is one item; a repeat after the dedupe window is a new one (#803)', () => {
+  const t = toastOf({ type: 'created', kind: 'doc', path: 'a.dpx.json' })!;
+  const tabA = itemOfToast(t, 1_000);
+  const tabB = itemOfToast(t, 1_030);
+  assert.equal(addItems(addItems(EMPTY_INBOX, [tabA]), [tabB]).items.length, 1);
+  // Both tabs stored their copy before seeing the other's: they collapse when read back.
+  const both = JSON.stringify({ items: [tabB, tabA], agentSeen: 0 });
+  assert.deepEqual(parseInbox(both).items.map((i) => i.id), [tabB.id]);
+  assert.equal(addItems(addItems(EMPTY_INBOX, [tabA]), [itemOfToast(t, 1_000 + DEDUPE_MS)]).items.length, 2);
+  // Different events at the same moment are both kept.
+  const other = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'b.dpx.json' })!, 1_000);
+  assert.equal(addItems(addItems(EMPTY_INBOX, [tabA]), [other]).items.length, 2);
+});
+
+/** A fake localStorage shared by syncs; each sync is one tab. */
+function fakeStorage() {
+  const data = new Map<string, string>();
+  const tabs: ReturnType<typeof createInboxSync>[] = [];
+  return {
+    tabs,
+    storage: {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem(k: string, v: string) {
+        data.set(k, v);
+        // The browser tells every other tab (the `storage` event).
+        for (const s of tabs) if (s !== this.from) s.onStorage(k, v);
+      },
+      from: null as unknown,
+    },
+  };
+}
+
+test('two tabs on one storage: each event stored once, deletes and reads carry over (#803)', () => {
+  const fake = fakeStorage();
+  let seen = 0;
+  const tab = () => {
+    const s = createInboxSync(() => fake.storage, () => seen++);
+    fake.tabs.push(s);
+    return s;
+  };
+  const a = tab();
+  const b = tab();
+  const t = toastOf({ type: 'created', kind: 'doc', path: 'a.dpx.json' })!;
+  fake.storage.from = a;
+  a.addToast(t, 1_000);
+  fake.storage.from = b;
+  b.addToast(t, 1_020);
+  assert.equal(a.read().items.length, 1);
+  assert.equal(b.read().items.length, 1);
+  assert.equal(JSON.parse(fake.storage.getItem(INBOX_KEY)!).items.length, 1);
+
+  // A read and a delete in one tab show in the other.
+  b.set(markItemRead(b.read(), b.read().items[0].id));
+  assert.equal(a.read().items[0].read, true);
+  fake.storage.from = a;
+  a.set(removeItem(a.read(), a.read().items[0].id));
+  assert.deepEqual(b.read().items, []);
+  assert.ok(seen >= 4);
+
+  // Storage off: the tab keeps its items in memory.
+  const mem = createInboxSync(() => null, () => {});
+  mem.addToast(t, 5);
+  mem.addToast(toastOf({ type: 'saved', path: 'x.dpx.json' })!, 6);
+  assert.equal(mem.read().items.length, 2);
+});
+
+test('an item whose document left the tree is known as gone; an unloaded tree says nothing (#803)', () => {
+  const files = ['docs/설계.dpx.json', 'run/p.dpx.json'];
+  assert.equal(targetGone({ file: 'docs/설계.dpx.json' }, files), false);
+  assert.equal(targetGone({ plan: 'run/p' }, files), false, 'with or without the extension');
+  assert.equal(targetGone({ file: 'docs/지운.dpx.json' }, files), true);
+  assert.equal(targetGone({ plan: 'run/q.dpx.json' }, files), true);
+  assert.equal(targetGone({ session: 's1' }, files), false);
+  assert.equal(targetGone({ file: 'docs/지운.dpx.json' }, []), false);
+  assert.equal(targetGone(undefined, files), false);
 });

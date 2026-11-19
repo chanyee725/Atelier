@@ -228,6 +228,7 @@ export function App() {
   // The one project this server belongs to (#778): its folder name, shown top-left.
   const [projectName, setProjectName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const treePaths = useMemo(() => filesOf(tree).map((f) => f.path), [tree]);
   const [projects, setProjects] = useState<ProjectsView | null>(null);
   // What the main panel shows; opening a file switches to the document screen.
   const [section, setSection] = useState<Section>(() => {
@@ -951,7 +952,7 @@ export function App() {
   );
 
   // The 알림함 sits at the right end of whichever top bar is on screen (#786).
-  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} onSession={openBoardSession} />;
+  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} onSession={openBoardSession} files={treePaths} />;
   return (
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>

@@ -5,7 +5,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bell, Bot, CheckCheck, ClipboardList, FileText, Plug, Settings, Trash2, Users, Workflow, type LucideIcon } from 'lucide-react';
 import { badgeText, placeFeed, whenText } from './activity';
-import { bellCount, inboxUnread, type InboxItem, type InboxKind, type InboxTarget } from './inbox';
+import { bellCount, inboxUnread, targetGone, type InboxItem, type InboxKind, type InboxTarget } from './inbox';
 import { clearAllInbox, readAllInbox, readInboxItem, useInbox } from './inboxStore';
 import { planFolder, planTitle, planWaitingText } from './plans';
 import { useWaitingPlans } from './waitingPlans';
@@ -34,14 +34,26 @@ function ItemMark({ item }: { item: InboxItem }) {
   return <Icon className="activity-mark-icon" aria-hidden />;
 }
 
-/** onOpen: a document's path; onSession: a session id (opens it on the board). */
-export function ActivityBell({ className, onOpen, onSession }: { className: string; onOpen: (path: string) => void; onSession: (id: string) => void }) {
+/** onOpen: a document's path; onSession: a session id (opens it on the board); files: every file path in the tree. */
+export function ActivityBell({
+  className,
+  onOpen,
+  onSession,
+  files = [],
+}: {
+  className: string;
+  onOpen: (path: string) => void;
+  onSession: (id: string) => void;
+  files?: readonly string[];
+}) {
   const inbox = useInbox();
   const id = useId();
   const bell = useRef<HTMLButtonElement>(null);
   const feed = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(Date.now);
+  // The item whose document is gone, clicked last: its row says so instead of opening nothing (#803).
+  const [gone, setGone] = useState<string | null>(null);
   const plans = useWaitingPlans();
   const unread = inboxUnread(inbox);
   const badge = badgeText(bellCount(inbox, plans.map((p) => p.path)));
@@ -66,7 +78,7 @@ export function ActivityBell({ className, onOpen, onSession }: { className: stri
     const onToggle = (e: Event) => {
       const isOpen = (e as ToggleEvent).newState === 'open';
       setOpen(isOpen);
-      if (!isOpen) return;
+      if (!isOpen) return setGone(null);
       setNow(Date.now());
       place();
       el.style.visibility = '';
@@ -98,6 +110,7 @@ export function ActivityBell({ className, onOpen, onSession }: { className: stri
     readInboxItem(i.id);
     const t: InboxTarget | undefined = i.target;
     if (!t) return;
+    if (targetGone(t, files)) return setGone(i.id);
     if ('plan' in t) startPlan(t.plan);
     else if ('file' in t) go(t.file);
     else {
@@ -190,6 +203,11 @@ export function ActivityBell({ className, onOpen, onSession }: { className: stri
                       {it.error && <span className="sr-only">오류, </span>}
                       {it.text}
                     </p>
+                    {gone === it.id && (
+                      <p className="activity-gone" role="status" data-inbox-gone="">
+                        문서를 찾지 못했어요. 지워졌거나 옮겨졌어요.
+                      </p>
+                    )}
                     <button type="button" className="activity-check" aria-describedby={text} onClick={() => openItem(it)} data-inbox-item={it.id}>
                       확인하기
                     </button>

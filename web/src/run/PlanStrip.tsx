@@ -76,7 +76,9 @@ export function PlanStrip({ session }: { session: FileSession }) {
   useEffect(() => onPlanConfirmRequest(() => setAsked((n) => n + 1)), []);
   useEffect(() => {
     // A status left over from the file open before is not this plan's.
-    if (!path || !status || status.state !== 'plan' || !samePlan(status.path, path) || busy || confirming) return;
+    if (!path || !status || !samePlan(status.path, path) || busy || confirming) return;
+    // Already started (or no longer a plan): the request is used up without a confirm (#803).
+    if (status.state !== 'plan') return void takePlanConfirm(path);
     if (takePlanConfirm(path) && status.blockers.length === 0) openRef.current();
   }, [path, status, asked, busy, confirming]);
 
