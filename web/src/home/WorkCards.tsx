@@ -84,7 +84,7 @@ export function BranchesCard({ branches, claimed, grow }: { branches: Feed<Branc
       ) : rows.length === 0 ? (
         <EmptyState>이슈 없이 작업 중인 브랜치가 없어요.</EmptyState>
       ) : (
-        <ul aria-label="이슈 없는 브랜치" className="m-0 list-none divide-y p-0">
+        <ul role="list" aria-label="이슈 없는 브랜치" className="m-0 list-none divide-y p-0">
           {rows.map((t) => {
             const st = t.state ? BRANCH_STATE[t.state] : null;
             return (
