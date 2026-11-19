@@ -1,7 +1,8 @@
 // GitHub issues as the unit of work on the project dashboard (#776). The server lists open issues with the PRs on
 // them (GET /api/issues, read-only through gh); this module joins them with the project's sessions and gives each
-// issue one state: 열림 → 진행 중 (a session works on it) → PR (an open PR) → 머지됨 (merged into the integration branch,
-// the issue still open). Branches are a detail of an issue. Pure functions only, so tests run without a browser.
+// issue one state: 열림 → 작업 중 (a session works on it) → PR 리뷰 (an open PR). An open issue is never shown as 머지됨,
+// even when an earlier PR on it was merged (#784): 머지됨 is only for a closed issue, which the list hides. Branches and
+// PRs are a detail of an issue. Pure functions only, so tests run without a browser.
 import { isOpen } from '../dispatch/lib/format.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
@@ -12,8 +13,8 @@ export type IssuesAnswer = { ok: true; issues: ApiIssue[] } | { ok: false; reaso
 export type IssueState = 'open' | 'progress' | 'pr' | 'merged';
 export const ISSUE_STATE: Record<IssueState, { label: string; tone: 'ok' | 'warn' | 'bad' | 'idle' }> = {
   open: { label: '열림', tone: 'idle' },
-  progress: { label: '진행 중', tone: 'ok' },
-  pr: { label: 'PR', tone: 'warn' },
+  progress: { label: '작업 중', tone: 'ok' },
+  pr: { label: 'PR 리뷰', tone: 'warn' },
   merged: { label: '머지됨', tone: 'ok' },
 };
 
@@ -38,19 +39,23 @@ export function issueOfBranch(branch: string | null | undefined): number | null 
 
 type WithIssue = Session & { issue?: number | null };
 
-/** The state of one issue from its PRs and whether a session is open on it. */
-export function issueState(prs: readonly IssuePr[], working: boolean): IssueState {
+/**
+ * The state of one issue from its PRs and whether a session is open on it. A merged PR makes it 머지됨 only when the
+ * issue itself is closed; an open issue with an old merged PR stays 열림 or 작업 중 (#784).
+ */
+export function issueState(prs: readonly IssuePr[], working: boolean, closed = false): IssueState {
+  if (closed && prs.some((p) => p.state === 'merged')) return 'merged';
   if (prs.some((p) => p.state === 'open')) return 'pr';
-  if (prs.some((p) => p.state === 'merged')) return 'merged';
   return working ? 'progress' : 'open';
 }
 
-const ORDER: Record<IssueState, number> = { pr: 0, progress: 1, merged: 2, open: 3 };
+// 작업 중 first (a session on it, then an open PR waiting for review), then untouched issues.
+const ORDER: Record<IssueState, number> = { progress: 0, pr: 1, open: 2, merged: 3 };
 
 /**
  * Joins the server's issues with the project's sessions. A session belongs to an issue when the server set its
  * `issue`, its branch names the issue, or its branch is the head branch of one of the issue's PRs. Rows with work on
- * them come first (PR, 진행 중, 머지됨, then untouched), newest number first inside each.
+ * them come first (작업 중, PR 리뷰, then 열림), newest number first inside each.
  */
 export function issueRows(issues: readonly ApiIssue[], sessions: readonly Session[]): IssueRow[] {
   const rows = issues.map((i) => {
@@ -62,6 +67,17 @@ export function issueRows(issues: readonly ApiIssue[], sessions: readonly Sessio
     return { ...i, sessions: mine, branches, state: issueState(i.prs, mine.some(isOpen)) };
   });
   return rows.sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.number - a.number);
+}
+
+/** The sessions open on an issue now (its owners), for the row's initials. */
+export const ownerSessions = (row: IssueRow): Session[] => row.sessions.filter(isOpen);
+
+/** One or two letters for a session's badge: the first letter of each of the first two words, else its first two. */
+export function initials(name: string | null | undefined): string {
+  const words = String(name ?? '').trim().split(/[\s._-]+/).filter(Boolean);
+  if (!words.length) return '?';
+  const pick = words.length > 1 ? [...words[0]][0] + [...words[1]][0] : [...words[0]].slice(0, 2).join('');
+  return pick.toUpperCase();
 }
 
 /** Open session branches that no listed issue claims (still shown, under the list). */

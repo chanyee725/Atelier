@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { issueOfBranch, issueRows, issueState, issuesBlankReason, looseBranches, type ApiIssue } from '../../web/src/home/issueBoard.ts';
+import { initials, issueOfBranch, issueRows, issueState, issuesBlankReason, looseBranches, ownerSessions, ISSUE_STATE, type ApiIssue } from '../../web/src/home/issueBoard.ts';
 import type { Session } from '../../shared/dispatch/types.ts';
 
 const s = (id: string, branch: string | null, status = 'running', extra: Record<string, unknown> = {}) =>
@@ -20,11 +20,25 @@ test('issueOfBranch reads feat/<n>-… and skips dispatch/ branches', () => {
   assert.equal(issueOfBranch(null), null);
 });
 
-test('issueState: open PR, then merged, then a working session, else open', () => {
+test('issueState: open PR, then a working session, else open; an open issue is never merged (#784)', () => {
   assert.equal(issueState([{ number: 1, state: 'merged' }, { number: 2, state: 'open' }], false), 'pr');
-  assert.equal(issueState([{ number: 1, state: 'merged' }], true), 'merged');
+  assert.equal(issueState([{ number: 1, state: 'merged' }], true), 'progress');
+  assert.equal(issueState([{ number: 1, state: 'merged' }], false), 'open');
   assert.equal(issueState([{ number: 1, state: 'closed' }], true), 'progress');
   assert.equal(issueState([], false), 'open');
+  assert.equal(issueState([{ number: 1, state: 'merged' }], false, true), 'merged');
+});
+
+test('state chips read 열림 / 작업 중 / PR 리뷰 / 머지됨', () => {
+  assert.deepEqual(Object.values(ISSUE_STATE).map((x) => x.label), ['열림', '작업 중', 'PR 리뷰', '머지됨']);
+});
+
+test('initials: first letters of two words, else the first two letters', () => {
+  assert.equal(initials('Pia'), 'PI');
+  assert.equal(initials('impl-1082'), 'I1');
+  assert.equal(initials('Jae Kim'), 'JK');
+  assert.equal(initials('구현자'), '구현');
+  assert.equal(initials(''), '?');
 });
 
 test('issueRows matches sessions by issue, branch name and PR head branch; worked-on issues first', () => {
@@ -36,11 +50,13 @@ test('issueRows matches sessions by issue, branch name and PR head branch; worke
     s('e', 'feat/748-x', 'done'),
   ];
   const rows = issueRows(ISSUES, sessions);
-  assert.deepEqual(rows.map((r) => [r.number, r.state]), [[776, 'pr'], [755, 'progress'], [748, 'merged'], [700, 'open']]);
-  assert.deepEqual(rows[0].sessions.map((x) => x.id), ['a']);
-  assert.deepEqual(rows[1].sessions.map((x) => x.id).sort(), ['b', 'c']);
-  assert.deepEqual(rows[1].branches.sort(), ['dispatch/impl-2', 'feat/755-agents']);
+  assert.deepEqual(rows.map((r) => [r.number, r.state]), [[755, 'progress'], [776, 'pr'], [748, 'open'], [700, 'open']]);
+  assert.deepEqual(rows[1].sessions.map((x) => x.id), ['a']);
+  assert.deepEqual(rows[0].sessions.map((x) => x.id).sort(), ['b', 'c']);
+  assert.deepEqual(rows[0].branches.sort(), ['dispatch/impl-2', 'feat/755-agents']);
   assert.deepEqual(rows[2].branches, ['feat/748-x']);
+  assert.deepEqual(ownerSessions(rows[2]), []); // its only session is done
+  assert.deepEqual(ownerSessions(rows[0]).map((x) => x.id).sort(), ['b', 'c']);
   assert.deepEqual(looseBranches(rows, sessions), ['feat/999-other']);
 });
 
