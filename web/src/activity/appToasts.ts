@@ -1,10 +1,11 @@
 // App event toasts (E540, #671): the one place app events go through. notifyApp(event) drops it when its category is
-// off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS, then hands the toast to ActivityAlerts
+// off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS, keeps it in the 알림함 (inboxStore.ts, #797) and hands the toast to ActivityAlerts
 // (page in view) or to a browser notification (page hidden and notifications on). watchAppEvents() turns the server's
 // SSE `session`, `providers`, `settings` and `run` events into app events for the whole app. Metadata only.
 import { useSyncExternalStore } from 'react';
 import { alertsOn } from '../dispatch/lib/notify';
 import { events } from '../lib/events';
+import { addToastToInbox } from './inboxStore';
 import {
   createDedupe,
   parseOff,
@@ -60,6 +61,8 @@ export const setToastOpener = (fn: (t: AppToast) => void) => void (openTarget = 
 export function notifyApp(e: AppEvent) {
   const t = toastOf(e);
   if (!t || !categoryOn(t.category) || !dedupe(t.key, Date.now())) return;
+  // Every toast is also kept in the 알림함 (#797), whether it pops up on the page or as a browser notification.
+  addToastToInbox(t);
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
     if (!alertsOn()) return;
     try {

@@ -4,6 +4,9 @@
 // started, times, token counts, cost, branch names and issue numbers. Never transcripts, prompts, answers,
 // emails or account ids. Strings are short tokens (pickSession's rule in server/runs/record.js).
 import { accountsSummary, checkAccountLabel } from "../../shared/dispatch/accounts.js";
+import { issueOfBranch } from "../../shared/dispatch/issue-branch.js";
+
+export { issueOfBranch };
 
 export const LEDGER_MAX = 2000;
 const BRANCHES_MAX = 6;
@@ -19,13 +22,6 @@ const label = v => { const r = checkAccountLabel(v); return r.ok ? r.value : nul
 export function issueNumber(v) {
   const n = typeof v === "string" ? Number(v.replace(/^#/, "")) : v;
   return Number.isInteger(n) && n > 0 && n < 1e7 ? n : null;
-}
-
-/** The issue a branch names (`feat/747-accounts`, `fix/747`, `747-x`), else null. Dispatch's own branches never do. */
-export function issueOfBranch(branch) {
-  if (typeof branch !== "string" || branch.startsWith("dispatch/")) return null;
-  const m = branch.match(/(?:^|\/)(?:issue-|gh-)?(\d{1,7})(?:[-_]|$)/i);
-  return m ? issueNumber(Number(m[1])) : null;
 }
 
 export class Ledger {
@@ -104,7 +100,7 @@ export class Ledger {
 
   /**
    * The sessions that worked on an issue: entries naming it (by an explicit issue or a branch), plus their leads.
-   * A lead's numbers are its whole session (it may have led other issues too).
+   * A lead's numbers are its whole session (it may have led other issues too); issueAccounts marks it `shared`.
    */
   forIssue(n) {
     const all = this.entries;
@@ -115,33 +111,49 @@ export class Ledger {
   }
 }
 
-/** The public shape of one entry for GET /api/issues/:n/accounts. `pr` comes from the PR lookup (null if unknown). */
-export function issueSession(e, pr = null) {
+/**
+ * The public shape of one entry for GET /api/issues/:n/accounts. `pr` comes from the PR lookup (null if unknown).
+ * `shared`: the entry's tokens, cost and time are its whole session and also cover other issues (a lead pulled in
+ * for its teammates, or a session on more than one issue), so the issue's totals leave it out (#756).
+ */
+export function issueSession(e, pr = null, shared = false) {
   return {
     sid: e.sid, role: e.role ?? null, provider: e.provider ?? null, model: e.model ?? null, modelLabel: e.modelLabel ?? null,
     effort: e.effort ?? null, accountLabel: e.accountLabel ?? null, startedAt: e.startedAt ?? null, endedAt: e.endedAt ?? null,
     tokens: { ...Object.fromEntries(TOKEN_KEYS.map(k => [k, e.tokens?.[k] ?? 0])) }, cost: e.cost ?? null,
-    branch: e.branch ?? null, pr,
+    branch: e.branch ?? null, pr, shared: !!shared,
   };
 }
 
 /**
- * `{ issue, sessions, summary }` for one issue. `prOf(branch)` answers like pr-status (`{ ok, pr: { number } }`);
- * it is asked once per distinct branch, at most `maxBranches` of them, and a failure leaves `pr` null.
+ * `{ issue, prs, sessions, summary }` for one issue. `prsOf(n)` answers like issues.js's listIssues.prsOf
+ * (`{ ok, prs: [{ number, branch? }] }`, from the cached PR list, matched by branch name, Closes and Refs); a session
+ * on one of those PRs' head branches gets its number. Only when that list is not available, `prOf(branch)` (pr-status,
+ * cached per branch) is asked for the branches that name this issue, at most `maxBranches` of them. Failures leave
+ * `pr` null. `prs` is the issue's PR numbers, open ones first.
  */
-export async function issueAccounts(ledger, n, { prOf = null, maxBranches = 8 } = {}) {
+export async function issueAccounts(ledger, n, { prsOf = null, prOf = null, maxBranches = 8 } = {}) {
   const entries = ledger.forIssue(n);
-  const prs = new Map();
-  if (prOf) {
+  const byBranch = new Map();
+  let listed = null;
+  if (prsOf) {
+    try {
+      const r = await prsOf(n);
+      if (r?.ok && Array.isArray(r.prs)) listed = r.prs.filter(p => Number.isInteger(p?.number));
+    } catch { /* fall back to prOf */ }
+    for (const p of listed ?? []) if (p.branch && !byBranch.has(p.branch)) byBranch.set(p.branch, p.number);
+  }
+  if (!listed && prOf) {
     // Only branches that name this issue: a lead's own dispatch/ branch has no PR of its own.
     const branches = [...new Set(entries.map(e => e.branch).filter(b => issueOfBranch(b) === n))].slice(0, maxBranches);
     await Promise.all(branches.map(async b => {
       try {
         const r = await prOf(b);
-        if (r?.ok && Number.isInteger(r.pr?.number)) prs.set(b, r.pr.number);
+        if (r?.ok && Number.isInteger(r.pr?.number)) byBranch.set(b, r.pr.number);
       } catch { /* unknown PR */ }
     }));
   }
-  const sessions = entries.map(e => issueSession(e, prs.get(e.branch) ?? null));
-  return { issue: n, sessions, summary: accountsSummary(sessions) };
+  const sessions = entries.map(e => issueSession(e, byBranch.get(e.branch) ?? null, !e.issues.includes(n) || e.issues.length > 1));
+  const prs = listed ? [...new Set(listed.map(p => p.number))] : [...new Set(sessions.map(s => s.pr).filter(Boolean))];
+  return { issue: n, prs, sessions, summary: accountsSummary(sessions) };
 }

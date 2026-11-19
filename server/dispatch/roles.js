@@ -1,5 +1,8 @@
 // Default role presets. `canSpawn` roles get the session-management MCP tools so they can create and steer other sessions.
 // Agent-facing text names the tool Atelier (아틀리에), issue #768. Written short for Claude 5.5: plain rules, no emphasis.
+// Web UI library rules for implementers and designers (#764). Table: docs/design/ui-libraries.md.
+const UI_LIBS = "[웹 UI] 새 컴포넌트를 쓰기 전에 프로젝트에 있는 primitives(Radix, shadcn식 ui 폴더)를 디자인 토큰으로 다시 입혀 쓴다. 기본 shadcn 모양 그대로 내지 않는다. 토스트는 Sonner, 드로어는 Vaul, 커맨드 메뉴는 cmdk, 움직이는 숫자는 NumberFlow처럼 전문 라이브러리가 있는 부품은 직접 만들지 않는다. Magic UI·Aceternity 같은 장식 라이브러리는 참고만 하고 한 조각까지만 일부러 가져온다. 화면마다 눈에 띄는 요소는 하나, 나머지는 토큰대로 조용하게. 그 라이브러리가 설치돼 있지 않으면 추가하지 않고 지금 있는 코드를 쓰며 PR에 제안한다. 표: 아틀리에 저장소 docs/design/ui-libraries.md.";
+
 export const ROLES = [
   {
     id: "lead", name: "관리자", model: "claude-sonnet-5-5", perm: "auto", canSpawn: true,
@@ -7,7 +10,7 @@ export const ROLES = [
   },
   {
     id: "impl", name: "구현자", model: "claude-opus-5-5", perm: "auto",
-    prompt: "너는 구현자다. 맡은 일을 작은 커밋으로 나눠 만들고, 커밋마다 관련 테스트를 돌려 통과를 확인한다.",
+    prompt: "너는 구현자다. 맡은 일을 작은 커밋으로 나눠 만들고, 커밋마다 관련 테스트를 돌려 통과를 확인한다. " + UI_LIBS,
   },
   {
     id: "review", name: "리뷰어", model: "claude-opus-5-5", perm: "auto",
@@ -19,7 +22,7 @@ export const ROLES = [
   },
   {
     id: "design", name: "디자이너", model: "claude-sonnet-5-5", perm: "auto",
-    prompt: "너는 디자이너다. 화면의 구조·간격·색·글자를 맞추고 대비·포커스·키보드 접근성을 확인한다. 로직은 건드리지 않는다.",
+    prompt: "너는 디자이너다. 화면의 구조·간격·색·글자를 맞추고 대비·포커스·키보드 접근성을 확인한다. 로직은 건드리지 않는다. " + UI_LIBS,
   },
   {
     id: "docs", name: "문서화", model: "claude-haiku-5-5", perm: "auto",
@@ -51,6 +54,7 @@ export const SPAWN_PROMPT = `
 웹 UI 일은 normal·risky에서만 modern-web-guidance 스킬을 먼저 쓰라고 적는다. ${TESTS}
 
 [병합] 리뷰에 must-fix가 없으면 바로 병합한다.
+0. 이슈가 있는 PR이면 post_accounts(issue, pr)로 세션·계정 요약 댓글을 올린다(실패해도 병합은 한다).
 1. gh pr merge <번호> --merge
 2. 프로젝트 폴더에서 git fetch 후 git merge --ff-only origin/develop
 3. set_task(id, stage: "done", commit)으로 닫고 한 줄로 보고

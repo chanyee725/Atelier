@@ -1,25 +1,38 @@
-// The bell on the right of the top bar (E537 #654, moved by E579 #786): the unread count of the agent activity log plus
-// the plans waiting for 시작하기 as a badge, and the feed in a popover="auto" (light dismiss, Esc). Opening the feed
-// marks the activity read on every page; a waiting plan stays until it starts, is reopened or deleted. The feed is
-// placed under the bell, right edges lined up, from JS (anchor positioning is not widely available).
+// The bell on the right of the top bar (E537 #654, moved by E579 #786): the 알림함 (#797) — every toast the app showed,
+// agent activity included, newest first, with 모두 읽음, 전체 삭제 and per-item 삭제 — plus the plans waiting for
+// 시작하기. The badge counts unread items and waiting plans. The feed is a popover="auto" (light dismiss, Esc), placed
+// under the bell, right edges lined up, from JS (anchor positioning is not widely available).
 import { useEffect, useId, useRef, useState } from 'react';
-import { Bell } from 'lucide-react';
-import { badgeText, feedOf, placeFeed, unreadCount } from './activity';
+import { Bell, Bot, CheckCheck, CircleAlert, ClipboardList, FileText, Plug, Settings, Trash2, Users, Workflow, X, type LucideIcon } from 'lucide-react';
+import { badgeText, placeFeed, whenText } from './activity';
+import { inboxUnread, type InboxItem, type InboxKind, type InboxTarget } from './inbox';
+import { clearAllInbox, deleteInboxItem, readAllInbox, readInboxItem, useInbox } from './inboxStore';
 import { planFolder, planTitle, planWaitingText } from './plans';
-import { readAll, useActivityLog } from './store';
 import { useWaitingPlans } from './waitingPlans';
 import { requestPlanConfirm } from '../run/planConfirmRequest';
 import './activity.css';
 
-export function ActivityBell({ className, onOpen }: { className: string; onOpen: (path: string) => void }) {
-  const log = useActivityLog();
+const ICON: Record<InboxKind, LucideIcon> = {
+  agents: Bot,
+  files: FileText,
+  sessions: Users,
+  models: Plug,
+  runs: Workflow,
+  settings: Settings,
+  plan: ClipboardList,
+};
+const iconOf = (i: InboxItem) => (i.error ? CircleAlert : ICON[i.kind]);
+
+/** onOpen: a document's path; onSession: a session id (opens it on the board). */
+export function ActivityBell({ className, onOpen, onSession }: { className: string; onOpen: (path: string) => void; onSession: (id: string) => void }) {
+  const inbox = useInbox();
   const id = useId();
   const bell = useRef<HTMLButtonElement>(null);
   const feed = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(Date.now);
   const plans = useWaitingPlans();
-  const unread = unreadCount(log);
+  const unread = inboxUnread(inbox);
   const badge = badgeText(unread + plans.length);
   const label = [unread ? `안 읽은 ${unread}개` : '', plans.length ? `시작을 기다리는 계획 ${plans.length}개` : ''].filter(Boolean).join(', ');
 
@@ -46,7 +59,6 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
       setNow(Date.now());
       place();
       el.style.visibility = '';
-      readAll();
     };
     el.addEventListener('beforetoggle', onBefore);
     el.addEventListener('toggle', onToggle);
@@ -57,16 +69,11 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
       removeEventListener('resize', place);
     };
   }, []);
-  // New events while the feed is open are seen as they come.
-  useEffect(() => {
-    if (open && unread) readAll();
-  }, [open, unread]);
-  // ...and their times are counted from now, not from when the feed opened.
+  // Times of items that come in while the feed is open are counted from now, not from when it opened.
   useEffect(() => {
     if (open) setNow(Date.now());
-  }, [open, log]);
+  }, [open, inbox]);
 
-  const items = feedOf(log, now);
   const go = (file: string) => {
     feed.current?.hidePopover();
     onOpen(file);
@@ -76,6 +83,25 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
     requestPlanConfirm(file);
     go(file);
   };
+  const openItem = (i: InboxItem) => {
+    readInboxItem(i.id);
+    const t: InboxTarget | undefined = i.target;
+    if (!t) return;
+    if ('plan' in t) startPlan(t.plan);
+    else if ('file' in t) go(t.file);
+    else {
+      feed.current?.hidePopover();
+      onSession(t.session);
+    }
+  };
+  // Deleting the focused item moves focus to the next one (else the previous, else the bell), never to the page.
+  const remove = (id: string, e: React.MouseEvent) => {
+    const li = (e.currentTarget as HTMLElement).closest('li');
+    const next = (li?.nextElementSibling ?? li?.previousElementSibling)?.querySelector<HTMLElement>('.activity-item');
+    deleteInboxItem(id);
+    (next ?? bell.current)?.focus();
+  };
+  const items = inbox.items;
   return (
     <>
       <button
@@ -117,20 +143,58 @@ export function ActivityBell({ className, onOpen }: { className: string; onOpen:
             </ol>
           </>
         )}
-        <h2 className="activity-feed-title">에이전트 활동</h2>
+        <div className="activity-inbox-head">
+          <h2 className="activity-feed-title">알림</h2>
+          {items.length > 0 && (
+            <span className="activity-inbox-actions">
+              <button type="button" className="activity-inbox-action" onClick={readAllInbox} disabled={!unread} data-inbox-read-all="">
+                <CheckCheck aria-hidden />
+                모두 읽음
+              </button>
+              <button
+                type="button"
+                className="activity-inbox-action"
+                onClick={() => {
+                  clearAllInbox();
+                  bell.current?.focus();
+                }}
+                data-inbox-clear=""
+              >
+                <Trash2 aria-hidden />
+                전체 삭제
+              </button>
+            </span>
+          )}
+        </div>
         {items.length === 0 ? (
-          <p className="activity-empty">아직 기록이 없어요.</p>
+          <p className="activity-empty">아직 알림이 없어요.</p>
         ) : (
-          <ol className="activity-list">
-            {items.map((it) => (
-              <li key={it.id}>
-                <button type="button" className="activity-item" data-activity-item={it.id} data-kind={it.kind} data-unread={it.unread ? '' : undefined} onClick={() => go(it.file)}>
-                  <span className="activity-dot" aria-hidden style={it.color ? { background: it.color } : undefined} />
-                  <span className="activity-text">{it.text}</span>
-                  <span className="activity-when">{it.when}</span>
-                </button>
-              </li>
-            ))}
+          <ol className="activity-list" data-inbox="">
+            {items.map((it) => {
+              const Icon = iconOf(it);
+              return (
+                <li key={it.id} className="activity-inbox-row">
+                  <button
+                    type="button"
+                    className="activity-item"
+                    data-inbox-item={it.id}
+                    data-kind={it.error ? 'error' : it.kind}
+                    data-unread={it.read ? undefined : ''}
+                    onClick={() => openItem(it)}
+                  >
+                    <Icon className="activity-icon" aria-hidden />
+                    <span className="activity-text">
+                      {!it.read && <span className="sr-only">읽지 않음, </span>}
+                      {it.text}
+                    </span>
+                    <span className="activity-when">{whenText(now - it.at, it.at)}</span>
+                  </button>
+                  <button type="button" className="activity-close" aria-label={`알림 지우기: ${it.text}`} title="지우기" onClick={(e) => remove(it.id, e)} data-inbox-delete="">
+                    <X aria-hidden />
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>
