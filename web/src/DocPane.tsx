@@ -20,6 +20,7 @@ import type { ImageKind } from './export/actions';
 import { blockItems, blocksAfterHistory, frameItems, framesOf, frameNode, type CanvasEl, newBlockGeometry, diagramNode, embeddedBlockIds, isEmptyDoc, normalizeLink, withTrailingParagraph, SLASH_ITEMS, type SlashItem } from './doc/model';
 import { List } from 'lucide-react';
 import { Button } from './components/ui/button';
+import { askText } from './appDialog';
 
 type Props = {
   document: unknown;
@@ -145,16 +146,27 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
         case 'table':
           return chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
         case 'link': {
-          const typed = window.prompt('링크 주소를 입력해 주세요');
-          if (typed === null) return chain().run();
-          const href = normalizeLink(typed);
-          if (!href) {
-            window.alert('http, https, mailto 주소만 넣을 수 있어요');
-            return chain().run();
-          }
-          return chain()
-            .insertContent([{ type: 'text', text: typed.trim(), marks: [{ type: 'link', attrs: { href } }] }, { type: 'text', text: ' ' }])
-            .run();
+          // Drop the typed `/링크` now; the link goes where it was once the address is in (#732: in-app dialog).
+          const done = chain().run();
+          const at = editor.state.selection.from;
+          void askText({
+            title: '링크 넣기',
+            label: '링크 주소',
+            placeholder: 'https://',
+            ok: '넣기',
+            validate: (v) => (normalizeLink(v) ? null : 'http, https, mailto 주소만 넣을 수 있어요'),
+          }).then((typed) => {
+            const href = typed === null ? null : normalizeLink(typed);
+            if (editor.isDestroyed) return;
+            if (!href || typed === null) return void editor.commands.focus(at);
+            const pos = Math.min(at, editor.state.doc.content.size);
+            editor
+              .chain()
+              .focus()
+              .insertContentAt(pos, [{ type: 'text', text: typed.trim(), marks: [{ type: 'link', attrs: { href } }] }, { type: 'text', text: ' ' }])
+              .run();
+          });
+          return done;
         }
         case 'frame':
           // Like the diagram embed: the cursor goes to a new line below.

@@ -7,6 +7,7 @@ import { documentToMarkdown } from './export/markdown';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { cn } from './lib/utils';
+import { askConfirm } from './appDialog';
 
 type Props = {
   path: string;
@@ -125,7 +126,8 @@ export function HistoryDialog({ path, dark, onClose, onRestore }: Props) {
 
   const restore = async () => {
     if (!picked || !preview || busy) return;
-    if (!window.confirm(`${when(preview.time)} 버전으로 되돌릴까요? 지금 내용도 버전 기록에 남겨 둬요.`)) return;
+    const ok = await askConfirm({ title: `${when(preview.time)} 버전으로 되돌릴까요?`, body: '지금 내용도 버전 기록에 남겨 둬요.', ok: '되돌리기' });
+    if (!ok) return;
     setBusy(true);
     setMessage(null);
     const err = await onRestore(picked);

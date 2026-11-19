@@ -234,6 +234,24 @@ export async function branchStatus(root, branch, base) {
   return { ahead, behind: behind ?? 0, lastAt: ct ? +ct * 1000 : null, state };
 }
 
+/** The subject line of `branch`'s tip commit, or null when the branch is gone. */
+export async function tipSubject(root, branch) {
+  if (typeof branch !== "string" || !branch || branch.startsWith("-")) return null;
+  try { return (await git(root, "log", "-1", "--format=%s", branch, "--")).stdout.trim(); } catch { return null; }
+}
+
+/**
+ * Whether a worktree holds uncommitted work: changed tracked files, or untracked files outside build noise
+ * (the same rule dropWorktree uses). null when git cannot tell (folder gone, not a repo).
+ */
+export async function worktreeDirty(dir) {
+  if (!dir || !existsSync(dir)) return null;
+  try {
+    const st = (await git(dir, "--no-optional-locks", "status", "--porcelain")).stdout;
+    return st.split("\n").filter(Boolean).some(l => !noiseLine(l));
+  } catch { return null; }
+}
+
 export async function branchGraph(root, { base = "develop", limit = 80, active = [] } = {}) {
   const activeSet = new Set(active);
   const sh = async (...a) => { try { return (await git(root, ...a)).stdout; } catch { return ""; } };

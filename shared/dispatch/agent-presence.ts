@@ -8,6 +8,9 @@ export interface AgentPresence {
   sid: string;
   /** The session's own name ("Otto"), or the outside writer's cleaned label. Never a real name or email. */
   name: string;
+  /** Hub creation number (1, 2, …) and the lead that created it, for a fixed team order (#785); absent for outside writers. */
+  n?: number;
+  parent?: string;
   /** Role id (`impl`, `lead`, ...); '' for an outside writer. */
   role: string;
   roleName?: string;
@@ -23,7 +26,7 @@ export interface AgentPresence {
   statusLabel?: string;
   /** Title of the pipeline step it works on (the plan diagram's node label); absent outside a running plan. */
   step?: string;
-  /** Hub status: starting | running | waiting (only live sessions are listed). */
+  /** Hub status: starting | running | waiting | idle (only live sessions are listed; done and error are not). */
   status: string;
   /** Monitoring state (shared/dispatch/types.ts SessionState), null when not known yet. */
   state: string | null;

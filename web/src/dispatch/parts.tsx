@@ -7,7 +7,6 @@ import { ProviderIcon } from '../ProviderIcon';
 import { STATE, TONE_TEXT, level, levelTone, providerName, type Tone } from './lib/format.ts';
 import type { SessionState } from './types';
 
-/** Provider and model as one neutral tag: the provider's mark (currentColor, no provider colours) and its name. */
 /** Provider mark and name, the model label, and the user's account label for that provider when set (#747). */
 export function ModelTag({ provider, label, account, className }: { provider: string; label: string; account?: string | null; className?: string }) {
   return (

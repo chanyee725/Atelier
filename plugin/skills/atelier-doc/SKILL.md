@@ -13,8 +13,13 @@ Documents are `.dpx.json` files in the workspace (`<project>/atelier`). The API 
    Done when: `GET /api/file?path=<file>` returns a `revision`.
 2. Write in small passes. Read the whole file, change `document` (and `blocks` when a diagram goes in), and `PUT /api/file?path=<file>` the whole JSON back with its `revision`. One section per PUT, so the reader sees it grow. A 409 means someone saved first: read again and redo the change.
    Done when: each PUT returns the new `revision`.
-3. Keep the style. Korean 해요체, short sentences. Each section opens with what the reader can do or check. Numbered steps for anything with more than one step, at most 5 items per list. Analysis docs end with a "관련 코드" section: real paths, functions and endpoints.
-   Done when: the first line of each section is an action or a finding.
+3. Keep the style (Atelier repo `docs/design/writing-style.md`). Korean 해요체, short sentences.
+   - Top of the document: 상태 and 결정 in one line, then 다음: the one thing the reader does now.
+   - Each section opens with what the reader can do or check. One idea per paragraph; a side issue goes last as "따로: …".
+   - Numbered steps for anything with more than one step, at most 5 items per list.
+   - Concrete estimates ("15분", "파일 3개"), never "조금".
+   - End with 끝난 것 and 남은 것 lists. Analysis docs then end with a "관련 코드" section: real paths, functions and endpoints.
+   Done when: the first line of the document and of each section is an action or a finding, and 남은 것 is there.
 4. Check privacy. No transcripts, tokens, keys, emails or real names in the document.
    Done when: you read the final text once for those.
 

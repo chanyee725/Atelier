@@ -17,6 +17,7 @@ import { guardValue, usageGroups, type SectionId, type UsageEntry } from '../set
 import { elapsed } from '../../../shared/dispatch/attention.ts';
 import { AlertWatcher } from './AlertWatcher';
 import { AlwaysOnView } from './AlwaysOnView';
+import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
@@ -34,11 +35,13 @@ import { UsagePage } from './UsagePage';
 import { api, connect, useDispatch } from './store';
 import { usePrTracking, useStatusLine } from './usePrTracking';
 import type { Session } from './types';
+import { askConfirm } from '../appDialog';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
 const TABS: { tab: BoardTab; label: string }[] = [
   { tab: 'sessions', label: '세션' },
+  { tab: 'branches', label: '브랜치' },
   { tab: 'timeline', label: '타임라인' },
   { tab: 'usage', label: '사용량' },
 ];
@@ -81,6 +84,8 @@ export type BoardProps = {
   /** 상시 화면 or 설정 asked for by the address (old /dispatch#tv, #settings); handled once, then `onExtraDone`. */
   extra?: BoardExtra | null;
   onExtraDone?: () => void;
+  /** The 알림함 bell, on the right of the header like every top bar (#786). */
+  bell?: ReactNode;
 };
 
 export default function SessionBoard(p: BoardProps) {
@@ -140,6 +145,7 @@ export default function SessionBoard(p: BoardProps) {
           onTv={() => setTv(true)}
           onSettings={setSettings}
           disabled={!ready || unavailable}
+          bell={p.bell}
         />
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
@@ -154,6 +160,8 @@ export default function SessionBoard(p: BoardProps) {
             <Skeleton />
           ) : p.tab === 'usage' ? (
             <UsagePage />
+          ) : p.tab === 'branches' ? (
+            <BranchesPage />
           ) : p.tab === 'timeline' ? (
             <SessionTimeline onOpen={(id) => openSession(id)} />
           ) : (
@@ -191,6 +199,7 @@ function BoardHeader(p: {
   onTv: () => void;
   onSettings: (s: SectionId) => void;
   disabled: boolean;
+  bell?: ReactNode;
 }) {
   const connected = useDispatch((s) => Object.values(s.providers ?? {}).some((x) => x?.connected));
   const scopeId = useId();
@@ -236,6 +245,7 @@ function BoardHeader(p: {
         </Button>
         <TaskBoardButton />
         <BoardMenu onTv={p.onTv} onSettings={() => p.onSettings('general')} disabled={p.disabled} />
+        {p.bell}
       </div>
     </header>
   );
@@ -249,7 +259,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
   const { pr, toggle, broken } = usePrTracking(status, '');
   const [said, setSaid] = useState('');
   const clear = async (all: boolean) => {
-    if (all && !window.confirm(`세션 ${sessions.length}개를 모두 정리할까요? 실행 중인 세션도 멈춰요.`)) return;
+    if (all && !(await askConfirm({ title: `세션 ${sessions.length}개를 모두 정리할까요?`, body: '실행 중인 세션도 멈춰요.', ok: '모두 정리', danger: true }))) return;
     try {
       const r = await api<{ removed?: number }>('POST', all ? '/api/sessions/clear' : '/api/sessions/clear-done');
       setSaid(`세션 ${r?.removed ?? 0}개를 정리했어요.`);
@@ -448,7 +458,7 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
   const failed = state === 'failed';
   // The label the session started under when the server records one (#747), else the provider's current label.
   const labels = useAccountLabels();
-  const account = shownAccount(s.provider, (s as Session & { accountLabel?: string | null }).accountLabel, labels);
+  const account = shownAccount(s.provider, s.accountLabel, labels);
   const wide = '@min-[560px]/list:col-auto @min-[560px]/list:row-auto';
   return (
     <button

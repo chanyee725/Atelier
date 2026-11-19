@@ -11,6 +11,12 @@ const MSG_SIZE = 12;
 const SELF_W = 36;
 const SELF_H = 22;
 const ACT_W = 10;
+/** Participant heads use the flowchart box sizes (layout-graph WIDTH_BUCKETS, NODE_MIN_H, padding, MAX_LINES). */
+const HEAD_WIDTHS = [160, 200, 260] as const;
+const HEAD_MIN_H = 52;
+const HEAD_PAD_X = 32;
+const HEAD_PAD_Y = 12;
+const HEAD_MAX_LINES = 3;
 
 interface Column {
   id: string;
@@ -48,15 +54,27 @@ function allMessages(items: SequenceItem[], out: SequenceMessage[] = []): Sequen
 
 export async function layoutSequence(d: SequenceDiagram): Promise<Scene> {
   const idx = new Map(d.columns.map((c, i) => [c.id, i]));
+  // Participant heads size like flowchart boxes (layout-graph sizeBox): the smallest width bucket whose label
+  // wraps to at most HEAD_MAX_LINES lines, then every head takes the widest one so all columns match.
+  const sizeHead = (c: Column, width: number): void => {
+    const iconW = c.iconSize ? c.iconSize + 8 : 0;
+    c.label = measureLabel(d.columns[idx.get(c.id)!]!.label, c.label.size, c.style.typeface, c.style.wrap, width - HEAD_PAD_X - iconW);
+    c.w = Math.max(width, Math.ceil(c.label.w + iconW + HEAD_PAD_X));
+    c.h = Math.max(HEAD_MIN_H, Math.ceil(Math.max(c.label.h, c.iconSize) + HEAD_PAD_Y));
+  };
   const cols: Column[] = d.columns.map((c) => {
     const style = styleFor(d, c.attrs, c.span.line);
     const size = fontSize(style);
-    const label = measureLabel(c.label, size, style.typeface, style.wrap, 140);
     const iconSize = c.attrs.icon ? Math.round(size * 1.5) : 0;
-    const w = Math.ceil(Math.max(label.w + (iconSize ? iconSize + 8 : 0) + 32, 96));
-    const h = Math.ceil(Math.max(label.h, iconSize) + 22);
-    return { id: c.id, style, label, iconSize, w, h, x: 0 };
+    const col: Column = { id: c.id, style, label: measureLabel(c.label, size, style.typeface, style.wrap, Infinity), iconSize, w: 0, h: 0, x: 0 };
+    for (const b of HEAD_WIDTHS) {
+      sizeHead(col, b);
+      if (col.w === b && col.label.lines.length <= HEAD_MAX_LINES) break;
+    }
+    return col;
   });
+  const headW = Math.max(0, ...cols.map((c) => c.w));
+  for (const c of cols) sizeHead(c, headW);
 
   // Gaps between neighbouring column centres: room for the boxes, then for every message label.
   const gaps = cols.slice(1).map((c, i) => cols[i]!.w / 2 + c.w / 2 + 40);

@@ -53,6 +53,20 @@ test('issueOfBranch: feat/747-x and fix/747 name 747; dispatch/ and plain branch
   assert.equal(issueOfBranch(null), null);
 });
 
+test('issueOfBranch: only <type>/<n>-…; dates, versions and bare numbers name none (#756)', () => {
+  assert.equal(issueOfBranch('fix/issue-12-x'), 12);
+  assert.equal(issueOfBranch('chore/gh-9'), 9);
+  assert.equal(issueOfBranch('Docs/31-readme'), 31);
+  assert.equal(issueOfBranch('release/2026-11-19'), null);
+  assert.equal(issueOfBranch('feat/2026-11-19-cleanup'), null);
+  assert.equal(issueOfBranch('backup/12-x'), null);
+  assert.equal(issueOfBranch('feat/v2-ui'), null);
+  assert.equal(issueOfBranch('feat/x/747-y'), null);
+  assert.equal(issueOfBranch('747-x'), null);
+  assert.equal(issueOfBranch('feat/747x'), null);
+  assert.equal(issueOfBranch('feat/0-x'), null);
+});
+
 test('Ledger: snapshot label kept, issues from item and branch, leads included, PR looked up per branch', async () => {
   const store = { data: {} };
   const l = new Ledger(store);
@@ -72,7 +86,24 @@ test('Ledger: snapshot label kept, issues from item and branch, leads included, 
   assert.equal(impl.effort, 'low');
   assert.deepEqual(impl.tokens, { input: 3, output: 4, cacheRead: 0, cacheWrite: 0 });
   assert.equal(r.summary, 'roles: lead Claude Sonnet 5.5 (Claude · Max), impl Codex GPT-5 (Codex · 팀)');
-  assert.deepEqual(Object.keys(impl).sort(), ['accountLabel', 'branch', 'cost', 'effort', 'endedAt', 'model', 'modelLabel', 'pr', 'provider', 'role', 'sid', 'startedAt', 'tokens'].sort());
+  assert.deepEqual(Object.keys(impl).sort(), ['accountLabel', 'branch', 'cost', 'effort', 'endedAt', 'model', 'modelLabel', 'pr', 'provider', 'role', 'shared', 'sid', 'startedAt', 'tokens'].sort());
+  assert.deepEqual(r.prs, [901]);
+  // The lead is in only for its teammate: its whole-session numbers are marked shared (#756).
+  assert.deepEqual(r.sessions.map((s) => s.shared), [true, false]);
+  // With the cached PR list (#756): a PR whose head is the session's branch counts even when only its body names the
+  // issue (Refs #747); pr-status is not asked.
+  const viaList = await issueAccounts(l, 747, {
+    prsOf: async (n) => (assert.equal(n, 747), { ok: true, prs: [{ number: 960, branch: 'feat/747-accounts' }, { number: 950, branch: 'dispatch/lead-1' }] }),
+    prOf: async () => assert.fail('prOf asked although the list answered'),
+  });
+  assert.deepEqual(viaList.sessions.map((s) => s.pr), [950, 960]);
+  assert.deepEqual(viaList.prs, [960, 950]);
+  // The list unavailable (PR tracking off, gh missing): pr-status per branch again.
+  const fallback = await issueAccounts(l, 747, { prsOf: async () => ({ ok: false, reason: 'disabled' }), prOf: async () => ({ ok: true, pr: { number: 7 } }) });
+  assert.deepEqual(fallback.sessions.map((s) => s.pr), [null, 7]);
+  // A session that worked on two issues is shared under both.
+  l.noteBranch('X', 'feat/747-also');
+  assert.deepEqual((await issueAccounts(l, 800)).sessions.map((s) => [s.sid, s.shared]), [['X', true]]);
   // Unknown issue: empty. Ledger keeps no free text: an email-shaped label never lands.
   assert.deepEqual((await issueAccounts(l, 1)).sessions, []);
   l.sync({ id: 'E', role: 'impl', accountLabel: 'x@y.z', startedAt: 4, status: 'idle' });
@@ -86,6 +117,8 @@ test('pickSession keeps role, accountLabel, issue and times; refuses email-shape
   assert.deepEqual(p, { sid: 's', role: 'impl', accountLabel: 'Claude · Max', issue: 747, startedAt: 1, endedAt: 2 });
   for (const bad of ['a@b.co', 'me﹫corp', '010-1234-5678']) assert.equal(pickSession({ sid: 's', accountLabel: bad }).accountLabel, undefined, bad);
 });
+
+const posted = [];
 
 async function start() {
   const root = mkdtempSync(join(tmpdir(), 'drawing-747-'));
@@ -108,6 +141,7 @@ async function start() {
     providerStatus: async () => ({ claude: { ...p }, openai: { ...p, connected: false }, gemini: { ...p, connected: false } }),
     codexModels: async () => [], login: () => {}, logout: async () => {}, cancelLogin: () => {},
     spawnCli: fakeSpawner(bin),
+    postAccounts: async (x) => (posted.push(x), { ok: true, pr: x.pr, comment: posted.length > 1 ? 'updated' : 'created' }),
     prStatus: async (b) => (b === 'feat/747-x' ? { ok: true, pr: { number: 12, state: 'open', ci: 'none' } } : { ok: false, reason: 'none' }),
   };
   const moduleList = [
@@ -167,6 +201,16 @@ test('API: accountLabels in /api/user-defaults; a session snapshots its label; G
     assert.equal(r.body.sessions[1].pr, 12);
     assert.equal(r.body.summary, 'roles: lead Claude Sonnet 5.5 (Claude · Max), impl Claude Haiku 5.5 (Claude · Max)');
     assert.equal((await call('GET', '/api/issues/747/accounts?pr=0')).body.sessions[1].pr, null);
+    // POST …/comment posts the summary line on the issue's PR (#756): found PR first, an explicit pr wins.
+    r = await call('POST', '/api/issues/747/accounts/comment', {});
+    assert.deepEqual(r.body, { ok: true, pr: 12, comment: 'created', summary: r.body.summary });
+    assert.deepEqual(posted.at(-1), { pr: 12, issue: 747, summary: r.body.summary });
+    r = await call('POST', '/api/issues/747/accounts/comment', { pr: 30 });
+    assert.equal(r.body.comment, 'updated');
+    assert.equal(posted.at(-1).pr, 30);
+    assert.equal((await call('POST', '/api/issues/747/accounts/comment', { pr: 'x' })).status, 400);
+    assert.deepEqual((await call('POST', '/api/issues/1/accounts/comment', {})).body, { ok: false, reason: 'no-sessions', summary: 'roles: -' });
+    assert.equal(posted.length, 2);
     // Removal keeps the record, with an end time.
     assert.equal((await call('POST', `/api/sessions/${kid.id}/remove`)).status, 200);
     r = await call('GET', '/api/issues/747/accounts?pr=0');

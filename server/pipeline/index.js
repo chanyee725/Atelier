@@ -192,6 +192,8 @@ export async function setup(ctx) {
         pauseEntry(e.path, entry, 'stop').catch((err) => console.error('pipeline pause on trash:', err?.code ?? err?.name));
         interruptTeam(entry.lead);
       }
+      // A trashed plan no longer waits for 시작하기: the 알림함 drops it (#786).
+      if (entry?.state === 'plan') changed(e.path);
       return;
     }
     if (e.kind !== 'move') return;
@@ -209,7 +211,10 @@ export async function setup(ctx) {
       }
       moved = true;
     }
-    if (moved) save();
+    if (moved) {
+      save();
+      changed(e.to);
+    }
     // Sessions follow their project when its top folder is renamed or moved (#487). A top folder moved into
     // another folder belongs to that one's project now.
     const hub = dispatch()?.hub;
@@ -381,7 +386,7 @@ export async function setup(ctx) {
     // The lead works for the project its plan lives in.
     const planFolder = topFolder(path);
     if (planFolder && planFolder !== lead.folder) d.hub.touch(lead, { folder: planFolder });
-    all[path] = { lead: lead.id, state: 'plan', draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }) };
+    all[path] = { lead: lead.id, state: 'plan', waitingSince: Date.now(), draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }) };
     drafts.set(path, built.plan);
     save();
     await ws.labelVersion(path, 'draft');
@@ -608,7 +613,8 @@ export async function setup(ctx) {
       if (next) results[id] = next;
     }
     if (runId) await quietly(recorder.endPaused(path, runId, 'stopped'));
-    Object.assign(e, { state: 'plan', draftRevision: file.revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {} });
+    // Reopened by the person, so it does not ask them again in the 알림함 until the lead writes it anew (#786).
+    Object.assign(e, { state: 'plan', reopened: true, draftRevision: file.revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {} });
     delete e.pause;
     if (runId && done.length) e.carry = { from: runId, steps: done, results };
     else delete e.carry;
@@ -783,8 +789,26 @@ export async function setup(ctx) {
     },
   });
 
+  /**
+   * Plans that wait for 시작하기 (#786): written by a lead, not reopened by the person, document still there.
+   * Metadata only: path, title, the lead's session name and since when.
+   */
+  async function waiting() {
+    const d = dispatch();
+    const out = [];
+    for (const [path, e] of Object.entries(entries() ?? {})) {
+      if (e?.state !== 'plan' || e.reopened) continue;
+      const file = await readOrNull(path).catch(() => null);
+      if (!file) continue;
+      out.push({ path, title: typeof file.title === 'string' ? file.title : null, lead: d?.hub.get(e.lead)?.name ?? null, since: e.waitingSince ?? null });
+    }
+    out.sort((a, b) => (b.since ?? 0) - (a.since ?? 0) || a.path.localeCompare(b.path));
+    return { plans: out };
+  }
+
   return {
     status,
+    waiting,
     writePlan,
     start,
     note,
@@ -804,6 +828,7 @@ export async function setup(ctx) {
         if (typeof p !== 'string') throw new StoreError(400, 'path is required');
         return status(p);
       }),
+      route('GET', '/api/pipeline/waiting', () => waiting()),
       route('POST', '/api/pipeline/plan', (b) => writePlan(b)),
       route('POST', '/api/pipeline/start', (b) => start(b)),
       route('POST', '/api/pipeline/note', (b) => note(b)),

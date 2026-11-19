@@ -3,16 +3,17 @@
 // and the open GitHub issues as the unit of work (#776; branches and PRs are details of an issue). All live: agents by
 // the event stream, sessions by session events, branches and PRs by polling while the page is visible.
 // At a narrow main pane (under 880px) the halves stack, documents first.
-// The work column splits its height 5:5 (sessions, issues) and lays each card's items out 3 to a row (#720).
+// The work column splits its height 5:5 (sessions, issues): live sessions as small cards, issues as one dense row each
+// (#784, #785); an empty sessions card shrinks to its header.
 import { useMemo } from 'react';
 import { boardHash, plainClick } from '../projectNav';
-import { ArrowRight, FilePlus2, FileText, PenTool, Plus, RotateCw } from 'lucide-react';
+import { ArrowRight, FilePlus2, FileText, LoaderCircle, PenTool, Plus, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
-import { cn } from '../lib/utils';
 import { Card, CardGrid, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
 import { AgentTag } from './AgentPanel';
+import { openAgentLive } from '../live/store';
 import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, type AgentPresence } from './agents';
 import { ColumnHead, DocList } from './DocList';
 import { allDocs, filterDocs } from './model';
@@ -90,7 +91,7 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
 
       <DashColumn label="진행 중인 작업">
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} />
+        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} filterKey={query} />
       </DashColumn>
     </DashGrid>
   );
@@ -109,9 +110,10 @@ function BoardLink({ folder, onBoard }: { folder: string; onBoard: (folder: stri
 
 function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void }) {
   const list = Array.isArray(agents) ? agents : [];
-  const busy = list.filter(isBusy).length;
+  // Nothing live: just the header line, so the empty box does not take half the column (#784).
+  const empty = Array.isArray(agents) && list.length === 0;
   return (
-    <Card id="sessions" grow={5} title="실행 중인 세션" count={list.length} hint={busy > 0 ? `${busy}명이 지금 작업 중이에요` : undefined} flush actions={<BoardLink folder={folder} onBoard={onBoard} />}>
+    <Card id="sessions" grow={empty ? undefined : 5} title="실행 중인 세션" count={list.length} flush actions={<BoardLink folder={folder} onBoard={onBoard} />}>
       {agents === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : agents === 'failed' ? (
@@ -126,12 +128,10 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
         </EmptyState>
       ) : agents === 'off' ? (
         <EmptyState>이 서버는 세션 목록을 보내지 않아요.</EmptyState>
-      ) : list.length === 0 ? (
-        <EmptyState>지금 이 프로젝트에서 일하는 세션이 없어요. 계획 문서에서 시작하기를 누르면 여기에 보여요.</EmptyState>
-      ) : (
+      ) : empty ? null : (
         <CardGrid label="실행 중인 세션">
           {list.map((a) => (
-            <SessionRow key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
+            <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
           ))}
         </CardGrid>
       )}
@@ -139,34 +139,60 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
   );
 }
 
-function SessionRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
+/**
+ * One live session per card (#785, cards again after the dense rows): name tag and role, model, the step it is on, then
+ * the file it holds. A spinner shows only while it is working (running or starting); one that needs a person gets an
+ * amber dot. The card's top part opens the session's live view; the file line opens the document.
+ */
+function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
+  const look = !busy && needsLook(a);
+  const model = a.modelLabel || a.model;
   return (
-    <li data-agent={a.sid} className="grid min-w-0 content-start gap-1 rounded-md border px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2">
-        <AgentTag agent={a} size="sm" />
-        <span className="min-w-0 truncate text-xs text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
-      </div>
-      <span className={cn('text-xs', busy ? 'text-foreground' : 'text-muted-foreground')}>
-        <StatusDot tone={busy ? 'ok' : needsLook(a) ? 'warn' : 'idle'} pulse={busy}>
-          {agentStateLabel(a)}
-        </StatusDot>
-      </span>
-      {(a.modelLabel || a.model) && (
-        <span className="inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-          <ProviderIcon provider={a.provider} className="size-3.5 shrink-0" />
-          <span className="truncate">{a.modelLabel || a.model}</span>
+    <li data-agent={a.sid} data-busy={busy || undefined} className="flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40">
+      {/* The same live view a 세션 보드 card opens (#728, #785). */}
+      <button
+        type="button"
+        data-agent-live={a.sid}
+        title={`${a.name} 진행상황 보기`}
+        onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
+        className="grid min-w-0 content-start gap-1 rounded-md px-3 pt-2 pb-1.5 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
+          <span className="min-w-0 shrink truncate text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
+          <span className="ml-auto inline-flex shrink-0 items-center" title={agentStateLabel(a)}>
+            {busy ? (
+              <LoaderCircle aria-hidden className="size-3.5 text-ok motion-safe:animate-spin" />
+            ) : look ? (
+              <StatusDot tone="warn" />
+            ) : null}
+            <span className="sr-only">{agentStateLabel(a)}</span>
+          </span>
         </span>
-      )}
-      {a.file && title ? (
-        <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 justify-self-start rounded-sm text-xs text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
-          <FileText aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="sr-only">잡고 있는 파일 </span>
-          <span className="truncate">{title}</span>
-        </button>
-      ) : (
-        <span className="text-xs text-muted-foreground">잡고 있는 파일 없음</span>
-      )}
+        {model && (
+          <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground" title={model}>
+            <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
+            <span className="truncate">{model}</span>
+          </span>
+        )}
+        {a.step ? (
+          <span className="min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>
+        ) : look ? (
+          <span className="text-muted-foreground">{agentStateLabel(a)}</span>
+        ) : null}
+      </button>
+      <span className="mt-auto flex min-w-0 px-3 pb-2">
+        {a.file && title ? (
+          <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+            <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+            <span className="sr-only">잡고 있는 파일 </span>
+            <span className="truncate">{title}</span>
+          </button>
+        ) : (
+          <span className="text-muted-foreground">잡고 있는 파일 없음</span>
+        )}
+      </span>
     </li>
   );
 }

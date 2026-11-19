@@ -8,9 +8,10 @@ import { Sidebar } from './Sidebar';
 import { Home, type CreateKind } from './home/Home';
 import { CHORD_MS, chord, folderPrefix } from './home/model';
 import { Alert } from './components/ui/alert';
-import { Button } from './components/ui/button';
+import { Button, buttonVariants } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
+import { ActivityBell } from './activity/ActivityBell';
 import { AgentLiveHost } from './live/AgentLivePanel';
 import { notifyApp } from './activity/appToasts';
 import type { EntryKind } from './activity/appEvents';
@@ -64,6 +65,8 @@ import type { CanvasHandle } from './export/types';
 import { COPY_IMAGE_SHORTCUT, EXPORT_MENU_QUERY, IS_MAC } from './platform';
 import { PlanStrip } from './run/PlanStrip';
 import { events } from './lib/events';
+import { askConfirm, askText } from './appDialog';
+import { AppDialogHost } from './AppDialogHost';
 
 const NARROW = '(max-width: 767px)';
 /** A top-level folder is a project (design doc 6 §1). */
@@ -303,7 +306,7 @@ export function App() {
   const open = useCallback(
     async (p: string): Promise<boolean> => {
       await session.flush();
-      if (session.isDirty() && !window.confirm('저장하지 못한 변경이 있어요. 그래도 다른 파일을 열까요?')) return false;
+      if (session.isDirty() && !(await askConfirm({ title: '저장하지 못한 변경이 있어요', body: '그래도 다른 파일을 열까요? 저장하지 못한 내용은 사라져요.', ok: '그래도 열기', danger: true }))) return false;
       setError(null);
       try {
         load(p, await api.readFile(p));
@@ -422,7 +425,13 @@ export function App() {
   const newFile = async (folder?: string | null, kind: CreateKind = 'doc', sub = false) => {
     const dir = sub && path ? subFolderOf(path) : folder === undefined ? newFileDir(section, projects, path) : (folder ?? '');
     const label = kind === 'plan' ? '새 파이프라인 계획 이름을 입력해 주세요' : '새 파일 이름을 입력해 주세요';
-    const name = window.prompt(sub ? '하위 문서 이름을 입력해 주세요' : dir ? `${label} (${dir} 안에 만들어요)` : label);
+    const name = await askText({
+      title: sub ? '새 하위 문서' : kind === 'plan' ? '새 파이프라인 계획' : '새 파일',
+      body: sub ? '하위 문서 이름을 입력해 주세요' : dir ? `${label} (${dir} 안에 만들어요)` : label,
+      label: '이름',
+      ok: '만들기',
+      validate: (v) => (fileStem(v) ? null : '이름을 입력해 주세요'),
+    });
     const stem = name ? fileStem(name) : '';
     if (!stem) return;
     // A plan goes to <area>/<feature>/계획 like a lead's (#782), titled with the typed name.
@@ -558,7 +567,13 @@ export function App() {
   const renameEntry = async (entry: DocNode | Project) => {
     const n = asTreeNode(entry);
     const initial = renameInitial(n);
-    const name = window.prompt('새 이름을 입력해 주세요', initial);
+    const name = await askText({
+      title: '이름 바꾸기',
+      label: '새 이름',
+      initial,
+      ok: '바꾸기',
+      validate: (v) => (v.trim() === initial ? null : nameProblem(n, v)),
+    });
     if (name == null || name.trim() === initial) return;
     const problem = nameProblem(n, name);
     if (problem) return setError(problem);
@@ -589,7 +604,7 @@ export function App() {
         : subdocs
           ? "하위 문서도 함께 지워져요. 30일 동안은 '최근에 지운 파일'에서 하나씩 되살릴 수 있어요."
           : "30일 동안은 '최근에 지운 파일'에서 되살릴 수 있어요.";
-    if (!window.confirm(`"${label}"을(를) 지울까요? ${keep}`)) return;
+    if (!(await askConfirm({ title: `"${label}"을(를) 지울까요?`, body: keep, ok: '지우기', danger: true }))) return;
     removing.current = n.path;
     try {
       // A document's sub-documents folder (`X/`, even an empty one) goes with it, so it never lingers as a group.
@@ -930,12 +945,15 @@ export function App() {
     />
   );
 
+  // The 알림함 sits at the right end of whichever top bar is on screen (#786).
+  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} onSession={openBoardSession} />;
   return (
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} />
+        <AppDialogHost />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
@@ -962,13 +980,14 @@ export function App() {
           {section.kind === 'board' ? (
             <LazyBoundary>
               <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>}>
-                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} />
+                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} bell={bell} />
               </Suspense>
             </LazyBoundary>
           ) : !docScreen ? (
             <Home
               projectName={projectName}
               narrow={narrow}
+              bell={bell}
               project={homeProject}
               version={tree}
               onProject={goProject}
@@ -995,6 +1014,7 @@ export function App() {
             onSubDoc={() => void newFile(undefined, 'doc', true)}
             onTitle={(title) => edit({ title })}
             onHistory={() => setHistoryOpen(true)}
+            bell={bell}
           onCommands={() => {
             setExportOpen(false);
             setPaletteGroup(undefined);
