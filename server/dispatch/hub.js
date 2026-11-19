@@ -10,6 +10,7 @@ import { enterStage } from "./tasks.js";
 import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
 import { MODE_IDS } from "./mode-profiles.js";
 import { replyStyle } from "./style.js";
+import { checkLane, etaHint, laneItems, recordRunTime } from "./lanes.js";
 import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
@@ -456,6 +457,11 @@ export class Hub extends EventEmitter {
       }
     }
     if (stage) enterStage(t, stage);
+    if (input.lane !== undefined) t.lane = checkLane(input.lane) ?? null;
+    // A merged task is one past run of its lane; new tasks get an ETA hint from those (#768).
+    if (stage === "done" && t.mergeCheck?.ok) {
+      this.store.data.runTimes = recordRunTime(this.store.data.runTimes, { lane: t.lane, minutes: (Date.now() - t.createdAt) / 60_000 });
+    }
     if (step !== undefined) t.step = step;
     if (input.owner !== undefined) t.owner = input.owner ? String(input.owner).slice(0, 60) : null;
     if (input.eta_minutes !== undefined) {
@@ -470,6 +476,9 @@ export class Hub extends EventEmitter {
     this.emit("tasks", this.tasks);
     return t;
   }
+
+  /** Median and slowest minutes of past merged runs in `lane` (#768), or null before the first one. */
+  etaHint(lane) { return etaHint(this.store.data.runTimes, lane || undefined); }
 
   /** Open tasks of one lead other than `except`, as { id, title, stage }. */
   openTasks(lead, except) {
@@ -536,10 +545,12 @@ export class Hub extends EventEmitter {
 
   // items: [{ role, model, effort, perm, prompt, n, mode }]. `mode` (per item, else the call's) picks the harness
   // profile of that mode (#748, mode-profiles.js); an item's own model, effort and perm still win over it.
-  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode }) {
+  // `lane` (#768, lanes.js): quickfix skips the plan gate, refuses reviewer/tester roles and defaults to the quickfix mode.
+  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode, lane }) {
     const total = items.reduce((a, x) => a + (x.n || 1), 0);
     if (!total) throw new Error("만들 세션이 없어요");
-    const gate = parent && this.createGate?.(parent);
+    items = laneItems(items, lane, mode);
+    const gate = parent && checkLane(lane) !== "quickfix" && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
     items = await Promise.all(items.map(it => this.applyProfile(it, it.mode ?? mode)));
     const roles = effectiveRoles(this.roles, this.store, this.models);
@@ -591,7 +602,7 @@ export class Hub extends EventEmitter {
           effort: it.effort || null, perm: it.perm || role.perm,
           // The account label of the provider connection as it is now (#747): a snapshot, never an email or id.
           accountLabel: this.accountLabel?.(model.provider) ?? null, issue: issueNumber(it.issue),
-          ...(it.mode && { mode: it.mode }), ...(it.profileNote && { profileNote: it.profileNote }),
+          ...(it.mode && { mode: it.mode }), ...(it.lane && { lane: it.lane }), ...(it.profileNote && { profileNote: it.profileNote }),
           prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
           cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder: top,
           status: "starting", startedAt: Date.now(), updatedAt: Date.now(),
@@ -1144,8 +1155,9 @@ export class Hub extends EventEmitter {
 
   systemPrompt(s) {
     // A lead works in its own worktree; without the project folder spelled out it merged into its own branch.
+    // Since #768 the lead merges the PR on GitHub, then fast-forwards the project folder.
     const where = s.canSpawn && s.worktree
-      ? `\n\n[병합 위치] 너의 작업 폴더는 ${s.cwd} (브랜치 ${s.branch})이고 통합 브랜치가 아니다. 병합은 프로젝트 폴더 ${this.root}에서 한다: git -C ${this.root} merge --no-ff <브랜치> (또는 --ff-only). 병합 뒤 git -C ${this.root} log --oneline -1 로 통합 브랜치 HEAD를 확인하고 보고에 적는다.`
+      ? `\n\n[병합 위치] 네 작업 폴더 ${s.cwd}(브랜치 ${s.branch})는 통합 브랜치가 아니다. gh pr merge --merge 뒤 프로젝트 폴더를 맞춘다: git -C ${this.root} fetch, git -C ${this.root} merge --ff-only origin/develop. 보고에 git -C ${this.root} log --oneline -1 결과를 적는다.`
       : "";
     // The role prompt is not saved (state.json keeps metadata only): after a restart it comes from the role.
     const prompt = s.prompt ?? effectiveRoles(this.roles, this.store, this.models).find(r => r.id === s.role)?.prompt;

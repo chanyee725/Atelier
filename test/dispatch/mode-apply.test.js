@@ -45,8 +45,8 @@ test("a mode picks the profile's model, effort and perm; no mode keeps the role 
   assert.equal(research.model, "gpt-a");
   assert.equal(research.mode, "research");
   const [quick] = await make(hub, [{ role: "impl", mode: "quickfix" }]);
-  assert.equal(quick.model, "claude-sonnet-5-5");
-  assert.equal(quick.effort, "low");
+  assert.equal(quick.model, "claude-opus-5-5");
+  assert.equal(quick.effort, null);
   // Review cross-checks the implementer (Opus in impl mode).
   const [rev] = await make(hub, [{ role: "review", mode: "impl" }]);
   assert.equal(rev.model, "gpt-a");
@@ -59,7 +59,7 @@ test("a plan step's own model, effort and perm win over the mode's profile", asy
   assert.equal(s.perm, "plan");
   assert.equal(s.mode, "research");
   const [e] = await make(hub, [{ role: "impl", mode: "quickfix", effort: "high" }]);
-  assert.equal(e.model, "claude-sonnet-5-5");
+  assert.equal(e.model, "claude-opus-5-5");
   assert.equal(e.effort, "high");
   // An item perm Codex cannot run skips Codex in the profile and falls back, with a note, instead of a 400.
   const [ae] = await make(hub, [{ role: "impl", mode: "research", perm: "acceptEdits" }]);

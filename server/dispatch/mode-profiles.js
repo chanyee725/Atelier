@@ -27,8 +27,8 @@ export const HINT_MAX = 40;
 export const DEFAULT_HINTS = Object.freeze({
   "claude-fable-5-2": "복잡한 작업",
   "claude-fable-5-1": "복잡한 작업",
-  "claude-opus-5-5": "구현",
-  "claude-sonnet-5-5": "빠른 수정·문서",
+  "claude-opus-5-5": "구현·빠른 수정",
+  "claude-sonnet-5-5": "관리·문서",
   "claude-haiku-5-5": "짧은 일",
   openai: "서치·자료 수집",
   gemini: "긴 문맥",
@@ -50,7 +50,8 @@ const DEFAULT_GRID = {
   impl: BASE,
   review: BASE,
   docs: { ...BASE, impl: [SONNET] },
-  quickfix: { ...BASE, impl: [C("claude-sonnet-5-5", { effort: "low" })], test: { cross: true, chain: [CODEX, SONNET] } },
+  // Quickfix (#768): one Opus 5.5 implementer, no reviewer; the lead may still pick Sonnet for a trivial change.
+  quickfix: { ...BASE, impl: [OPUS], test: { cross: true, chain: [CODEX, SONNET] } },
   research: { ...BASE, lead: [CODEX, SONNET], impl: [CODEX, OPUS] },
 };
 

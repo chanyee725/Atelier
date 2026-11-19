@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// Minimal MCP stdio server that lets a manager session drive Dispatch over its local HTTP API.
+// Minimal MCP stdio server that lets a lead session drive Atelier's session hub over its local HTTP API.
 // Spawned by Claude Code (--mcp-config), Codex (mcp_servers.dispatch) or agy with DISPATCH_URL / DISPATCH_PARENT.
+
+import { LANES, lanePlanArgs } from "./lanes.js";
 
 // Only this machine's loopback: a DISPATCH_URL pointing anywhere else is refused, and there is no
 // default port to fall back to (the server passes its own URL when it starts a session).
@@ -27,10 +29,11 @@ const MODE_HELP = [
   { id: "impl", name: "구현", use: "기능 구현" },
   { id: "review", name: "리뷰·테스트", use: "리뷰와 테스트" },
   { id: "docs", name: "문서", use: "문서 쓰기" },
-  { id: "quickfix", name: "빠른 수정", use: "1-2개 파일의 작은 수정" },
+  { id: "quickfix", name: "빠른 수정", use: "1-3개 파일의 작은 수정" },
   { id: "research", name: "조사", use: "서치·자료 조사" },
 ];
-const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류(모드). 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
+const LANE_PROP = { type: "string", enum: LANES, description: "quickfix: 1-3개 파일, 계획 승인·리뷰어 없이 구현자 하나. normal: 기능 하나, 리뷰어 1명. risky: 인증·데이터·삭제·구조, 리뷰어 2명, 병합 전 메인 세션 확인" };
+const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류. 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
 
 const brief = s => ({
   id: s.id, name: s.name, role: s.role, model: s.model, status: s.status, state: s.state,
@@ -47,7 +50,7 @@ const brief = s => ({
 const CHILD_TOOLS = [
   {
     name: "message_lead",
-    description: "턴 중간에 관리자에게 질문이나 알림을 보낸다. 턴이 끝날 때의 마지막 답변은 따로 보내지 않아도 자동으로 보고된다.",
+    description: "턴 중간에 관리자에게 묻거나 알린다. 턴을 끝낼 때의 답변은 자동으로 보고되니 따로 보내지 않는다.",
     inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" } } },
     run: async ({ text }) => { await api("POST", `/api/sessions/${SELF}/to-lead`, { text }); return { ok: true }; },
   },
@@ -56,7 +59,7 @@ const CHILD_TOOLS = [
 const LEAD_TOOLS = [
   {
     name: "list_roles",
-    description: "사용할 수 있는 역할 프리셋과 모델 목록을 돌려준다.",
+    description: "역할, 모델, 모드 목록.",
     inputSchema: { type: "object", properties: {} },
     run: async () => {
       const st = await api("GET", "/api/state");
@@ -69,7 +72,7 @@ const LEAD_TOOLS = [
   },
   {
     name: "create_sessions",
-    description: "역할별로 새 세션을 만든다. 각 항목의 task 가 그 세션의 첫 지시가 된다. 생성된 세션은 이 관리자 세션의 하위로 묶인다.",
+    description: "팀원 세션을 만든다. 각 항목의 task가 첫 지시다(끝 조건, 작은 조각, 보고 형식). lane: \"quickfix\"면 계획 승인 없이 구현자 하나.",
     inputSchema: {
       type: "object",
       required: ["sessions"],
@@ -81,30 +84,31 @@ const LEAD_TOOLS = [
             required: ["role", "task"],
             properties: {
               role: { type: "string", description: "역할 id (list_roles 참고)" },
-              task: { type: "string", description: "이 세션에게 줄 구체적인 지시" },
+              task: { type: "string", description: "이 세션에게 줄 지시" },
               model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 mode의 프로필, mode도 없으면 역할 기본값" },
               effort: { type: "string" },
               perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
               mode: MODE_PROP,
               count: { type: "integer", minimum: 1, maximum: 4 },
-              issue: { type: "integer", description: "이 세션이 맡은 GitHub 이슈 번호. 이슈별 작업 계정 기록에 쓰인다(브랜치 이름의 번호로도 묶인다)" },
+              issue: { type: "integer", description: "맡은 GitHub 이슈 번호(이슈별 기록용)" },
             },
           },
         },
         worktree: { type: "boolean", description: "세션마다 git worktree 분리 (기본 true)" },
         folder: { type: "string", description: "프로젝트 폴더(워크스페이스 최상위 폴더) 경로. 생략하면 이 관리자의 폴더" },
         mode: MODE_PROP,
+        lane: LANE_PROP,
       },
     },
-    run: async ({ sessions, worktree = true, folder, mode }) => {
+    run: async ({ sessions, worktree = true, folder, mode, lane }) => {
       const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1, ...(x.issue && { issue: x.issue }), ...(x.mode && { mode: x.mode }) }));
-      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }), ...(mode && { mode }) });
+      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }), ...(mode && { mode }), ...(lane && { lane }) });
       return res.sessions.map(brief);
     },
   },
   {
     name: "list_sessions",
-    description: "세션 목록과 상태를 돌려준다. mine=true 면 이 관리자가 만든 세션만.",
+    description: "세션 목록과 상태. mine=true면 내가 만든 세션만.",
     inputSchema: { type: "object", properties: { mine: { type: "boolean" } } },
     run: async ({ mine = true }) => {
       const st = await api("GET", "/api/state");
@@ -113,7 +117,7 @@ const LEAD_TOOLS = [
   },
   {
     name: "get_session",
-    description: "세션 상태와 최근 대화 일부를 돌려준다. 각 메시지는 요약(앞부분)만 온다 — 전체를 반복해서 읽으면 토큰 낭비이니 꼭 필요한 세션만 본다.",
+    description: "한 세션의 상태와 최근 메시지 앞부분. 꼭 필요할 때만 쓴다.",
     inputSchema: { type: "object", required: ["session_id"], properties: { session_id: { type: "string" }, last: { type: "integer", description: "최근 메시지 개수 (기본 6, 최대 20)" } } },
     run: async ({ session_id, last = 6 }) => {
       const res = await api("GET", `/api/sessions/${session_id}/messages`);
@@ -130,7 +134,7 @@ const LEAD_TOOLS = [
   },
   {
     name: "set_task",
-    description: "작업 보드를 갱신한다. 맡은 일 하나마다 한 번만 만들고(title), 그 뒤로는 돌려받은 id로 stage·owner·eta_minutes·note를 고친다. 같은 일을 제목만 바꿔 새로 만들지 않는다(제목을 바꿀 때도 id와 함께 보낸다). develop에 병합한 일은 commit(병합한 브랜치 이름이나 끝 커밋)과 함께 stage done으로 닫는다. 서버가 그 커밋이 통합 브랜치에 들어 있는지 확인하고, 없으면 닫지 않고 merge_check에 이유를 돌려준다. 그만둔 일은 commit 없이 done으로 닫는다. 새로 만들면 결과의 open에 이미 열려 있는 내 작업이 온다. 같은 일이 있으면 그 id를 쓰고 방금 만든 것은 done으로 닫는다.",
+    description: "작업 보드. 일 하나에 한 번 만들고(title), 그 뒤로는 받은 id로 stage·owner·eta_minutes·note를 고친다. 병합한 일은 commit(브랜치나 커밋)과 함께 done으로 닫는다. 서버가 통합 브랜치에 있는지 확인하고, 없으면 merge_check에 이유를 돌려준다. 그만둔 일은 commit 없이 done. 새로 만들면 열린 내 작업(open)과 같은 lane 과거 실행 시간(past_runs)이 온다.",
     inputSchema: {
       type: "object",
       required: ["title"],
@@ -141,8 +145,9 @@ const LEAD_TOOLS = [
         owner: { type: "string", description: "지금 맡은 세션 이름 (예: Juno)" },
         eta_minutes: { type: "number", description: "끝날 때까지 남은 예상 분" },
         note: { type: "string", description: "한 줄 상태" },
-        commit: { type: "string", description: "병합한 브랜치 이름이나 커밋. done으로 닫을 때 통합 브랜치 포함 여부를 확인한다. 빈 문자열이면 지운다" },
-        step: { type: "string", description: "승인된 계획의 단계 id. 이 작업이 어느 단계인지 묶는다(owner 세션의 진행이 그 단계에 기록된다)" },
+        commit: { type: "string", description: "병합한 브랜치나 커밋. 빈 문자열이면 지운다" },
+        step: { type: "string", description: "승인된 계획의 단계 id" },
+        lane: LANE_PROP,
       },
     },
     run: async args => {
@@ -151,18 +156,19 @@ const LEAD_TOOLS = [
         id: t.id, title: t.title, stage: t.stage,
         ...(args.stage === "done" && t.mergeCheck && { merge_check: t.mergeCheck }),
         ...(t.open?.length && { open: t.open }),
+        ...(t.etaHint && { past_runs: t.etaHint }),
       };
     },
   },
   {
     name: "write_plan",
-    description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 같은 계획을 고칠 때는 path 없이 다시 부른다. 쓴 뒤에는 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 사용자가 시작하기를 누르기 전에는 create_sessions가 거절된다. 1-2개 파일의 작은 수정은 단계 하나 + autostart: true로 바로 시작할 수 있다. 코드 분석 다이어그램의 노드 라벨은 기능을 짧은 한국어로 쓰고 파일 이름은 쓰지 않는다. 코드 위치는 code: \"path:start-end#symbol\" 로 붙이고, 블록 JSON에서는 codeRefs: {v:1, nodes:{\"<라벨>\":{summary, refs:[{path,start,end?,symbol?}]}}} 로 붙인다(Drawing 저장소 docs/agent-diagrams.md).",
+    description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 고칠 때는 path 없이 다시 부른다. 쓴 뒤 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 승인 전에는 create_sessions가 거절된다. lane: \"quickfix\"는 단계 하나로 바로 시작한다.",
     inputSchema: {
       type: "object",
       required: ["goal", "steps"],
       properties: {
         path: { type: "string", description: "워크스페이스 안 파일 경로. 생략하면 내 초안을 고치거나 <프로젝트 폴더>/pipelines/<제목>으로 새로 만든다" },
-        folder: { type: "string", description: "새 계획을 둘 프로젝트 폴더(워크스페이스 최상위 폴더 이름, 이미 있어야 함). 생략하면 내 프로젝트 폴더, 그것도 없으면 단계 files가 모두 한 최상위 폴더 안일 때 그 폴더, 아니면 pipelines/" },
+        folder: { type: "string", description: "새 계획을 둘 프로젝트 폴더(워크스페이스 최상위, 이미 있어야 함). 생략하면 내 프로젝트 폴더" },
         title: { type: "string", description: "계획 제목 (생략하면 goal 앞부분)" },
         goal: { type: "string", description: "목표 한두 문장" },
         steps: {
@@ -189,19 +195,20 @@ const LEAD_TOOLS = [
         risks: { type: "array", items: { type: "string" } },
         asks: { type: "array", items: { type: "string" }, description: "사용자에게 물어볼 것" },
         autostart: { type: "boolean", description: "단계가 하나일 때만: 승인 없이 바로 시작" },
+        lane: LANE_PROP,
       },
     },
-    run: async args => api("POST", "/api/pipeline/plan", { ...args, lead: PARENT }),
+    run: async args => api("POST", "/api/pipeline/plan", { ...lanePlanArgs(args), lead: PARENT }),
   },
   {
     name: "note_step",
-    description: "실행 중인 계획의 한 단계에 한 줄 메모를 남긴다(실행 기록에 남는다). 200자까지, 대화 내용을 옮기지 않는다. 예: 리뷰 must-fix 1건 고쳐서 다시 올림",
+    description: "실행 중인 계획의 한 단계에 한 줄 메모(200자, 대화 내용 없이). 예: 리뷰 must-fix 1건 고쳐서 다시 올림",
     inputSchema: { type: "object", required: ["step", "text"], properties: { step: { type: "string", description: "단계 id" }, text: { type: "string" } } },
     run: async ({ step, text }) => api("POST", "/api/pipeline/note", { lead: PARENT, step, text }),
   },
   {
     name: "stop_session",
-    description: "세션을 종료한다. 다시 쓸 일이 없는 끝난 세션은 remove: true로 목록에서도 지운다(대화 기록도 지워진다). 결과를 아직 확인해야 하면 remove 없이 종료만 한다.",
+    description: "세션을 끝낸다. 다시 쓸 일이 없으면 remove: true로 목록에서도 지운다.",
     inputSchema: { type: "object", required: ["session_id"], properties: { session_id: { type: "string" }, remove: { type: "boolean", description: "목록에서도 지움 (기본 false)" } } },
     run: async ({ session_id, remove }) => {
       await api("POST", `/api/sessions/${session_id}/${remove ? "remove" : "kill"}`);
