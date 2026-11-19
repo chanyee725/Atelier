@@ -11,6 +11,8 @@ import { usageGroups, type UsageEntry, type UsageGroup } from '../settings/model
 import { pollWhileVisible } from '../home/model';
 
 const POLL_MS = 30_000;
+/** With nothing to show after a failed read, try again this soon instead of waiting for the next poll (#705). */
+const RETRY_MS = 5_000;
 const kept = lastValue<UsageGroup[]>();
 
 /** Connected providers with their usage windows; null while loading, 'failed' when either request failed. */
@@ -18,6 +20,7 @@ export function useUsage(): UsageGroup[] | 'failed' | null {
   const [groups, setGroups] = useState<UsageGroup[] | 'failed' | null>(kept.get);
   useEffect(() => {
     let live = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
     const load = () =>
       void Promise.all([api.limits(), api.providers()]).then(
         ([l, p]: [ProviderLimits, Record<string, ProviderState>]) => {
@@ -26,13 +29,17 @@ export function useUsage(): UsageGroup[] | 'failed' | null {
         },
         () => {
           const next = kept.put('failed');
-          if (live) setGroups(next);
+          if (!live) return;
+          setGroups(next);
+          clearTimeout(retry);
+          if (next === 'failed') retry = setTimeout(load, RETRY_MS);
         },
       );
     const stop = pollWhileVisible(load, POLL_MS);
     const offs = [events.subscribe('limits', load), events.subscribe('providers', load)];
     return () => {
       live = false;
+      clearTimeout(retry);
       stop();
       offs.forEach((off) => off());
     };
