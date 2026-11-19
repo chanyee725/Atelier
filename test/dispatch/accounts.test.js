@@ -53,6 +53,20 @@ test('issueOfBranch: feat/747-x and fix/747 name 747; dispatch/ and plain branch
   assert.equal(issueOfBranch(null), null);
 });
 
+test('issueOfBranch: only <type>/<n>-…; dates, versions and bare numbers name none (#756)', () => {
+  assert.equal(issueOfBranch('fix/issue-12-x'), 12);
+  assert.equal(issueOfBranch('chore/gh-9'), 9);
+  assert.equal(issueOfBranch('Docs/31-readme'), 31);
+  assert.equal(issueOfBranch('release/2026-11-19'), null);
+  assert.equal(issueOfBranch('feat/2026-11-19-cleanup'), null);
+  assert.equal(issueOfBranch('backup/12-x'), null);
+  assert.equal(issueOfBranch('feat/v2-ui'), null);
+  assert.equal(issueOfBranch('feat/x/747-y'), null);
+  assert.equal(issueOfBranch('747-x'), null);
+  assert.equal(issueOfBranch('feat/747x'), null);
+  assert.equal(issueOfBranch('feat/0-x'), null);
+});
+
 test('Ledger: snapshot label kept, issues from item and branch, leads included, PR looked up per branch', async () => {
   const store = { data: {} };
   const l = new Ledger(store);

@@ -4,6 +4,9 @@
 // started, times, token counts, cost, branch names and issue numbers. Never transcripts, prompts, answers,
 // emails or account ids. Strings are short tokens (pickSession's rule in server/runs/record.js).
 import { accountsSummary, checkAccountLabel } from "../../shared/dispatch/accounts.js";
+import { issueOfBranch } from "../../shared/dispatch/issue-branch.js";
+
+export { issueOfBranch };
 
 export const LEDGER_MAX = 2000;
 const BRANCHES_MAX = 6;
@@ -19,13 +22,6 @@ const label = v => { const r = checkAccountLabel(v); return r.ok ? r.value : nul
 export function issueNumber(v) {
   const n = typeof v === "string" ? Number(v.replace(/^#/, "")) : v;
   return Number.isInteger(n) && n > 0 && n < 1e7 ? n : null;
-}
-
-/** The issue a branch names (`feat/747-accounts`, `fix/747`, `747-x`), else null. Dispatch's own branches never do. */
-export function issueOfBranch(branch) {
-  if (typeof branch !== "string" || branch.startsWith("dispatch/")) return null;
-  const m = branch.match(/(?:^|\/)(?:issue-|gh-)?(\d{1,7})(?:[-_]|$)/i);
-  return m ? issueNumber(Number(m[1])) : null;
 }
 
 export class Ledger {
