@@ -69,6 +69,12 @@
   --role-test: oklch(0.6 0.14 160);
   --role-design: oklch(0.62 0.19 0);
   --role-docs: oklch(0.55 0.04 250);
+  /* Step states painted on diagram nodes (#687, web/src/run/nodeStatus.ts). */
+  --step-pending: oklch(0.6 0 0);
+  --step-active: oklch(0.56 0.17 255);
+  --step-done: var(--ok);
+  --step-failed: var(--bad);
+  --step-blocked: oklch(0.54 0.2 300);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -112,6 +118,11 @@
   --role-test: oklch(0.74 0.13 160);
   --role-design: oklch(0.72 0.16 0);
   --role-docs: oklch(0.7 0.03 250);
+  --step-pending: oklch(0.66 0 0);
+  --step-active: oklch(0.7 0.15 255);
+  --step-done: var(--ok);
+  --step-failed: var(--bad);
+  --step-blocked: oklch(0.7 0.17 300);
 }
 /* 모니터링 (ported from Dispatch's monitor theme): dark-first, so it sits on top of the dark tokens above. */
 :root[data-theme="dark"].monitor {
