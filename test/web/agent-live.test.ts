@@ -1,7 +1,7 @@
 // Agent live view client helpers (E559, #728): hash sync, the raw-text sid filter, display formats.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agentFromHash, withAgent } from '../../web/src/live/store.ts';
+import { agentFromHash, closeAgentLive, followHash, openAgentLive, resetLiveStore, withAgent } from '../../web/src/live/store.ts';
 import { eventFor } from '../../web/src/live/useAgentLive.ts';
 import { Hub } from '../../server/dispatch/hub.js';
 import { clock, liveStateLabel, middle, span } from '../../web/src/live/format.ts';
@@ -38,6 +38,40 @@ test('the sid filter matches the session events the hub really sends, whatever t
   assert.equal(eventFor<{ id: string }>(raw, 'id', 'k9')?.id, 'k9');
   assert.equal(eventFor(raw, 'id', 'k'), null);
   assert.equal(eventFor(JSON.stringify({ id: 'k9' }), 'id', 'k9')?.id, 'k9', 'the removed event');
+});
+
+test('the panel follows back/forward and a pasted hash, without writing the hash back', () => {
+  const g = globalThis as unknown as { window?: unknown };
+  const had = 'window' in g;
+  const prev = g.window;
+  let writes = 0;
+  const loc = { pathname: '/', search: '', hash: '#file=a.dpx.json' };
+  g.window = { location: loc, history: { state: null, replaceState: (_s: unknown, _t: string, url: string) => { writes++; loc.hash = url.slice(1); } } };
+  try {
+    resetLiveStore();
+    openAgentLive('s1', { trigger: null });
+    assert.equal(loc.hash, '#file=a.dpx.json&agent=s1');
+    writes = 0;
+    // Back to an entry without agent=: the panel closes, nothing is written.
+    loc.hash = '#file=a.dpx.json';
+    followHash();
+    assert.equal(writes, 0);
+    openAgentLive('s1', { trigger: null });
+    assert.equal(loc.hash, '#file=a.dpx.json&agent=s1', 'it was closed, so this opens it again rather than toggling off');
+    // A pasted hash naming another agent switches to it.
+    writes = 0;
+    loc.hash = '#file=a.dpx.json&agent=s2';
+    followHash();
+    followHash();
+    assert.equal(writes, 0);
+    openAgentLive('s2', { trigger: null });
+    assert.equal(loc.hash, '#file=a.dpx.json', 's2 was open, so the same sid toggles it off');
+    closeAgentLive();
+  } finally {
+    resetLiveStore();
+    if (had) g.window = prev;
+    else delete g.window;
+  }
 });
 
 test('display formats', () => {

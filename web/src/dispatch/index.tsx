@@ -21,6 +21,7 @@ import { UsagePage } from './UsagePage';
 import { AlertWatcher } from './AlertWatcher';
 import { ActivityAlerts } from '../activity/ActivityAlerts';
 import { AgentLiveHost } from '../live/AgentLivePanel';
+import { agentFromHash, withAgent } from '../live/store';
 import { connect, useDispatch } from './store';
 
 export { connect };
@@ -44,7 +45,8 @@ function useRoute(): [View, Scope, (v: View, scope?: Scope) => void] {
     return () => window.removeEventListener('hashchange', on);
   }, []);
   const go = (v: View, scope: Scope = route[1]) => {
-    const h = hashWith(hashOf(v).slice(1), scope);
+    // The open live view (`agent=`) stays in the hash across a view change, so the panel stays open.
+    const h = withAgent(hashWith(hashOf(v).slice(1), scope), agentFromHash(location.hash));
     if (h) location.hash = h;
     else history.pushState(null, '', location.pathname + location.search);
     setRoute([v, scope]);

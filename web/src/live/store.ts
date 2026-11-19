@@ -43,12 +43,28 @@ function writeHash(sid: string | null) {
   window.history.replaceState(window.history.state ?? { drawing: 1 }, '', `${pathname}${search}${next}`);
 }
 
-/** Reads `agent=` from the address bar once, so a reload reopens the panel. */
+/** Reads `agent=` from the address bar once, so a reload reopens the panel, then follows it on `hashchange`. */
 function readHashOnce() {
   if (hashRead || typeof window === 'undefined') return;
   hashRead = true;
   const sid = agentFromHash(window.location.hash);
   if (sid && !target) target = sid;
+  window.addEventListener('hashchange', followHash);
+}
+
+/**
+ * Back/forward or a hash typed into the address bar: the panel follows the `agent=` part (gone → closes, another sid
+ * → shows it). Never writes the hash itself (the hash already says it, and replaceState fires no `hashchange`), so
+ * this cannot loop.
+ */
+export function followHash(): void {
+  const sid = agentFromHash(window.location.hash);
+  if (sid === target) return;
+  // Gone: close as the close button does (the hash write in it is a no-op, the hash has no agent= any more).
+  if (!sid) return closeAgentLive();
+  target = sid;
+  trigger = null;
+  notify();
 }
 
 /** Opens the live view of `sid`. Opening the one already open closes it (a toggle from the same trigger). */
