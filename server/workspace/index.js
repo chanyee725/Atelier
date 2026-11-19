@@ -79,6 +79,8 @@ export async function setup(ctx) {
         const out = { error: err.message };
         if (err.revision !== undefined) out.revision = err.revision;
         if (err.project !== undefined) out.project = err.project;
+        // A stable reason for the client to branch on (messages are English and may change).
+        if (typeof err.code === 'string') out.code = err.code;
         send(res, err.status, out);
       }
     },

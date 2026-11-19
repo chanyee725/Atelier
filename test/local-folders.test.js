@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
 import { modules } from '../server/modules.js';
+import { createStore } from '../server/workspace/store.js';
+import { linkLocalFolder } from '../server/workspace/local-folders.js';
 
 // Scratch folders only (never a real project): a workspace and a fake "home" with folders to browse.
 async function withApp(fn, opts = {}) {
@@ -108,7 +110,7 @@ test('local project: links a folder, writes only inside the workspace, shows up 
 
     // Same folder again: 409 with the existing project.
     const again = await call('POST', '/api/workspace/local-project', { path: target });
-    assert.deepEqual([again.status, again.body.project], [409, 'my-app']);
+    assert.deepEqual([again.status, again.body.project, again.body.code], [409, 'my-app', 'already_linked']);
 
     // Another folder with the same name gets a free project name.
     const other = join(home, 'b', 'my-app');
@@ -119,6 +121,20 @@ test('local project: links a folder, writes only inside the workspace, shows up 
     for (const [path, status] of [[ws, 400], ['/', 400], [join(home, 'nope'), 404], ['x/y', 400], [undefined, 400]]) {
       assert.equal((await call('POST', '/api/workspace/local-project', { path })).status, status, String(path));
     }
+    // Stable reason codes for the client.
+    assert.equal((await call('POST', '/api/workspace/local-project', { path: ws })).body.code, 'inside_workspace');
+    assert.equal((await call('POST', '/api/workspace/local-project', { path: '/' })).body.code, 'filesystem_root');
+  });
+});
+
+test('local project: links of the same folder at once make one project', async () => {
+  await withApp(async ({ ws, home }) => {
+    const target = join(home, 'twice');
+    await mkdir(target, { recursive: true });
+    const store = createStore(ws);
+    const rs = await Promise.allSettled([1, 2, 3].map(() => linkLocalFolder(store, target)));
+    assert.deepEqual(rs.map((r) => (r.status === 'fulfilled' ? 'ok' : r.reason.code)).sort(), ['already_linked', 'already_linked', 'ok']);
+    assert.deepEqual((await store.tree()).map((n) => n.name), ['twice']);
   });
 });
 

@@ -76,7 +76,7 @@ export async function listLocalFolders(raw) {
 
 const inside = (child, parentDir) => {
   const r = relative(parentDir, child);
-  return r === '' || (!r.startsWith('..') && !isAbsolute(r));
+  return r === '' || !(r === '..' || r.startsWith('..' + sep) || isAbsolute(r));
 };
 
 // Same rules as the store's folder names (no hidden names, no slashes, no control chars), Windows-safe too.
@@ -88,12 +88,24 @@ function projectFolderName(name) {
   return clean || '프로젝트';
 }
 
+// Links run one at a time per workspace, so two requests for the same folder cannot both pass the 409 check.
+const linkQueues = new Map();
+
 /**
  * POST /api/workspace/local-project { path }: link a local folder as a new project.
  * Creates <workspace>/<name>/ and its .project.json { name, linkedPath }. 409 when the folder is already linked.
  * Returns { path (workspace project path), name, linkedPath }.
  */
-export async function linkLocalFolder(store, raw) {
+export function linkLocalFolder(store, raw) {
+  const prev = linkQueues.get(store.root) ?? Promise.resolve();
+  const run = prev.then(() => linkOne(store, raw));
+  const tail = run.catch(() => {});
+  linkQueues.set(store.root, tail);
+  tail.then(() => linkQueues.get(store.root) === tail && linkQueues.delete(store.root));
+  return run;
+}
+
+async function linkOne(store, raw) {
   if (typeof raw !== 'string' || raw === '') throw new StoreError(400, 'path is required');
   const asked = parseFolderPath(raw);
   let target;
@@ -105,8 +117,8 @@ export async function linkLocalFolder(store, raw) {
   }
   const ws = await realpath(store.root);
   // The workspace (or a folder in it) is already where projects live; linking it would make a project of itself.
-  if (inside(target, ws)) throw new StoreError(400, 'folder is inside the workspace');
-  if (parse(target).root === target) throw new StoreError(400, 'cannot link the filesystem root');
+  if (inside(target, ws)) throw new StoreError(400, 'folder is inside the workspace', { code: 'inside_workspace' });
+  if (parse(target).root === target) throw new StoreError(400, 'cannot link the filesystem root', { code: 'filesystem_root' });
 
   const tree = await store.tree();
   const taken = new Set();
@@ -115,7 +127,7 @@ export async function linkLocalFolder(store, raw) {
     taken.add(n.name.replace(/\.dpx\.json$/, '').toLowerCase());
     if (n.type !== 'folder') continue;
     const meta = await readProjectMeta(join(store.root, n.name));
-    if (meta.linkedPath === target) throw Object.assign(new StoreError(409, 'folder is already a project'), { project: n.path });
+    if (meta.linkedPath === target) throw new StoreError(409, 'folder is already a project', { code: 'already_linked', project: n.path });
   }
   const name = projectFolderName(basename(target));
   let folder = name;
