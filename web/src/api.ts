@@ -82,6 +82,18 @@ export type HistoryEntry = { id: string; /** ms since epoch */ time: number; byt
 export type TrashItem = { id: string; path: string; /** ms since epoch */ deletedAt: number; /** Deleted outside the app: restoring brings back the newest saved snapshot. */ fromSnapshot?: boolean };
 export type HistoryVersion = DpxFile & { id: string; time: number };
 
+/** GET /api/user-defaults (docs/design/user-defaults.md). Metadata only. */
+export type UserDefaultsValues = {
+  theme?: 'system' | 'light' | 'dark';
+  workspace?: string;
+  port?: number;
+  prStatus?: boolean;
+  workspaces?: { path: string; name: string }[];
+  lastWorkspace?: string;
+};
+export type UserDefaultsStatus = { file: string | null; values: UserDefaultsValues; error: string | null; problems: string[] };
+export type UserDefaultsPatch = { theme?: 'system' | 'light' | 'dark' | null; workspace?: string | null; port?: number | null; prStatus?: boolean | null };
+
 export class ApiError extends Error {
   status: number;
   revision?: number;
@@ -140,6 +152,10 @@ export const api = {
   providerRefresh: () => call<Record<string, ProviderInfo>>('POST', '/api/providers/refresh', {}),
   saveDispatchSettings: (patch: { guard?: Partial<Omit<DispatchSettings["guard"], "fable" | "openai">> & { fable?: number | null; openai?: Record<string, number> }; team?: Partial<DispatchSettings['team']> }) =>
     call<DispatchSettings>('POST', '/api/settings', patch),
+  /** The user's defaults in ~/.dispatch/drawing.json (E555): `error` is set when the file could not be read. */
+  userDefaults: () => call<UserDefaultsStatus>('GET', '/api/user-defaults'),
+  /** Saves some defaults; null clears one. 409 when the file is broken (it is never overwritten). */
+  setUserDefaults: (patch: UserDefaultsPatch) => call<UserDefaultsStatus>('POST', '/api/user-defaults', patch),
   prTracking: () => call<{ on: boolean }>('GET', '/api/workspace/pr-tracking'),
   setPrTracking: (on: boolean) => call<{ on: boolean }>('POST', '/api/workspace/pr-tracking', { on }),
   /** Read only; `start`/`end` are 1-based and inclusive. */

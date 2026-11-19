@@ -2,8 +2,8 @@
 // conflict flag and the PR link.
 // No title, body, author, branch text or check names are kept. `gh` starts only through cli.js.
 //
-// Per-workspace switch: <workspace>/.drawing/settings.json { "prStatus": false } turns it off
-// (default on). Off, or a missing gh, never throws: the result says why.
+// Per-workspace switch: <workspace>/.drawing/settings.json { "prStatus": false } turns it off. A workspace
+// without its own value follows the user's default (`prStatus` in ~/.dispatch/drawing.json), else on. Off, or a missing gh, never throws: the result says why.
 import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -38,14 +38,19 @@ async function readSettings(workspaceDir) {
   return value;
 }
 
-/** Whether PR tracking is on for a workspace folder (default true; an unreadable file counts as default). */
-export async function prTrackingEnabled(workspaceDir) {
-  try { return (await readSettings(workspaceDir)).prStatus !== false; } catch { return true; }
+const pick = (value, fallback) => (typeof value === "boolean" ? value : fallback !== false);
+
+/**
+ * Whether PR tracking is on for a workspace folder: its own value, else `fallback` (the user's default), else true.
+ * An unreadable file counts as unset.
+ */
+export async function prTrackingEnabled(workspaceDir, fallback = true) {
+  try { return pick((await readSettings(workspaceDir)).prStatus, fallback); } catch { return fallback !== false; }
 }
 
 /** Like prTrackingEnabled, but throws (code ESETTINGS) when settings.json is not a valid JSON object. */
-export async function readPrTracking(workspaceDir) {
-  return (await readSettings(workspaceDir)).prStatus !== false;
+export async function readPrTracking(workspaceDir, fallback = true) {
+  return pick((await readSettings(workspaceDir)).prStatus, fallback);
 }
 
 /**
@@ -111,7 +116,7 @@ export function validBranch(branch) {
  * starts at most once per minGapMs with at most maxConcurrent running, so a run watching many steps does not hammer GitHub.
  * `cwd` (required) is the git project folder (gh reads the repo from it); `env` is for tests (fake gh on PATH).
  */
-export function createPrStatus({ workspaceDir, cwd, env, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs, maxConcurrent = PR_DEFAULTS.maxConcurrent } = {}) {
+export function createPrStatus({ workspaceDir, cwd, env, prDefault = () => true, run = runCli, now = Date.now, timeoutMs = PR_DEFAULTS.timeoutMs, cacheMs = PR_DEFAULTS.cacheMs, minGapMs = PR_DEFAULTS.minGapMs, maxConcurrent = PR_DEFAULTS.maxConcurrent } = {}) {
   const cache = new Map(); // branch -> { at, result }
   const inflight = new Map();
   let lastStart = 0;
@@ -152,7 +157,7 @@ export function createPrStatus({ workspaceDir, cwd, env, run = runCli, now = Dat
   }
 
   return async function prStatus(branch, { force = false } = {}) {
-    if (workspaceDir && !(await prTrackingEnabled(workspaceDir))) return { ok: false, reason: "disabled" };
+    if (workspaceDir && !(await prTrackingEnabled(workspaceDir, prDefault()))) return { ok: false, reason: "disabled" };
     if (!validBranch(branch)) return { ok: false, reason: "invalid-branch" };
     // gh reads the repo from cwd; without it gh would ask about whatever repo the server runs in.
     if (typeof cwd !== "string" || !cwd) return { ok: false, reason: "error" };

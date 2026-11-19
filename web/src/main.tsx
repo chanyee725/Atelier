@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { LazyBoundary } from './LazyBoundary';
 import './index.css';
+import { startThemeSync } from './userDefaultsTheme';
 
 // Excalidraw loads its fonts from here (bundled by vite.config.ts) instead of a CDN.
 (window as unknown as { EXCALIDRAW_ASSET_PATH: string }).EXCALIDRAW_ASSET_PATH = '/excalidraw/';
@@ -18,6 +19,9 @@ if (import.meta.env.DEV) {
   const id = q.get('runFixture');
   if (id) void import('./run/fixture').then(async (f) => (await import('./run/runStore')).setRunSteps(id, q.has('runBlocked') ? f.FIXTURE_BLOCKED : f.FIXTURE_STEPS));
 }
+
+// The theme follows ~/.dispatch/drawing.json and is written back to it (E555).
+startThemeSync();
 
 // Project mode: the server answers every editor URL with a 302 to /dispatch, so nothing is fetched before the first render.
 createRoot(document.getElementById('root')!).render(
