@@ -15,6 +15,7 @@ import { Ledger } from "./ledger.js";
 import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
+import { createLiveBranches } from "./live-branches.js";
 import { createIssueList } from "./issues.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
 import { SharedLimits } from "./limits.js";
@@ -209,6 +210,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
     // Open issues with the PRs on them through `gh` (issues.js, #776); same switch as PR tracking, cached 60s.
     issues: dep.issues ?? createIssueList({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
   };
+  // Session branches with ahead/behind, last commit, dirty flag and PR phase (#792); cached 3s.
+  d.liveBranches = dep.liveBranches ?? createLiveBranches({ root, sessions: () => hub.sessions, prStatus: d.prStatus });
 
   const timers = [];
   // Each timer is guarded on its own: a Hub error must not stop the server or the drawing routes.
