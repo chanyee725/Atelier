@@ -195,7 +195,7 @@ test('blockers: unknown role, cycle, no lead; moving the file keeps its approval
     assert.deepEqual(st.body.changes, []);
 
     // A file nobody's lead wrote cannot start.
-    const plain = await call('POST', '/api/file', { path: 'pipelines/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'impl' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
+    const plain = await call('POST', '/api/file', { path: 'plans/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'impl' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
     assert.equal(plain.status, 201, JSON.stringify(plain.body));
     st = await call('GET', `/api/pipeline?path=${encodeURIComponent(plain.body.path)}`);
     assert.equal(st.body.state, 'plan');

@@ -194,10 +194,10 @@ test('renaming or moving a top folder moves its sessions along (#487)', { timeou
 });
 
 test('old sessions without folder: derived from a plan link only, else null', () => {
-  const pipelines = { 'alpha/a.dpx.json': { lead: 'L1', links: { S1: 'api' } }, 'root.dpx.json': { lead: 'L2', links: { S2: 'x' } } };
-  assert.equal(deriveFolder({ id: 'S1' }, pipelines), 'alpha');
-  assert.equal(deriveFolder({ id: 'L1' }, pipelines), null); // not linked
-  assert.equal(deriveFolder({ id: 'S2' }, pipelines), null); // plan at the root
+  const plans = { 'alpha/a.dpx.json': { lead: 'L1', links: { S1: 'api' } }, 'root.dpx.json': { lead: 'L2', links: { S2: 'x' } } };
+  assert.equal(deriveFolder({ id: 'S1' }, plans), 'alpha');
+  assert.equal(deriveFolder({ id: 'L1' }, plans), null); // not linked
+  assert.equal(deriveFolder({ id: 'S2' }, plans), null); // plan at the root
   assert.equal(deriveFolder({ id: 'S3' }, undefined), null);
   assert.equal(topFolder('a.dpx.json'), null);
   assert.equal(topFolder('x/y/a.dpx.json'), 'x');

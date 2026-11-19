@@ -80,7 +80,7 @@ test('a v3 file reads as is and becomes v4 with a plan; a broken stored plan is 
 test('create with a template, and the tree marks pipeline files', async () => {
   await withApp(async ({ call }) => {
     const doc = { type: 'doc', content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '목표' }] }] };
-    let r = await call('POST', '/api/file', { path: 'pipelines/new', title: '새 파이프라인', document: doc, blocks: [block], plan });
+    let r = await call('POST', '/api/file', { path: 'plans/new', title: '새 파이프라인', document: doc, blocks: [block], plan });
     assert.equal(r.status, 201);
     assert.equal(r.body.revision, 1);
     assert.deepEqual(r.body.plan, plan);
@@ -89,7 +89,7 @@ test('create with a template, and the tree marks pipeline files', async () => {
     await call('POST', '/api/file', { path: 'plain' });
     r = await call('GET', '/api/tree');
     const files = r.body.tree.flatMap((n) => (n.type === 'folder' ? n.children : [n]));
-    assert.deepEqual(files.find((n) => n.path === 'pipelines/new.dpx.json').pipeline, { state: 'plan' });
+    assert.deepEqual(files.find((n) => n.path === 'plans/new.dpx.json').pipeline, { state: 'plan' });
     assert.equal('pipeline' in files.find((n) => n.path === 'plain.dpx.json'), false);
   });
 });

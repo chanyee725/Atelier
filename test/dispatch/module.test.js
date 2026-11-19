@@ -19,7 +19,7 @@ function scratchRepo() {
   writeFileSync(join(root, 'README.md'), 'scratch\n');
   git('add', '.');
   git('commit', '-qm', 'init');
-  const ws = join(root, 'pipelines');
+  const ws = join(root, 'workspace');
   mkdirSync(ws);
   return { root, ws };
 }
