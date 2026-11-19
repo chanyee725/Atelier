@@ -12,7 +12,6 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fakeCliBin } from '../fixtures/fake-cli/index.mjs';
 import { which } from '../../server/dispatch/cli.js';
-import { MODAL_SELECTOR } from '../../web/src/activity/activity.ts';
 
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const SHOTS = process.env.DRAW_SHOTS;
@@ -103,8 +102,8 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     // The sheet slides in; shoot (and check the width) once it has stopped.
     await page.waitForFunction(() => document.querySelector('[data-slot=sheet-content]').getAnimations().length === 0);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e19b-board.png') });
-    // #663: the open sheet counts as a modal, so activity toasts wait behind it.
-    assert.ok(await page.evaluate((sel) => !!document.querySelector(sel)?.closest('[data-slot=sheet-content]'), MODAL_SELECTOR), 'the open sheet matches MODAL_SELECTOR');
+    // #811 dropped activity toasts (and MODAL_SELECTOR); the open sheet is still a modal dialog.
+    assert.equal(await page.locator('[data-slot=sheet-content]').getAttribute('role'), 'dialog', 'the open sheet is a dialog');
 
     at('blocked reason and capped done column');
     await card('배포 막힘').locator('[data-blocked-reason]').filter({ hasText: '키가 없어요' }).waitFor();
@@ -144,7 +143,7 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     at('close with Esc');
     await page.keyboard.press('Escape');
     await board.waitFor({ state: 'detached' });
-    assert.equal(await page.evaluate((sel) => document.querySelector(sel), MODAL_SELECTOR), null, 'no modal once the sheet is closed');
+    assert.equal(await page.locator('[data-slot=sheet-content]').count(), 0, 'no sheet once it is closed');
     assert.deepEqual(errors, []);
   } catch (e) {
     const shot = join(tmpdir(), `dispatch-board-fail-${Date.now()}.png`);

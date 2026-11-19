@@ -79,9 +79,12 @@ test('a saved session of a provider that no longer runs opens read-only', { skip
     await page.goto(`${BASE}/dispatch`);
 
     at('open the saved session');
-    // The server closes it (done) on load, so it sits behind the 완료 toggle.
-    await page.getByRole('button', { name: /완료 1개 보기/ }).click();
-    await page.getByText('Old', { exact: true }).click();
+    // The server closes it (done) on load, so it sits behind the 끝난 세션 toggle (#731 board).
+    await page.getByRole('button', { name: /끝난 세션 1개 보기/ }).click();
+    // #731 rows add a screen-reader state after the name, so open the row itself.
+    await page.locator('[data-session="legacy-1"]').filter({ hasText: 'Old' }).click();
+    // #728: a row opens the live view first; 대화 보기 opens the chat sheet.
+    await page.locator('dialog[data-agent-live="legacy-1"]').getByRole('button', { name: '대화 보기' }).first().click();
     const sheet = page.locator('[data-slot=sheet-content]');
     await sheet.waitFor();
 

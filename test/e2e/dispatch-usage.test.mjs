@@ -103,7 +103,7 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
 
     at('사용량');
     await page.goto(`${BASE}/dispatch#usage`);
-    const nav = page.getByRole('navigation', { name: '세션 화면' });
+    const nav = page.getByRole('navigation', { name: '세션 보드 화면' });
     await nav.getByRole('link', { name: '사용량' }).and(page.locator('[aria-current="page"]')).waitFor();
     await page.getByText('$1.25').first().waitFor();
     await page.locator('[data-limit="5시간"]').getByText('42%').waitFor();
@@ -127,7 +127,7 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
 
     at('타임라인');
     await nav.getByRole('link', { name: '타임라인' }).click();
-    assert.equal(new URL(page.url()).hash, '#timeline');
+    assert.equal(new URL(page.url()).hash, '#board=timeline'); // board hashes since the project nav (legacy #timeline still opens it)
     const row = page.locator(`[data-row="${name}"]`);
     await row.waitFor();
     assert.match(await row.getAttribute('aria-label'), new RegExp(`^${name}, 지금 `));
@@ -159,18 +159,24 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
     // 상시 화면: dark, a tile per session, Esc goes back to the board.
     at('상시 화면');
     const themeBefore = await page.evaluate(() => document.documentElement.dataset.theme);
-    await page.getByRole('link', { name: '상시 화면' }).click();
+    // #731: 상시 화면 moved into the board's ⋯ menu.
+    await page.getByRole('button', { name: '더 보기' }).click();
+    await page.getByRole('menuitem', { name: '상시 화면' }).click();
     await page.locator('[data-always-on]').waitFor();
-    assert.equal(new URL(page.url()).hash, '#tv');
+    // #731: the menu opens it over the current tab without changing the address.
+    assert.equal(new URL(page.url()).hash, '#board=timeline');
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     await page.locator(`[data-tile="${name}"]`).waitFor();
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e29-always-on.png') });
-    at('상시 화면 after reload');
-    await page.reload();
-    await page.locator(`[data-tile="${name}"]`).waitFor(); // #tv survives a reload
     await page.keyboard.press('Escape');
     await page.locator('[data-always-on]').waitFor({ state: 'detached' });
-    assert.equal(new URL(page.url()).hash, '');
+    assert.equal(new URL(page.url()).hash, '#board=timeline');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), themeBefore);
+    at('상시 화면 from its address');
+    await page.goto(`${BASE}/dispatch#board=tv`);
+    await page.locator(`[data-tile="${name}"]`).waitFor(); // #board=tv opens it straight away
+    await page.keyboard.press('Escape');
+    await page.locator('[data-always-on]').waitFor({ state: 'detached' });
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), themeBefore);
 
     // A tile opens the session sheet on the board.
