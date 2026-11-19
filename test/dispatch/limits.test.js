@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { mergeLimits, SharedLimits } from "../../server/dispatch/limits.js";
+import { geminiUsage, geminiUsageWindows, GEMINI_USAGE_MS, mergeLimits, resetGeminiUsageCache, SharedLimits } from "../../server/dispatch/limits.js";
 
 async function tmpFile(t) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "dispatch-limits-"));
@@ -219,4 +219,55 @@ test("Hub guards: guardCheck and limitHit both check five, seven and the Fable w
   hub = await mk({ fable: 0.5, fableReset: far });
   assert.equal(hub.guardCheck(1), null);
   assert.equal(hub.limitHit(), null);
+});
+
+// agy -p /usage --output-format json (#878): the shape agy 1.5 prints, numbers only.
+const AGY_USAGE = {
+  conversation_id: "", status: "SUCCESS", response: "…", usage: { input_tokens: 0, output_tokens: 0 },
+  command: { name: "usage", data: { description: "…", groups: [
+    { name: "Gemini Models", buckets: [{ id: "gemini-weekly", name: "Weekly Limit Remaining", window: "weekly", remaining_fraction: 0.25, reset_time: "2026-11-26T10:38:45Z" }] },
+    { name: "Claude and GPT models", buckets: [{ id: "3p-weekly", window: "weekly", remaining_fraction: 1, reset_time: "2026-11-26T23:33:22Z" }] },
+  ] } },
+};
+
+test("geminiUsageWindows: the Gemini group's buckets become windows (used = 1 - remaining), other groups and bad shapes are dropped", () => {
+  assert.deepEqual(geminiUsageWindows(JSON.stringify(AGY_USAGE)), [{ label: "주간", used: 0.75, reset: Date.parse("2026-11-26T10:38:45Z") }]);
+  const daily = { command: { name: "usage", data: { groups: [{ name: "Gemini Models", buckets: [{ window: "daily", remaining_fraction: 1.2 }, { window: "weekly", remaining_fraction: "x" }] }] } } };
+  assert.deepEqual(geminiUsageWindows(daily), [{ label: "일간", used: 0, reset: null }]);
+  for (const bad of ["", "not json", "{}", JSON.stringify({ command: { name: "other", data: AGY_USAGE.command.data } })]) assert.deepEqual(geminiUsageWindows(bad), []);
+});
+
+test("geminiUsage: one agy /usage run per five minutes (no model turn), failures give null", async t => {
+  t.after(resetGeminiUsageCache);
+  resetGeminiUsageCache();
+  const calls = [];
+  const run = async (bin, args) => { calls.push([bin, ...args]); return { stdout: JSON.stringify(AGY_USAGE) }; };
+  const [a, b] = await Promise.all([geminiUsage(run, 1000), geminiUsage(run, 1000)]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(0, 5), ["agy", "-p", "/usage", "--output-format", "json"]);
+  assert.equal(a.windows[0].used, 0.75);
+  assert.equal(b, a);
+  await geminiUsage(run, 1000 + GEMINI_USAGE_MS - 1);
+  assert.equal(calls.length, 1);
+  resetGeminiUsageCache();
+  assert.equal(await geminiUsage(async () => { throw new Error("ECLIDENIED"); }, 1), null);
+});
+
+test("Hub: providerLimits carries Gemini's /usage windows once Gemini is connected, none before", async t => {
+  const { Hub } = await import("../../server/dispatch/hub.js");
+  const file = await tmpFile(t);
+  const shared = new SharedLimits(file);
+  await shared.load();
+  const store = { data: { sessions: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 } } }, save() {} };
+  const hub = new Hub({ root: path.dirname(file), store, models: [], roles: [], port: 0, limits: shared });
+  const windows = [{ label: "주간", used: 0.75, reset: 1e13 }];
+  let runs = 0;
+  hub.geminiUsage = async () => { runs++; return { windows }; };
+  hub.isConnected = p => p === "claude";
+  assert.deepEqual((await hub.providerLimits()).gemini, { reached: false, reset: null, windows: [] });
+  assert.equal(runs, 0);
+  hub.isConnected = () => true;
+  assert.deepEqual((await hub.providerLimits()).gemini.windows, windows);
+  hub.geminiUsage = async () => { throw new Error("agy failed"); };
+  assert.deepEqual((await hub.providerLimits()).gemini.windows, []);
 });

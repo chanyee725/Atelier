@@ -7,8 +7,8 @@ import { userDir } from "./paths.js";
 
 // Usage limits per provider (ported from standalone Dispatch, issue #587). Claude reports its windows
 // in the stream; Codex's are read from what the codex CLI already records locally (only the limit
-// numbers are parsed, nothing else from those files is kept or sent anywhere); Gemini only says
-// "quota reached" in an error, so that flag and its reset time are kept.
+// numbers are parsed, nothing else from those files is kept or sent anywhere); Gemini's come from
+// agy's /usage command (geminiUsage, numbers only), and its "quota reached" error sets a flag with its reset time.
 
 export const CODEX_SESSIONS = path.join(os.homedir(), ".codex", "sessions");
 
@@ -66,6 +66,62 @@ export async function codexLimits(dir = CODEX_SESSIONS, now = Date.now()) {
   } catch { value = null; }
   codexCache.set(dir, { at: now, value });
   return value;
+}
+
+/* ---------------- Gemini usage windows (#878) ---------------- */
+// `agy -p /usage --output-format json` answers the /usage slash command without a model turn (0 tokens):
+// { command: { name: "usage", data: { groups: [{ name, buckets: [{ id, window, remaining_fraction, reset_time }] }] } } }.
+// Only the "Gemini Models" group is kept (Atelier runs Gemini models through agy); only the numbers are read.
+
+const GEMINI_WINDOW_LABELS = { weekly: "주간", daily: "일간", "5h": "5시간", five_hour: "5시간", monthly: "월간" };
+
+/** Usage windows ({ label, used 0..1, reset epoch ms }) from agy's /usage JSON; [] when the shape is not there. */
+export function geminiUsageWindows(out) {
+  let data;
+  try { data = typeof out === "string" ? JSON.parse(out) : out; } catch { return []; }
+  const groups = data?.command?.name === "usage" ? data.command.data?.groups : null;
+  if (!Array.isArray(groups)) return [];
+  const windows = [];
+  for (const g of groups) {
+    if (!/gemini/i.test(String(g?.name ?? ""))) continue;
+    for (const b of Array.isArray(g.buckets) ? g.buckets : []) {
+      const left = b?.remaining_fraction;
+      if (typeof left !== "number" || !Number.isFinite(left)) continue;
+      const reset = typeof b.reset_time === "string" ? Date.parse(b.reset_time) : NaN;
+      windows.push({
+        label: GEMINI_WINDOW_LABELS[b.window] ?? (typeof b.window === "string" && b.window.length <= 12 ? b.window : "한도"),
+        used: Math.min(1, Math.max(0, 1 - left)),
+        reset: Number.isFinite(reset) ? reset : null,
+      });
+    }
+  }
+  return windows;
+}
+
+export const GEMINI_USAGE_MS = 5 * 60_000;
+let geminiCache = null; // { at, value } — value null when agy gave no windows
+let geminiPending = null;
+/** Forgets the cached /usage answer (tests). */
+export const resetGeminiUsageCache = () => { geminiCache = null; geminiPending = null; };
+
+/**
+ * Gemini's usage windows via `run` (runCli from cli.js: agy -p /usage), cached for five minutes so the 30 s
+ * poll of GET /api/limits starts at most one agy every five minutes. Null when agy failed or gave no windows.
+ */
+export async function geminiUsage(run, now = Date.now()) {
+  if (geminiCache && now - geminiCache.at < GEMINI_USAGE_MS) return geminiCache.value;
+  geminiPending ??= (async () => {
+    let value = null;
+    try {
+      const { stdout } = await run("agy", ["-p", "/usage", "--output-format", "json", "--print-timeout", "20s", "--mode", "plan"], { cwd: os.tmpdir(), timeout: 30_000, maxBuffer: 1024 * 1024 });
+      const windows = geminiUsageWindows(stdout);
+      value = windows.length ? { windows } : null;
+    } catch { value = null; }
+    geminiCache = { at: now, value };
+    geminiPending = null;
+    return value;
+  })();
+  return geminiPending;
 }
 
 /** "Resets in 3h20m" / "Resets in 45m" from a Gemini quota error, as an epoch ms. */
