@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anchorLabel, answeredLine, answerOf, questionLists, whoLabel } from '../../web/src/doc/questionsModel.ts';
+import { anchorLabel, answeredLine, answerOf, questionLists, stepLine, whoLabel } from '../../web/src/doc/questionsModel.ts';
 import type { Discussion } from '../../shared/dispatch/discussions.ts';
 
 const q = (over: Partial<Discussion> = {}): Discussion => ({ id: 'q', anchor: { kind: 'block', block: 'doc' }, question: '?', status: 'open', askedBy: 'impl', askedAt: 1, ...over });
@@ -37,4 +37,11 @@ test('the answer: a valid choice wins, else trimmed text, else nothing', () => {
   assert.deepEqual(answerOf(q(), 0, 'typed'), { text: 'typed' });
   assert.equal(answerOf(c, null, '   '), null);
   assert.equal(answerOf(c, null, 'x'.repeat(4001)), null);
+});
+
+test('a blocked step is named by its diagram node, with the run views\' 막힘 word', () => {
+  const plan = { v: 1, block: 'b', steps: [{ id: 'impl', node: '구현' }] };
+  assert.equal(stepLine('impl', plan), '단계 구현 막힘');
+  assert.equal(stepLine('gone', plan), '단계 gone 막힘');
+  assert.equal(stepLine('impl', undefined), '단계 impl 막힘');
 });

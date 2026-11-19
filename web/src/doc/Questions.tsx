@@ -5,7 +5,7 @@
 // range, diagram node) is named on the card, not highlighted in the text yet.
 import { useId, useState, type KeyboardEvent } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { api, type Discussion } from '../api';
+import { api, type Discussion, type Plan } from '../api';
 import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
@@ -13,7 +13,7 @@ import type { FileSession } from '../fileSession';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { useSession } from '../useSession';
-import { anchorLabel, answeredLine, answerOf, questionLists, whoLabel } from './questionsModel';
+import { anchorLabel, answeredLine, answerOf, questionLists, stepLine, whoLabel } from './questionsModel';
 
 /** The section's id: the agent area's question badge scrolls here. */
 export const QUESTIONS_ID = 'doc-questions';
@@ -23,6 +23,7 @@ type Props = { session: FileSession };
 export function Questions({ session }: Props) {
   const path = useSession(session, (s) => s.path ?? '');
   const discussions = useSession(session, (s) => s.file?.discussions);
+  const plan = useSession(session, (s) => s.file?.plan);
   const { open, answered } = questionLists(discussions);
   const [showAnswered, setShowAnswered] = useState(false);
   const [note, setNote] = useState('');
@@ -53,7 +54,7 @@ export function Questions({ session }: Props) {
         <ol className="flex flex-col gap-2">
           {open.map((q) => (
             <li key={q.id}>
-              <QuestionCard q={q} onSend={send} />
+              <QuestionCard q={q} plan={plan} onSend={send} />
             </li>
           ))}
         </ol>
@@ -85,7 +86,7 @@ export function Questions({ session }: Props) {
   );
 }
 
-function Meta({ q }: { q: Discussion }) {
+function Meta({ q, plan }: { q: Discussion; plan?: Plan }) {
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">{whoLabel(q.askedBy)}</span>
@@ -94,14 +95,14 @@ function Meta({ q }: { q: Discussion }) {
       {q.step && q.status === 'open' && (
         <>
           <span aria-hidden>·</span>
-          <span>단계 {q.step} 멈춤</span>
+          <span>{stepLine(q.step, plan)}</span>
         </>
       )}
     </p>
   );
 }
 
-function QuestionCard({ q, onSend }: { q: Discussion; onSend: (q: Discussion, a: { choice: number } | { text: string }) => Promise<void> }) {
+function QuestionCard({ q, plan, onSend }: { q: Discussion; plan: Plan | undefined; onSend: (q: Discussion, a: { choice: number } | { text: string }) => Promise<void> }) {
   const [choice, setChoice] = useState<number | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -131,7 +132,7 @@ function QuestionCard({ q, onSend }: { q: Discussion; onSend: (q: Discussion, a:
       aria-label={`${whoLabel(q.askedBy)}의 질문`}
       className="rounded-md border border-l-2 border-l-[var(--step-blocked)] bg-card px-4 py-3 text-card-foreground"
     >
-      <Meta q={q} />
+      <Meta q={q} plan={plan} />
       <p className="mt-1 text-sm leading-6 whitespace-pre-wrap">{q.question}</p>
       {q.choices && q.choices.length > 0 && (
         <ToggleGroup

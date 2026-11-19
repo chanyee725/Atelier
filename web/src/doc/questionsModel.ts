@@ -1,5 +1,6 @@
 // In-document questions (#738), the pure part: which questions the document shows, in what order, and the words
 // around them. Stored names are a session name, "user" or "outside" only (shared/dispatch/discussions.ts).
+import type { Plan } from '../../../shared/dispatch/plan.ts';
 import { DISCUSSIONS_VERSION, MAX_ANSWER, OUTSIDE, USER, type Discussion, type DiscussionAnchor, type Discussions } from '../../../shared/dispatch/discussions.ts';
 
 export type QuestionLists = { open: Discussion[]; answered: Discussion[] };
@@ -35,6 +36,12 @@ export function answerOf(q: Discussion, choice: number | null, text: string): { 
   const t = text.trim();
   if (!t || t.length > MAX_ANSWER) return null;
   return { text: t };
+}
+
+/** "단계 구현 막힘": the plan step named by its diagram node (the run views' 막힘 word), the bare id when the plan lacks it. */
+export function stepLine(step: string, plan: Plan | null | undefined): string {
+  const node = Array.isArray(plan?.steps) ? plan.steps.find((s) => s?.id === step)?.node : undefined;
+  return `단계 ${typeof node === 'string' && node ? node : step} 막힘`;
 }
 
 /** Count text for the badges: "질문 2". */
