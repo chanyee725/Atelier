@@ -20,7 +20,7 @@ import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
 import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
-import { shownView, toCanvas } from './viewMode';
+import { isPipelineView, shownView, toCanvas } from './viewMode';
 import { createFileSession, type FilePatch, type FileSession } from './fileSession';
 import { useSession } from './useSession';
 import { noteTree } from './freshPaths';
@@ -35,6 +35,8 @@ import type { CursorEvent, CursorStatusEvent } from './canvas/agentCursor';
 import type { RunEvent } from './run/runModel';
 // The run view (E22) loads when it is first shown.
 const RunView = lazy(() => import('./run/RunView'));
+// The 플랜 view (#729) too.
+const PlanView = lazy(() => import('./run/PlanView'));
 // The 세션 보드 (#731) loads only when opened, so the editor bundle does not carry the Dispatch screens.
 const SessionBoard = lazy(() => import('./dispatch/SessionBoard'));
 // TipTap and the diagram renderer are big; they load when a file is first opened.
@@ -284,7 +286,7 @@ export function App() {
   // A pipeline file (it has a plan): its runs show in the strip, the 실행 view and the canvas overlay.
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
   const planCode = useSession(session, (s) => s.file?.blocks.find((b) => b.id === s.file?.plan?.block)?.code);
-  const view: View = !hasPlan && baseView === 'run' ? 'doc' : baseView;
+  const view: View = !hasPlan && isPipelineView(baseView) ? 'doc' : baseView;
   useEffect(() => watchRun(hasPlan ? path : null), [hasPlan, path]);
   const status = useSession(session, (s) => s.status);
   const statusAlert = useSession(session, (s) => s.statusAlert);
@@ -1050,6 +1052,12 @@ export function App() {
             <LazyBoundary onFail={flushForReload}>
               <Suspense fallback={null}>
                 <RunView code={planCode} />
+              </Suspense>
+            </LazyBoundary>
+          ) : view === 'plan' ? (
+            <LazyBoundary onFail={flushForReload}>
+              <Suspense fallback={null}>
+                <PlanView session={session} />
               </Suspense>
             </LazyBoundary>
           ) : view === 'both' ? (

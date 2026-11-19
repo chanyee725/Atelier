@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shownView, toCanvas } from '../../web/src/viewMode.ts';
+import { isPipelineView, shownView, toCanvas } from '../../web/src/viewMode.ts';
 
 test('shownView: narrow screens show the document instead of both panes', () => {
   assert.equal(shownView('both', true), 'doc');
@@ -26,4 +26,13 @@ test('toCanvas: from the 실행 view, wide screens open both panes and narrow sc
   assert.equal(toCanvas('run', false), 'both');
   assert.equal(toCanvas('run', true), 'canvas');
   assert.equal(shownView('run', true), 'run');
+});
+
+test('toCanvas: the 플랜 view (#729) leaves for the canvas like 실행', () => {
+  assert.equal(toCanvas('plan', false), 'both');
+  assert.equal(toCanvas('plan', true), 'canvas');
+  assert.equal(shownView('plan', true), 'plan');
+  assert.equal(isPipelineView('plan'), true);
+  assert.equal(isPipelineView('run'), true);
+  assert.equal(isPipelineView('doc'), false);
 });
