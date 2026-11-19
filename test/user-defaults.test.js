@@ -101,10 +101,14 @@ test('a value with the wrong type is ignored and named; the rest still apply', a
   }
 });
 
-test('startDefaults: workspace, then lastWorkspace; DRAW_PORT, then the file, then the built-in port', () => {
+test('startDefaults: workspace, then lastWorkspace; ATELIER_PORT, then the file, then the built-in port', () => {
+  assert.deepEqual(startDefaults({}, {}), { workspaceDir: null, port: 4000 });
   assert.deepEqual(startDefaults({}, {}, 4330), { workspaceDir: null, port: 4330 });
   assert.deepEqual(startDefaults({ workspace: '~/w', port: 4400 }, { HOME: '/h' }, 4330), { workspaceDir: '/h/w', port: 4400 });
   assert.deepEqual(startDefaults({ lastWorkspace: '/l', port: 4400 }, { DRAW_PORT: '4999' }, 4330), { workspaceDir: '/l', port: 4999 });
+  assert.deepEqual(startDefaults({ port: 4400 }, { ATELIER_PORT: '4001', DRAW_PORT: '4999', DISPATCH_PORT: '4888' }), { workspaceDir: null, port: 4001 });
+  assert.deepEqual(startDefaults({}, { DISPATCH_PORT: '4888' }), { workspaceDir: null, port: 4888 });
+  assert.deepEqual(startDefaults({ port: 4400 }, { ATELIER_PORT: 'x' }), { workspaceDir: null, port: 4400 });
 });
 
 function scratchRepo() {

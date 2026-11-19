@@ -6,7 +6,7 @@ export type DefaultsForm = { workspace: string; port: string; prStatus: boolean 
 export type DefaultsField = 'workspace' | 'port';
 export type DefaultsPatch = { workspace?: string | null; port?: number | null; prStatus?: boolean | null };
 
-export const DEFAULT_PORT = 4330;
+export const DEFAULT_PORT = 4000;
 
 /** The form state for saved values: empty text means "not set" (built-in default). */
 export function defaultsForm(v: DefaultsValues): DefaultsForm {

@@ -150,7 +150,7 @@ export function UserDefaultsForm() {
                 className={cn(INPUT, 'w-28 tabular-nums')}
               />
               <span id={`${ids.port}-hint`} className="text-xs text-muted-foreground">
-                1024~65535 사이. DRAW_PORT를 주면 그게 먼저예요.
+                1024~65535 사이. ATELIER_PORT를 주면 그게 먼저예요. 바꾸면 서버를 다시 시작해야 해요.
               </span>
               {errors.port && (
                 <span id={`${ids.port}-error`} className="text-xs text-destructive">

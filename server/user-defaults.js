@@ -240,13 +240,25 @@ export class UserDefaults {
 
 /**
  * Where `npm start` runs when the command line names no folder, and on which port.
- * Workspace: the file's `workspace`, else `lastWorkspace`. Port: DRAW_PORT, else the file's `port`, else fallback.
+ * Workspace: the file's `workspace`, else `lastWorkspace`. Port: ATELIER_PORT (DRAW_PORT and DISPATCH_PORT are
+ * deprecated aliases, in that order), else the file's `port`, else fallback (4000, issue #773).
  */
-export function startDefaults(values, env = process.env, fallbackPort = 4330) {
+export const DEFAULT_PORT = 4000;
+
+/** The port named in the environment: ATELIER_PORT, else the deprecated DRAW_PORT, else DISPATCH_PORT. 0 when none. */
+export function envPort(env = process.env) {
+  for (const k of ['ATELIER_PORT', 'DRAW_PORT', 'DISPATCH_PORT']) {
+    const n = Number(env[k]);
+    if (Number.isInteger(n) && n > 0 && n <= 65535) return n;
+  }
+  return 0;
+}
+
+export function startDefaults(values, env = process.env, fallbackPort = DEFAULT_PORT) {
   const ws = values.workspace ?? values.lastWorkspace ?? null;
   return {
     workspaceDir: ws ? expandHome(ws, env) : null,
-    port: Number(env.DRAW_PORT) || values.port || fallbackPort,
+    port: envPort(env) || values.port || fallbackPort,
   };
 }
 

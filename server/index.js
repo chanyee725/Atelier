@@ -5,15 +5,17 @@ import { statSync } from 'node:fs';
 import { createApp } from './app.js';
 import { parseArgs, USAGE } from './cli.js';
 import { claimWorkspace } from './lock.js';
-import { readDefaultsSync, startDefaults } from './user-defaults.js';
+import { DEFAULT_PORT, envPort, readDefaultsSync, startDefaults } from './user-defaults.js';
 
 const HOST = '127.0.0.1';
-const DEFAULT_PORT = 4330;
 
-// ~/.dispatch/drawing.json: the default workspace and port when the command line and DRAW_PORT name none.
+// ~/.dispatch/drawing.json: the default workspace and port when the command line and ATELIER_PORT name none.
 const userDefaults = readDefaultsSync();
 if (userDefaults.error) console.error(`~/.dispatch/drawing.json unreadable (${userDefaults.error}); using built-in defaults.`);
 const start = startDefaults(userDefaults.values, process.env, DEFAULT_PORT);
+if (!process.env.ATELIER_PORT && (process.env.DRAW_PORT || process.env.DISPATCH_PORT)) {
+  console.error('DRAW_PORT / DISPATCH_PORT are deprecated; use ATELIER_PORT.');
+}
 
 let opts;
 try {
@@ -56,7 +58,9 @@ const port = start.port;
 app = await createApp({ ...opts, lock }, { claimWorkspace });
 app.server.on('error', async (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${port} is already in use. Pick another one: DRAW_PORT=<port> npm start -- <workspace-dir>`);
+    // Never fall back to another port: agent sessions and plugin scripts expect this one (#773).
+    const from = envPort(process.env) ? 'the environment' : userDefaults.values.port ? '~/.dispatch/drawing.json' : 'the default';
+    console.error(`Port ${port} (from ${from}) is already in use by another app. Stop that app, or start Atelier on another port: ATELIER_PORT=<port> npm start -- <workspace-dir>`);
   } else {
     console.error(`Server error: ${err.message}`);
   }
