@@ -14,7 +14,7 @@ import { issuesBlankReason, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
 
 const ROW = 'flex h-9 min-w-0 items-center gap-2 px-4 text-xs';
-const PR_STATE = { open: { label: '열림', tone: 'warn' }, merged: { label: '머지됨', tone: 'ok' }, closed: { label: '닫힘', tone: 'idle' } } as const;
+const PR_STATE = { open: { label: '열림', tone: 'warn' }, merged: { label: '머지됨', tone: 'merged' }, closed: { label: '닫힘', tone: 'idle' } } as const;
 const CI: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad' }> = {
   success: { label: 'CI 통과', tone: 'ok' },
   failure: { label: 'CI 실패', tone: 'bad' },
@@ -76,7 +76,7 @@ export function BranchesCard({ branches, claimed, grow }: { branches: Feed<Branc
   const rows = branchRows(branches, claimed);
   const base = branches && branches !== 'failed' ? branches.base : null;
   return (
-    <Card id="branches" grow={grow} scroll className={grow === undefined ? "max-h-80" : undefined} title="이슈 없는 브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
+    <Card id="branches" grow={grow} scroll className={grow === undefined ? 'max-h-80' : undefined} title="이슈 없는 브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
       {branches === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : branches === 'failed' ? (
@@ -110,7 +110,7 @@ export function BranchesCard({ branches, claimed, grow }: { branches: Feed<Branc
 export function PrsCard({ issues, prs, grow }: { issues: Feed<IssuesAnswer>; prs: Feed<ReadonlyMap<string, PrAnswer>>; grow?: number }) {
   const rows = issues && issues !== 'failed' && issues.ok ? prRows(issues.issues, prs) : [];
   return (
-    <Card id="prs" grow={grow} scroll title="PR과 머지" count={rows.length || undefined} flush>
+    <Card id="prs" grow={grow} scroll className={grow === undefined ? 'max-h-[30rem]' : undefined} title="PR과 머지" count={rows.length || undefined} flush>
       {issues === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : issues === 'failed' ? (

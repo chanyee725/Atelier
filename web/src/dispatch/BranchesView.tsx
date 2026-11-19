@@ -49,7 +49,7 @@ function PrChip({ pr }: { pr: BranchRow['pr'] }) {
   const p = PR_PHASE[pr.phase];
   const body = (
     <>
-      <span className="tabular-nums">#{pr.number}</span> <span className={TONE_TEXT[p.tone]}>{p.label}</span>
+      <span className="tabular-nums">#{pr.number}</span> <span className={pr.phase === 'merged' ? 'text-merged' : TONE_TEXT[p.tone]}>{p.label}</span>
     </>
   );
   return pr.url ? (

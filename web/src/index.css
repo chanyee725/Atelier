@@ -59,6 +59,8 @@
 
   /* Status colours (not in shadcn), from Dispatch light (doc 5 §3.1): only for state dots and bars. */
   --ok: oklch(0.62 0.15 155);
+  /* Merged PRs and issues (#793): purple, as on GitHub, so 머지됨 is not read as 통과. */
+  --merged: oklch(0.55 0.2 300);
   --warn: oklch(0.72 0.15 70);
   --bad: oklch(0.6 0.2 25);
   --idle: oklch(0.62 0.08 250);
@@ -109,6 +111,7 @@
 
   /* Status colours from Dispatch's monitor theme (tuned for dark panels). */
   --ok: oklch(0.76 0.17 150);
+  --merged: oklch(0.72 0.16 300);
   --warn: oklch(0.82 0.15 80);
   --bad: oklch(0.7 0.2 25);
   --idle: oklch(0.68 0.04 250);
@@ -257,6 +260,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-ok: var(--ok);
+  --color-merged: var(--merged);
   --color-warn: var(--warn);
   --color-bad: var(--bad);
   --color-idle: var(--idle);

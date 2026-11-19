@@ -3,9 +3,9 @@
 import type { ApiIssue } from './issueBoard';
 import type { BranchTip, Branches, Feed, PrAnswer } from './projectFeeds';
 
-export const BRANCH_STATE: Record<NonNullable<BranchTip['state']>, { label: string; tone: 'ok' | 'warn' | 'idle' }> = {
+export const BRANCH_STATE: Record<NonNullable<BranchTip['state']>, { label: string; tone: 'ok' | 'warn' | 'idle' | 'merged' }> = {
   open: { label: '작업 중', tone: 'warn' },
-  merged: { label: '머지됨', tone: 'ok' },
+  merged: { label: '머지됨', tone: 'merged' },
   empty: { label: '커밋 없음', tone: 'idle' },
 };
 

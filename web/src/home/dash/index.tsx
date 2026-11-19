@@ -170,7 +170,7 @@ export function CardRow({ icon, title, sub, meta, onClick, href, className, data
 }
 
 /** A number with a label under it; `tone` colours a dot before the number. */
-export function Stat({ value, label, tone }: { value: ReactNode; label: ReactNode; tone?: 'ok' | 'warn' | 'bad' | 'idle' }) {
+export function Stat({ value, label, tone }: { value: ReactNode; label: ReactNode; tone?: keyof typeof TONE }) {
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-1.5 text-xl leading-7 font-semibold tabular-nums">
@@ -191,7 +191,7 @@ export function StatRow({ children, label }: { children: ReactNode; label?: stri
   );
 }
 
-export const TONE = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-bad', idle: 'bg-idle' } as const;
+export const TONE = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-bad', idle: 'bg-idle', merged: 'bg-merged' } as const;
 
 /** Small coloured status dot with text; the text is what screen readers get. */
 export function StatusDot({ tone, children, pulse }: { tone: keyof typeof TONE; children?: ReactNode; pulse?: boolean }) {

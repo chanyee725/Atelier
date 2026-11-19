@@ -3,14 +3,14 @@
 // 작업 중 first, then PR 리뷰, then 열림; closed issues are not listed. Nothing is shown for an empty bit (no "맡은 세션
 // 없음"). The row's chevron opens its details below: branches with ahead/behind, every PR (review, CI, conflicts) and
 // the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only; links open GitHub in a new tab.
-import { useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
 import { useAccountLabels } from '../accountLabels';
 import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { PrIssueSessions } from './IssueSessionList';
-import { Pager, useFitRows, usePaging } from './Pager';
+import { Pager, usePaging } from './Pager';
 import { fromSessions } from './issueSessions';
 import { ISSUE_STATE, initials, issueRows, issuesBlankReason, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
@@ -35,10 +35,8 @@ type Props = {
   filterKey?: string;
 };
 
-/** One issue row (h-9) plus its divider, px. */
-const ROW_H = 37;
-/** Pager, the card's bottom border and the page padding under the card, px. */
-const PAGER_RESERVE = 72;
+/** Issues on one page (#793): a fixed eight, so the card keeps one height and the pager stays in one place. */
+export const ISSUES_PER_PAGE = 8;
 
 /** The head branches of open PRs, for the CI/review lookup (#686's /api/prs). */
 export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
@@ -47,12 +45,9 @@ export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
 export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: Props) {
   const list = Array.isArray(sessions) ? sessions : [];
   const rows = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
-  // Rows that fit above the card's bottom edge become one page (#800); the rest goes to the next pages.
-  const listRef = useRef<HTMLUListElement>(null);
-  const size = useFitRows(listRef, { rowHeight: ROW_H, reserve: PAGER_RESERVE, min: 5, max: 15, active: rows.length > 0 });
-  const paged = usePaging(rows, size, filterKey);
+  const paged = usePaging(rows, ISSUES_PER_PAGE, filterKey);
   return (
-    <Card id="issues" grow={5} title="이슈" count={rows.length || undefined} flush>
+    <Card id="issues" title="이슈" count={rows.length || undefined} flush>
       {issues === null ? (
         <EmptyState>GitHub에서 이슈를 찾는 중이에요</EmptyState>
       ) : issues === 'failed' ? (
@@ -63,7 +58,7 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: 
         <EmptyState>열린 이슈가 없어요.</EmptyState>
       ) : (
         <>
-          <ul ref={listRef} aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
+          <ul aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
             {paged.shown.map((r) => (
               <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
             ))}

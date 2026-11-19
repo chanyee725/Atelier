@@ -12,11 +12,11 @@ export type ApiIssue = { number: number; title: string; url?: string; prs: Issue
 export type IssuesAnswer = { ok: true; issues: ApiIssue[] } | { ok: false; reason: string };
 
 export type IssueState = 'open' | 'progress' | 'pr' | 'merged';
-export const ISSUE_STATE: Record<IssueState, { label: string; tone: 'ok' | 'warn' | 'bad' | 'idle' }> = {
+export const ISSUE_STATE: Record<IssueState, { label: string; tone: 'ok' | 'warn' | 'bad' | 'idle' | 'merged' }> = {
   open: { label: '열림', tone: 'idle' },
   progress: { label: '작업 중', tone: 'ok' },
   pr: { label: 'PR 리뷰', tone: 'warn' },
-  merged: { label: '머지됨', tone: 'ok' },
+  merged: { label: '머지됨', tone: 'merged' },
 };
 
 export type IssueRow = ApiIssue & {
