@@ -267,6 +267,8 @@ export async function setup(ctx, deps = {}) {
   ctx.hub.onAttach(async sendTo => sendTo("snapshot", await d.snapshot()));
   return {
     ...d,
+    // The git project this server runs agents for; /api/info names it by folder (server/app.js projectName).
+    projectRoot: found.root,
     routes: [statusRoute, ...d.routes],
     status: () => status,
     async listening() {

@@ -17,13 +17,13 @@ proj="$(git -C "${1:-$PWD}" rev-parse --show-toplevel 2>/dev/null || (cd "${1:-$
 old=""
 [ ! -f "$proj/.dispatch/server.pid" ] || old="$(tr -dc '0-9' < "$proj/.dispatch/server.pid" 2>/dev/null || true)"
 # Only wait for a pid that is our server; a recycled pid is stale and stop.sh ignores it too.
-{ [ -z "$old" ] || is_our_server "$old" "$proj/pipelines"; } || old=""
+{ [ -z "$old" ] || is_our_project_server "$old" "$proj"; } || old=""
 "$here/stop.sh" "${1:-$PWD}"
 # Wait (about 10s; each poll also costs a ps call) for the old server to exit so start.sh never finds it still answering.
 if [ -n "$old" ]; then
   # A zombie (exited, not yet reaped by its parent) counts as gone.
   # A pid recycled by an unrelated process during the wait also counts as gone.
-  running() { kill -0 "$old" 2>/dev/null && [[ "$(ps -o stat= -p "$old" 2>/dev/null || true)" != Z* ]] && is_our_server "$old" "$proj/pipelines"; }
+  running() { kill -0 "$old" 2>/dev/null && [[ "$(ps -o stat= -p "$old" 2>/dev/null || true)" != Z* ]] && is_our_project_server "$old" "$proj"; }
   # DRAW_RESTART_WAIT_TENTHS (default 100 = about 10s) only exists so tests can shorten the wait.
   for _ in $(seq 1 "${DRAW_RESTART_WAIT_TENTHS:-100}"); do running || break; sleep 0.1; done
   if running; then echo "old server (pid $old) did not exit within the wait (about 10s by default); not starting a new one" >&2; exit 1; fi

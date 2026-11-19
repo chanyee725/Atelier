@@ -5,7 +5,7 @@ description: Write or edit an Atelier document (.dpx.json) through the workspace
 
 # Atelier doc
 
-Documents are `.dpx.json` files in the workspace (`<project>/pipelines`). The API is in `docs/workspace-api.md` in the Atelier repo. Every non-GET request needs `x-drawing: 1`; a session started by Atelier also sends `x-drawing-session: $DRAWING_SESSION`.
+Documents are `.dpx.json` files in the workspace (`<project>/atelier`). The API is in `docs/workspace-api.md` in the Atelier repo. Every non-GET request needs `x-drawing: 1`; a session started by Atelier also sends `x-drawing-session: $DRAWING_SESSION`.
 
 ## Steps
 

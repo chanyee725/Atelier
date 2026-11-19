@@ -143,7 +143,7 @@ export type LocalFolders = { path: string; parent: string | null; home: string; 
 
 export const api = {
   /** `project`: the git project's folder name when the server sends it (#773); else the workspace folder's name. */
-  info: () => call<{ workspace: string; project?: string; mode?: 'drawing' | 'project' }>('GET', '/api/info'),
+  info: () => call<{ workspace: string; mode?: 'drawing' | 'project'; project?: string | null }>('GET', '/api/info'),
   tree: () => call<{ tree: TreeNode[] }>('GET', '/api/tree').then((r) => r.tree),
   projects: () => call<ProjectsView>('GET', '/api/workspace/projects'),
   dispatch: () => call<DispatchStatus>('GET', '/api/dispatch'),

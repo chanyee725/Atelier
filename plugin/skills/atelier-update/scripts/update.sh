@@ -97,7 +97,7 @@ if $restart; then
   pid=""; port=""
   [ ! -f "$pid_file" ] || pid="$(cat "$pid_file")"
   [ ! -f "$port_file" ] || port="$(cat "$port_file")"
-  if is_our_server "$pid" "$project/pipelines"; then
+  if is_our_project_server "$pid" "$project"; then
     if [[ "$port" =~ ^[0-9]+$ ]]; then
       DRAWING_HOME="$base/$ver" DISPATCH_PORT="$port" DRAW_PORT="$port" "$base/current/plugin/skills/atelier-setup/scripts/restart.sh" "$project" | sed 's/^/    /'
     else

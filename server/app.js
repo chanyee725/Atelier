@@ -1,7 +1,6 @@
 // HTTP app: API routes from feature modules, SSE hub, static files from public/.
 import { createServer } from 'node:http';
-import { stat } from 'node:fs/promises';
-import { basename, join, sep } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHub } from './events.js';
 import { serveStatic } from './static.js';
@@ -24,41 +23,21 @@ const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
  * switchWorkspace(dir) (E554) moves the running server to another workspace folder: every module is closed and
  * set up again for the new folder, so modules never need to handle a changing ctx.workspaceDir themselves.
  */
-// Project mode serves the run screen only. Document/file writes of the editor stay closed; the /dispatch UI never
-// calls them. Kept open: POST /api/workspace/pr-tracking (a per-workspace setting, not a document), /api/pipeline/* (plan, start, stop, ...), PATCH /api/file/plan (agents' step edits), /api/sessions/*.
+// Project mode (start.sh <project>, issue #773): the whole app for one git project, its documents in
+// <project>/atelier/. Only the workspace folder list stays closed: the server belongs to that one project.
 const PROJECT_MODE_BLOCKED = [
-  ['PUT', /^\/api\/file$/],
-  ['POST', /^\/api\/file$/],
-  ['DELETE', /^\/api\/file$/],
-  ['POST', /^\/api\/folder$/],
   ['POST', /^\/api\/workspaces(\/open)?$/],
   ['DELETE', /^\/api\/workspaces$/],
-  ['DELETE', /^\/api\/folder$/],
-  ['POST', /^\/api\/move$/],
-  ['POST', /^\/api\/trash\/restore$/],
-  ['POST', /^\/api\/history$/],
 ];
 
 /**
- * True for a path the SPA entry answers (index.html fallback): not /dispatch, not /api, and not a real asset.
- * A real asset is an existing file in publicDir (other than index.html) or anything under /assets/; a dotted
- * path such as /notes.v2 is just an editor route.
+ * The git project's folder name for /api/info: the Dispatch module's project root when it runs, else in project
+ * mode the folder that holds the workspace (<project>/atelier). Folder name only, never the full path.
  */
-export async function isEditorEntry(pathname, publicDir = PUBLIC_DIR) {
-  if (/^\/(dispatch|api)(\/|$)/.test(pathname)) return false;
-  if (pathname === '/index.html') return true;
-  if (pathname.startsWith('/assets/')) return false;
-  let rel;
-  try {
-    rel = decodeURIComponent(pathname).replace(/^\/+/, '');
-  } catch {
-    return true;
-  }
-  const root = publicDir.endsWith(sep) ? publicDir : publicDir + sep;
-  const file = join(publicDir, rel);
-  if (!file.startsWith(root)) return true;
-  const st = await stat(file).catch(() => null);
-  return !(st && st.isFile());
+export function projectName(ctx) {
+  const root = ctx.modules?.dispatch?.projectRoot;
+  if (root) return basename(root);
+  return ctx.projectMode && ctx.workspaceDir ? basename(dirname(ctx.workspaceDir)) : null;
 }
 
 // Session states that a switch would cut off: the switch is refused while any session is in one.
@@ -84,7 +63,11 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
   const base = [
     { method: 'GET', path: '/api/events', handler: (req, res) => hub.attach(req, res) },
     // Folder name only, never the full path.
-    { method: 'GET', path: '/api/info', handler: (req, res) => sendJson(res, 200, { workspace: basename(ctx.workspaceDir ?? ''), mode: ctx.projectMode ? 'project' : 'drawing' }) },
+    {
+      method: 'GET',
+      path: '/api/info',
+      handler: (req, res) => sendJson(res, 200, { workspace: basename(ctx.workspaceDir ?? ''), mode: ctx.projectMode ? 'project' : 'drawing', project: projectName(ctx) }),
+    },
   ];
   // What the modules set up for the open workspace; replaced as a whole on a switch.
   let active = { routes: [], closers: [], listeners: [] };
@@ -219,7 +202,7 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
           return sendJson(res, 403, { error: 'forbidden' });
         }
         if (ctx.projectMode && PROJECT_MODE_BLOCKED.some(([m, re]) => m === req.method && re.test(url.pathname))) {
-          return sendJson(res, 403, { error: 'project mode: documents are read-only here' });
+          return sendJson(res, 403, { error: 'project mode: the workspace folder cannot change' });
         }
         if (switching && !url.pathname.startsWith('/api/workspaces')) await switching.catch(() => {});
         for (const r of [...base, ...active.routes]) {
@@ -228,10 +211,6 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
           if (match) return await r.handler(req, res, ctx, match, url);
         }
         return sendJson(res, 404, { error: 'not found' });
-      }
-      if (ctx.projectMode && (req.method === 'GET' || req.method === 'HEAD') && (await isEditorEntry(url.pathname, publicDir))) {
-        res.writeHead(302, { location: '/dispatch', 'cache-control': 'no-store' });
-        return res.end();
       }
       if (req.method !== 'GET' && req.method !== 'HEAD') return sendJson(res, 405, { error: 'method not allowed' });
       return await serveStatic(req, res, url.pathname, publicDir);
