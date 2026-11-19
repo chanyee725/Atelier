@@ -6,7 +6,7 @@ import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, 
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
 import { badgeRect } from '../../../shared/render/badge.ts';
-import { boardShown, legendOf, legendSpot, overlayModel, pathData, runProgress, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, legendSpot, overlayModel, pathData, runProgress, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -21,6 +21,8 @@ type Props = {
   scale: number;
   /** No room above the picture (it touches the top of a clipped view): the motion switch sits inside its corner. */
   motionInside?: boolean;
+  /** The document draws the time-left panel itself, in flow under the picture (`RunEta`). */
+  hideEta?: boolean;
 };
 
 /** Below this scale the labels are too small to read and hidden (§5 "hidden below 40 % zoom"). */
@@ -37,7 +39,7 @@ export function textWidth(s: string, size = LABEL_FONT): number {
   return Math.ceil(w);
 }
 
-export function RunLayer({ scene, steps, left, top, scale, motionInside }: Props) {
+export function RunLayer({ scene, steps, left, top, scale, motionInside, hideEta }: Props) {
   const model = useMemo(() => overlayModel(scene, steps), [scene, steps]);
   const still = useStill();
   if (!model.nodes.length) return null;
@@ -53,7 +55,7 @@ export function RunLayer({ scene, steps, left, top, scale, motionInside }: Props
           <Step key={n.node} n={n} labels={labels} />
         ))}
       </svg>
-      <EtaCorner panel={model.etas} />
+      {!hideEta && <EtaCorner panel={model.etas} />}
       {moving && (
         <button type="button" className="run-motion" onClick={() => setStill(!still)}>
           {still ? '움직임 켜기' : '움직임 멈추기'}
@@ -68,6 +70,12 @@ export function etaText(e: AgentEta): string {
   if (e.kind === 'left') return `남은 시간 ~${fmtDur(e.ms)}`;
   if (e.kind === 'over') return '평소보다 길어요';
   return '추정 중';
+}
+
+/** The panel for the document, in flow under the picture's bottom-right so it never covers a node (#735). */
+export function RunEta({ steps }: { steps: readonly RunStep[] }) {
+  const panel = useMemo(() => etaPanel(steps), [steps]);
+  return <EtaCorner panel={panel} />;
 }
 
 /** Per-agent time left, bottom-right corner of the picture (#735). One row per working agent, the rest fold into "+N". */
