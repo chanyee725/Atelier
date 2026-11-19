@@ -73,21 +73,26 @@ const sessionEnv = s => ({ ...SESSION_ENV, ...ownGitEnv(), DRAWING_SESSION: s.id
 const isOpenStatus = st => !["done", "error"].includes(st);
 const clip = (s, n = 2000) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
 
-// Splits a child's stdout into JSON lines.
+// Splits a child's stdout into JSON lines. A last line without a trailing newline is read when the stream ends.
 function onJsonLines(stream, fn) {
   let buf = "";
+  const take = raw => {
+    const line = raw.trim();
+    if (!line) return;
+    let msg;
+    try { msg = JSON.parse(line); } catch { return; }
+    fn(msg);
+  };
   stream.on("data", d => {
     buf += d;
     let i;
     while ((i = buf.indexOf("\n")) >= 0) {
-      const line = buf.slice(0, i).trim();
+      const line = buf.slice(0, i);
       buf = buf.slice(i + 1);
-      if (!line) continue;
-      let msg;
-      try { msg = JSON.parse(line); } catch { continue; }
-      fn(msg);
+      take(line);
     }
   });
+  stream.on("end", () => { const line = buf; buf = ""; take(line); });
 }
 
 /** A short Korean label for what a tool call is doing, from its name and (for shells) its command. */
@@ -1414,8 +1419,28 @@ export class Hub extends EventEmitter {
     const env = { ...sessionEnv(s), ...this.mcpEnv(s) };
     const proc = this.spawnCli("agy", args, { cwd: s.cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     this.attach(s, proc);
+    // One agy process is one turn. Its answer arrives as text_delta chunks; they add up in `turn.text`.
+    const turn = { text: "", ended: false };
+    this.rt(s.id).agyTurn = turn;
     onJsonLines(proc.stdout, m => this.onGemini(s, m));
+    // No result event before agy closed (it exited early or the line was lost): the turn still ends with
+    // what agy said, so the lead gets the report. A failed exit is left to attach().
+    proc.on("close", code => {
+      if (!turn.ended && !code && !s._killed && s.status !== "done") this.endGeminiTurn(s, turn);
+    });
     this.touch(s, { status: "running", error: null });
+  }
+
+  /** Stores a finished agy turn's answer as `last` and hands it to the lead (once per turn). */
+  endGeminiTurn(s, turn, response) {
+    turn.ended = true;
+    const text = response && response.trim() ? response : turn.text;
+    if (text.trim()) {
+      s.last = redact(clip(text, 400));
+      this.rt(s.id).lastText = text;
+    }
+    this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
+    this.reportToParent(s);
   }
 
   onGemini(s, m) {
@@ -1427,10 +1452,16 @@ export class Hub extends EventEmitter {
       case "step_update": {
         const su = m.step_update || {};
         if (su.step_type === "agent_response") {
-          if (su.text_delta && su.text_delta.trim()) {
-            this.push(s, { kind: "assistant", text: su.text_delta });
-            s.last = redact(clip(su.text_delta, 400));
-            this.rt(s.id).lastText = su.text_delta;
+          // text_delta is a chunk of the answer, not the whole of it.
+          const chunk = su.text_delta ?? su.text ?? "";
+          if (chunk) {
+            const turn = this.rt(s.id).agyTurn ??= { text: "", ended: false };
+            turn.text += chunk;
+            if (chunk.trim()) this.push(s, { kind: "assistant", text: chunk });
+            if (turn.text.trim()) {
+              s.last = redact(clip(turn.text, 400));
+              this.rt(s.id).lastText = turn.text;
+            }
           }
           if (su.usage) {
             const u = su.usage;
@@ -1451,17 +1482,18 @@ export class Hub extends EventEmitter {
       }
       case "result": {
         const res = m.result || {};
-        if (res.response && res.response.trim()) {
-          s.last = redact(clip(res.response, 400));
-          this.rt(s.id).lastText = res.response;
-        }
+        const turn = this.rt(s.id).agyTurn ??= { text: "", ended: false };
         if (res.status === "ERROR") {
+          turn.ended = true;
+          if (res.response && res.response.trim()) {
+            s.last = redact(clip(res.response, 400));
+            this.rt(s.id).lastText = res.response;
+          }
           if (isQuotaError(res.error)) this.setGeminiQuota(res.error);
           this.push(s, { kind: "error", text: clip(res.error || "Turn failed", 400) });
           this.touch(s, { status: "error", error: clip(res.error || "Turn failed", 300) });
-        } else {
-          this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
-          this.reportToParent(s);
+        } else if (!turn.ended) {
+          this.endGeminiTurn(s, turn, res.response ?? m.response);
         }
         break;
       }
