@@ -17,6 +17,7 @@ import {
   parseInbox,
   removeItem,
   takeActivity,
+  targetGone,
 } from '../../web/src/activity/inbox.ts';
 
 const ev = (id: string, at: number, kind: 'start' | 'progress' | 'finish' | 'error' = 'finish') => ({ id, at, kind, sid: 's1', name: 'Jae', file: 'docs/설계.dpx.json' });
@@ -173,4 +174,15 @@ test('two tabs on one storage: each event stored once, deletes and reads carry o
   mem.addToast(t, 5);
   mem.addToast(toastOf({ type: 'saved', path: 'x.dpx.json' })!, 6);
   assert.equal(mem.read().items.length, 2);
+});
+
+test('an item whose document left the tree is known as gone; an unloaded tree says nothing (#803)', () => {
+  const files = ['docs/설계.dpx.json', 'run/p.dpx.json'];
+  assert.equal(targetGone({ file: 'docs/설계.dpx.json' }, files), false);
+  assert.equal(targetGone({ plan: 'run/p' }, files), false, 'with or without the extension');
+  assert.equal(targetGone({ file: 'docs/지운.dpx.json' }, files), true);
+  assert.equal(targetGone({ plan: 'run/q.dpx.json' }, files), true);
+  assert.equal(targetGone({ session: 's1' }, files), false);
+  assert.equal(targetGone({ file: 'docs/지운.dpx.json' }, []), false);
+  assert.equal(targetGone(undefined, files), false);
 });

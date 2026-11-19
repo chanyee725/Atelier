@@ -90,6 +90,19 @@ export function bellCount(box: Inbox, waiting: readonly string[]): number {
   return unread + plans.size;
 }
 
+const stem = (p: string) => p.replace(/\.dpx(\.json)?$/i, '');
+
+/**
+ * True when the item leads to a document (or plan) that is no longer in the workspace tree (deleted or moved), so a
+ * click says so instead of opening nothing (#803). `files`: every file path in the tree; empty means not loaded yet.
+ */
+export function targetGone(target: InboxTarget | undefined, files: readonly string[]): boolean {
+  const path = target && ('file' in target ? target.file : 'plan' in target ? target.plan : null);
+  if (!path || !files.length) return false;
+  const want = stem(path);
+  return !files.some((f) => stem(f) === want);
+}
+
 const clip = (s: string) => (s.length > TEXT_MAX ? `${s.slice(0, TEXT_MAX - 1)}…` : s);
 
 /** The item for an app toast shown (or sent as a browser notification) at `at`. Its id comes from the event, not the tab. */
