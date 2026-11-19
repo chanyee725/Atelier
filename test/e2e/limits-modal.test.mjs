@@ -62,6 +62,9 @@ test('설정 modal: open, change, reset, focus return, Fable follows weekly, 390
   for (let i = 0; i < 100 && !log.includes('workspace'); i++) await new Promise((r) => setTimeout(r, 100));
   assert.ok(log.includes(`http://127.0.0.1:${port}/`) && log.includes(`workspace ${ws}`), `unexpected server log: ${log}`);
   const state = async () => (await (await fetch(`${BASE}/api/state`)).json()).settings;
+  // #676: the Claude guard group shows only once Claude is connected here (the fake CLI says it is logged in).
+  const login = await fetch(`${BASE}/api/providers/claude/login`, { method: 'POST', headers: { 'x-drawing': '1' } });
+  assert.equal((await login.json()).connected, true, 'the fake Claude connects');
 
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
   const errors = [];
