@@ -102,14 +102,16 @@ function EtaCorner({ panel }: { panel: EtaPanel }) {
 
 function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
   const { x, y, w, h } = n.rect;
-  const text = n.waiting ? `${n.glyph} ${n.text} · 사람 기다림` : `${n.glyph} ${n.text}`;
+  // "결정 필요" already says the step waits on a person.
+  const text = `${n.glyph} ${n.text}`;
   const tw = textWidth(text) + 12;
   const cx = x + w / 2;
   const ly = y + h + PAD + 4;
   // The same chip as a diagram node's `badge:` (shared/render/badge.ts), drawn as an outline in the step colour.
   const chip = badgeRect(x + w + PAD, y - PAD, textWidth(n.glyph));
   return (
-    <g role="img" aria-label={n.label} data-step={n.step} data-view={n.view} style={{ color: n.color }}>
+    <g role="img" aria-label={n.label} data-step={n.step} data-view={n.view} data-tone={n.tone} style={{ color: n.color }}>
+      <rect className="run-fill" x={x} y={y} width={w} height={h} rx={6} />
       <rect className={`run-ring${n.live ? ' is-live' : ''}`} data-view={n.view} x={x - PAD} y={y - PAD} width={w + PAD * 2} height={h + PAD * 2} rx={10} />
       <g className="run-corner" aria-hidden="true">
         <rect x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx={chip.h / 2} />
@@ -183,7 +185,7 @@ export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunSt
         </ul>
         <ul aria-label="상태">
           {legend.states.map((s) => (
-            <li key={s.view}>
+            <li key={s.key}>
               <span className="run-legend-glyph" aria-hidden="true" style={{ color: s.color }}>
                 {s.glyph}
               </span>

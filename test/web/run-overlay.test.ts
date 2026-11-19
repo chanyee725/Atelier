@@ -18,42 +18,45 @@ test('one ring per linked step, on its node box, glyph and text with every state
   assert.deepEqual(m.nodes.map((n) => [n.node, n.view, n.glyph]), [
     ['plan', 'done', '✓'],
     ['impl', 'done', '✓'],
-    ['review', 'review', '◐'],
+    ['review', 'review', '?'],
     ['test', 'active', '●'],
     ['merge', 'pending', '◌'],
   ]);
   for (const n of m.nodes) {
     assert.deepEqual(n.rect, rects.get(n.node));
     // Never colour alone: the visible text starts with the state label.
-    assert.match(n.text, /^(대기|진행|리뷰|완료|막힘)/);
+    assert.match(n.text, /^(대기|진행|리뷰|완료|막힘|실패|결정 필요)/);
   }
   assert.deepEqual(m.missing, []);
 });
 
-test('colours: owner role while active/review, status tokens otherwise', async () => {
+test('colours: the step state paints the node (#687), not the agent role', async () => {
   const m = overlayModel(await scene(FIXTURE_CODE), FIXTURE_STEPS);
   const by = new Map(m.nodes.map((n) => [n.node, n]));
-  assert.equal(by.get('review')!.color, 'var(--role-review)');
-  assert.equal(by.get('test')!.color, 'var(--role-test)');
-  assert.equal(by.get('plan')!.color, 'var(--ok)');
-  assert.equal(by.get('merge')!.color, 'var(--idle)');
+  assert.equal(by.get('review')!.color, 'var(--step-blocked)');
+  assert.equal(by.get('review')!.tone, 'blocked');
+  assert.equal(by.get('test')!.color, 'var(--step-active)');
+  assert.equal(by.get('plan')!.color, 'var(--step-done)');
+  assert.equal(by.get('merge')!.color, 'var(--step-pending)');
   assert.equal(by.get('review')!.live, true);
   assert.equal(by.get('plan')!.live, false);
   const b = overlayModel(await scene(FIXTURE_CODE), FIXTURE_BLOCKED).nodes.find((n) => n.node === 'test')!;
-  assert.equal(b.color, 'var(--bad)');
+  assert.equal(b.color, 'var(--step-blocked)');
   assert.equal(b.live, false);
   assert.equal(b.glyph, '⚠');
+  const f = overlayModel(await scene(FIXTURE_CODE), FIXTURE_BLOCKED.map((s) => (s.id === 'test' ? { ...s, failed: true } : s))).nodes.find((n) => n.node === 'test')!;
+  assert.deepEqual([f.tone, f.color, f.glyph, f.text], ['failed', 'var(--step-failed)', '✕', '실패 · Pell']);
 });
 
-test('active step with no session yet is green', async () => {
+test('active step with no session yet is blue', async () => {
   const m = overlayModel(await scene('a\nb\na > b'), [{ id: 'a', view: 'active' }]);
-  assert.equal(m.nodes[0]!.color, 'var(--ok)');
+  assert.equal(m.nodes[0]!.color, 'var(--step-active)');
 });
 
 test('labels: name, state, agents with role, waiting tag only when live', async () => {
   const m = overlayModel(await scene(FIXTURE_CODE), FIXTURE_STEPS);
   const by = new Map(m.nodes.map((n) => [n.node, n]));
-  assert.equal(by.get('review')!.label, 'Review · 리뷰 · Oren(리뷰어) · 사람 기다림');
+  assert.equal(by.get('review')!.label, 'Review · 결정 필요 · Oren(리뷰어) · 사람 기다림');
   assert.equal(by.get('impl')!.label, 'Implement · 완료 · Juno(구현자) · Tali(구현자)');
   assert.equal(by.get('impl')!.text, '완료 · Juno · Tali');
   assert.equal(by.get('merge')!.text, '대기');
@@ -82,9 +85,9 @@ test('edges: flow from done into active/review in the target colour, solid green
   const by = new Map(m.edges.map((e) => [e.key, e]));
   assert.deepEqual([...by.keys()].sort(), [edgeKey('impl', 'review'), edgeKey('impl', 'test'), edgeKey('plan', 'impl')].sort());
   assert.equal(by.get(edgeKey('plan', 'impl'))!.kind, 'done');
-  assert.equal(by.get(edgeKey('plan', 'impl'))!.color, 'var(--ok)');
+  assert.equal(by.get(edgeKey('plan', 'impl'))!.color, 'var(--step-done)');
   assert.equal(by.get(edgeKey('impl', 'review'))!.kind, 'flow');
-  assert.equal(by.get(edgeKey('impl', 'review'))!.color, 'var(--role-review)');
+  assert.equal(by.get(edgeKey('impl', 'review'))!.color, 'var(--step-blocked)');
   // Into a blocked step: drawn as is.
   const b = overlayModel(await scene(FIXTURE_CODE), FIXTURE_BLOCKED);
   assert.equal(b.edges.some((e) => e.key === edgeKey('impl', 'test')), false);
@@ -123,10 +126,11 @@ test('progress and legend: weighted progress, only the agents and states present
     ['Pell', '테스터'],
   ]);
   assert.equal(m.legend.agents[2]!.color, roleColor('impl', 1));
-  assert.deepEqual(m.legend.states.map((s) => `${s.glyph} ${s.label}`), ['◌ 대기', '● 진행', '◐ 리뷰', '✓ 완료']);
+  assert.deepEqual(m.legend.states.map((s) => `${s.glyph} ${s.label}`), ['◌ 대기', '● 진행', '✓ 완료', '? 결정 필요']);
   const b = legendOf(FIXTURE_BLOCKED);
-  assert.deepEqual(b.states.map((s) => s.view), ['pending', 'review', 'done', 'blocked']);
-  assert.equal(b.states.at(-1)!.color, 'var(--bad)');
+  assert.deepEqual(b.states.map((s) => s.tone), ['pending', 'done', 'blocked', 'blocked']);
+  assert.deepEqual(b.states.map((s) => s.label), ['대기', '완료', '결정 필요', '막힘']);
+  assert.equal(b.states.at(-1)!.color, 'var(--step-blocked)');
 });
 
 test('progress: a blocked step keeps its weight, a skipped step leaves the count', () => {
