@@ -1,10 +1,12 @@
-// 작업 보드: the lead's tasks by stage (plan … blocked) with owner, ETA and the time in the current stage, in a side sheet.
+// 작업 보드: the lead's tasks by stage (plan … blocked) with owner, ETA and the time in the current stage: a
+// dashboard card on the 세션 보드 (#879) that opens the full board in a side sheet.
 // Reads the live `tasks` slice of the store; shows metadata only (titles, stages, times), never transcripts.
 import { useState } from 'react';
-import { SquareKanban, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
+import { Card, CardList, CardRow, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { useNow } from './AttentionStrip';
 import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, visibleTasks } from './lib/board.ts';
@@ -76,28 +78,79 @@ function Board({ tasks }: { tasks: BoardTask[] }) {
   );
 }
 
-/** The 작업 보드 button for the 세션 board's `actions` slot, with the sheet it opens. */
-export function TaskBoardButton() {
+/** The full board in a wide side sheet; `tasks` are the scoped ones. */
+function BoardSheet({ open, onOpenChange, tasks }: { open: boolean; onOpenChange: (v: boolean) => void; tasks: BoardTask[] }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" showCloseButton className="w-[min(1280px,100vw)] bg-background sm:max-w-none">
+        <SheetHeader>
+          <SheetTitle>작업 보드</SheetTitle>
+          <SheetDescription>관리자가 적어 둔 작업을 단계별로 보여줘요.</SheetDescription>
+        </SheetHeader>
+        {tasks.length === 0 && <p className="px-(--overlay-x) pb-2 text-sm text-muted-foreground">아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</p>}
+        <Board tasks={tasks} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/** How many open tasks the card lists before 전체 보기. */
+const CARD_ROWS = 5;
+
+/**
+ * 작업 보드 as a dashboard card (#879): open tasks per stage on one line, then the open tasks that need a look first
+ * (stuck, then blocked, then the longest in their stage). 전체 보기 opens the full board in the sheet.
+ */
+export function TaskBoardCard() {
   const [open, setOpen] = useState(false);
   const { tasks } = useScoped();
-  const openCount = tasks.filter(t => t.stage !== 'done').length;
+  const now = useNow(20_000);
+  const groups = groupByStage(tasks);
+  const live = tasks.filter(t => t.stage !== 'done');
+  const rank = (t: BoardTask) => (t.stuck ? 0 : t.stage === 'blocked' ? 1 : 2);
+  const shown = [...live].sort((a, b) => rank(a) - rank(b) || a.stageAt - b.stageAt).slice(0, CARD_ROWS);
   return (
-    <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <SquareKanban aria-hidden />
-        작업 보드
-        <span className="text-xs text-muted-foreground tabular-nums">{openCount}</span>
-      </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" showCloseButton className="w-[min(1280px,100vw)] bg-background sm:max-w-none">
-          <SheetHeader>
-            <SheetTitle>작업 보드</SheetTitle>
-            <SheetDescription>관리자가 적어 둔 작업을 단계별로 보여줘요.</SheetDescription>
-          </SheetHeader>
-          {tasks.length === 0 && <p className="px-(--overlay-x) pb-2 text-sm text-muted-foreground">아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</p>}
-          <Board tasks={tasks} />
-        </SheetContent>
-      </Sheet>
-    </>
+    <Card
+      id="tasks"
+      title="작업 보드"
+      count={live.length}
+      flush
+      actions={
+        <Button variant="ghost" size="sm" disabled={!tasks.length} onClick={() => setOpen(true)}>
+          전체 보기
+        </Button>
+      }
+    >
+      {tasks.length === 0 ? (
+        <EmptyState>아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</EmptyState>
+      ) : (
+        <>
+          <ul aria-label="단계별 작업 수" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 border-b px-4 py-2 text-xs text-muted-foreground">
+            {STAGES.map(s => (
+              <li key={s.id} data-stage-count={s.id} className={cn('tabular-nums', s.id === 'blocked' && groups.blocked.length > 0 && 'text-destructive')}>
+                {s.label} <span className={cn(groups[s.id].length > 0 && 'font-medium text-foreground', s.id === 'blocked' && groups.blocked.length > 0 && 'text-destructive')}>{groups[s.id].length}</span>
+              </li>
+            ))}
+          </ul>
+          {shown.length === 0 ? (
+            <EmptyState>진행 중인 작업이 없어요.</EmptyState>
+          ) : (
+            <CardList label="진행 중인 작업">
+              {shown.map(t => (
+                <CardRow
+                  key={t.id}
+                  data={t.id}
+                  icon={t.stuck || t.stage === 'blocked' ? <TriangleAlert className={t.stage === 'blocked' ? 'text-destructive' : 'text-warn'} /> : undefined}
+                  title={t.title}
+                  sub={t.stuck?.label ?? (t.stage === 'blocked' && t.note ? t.note : t.owner || '맡은 사람 없음')}
+                  meta={<span title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>}
+                />
+              ))}
+            </CardList>
+          )}
+        </>
+      )}
+      <BoardSheet open={open} onOpenChange={setOpen} tasks={tasks} />
+    </Card>
   );
 }

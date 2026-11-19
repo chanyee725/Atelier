@@ -1,16 +1,18 @@
-// 세션 보드 inside the Atelier shell (#731, docs/design/session-board-in-shell.md): header with scope, tabs, 새 세션 and
-// a ⋯ menu; sessions grouped by project beside a usage column; timeline and usage tabs reuse the old /dispatch screens.
+// 세션 보드 inside the Atelier shell (#731), as a card dashboard on the home's dash primitives (#879): no header or tab
+// row. Left: the 프로젝트 card (전체, each project, 미분류) that sets the scope, and 사용량. Right: the picked project's
+// 세션, 작업 보드 and 타임라인 cards. `#board=usage` and `#board=branches` open their full screen in one card;
+// `#board=timeline` opens the dashboard at the 타임라인 card.
 // Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
-import { NativeSelect } from '../components/ui/native-select';
 import { cn } from '../lib/utils';
 import { projectsApi, type DispatchSettings, type ProjectInfo } from '../api';
-import { boardHash, type BoardExtra, type BoardTab } from '../projectNav';
+import { boardHash, plainClick, type BoardExtra, type BoardTab } from '../projectNav';
+import { Card, DashColumn, DashGrid, EmptyState } from '../home/dash';
 import { cardRows } from '../SidebarUsageCard';
 import { OffNote, useDispatchStatus } from '../settings/DispatchOff';
 import { guardValue, usageGroups, type SectionId, type UsageEntry } from '../settings/model';
@@ -21,7 +23,7 @@ import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
-import { knownFolders, scopePending, UNFILED, type Scope } from './lib/folder.ts';
+import { knownFolders, pickerRows, scopePending, type Scope } from './lib/folder.ts';
 import { fmtK, fmtUsd, isOpen, pct, STATE, stateOf, TONE_TEXT, totalTok, until } from './lib/format.ts';
 import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
@@ -29,8 +31,8 @@ import { Meter, ModelTag, STATE_ICON } from './parts';
 import { ScopeProvider, useScope, useScoped } from './scope';
 import { openAgentLive, useAgentLiveTarget } from '../live/store';
 import { shownAccount, useAccountLabels } from '../accountLabels';
-import { SessionTimeline } from './SessionTimeline';
-import { TaskBoardButton } from './TaskBoard';
+import { TimelineCard } from './TimelineCard';
+import { TaskBoardCard } from './TaskBoard';
 import { UsagePage } from './UsagePage';
 import { api, connect, useDispatch } from './store';
 import { usePrTracking, useStatusLine } from './usePrTracking';
@@ -38,13 +40,6 @@ import type { Session } from './types';
 import { askConfirm } from '../appDialog';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
-
-const TABS: { tab: BoardTab; label: string }[] = [
-  { tab: 'sessions', label: '세션' },
-  { tab: 'branches', label: '브랜치' },
-  { tab: 'timeline', label: '타임라인' },
-  { tab: 'usage', label: '사용량' },
-];
 
 type ListState = 'loading' | 'ready' | 'failed';
 
@@ -84,7 +79,7 @@ export type BoardProps = {
   /** 상시 화면 or 설정 asked for by the address (old /dispatch#tv, #settings); handled once, then `onExtraDone`. */
   extra?: BoardExtra | null;
   onExtraDone?: () => void;
-  /** The 알림함 bell, on the right of the header like every top bar (#786). */
+  /** The 알림함 bell (#786); with no top bar it sits at the end of the 세션 card's header. */
   bell?: ReactNode;
 };
 
@@ -134,47 +129,52 @@ export default function SessionBoard(p: BoardProps) {
   }
 
   const offline = ready && !online && !unavailable;
+  const disabled = !ready || unavailable;
+  const detail = p.tab === 'usage' || p.tab === 'branches' ? p.tab : null;
   return (
     <ScopeProvider value={ctx}>
       <div data-session-board className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        <BoardHeader
-          tab={p.tab}
-          scope={scope}
-          projects={projects}
-          onRoute={p.onRoute}
-          onCreate={() => setCreating(true)}
-          onTv={() => setTv(true)}
-          onSettings={setSettings}
-          disabled={!ready || unavailable}
-          bell={p.bell}
-        />
+        <h1 className="sr-only">세션 보드</h1>
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
           {/* The live region stays mounted so the notice is read when it appears. */}
           <div role="status">
             {listState === 'failed' && !unavailable && ready && (
-              <p className="m-0 border-b px-6 py-2 text-sm text-muted-foreground max-md:px-4">프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.</p>
+              <p className="m-0 border-b px-4 py-2 text-sm text-muted-foreground">프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.</p>
             )}
           </div>
           {unavailable ? (
-            <OffNote status={offStatus} className="m-6" />
+            <OffNote status={offStatus} className="m-4" />
           ) : !ready ? (
             <Skeleton />
-          ) : p.tab === 'usage' ? (
-            <UsagePage />
-          ) : p.tab === 'branches' ? (
-            <BranchesPage />
-          ) : p.tab === 'timeline' ? (
-            <SessionTimeline onOpen={(id) => openSession(id)} />
+          ) : detail ? (
+            <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} />
           ) : (
-            <SessionsBody
-              open={open}
-              onOpen={openSession}
-              onUsage={() => p.onRoute('usage', scope)}
-              onCreate={() => setCreating(true)}
-              onSettings={setSettings}
-              byCwd={listState === 'failed'}
-            />
+            <DashGrid ratio="minmax(14rem,18rem) minmax(0,1fr)">
+              {/* Stacked (under 880px of pane), this column dissolves so 사용량 goes after the 세션 cards, not before them. */}
+              <DashColumn className="contents @min-[880px]:flex">
+                <ProjectCard projects={projects} scope={scope} onPick={(f) => p.onRoute('sessions', f)} />
+                <UsageCard className="order-last @min-[880px]:order-none" onSettings={setSettings} onMore={() => p.onRoute('usage', scope)} />
+              </DashColumn>
+              <DashColumn label="선택한 프로젝트">
+                <SessionsCard
+                  open={open}
+                  onOpen={openSession}
+                  onUsage={() => p.onRoute('usage', scope)}
+                  onCreate={() => setCreating(true)}
+                  byCwd={listState === 'failed'}
+                  actions={
+                    <>
+                      <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
+                      <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
+                      {p.bell}
+                    </>
+                  }
+                />
+                <TaskBoardCard />
+                <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
+              </DashColumn>
+            </DashGrid>
           )}
         </main>
         {creating && <CreateSessionDialog folder={typeof scope === 'string' ? scope : undefined} onClose={() => setCreating(false)} />}
@@ -189,72 +189,94 @@ export default function SessionBoard(p: BoardProps) {
   );
 }
 
-const TAB_LINK =
-  'relative inline-flex h-12 shrink-0 items-center px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:font-medium aria-[current=page]:text-foreground aria-[current=page]:after:absolute aria-[current=page]:after:inset-x-2 aria-[current=page]:after:bottom-0 aria-[current=page]:after:h-0.5 aria-[current=page]:after:rounded-full aria-[current=page]:after:bg-foreground';
-
-function BoardHeader(p: {
-  tab: BoardTab;
-  scope: Scope;
-  projects: ProjectInfo[];
-  onRoute: BoardProps['onRoute'];
-  onCreate: () => void;
-  onTv: () => void;
-  onSettings: (s: SectionId) => void;
-  disabled: boolean;
-  bell?: ReactNode;
-}) {
+function NewSessionButton({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
   const connected = useDispatch((s) => Object.values(s.providers ?? {}).some((x) => x?.connected));
-  const scopeId = useId();
-  // '' = 전체, '\0' = 미분류 (a folder path is never empty or a NUL).
-  const value = p.scope === undefined ? '' : p.scope === null ? '\0' : p.scope;
-  const pick = (v: string) => p.onRoute(p.tab, v === '' ? undefined : v === '\0' ? null : v);
   return (
-    <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 border-b px-6 max-md:px-4 max-sm:gap-x-2 max-sm:px-3">
-      <h1 className="m-0 shrink-0 text-[15px] font-semibold">세션 보드</h1>
-      <label htmlFor={scopeId} className="sr-only">
-        프로젝트
-      </label>
-      <NativeSelect id={scopeId} value={value} onChange={(e) => pick(e.target.value)} className="max-w-48 text-[13px] max-sm:max-w-32">
-        <option value="">전체 프로젝트</option>
-        {p.projects.map((x) => (
-          <option key={x.path} value={x.path}>
-            {x.name}
-          </option>
-        ))}
-        {typeof p.scope === 'string' && !p.projects.some((x) => x.path === p.scope) && <option value={p.scope}>{p.scope}</option>}
-        <option value={'\0'}>{UNFILED}</option>
-      </NativeSelect>
-      <nav aria-label="세션 보드 화면" className="flex min-w-0 items-center overflow-x-auto [scrollbar-width:none] max-md:order-last max-md:-mx-2 max-md:w-full">
-        {TABS.map((t) => (
-          <a
-            key={t.tab}
-            href={boardHash({ tab: t.tab, folder: p.scope })}
-            aria-current={p.tab === t.tab ? 'page' : undefined}
-            onClick={(e) => {
-              e.preventDefault();
-              p.onRoute(t.tab, p.scope);
-            }}
-            className={cn(TAB_LINK, 'max-md:h-10')}
-          >
-            {t.label}
-          </a>
-        ))}
-      </nav>
-      <div className="ml-auto flex shrink-0 items-center gap-2 py-2">
-        <Button size="sm" variant="outline" disabled={p.disabled || !connected} title={connected ? undefined : '연결된 모델이 없어요'} onClick={p.onCreate}>
-          <Plus aria-hidden />
-          <span className="max-sm:sr-only">새 세션</span>
-        </Button>
-        <TaskBoardButton />
-        <BoardMenu onTv={p.onTv} onSettings={() => p.onSettings('general')} disabled={p.disabled} />
-        {p.bell}
-      </div>
-    </header>
+    <Button size="sm" variant="outline" disabled={disabled || !connected} title={connected ? undefined : '연결된 모델이 없어요'} onClick={onCreate}>
+      <Plus aria-hidden />
+      <span className="max-sm:sr-only">새 세션</span>
+    </Button>
   );
 }
 
-/** ⋯ menu: 끝난 세션 정리, 모든 세션 정리 (asks first), PR·CI 추적, 상시 화면, 설정. */
-function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSettings: () => void; disabled: boolean }) {
+/** A link to a board address that routes in place on a plain click (a new tab still gets the address). */
+function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab: BoardTab; folder: Scope; onRoute: BoardProps['onRoute']; className?: string; children: ReactNode } & Omit<React.ComponentProps<'a'>, 'href' | 'onClick'>) {
+  return (
+    <a
+      {...rest}
+      href={boardHash({ tab, folder })}
+      onClick={(e) => {
+        if (!plainClick(e)) return;
+        e.preventDefault();
+        onRoute(tab, folder);
+      }}
+      className={className}
+    >
+      {children}
+    </a>
+  );
+}
+
+const PICK =
+  'flex min-h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground max-md:min-h-10';
+
+/** 프로젝트 card (#879): 전체, each project and 미분류 as links; the picked one sets the scope every other card reads. */
+function ProjectCard({ projects, scope, onPick }: { projects: ProjectInfo[]; scope: Scope; onPick: (folder: Scope) => void }) {
+  const sessions = useDispatch((s) => s.sessions);
+  const { known } = useScope();
+  const rows = useMemo(() => pickerRows(projects, sessions, known, scope), [projects, sessions, known, scope]);
+  const route: BoardProps['onRoute'] = (_tab, folder) => onPick(folder);
+  return (
+    <Card id="projects" title="프로젝트" hint="실행 중인 세션 수" flush>
+      <nav aria-label="프로젝트 고르기">
+        <ul className="m-0 flex list-none flex-col gap-px p-1.5">
+          {rows.map((r, i) => (
+            <li key={r.key} className={cn(i === 1 && 'mt-1 border-t pt-1', i === rows.length - 1 && 'mt-1 border-t pt-1')}>
+              <BoardLink tab="sessions" folder={r.folder} onRoute={route} aria-current={r.current ? 'page' : undefined} data-project-pick={r.folder === undefined ? '*' : (r.folder ?? '')} className={PICK}>
+                <span className="min-w-0 flex-1 truncate">{r.label}</span>
+                {r.open > 0 && (
+                  <span className="shrink-0 text-xs tabular-nums">
+                    {r.open}
+                    <span className="sr-only">개 실행 중</span>
+                  </span>
+                )}
+              </BoardLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </Card>
+  );
+}
+
+/** `#board=usage` / `#board=branches`: that screen in one full-width card, with the way back to the dashboard. */
+function DetailView({ tab, scope, onRoute, bell }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode }) {
+  return (
+    <DashGrid ratio="minmax(0,1fr)">
+      <Card
+        id={tab}
+        title={tab === 'usage' ? '사용량' : '브랜치'}
+        flush
+        actions={
+          <>
+            <Button size="sm" variant="ghost" asChild>
+              <BoardLink tab="sessions" folder={scope} onRoute={onRoute}>
+                <ArrowLeft aria-hidden />
+                세션 보드
+              </BoardLink>
+            </Button>
+            {bell}
+          </>
+        }
+      >
+        {tab === 'usage' ? <UsagePage /> : <BranchesPage />}
+      </Card>
+    </DashGrid>
+  );
+}
+
+/** ⋯ menu: 끝난 세션 정리, 모든 세션 정리 (asks first), PR·CI 추적, 브랜치, 상시 화면, 설정. */
+function BoardMenu({ onTv, onSettings, onBranches, disabled }: { onTv: () => void; onSettings: () => void; onBranches: () => void; disabled: boolean }) {
   const sessions = useDispatch((s) => s.sessions);
   const doneCount = sessions.filter((s) => !isOpen(s)).length;
   const { note, status } = useStatusLine();
@@ -295,6 +317,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
           >
             PR·CI 추적
           </DropdownMenuCheckboxItem>
+          <DropdownMenuItem onSelect={onBranches}>브랜치</DropdownMenuItem>
           <DropdownMenuItem onSelect={onTv}>상시 화면</DropdownMenuItem>
           <DropdownMenuItem onSelect={onSettings}>설정</DropdownMenuItem>
         </DropdownMenuContent>
@@ -308,7 +331,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
 
 function Skeleton() {
   return (
-    <div role="status" aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-6 max-md:p-4">
+    <div role="status" aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-4">
       {[0, 1].map((g) => (
         <div key={g} className="flex flex-col gap-2">
           <div className="h-4 w-32 rounded bg-muted motion-safe:animate-pulse" />
@@ -321,20 +344,21 @@ function Skeleton() {
   );
 }
 
-function SessionsBody({
+/** 세션 card: the summary and what needs a person, then the picked project's sessions grouped by project. */
+function SessionsCard({
   open,
   onOpen,
   onUsage,
   onCreate,
-  onSettings,
   byCwd,
+  actions,
 }: {
   open: string | null;
   onOpen: (id: string, from?: HTMLElement | null) => void;
   onUsage: () => void;
   onCreate: () => void;
-  onSettings: (s: SectionId) => void;
   byCwd: boolean;
+  actions: ReactNode;
 }) {
   const { sessions, scope, pending } = useScoped();
   const { known, names } = useScope();
@@ -342,35 +366,37 @@ function SessionsBody({
   const byId = useMemo(() => new Map(all.map((s) => [s.id, s])), [all]);
   const now = useNow(20_000);
   const groups = useMemo(() => boardGroups(sessions, { known, names, stateOf, byCwd }), [sessions, known, names, byCwd]);
-  const usageRef = useRef<HTMLElement>(null);
   return (
-    <div className="@container/board">
-      <div className="mx-auto grid w-full max-w-[1400px] gap-6 p-6 max-md:p-4 @min-[960px]/board:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <SummaryLine />
-            <UsageStrip onJump={() => usageRef.current?.scrollIntoView({ block: 'start' })} />
-            <AttentionStrip onOpen={(id) => onOpen(id)} onUsage={onUsage} />
-          </div>
-          {pending ? null : sessions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
-              <p className="m-0 font-medium">실행 중인 세션이 없어요</p>
-              <p className="m-0 text-sm text-muted-foreground">새 세션을 만들면 여기에 보여요.</p>
-              <Button size="sm" variant="outline" className="mt-2" onClick={onCreate}>
+    <Card id="sessions" title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <SummaryLine />
+          <AttentionStrip onOpen={(id) => onOpen(id)} onUsage={onUsage} />
+        </div>
+        {pending ? null : sessions.length === 0 ? (
+          <EmptyState
+            className="px-0 py-2"
+            action={
+              <Button size="sm" variant="outline" onClick={onCreate}>
                 <Plus aria-hidden />새 세션
               </Button>
-            </div>
-          ) : (
-            <div className="@container/list grid gap-y-5 @min-[560px]/list:grid-cols-[1.25rem_minmax(4rem,max-content)_minmax(4rem,max-content)_minmax(0,max-content)_minmax(0,1fr)_max-content_1rem] @min-[560px]/list:gap-x-3">
+            }
+          >
+            실행 중인 세션이 없어요. 새 세션을 만들면 여기에 보여요.
+          </EmptyState>
+        ) : (
+          // The query container wraps the grid: an element can't answer its own container query, so the columns
+          // were never set on the grid itself and every row stacked into one column.
+          <div className="@container/list">
+            <div className="grid gap-y-5 @min-[560px]/list:grid-cols-[1.25rem_minmax(4rem,max-content)_minmax(4rem,max-content)_minmax(0,max-content)_minmax(0,1fr)_max-content_1rem] @min-[560px]/list:gap-x-3">
               {groups.map((g) => (
                 <Group key={g.key ?? '\0'} g={g} scoped={scope !== undefined} open={open} now={now} byId={byId} onOpen={onOpen} />
               ))}
             </div>
-          )}
-        </div>
-        <UsageColumn ref={usageRef} onSettings={onSettings} />
+          </div>
+        )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -500,28 +526,8 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
   );
 }
 
-/** Phone: one line of Claude's limits under the summary, jumping to the usage block. */
-function UsageStrip({ onJump }: { onJump: () => void }) {
-  const limits = useDispatch((s) => s.limits);
-  const providers = useDispatch((s) => s.providers);
-  const claude = useMemo(() => usageGroups(limits as unknown as Record<string, UsageEntry>, providers ?? {}).find((g) => g.id === 'claude'), [limits, providers]);
-  if (!claude?.windows.length) return null;
-  const text = claude.windows
-    .filter((w) => w.label === '5시간' || w.label === '주간')
-    .map((w) => `${w.label} ${pct(w.used)}`)
-    .join(' · ');
-  return (
-    <button
-      type="button"
-      onClick={onJump}
-      className="min-h-6 self-start rounded-md py-1 text-left text-xs text-muted-foreground tabular-nums hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[960px]/board:hidden"
-    >
-      Claude {text} <span className="underline underline-offset-2">사용량 자세히</span>
-    </button>
-  );
-}
-
-function UsageColumn({ ref, onSettings }: { ref: React.Ref<HTMLElement>; onSettings: (s: SectionId) => void }) {
+/** 사용량 card: each connected provider's limits, the open sessions' totals and the guard; 자세히 opens #board=usage. */
+function UsageCard({ onSettings, onMore, className }: { onSettings: (s: SectionId) => void; onMore: () => void; className?: string }) {
   const limits = useDispatch((s) => s.limits);
   const providers = useDispatch((s) => s.providers);
   const settings = useDispatch((s) => s.settings);
@@ -531,61 +537,68 @@ function UsageColumn({ ref, onSettings }: { ref: React.Ref<HTMLElement>; onSetti
   const live = sessions.filter(isOpen);
   const s = settings as unknown as DispatchSettings;
   const guardOn = !!settings?.guard?.enabled;
-  const head = useId();
   const now = Date.now();
   return (
-    <section ref={ref} aria-labelledby={head} className="flex min-w-0 scroll-mt-4 flex-col gap-3">
-      <h2 id={head} className="m-0 text-[13px] font-semibold">
-        사용량
-      </h2>
-      {groups.length === 0 ? (
-        <div className="flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-sm">
-          <p className="m-0">연결된 모델이 없어요</p>
-          <Button size="sm" variant="outline" onClick={() => onSettings('providers')}>
-            모델 연결
-          </Button>
+    <Card
+      id="usage"
+      title="사용량"
+      className={className}
+      actions={
+        <Button size="sm" variant="ghost" onClick={onMore}>
+          자세히
+        </Button>
+      }
+    >
+      <div className="flex min-w-0 flex-col gap-3">
+        {groups.length === 0 ? (
+          <div className="flex flex-col items-start gap-2 text-sm">
+            <p className="m-0">연결된 모델이 없어요</p>
+            <Button size="sm" variant="outline" onClick={() => onSettings('providers')}>
+              모델 연결
+            </Button>
+          </div>
+        ) : (
+          groups.map((g) => {
+            const rows = g.id === 'claude' || g.id === 'openai' ? cardRows(g.id, g, s) : g.windows.map((w) => ({ label: w.label, used: w.used, reset: w.reset ?? null, limit: null }));
+            return (
+              <div key={g.id} data-usage={g.id} className="flex flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
+                <p className="m-0 text-[13px] font-semibold">{g.name}</p>
+                {rows.length === 0 && <p className="m-0 text-xs text-muted-foreground">{g.reached ? '한도에 닿았어요' : '아직 사용량 정보가 없어요'}</p>}
+                {rows.map((r) => (
+                  <div key={r.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
+                    <span className="truncate text-muted-foreground">{r.label}</span>
+                    <Meter value={r.used} label={`${g.name} ${r.label}`} />
+                    <span className="text-right tabular-nums">{pct(r.used)}</span>
+                    {r.reset != null && <span className="col-start-2 col-end-4 text-[11px] text-muted-foreground">초기화까지 {until(r.reset, now)}</span>}
+                  </div>
+                ))}
+              </div>
+            );
+          })
+        )}
+        {off.map(([id, x]) => (
+          <div key={id} className="flex items-center gap-2 border-t pt-2 text-xs">
+            <span className="font-medium">{x?.name || id}</span>
+            <span className="text-muted-foreground">연결 안 됨</span>
+            <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={() => onSettings('providers')}>
+              연결
+            </Button>
+          </div>
+        ))}
+        <p className="m-0 border-t pt-3 text-xs text-muted-foreground tabular-nums">
+          실행 중 {live.length} · 토큰 {fmtK(live.reduce((a, x) => a + totalTok(x.usage), 0))} · {fmtUsd(live.reduce((a, x) => a + (x.cost ?? 0), 0))}
+        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            {guardOn && settings?.guard
+              ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션을 멈춰요`
+              : '가드가 꺼져 있어요'}
+          </span>
+          <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+            가드 바꾸기 ›
+          </button>
         </div>
-      ) : (
-        groups.map((g) => {
-          const rows = g.id === 'claude' || g.id === 'openai' ? cardRows(g.id, g, s) : g.windows.map((w) => ({ label: w.label, used: w.used, reset: w.reset ?? null, limit: null }));
-          return (
-            <div key={g.id} data-usage={g.id} className="flex flex-col gap-2 rounded-lg border bg-card p-3">
-              <p className="m-0 text-[13px] font-semibold">{g.name}</p>
-              {rows.length === 0 && <p className="m-0 text-xs text-muted-foreground">{g.reached ? '한도에 닿았어요' : '아직 사용량 정보가 없어요'}</p>}
-              {rows.map((r) => (
-                <div key={r.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
-                  <span className="truncate text-muted-foreground">{r.label}</span>
-                  <Meter value={r.used} label={`${g.name} ${r.label}`} />
-                  <span className="text-right tabular-nums">{pct(r.used)}</span>
-                  {r.reset != null && <span className="col-start-2 col-end-4 text-[11px] text-muted-foreground">초기화까지 {until(r.reset, now)}</span>}
-                </div>
-              ))}
-            </div>
-          );
-        })
-      )}
-      {off.map(([id, x]) => (
-        <div key={id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs">
-          <span className="font-medium">{x?.name || id}</span>
-          <span className="text-muted-foreground">연결 안 됨</span>
-          <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={() => onSettings('providers')}>
-            연결
-          </Button>
-        </div>
-      ))}
-      <p className="m-0 text-xs text-muted-foreground tabular-nums">
-        실행 중 {live.length} · 토큰 {fmtK(live.reduce((a, x) => a + totalTok(x.usage), 0))} · {fmtUsd(live.reduce((a, x) => a + (x.cost ?? 0), 0))}
-      </p>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span>
-          {guardOn && settings?.guard
-            ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션을 멈춰요`
-            : '가드가 꺼져 있어요'}
-        </span>
-        <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-          가드 바꾸기 ›
-        </button>
       </div>
-    </section>
+    </Card>
   );
 }

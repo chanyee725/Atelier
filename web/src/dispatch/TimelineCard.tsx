@@ -1,9 +1,10 @@
-// 타임라인 view of the 세션 board (E29): one row per session in role lanes, the last two hours across, each stretch
+// 타임라인 card of the 세션 board (E29, #879): one row per session of the picked project in role lanes, the last two hours across, each stretch
 // drawn by state. Shape tells states apart without colour: active states fill the row, stuck is hatched, resting is
 // a low solid bar (no fade, so it keeps 3:1 against the track), done a thin faded line, a failure a red tick. History is state and time only (GET /api/timeline).
 // Forced-colors mode drops author backgrounds and gradients, so every mark also gets a system-colour border there
 // (stuck dashed, failures in Highlight); the shapes still tell states apart.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Card, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { roleColor } from '../run/overlayModel';
 import { windowSpans, WINDOW_MS, type Entry } from '../../../shared/dispatch/timeline.js';
@@ -11,7 +12,9 @@ import { STATE, TONE_COLOR, stateOf } from './lib/format.ts';
 import { rowHistory } from './lib/usage.ts';
 import { StatusBadge } from './parts';
 import { api, useDispatch } from './store';
-import { useScoped } from './scope';
+import { useScope } from './scope';
+import type { Scope } from './lib/folder.ts';
+import { timelineLanes } from './lib/timeline.ts';
 import type { Session, SessionState } from './types';
 
 type Timeline = { now: number; windowMs: number; sessions: Record<string, Entry[]> };
@@ -64,7 +67,7 @@ function Row({ s, history, now, windowMs, onOpen }: { s: Session; history: Entry
       onClick={onOpen}
       data-row={s.name}
       aria-label={`${s.name}, 지금 ${STATE[state].label}. ${summary}${fails.length ? `. 실패 ${fails.length}번` : ''}`}
-      className="grid w-full grid-cols-[200px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-sm:grid-cols-1 max-sm:gap-1.5"
+      className="grid w-full grid-cols-[200px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @max-[560px]:grid-cols-1 @max-[560px]:gap-1.5"
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate text-sm font-medium">{s.name}</span>
@@ -91,8 +94,8 @@ function Axis({ now, windowMs }: { now: number; windowMs: number }) {
   const ticks: number[] = [];
   for (let t = Math.ceil(start / step) * step; t < now - step / 2; t += step) ticks.push(t);
   return (
-    <div aria-hidden className="grid grid-cols-[200px_1fr] gap-3 pr-2 pl-[19px] max-sm:grid-cols-1">
-      <span className="max-sm:hidden" />
+    <div aria-hidden className="grid grid-cols-[200px_1fr] gap-3 pr-2 pl-[19px] @max-[560px]:grid-cols-1">
+      <span className="@max-[560px]:hidden" />
       <div className="relative h-4 text-[11px] text-muted-foreground tabular-nums">
         {ticks.map(t => <span key={t} className="absolute -translate-x-1/2" style={{ left: `${((t - start) / windowMs) * 100}%` }}>{hhmm(t)}</span>)}
         <span className="absolute right-0">지금</span>
@@ -101,11 +104,21 @@ function Axis({ now, windowMs }: { now: number; windowMs: number }) {
   );
 }
 
-export function SessionTimeline({ onOpen }: { onOpen: (id: string) => void }) {
-  const { sessions } = useScoped();
+/**
+ * 타임라인 card (#879): the sessions of `projectId` (the board's picked project; 전체 = undefined, 미분류 = null) over
+ * the last two hours. `focus` (#board=timeline) scrolls the card into view.
+ */
+export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; onOpen: (id: string) => void; focus?: boolean }) {
+  const all = useDispatch(s => s.sessions);
   const roles = useDispatch(s => s.roles);
+  const { known, pending = false } = useScope();
   const [data, setData] = useState<Timeline | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focus) ref.current?.scrollIntoView({ block: 'start' });
+  }, [focus]);
 
   useEffect(() => {
     let alive = true;
@@ -117,40 +130,35 @@ export function SessionTimeline({ onOpen }: { onOpen: (id: string) => void }) {
   }, []);
 
   const windowMs = data?.windowMs ?? WINDOW_MS;
-  const histories = useMemo(() => new Map(sessions.map(s => [s.id, rowHistory(s, data?.sessions[s.id], now)])), [sessions, data, now]);
-  const lanes = useMemo(() => {
-    const list = roles.map(r => ({ id: r.id, name: r.name }));
-    for (const s of sessions) if (!list.some(r => r.id === s.role)) list.push({ id: s.role, name: s.roleName || s.role });
-    return list;
-  }, [roles, sessions]);
+  const lanes = useMemo(() => timelineLanes(all, roles, projectId, known, pending), [all, roles, projectId, known, pending]);
+  const count = lanes.reduce((n, l) => n + l.sessions.length, 0);
+  const histories = useMemo(() => new Map(lanes.flatMap(l => l.sessions).map(s => [s.id, rowHistory(s, data?.sessions[s.id], now)])), [lanes, data, now]);
 
-  if (!sessions.length) {
-    return (
-      <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col p-6 max-md:p-4">
-        <p className="flex grow items-center justify-center rounded-lg border border-dashed px-6 py-16 text-center text-sm text-muted-foreground">아직 세션이 없어요</p>
-      </div>
-    );
-  }
   return (
-    <div className="mx-auto flex w-full max-w-[1400px] shrink-0 grow flex-col gap-3 p-6 max-md:p-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">최근 2시간</span>
-        {LEGEND.map(st => <span key={st} className="inline-flex items-center gap-1.5"><Swatch state={st} />{STATE[st].label}</span>)}
-        <span className="inline-flex items-center gap-1.5"><span aria-hidden data-legend="failed" className={cn('inline-block h-3 w-[3px] bg-destructive', FORCED_FAIL)} />실패한 순간</span>
-      </div>
-      <div className="flex flex-col gap-5">
-        {lanes.map(role => {
-          const ss = sessions.filter(s => s.role === role.id).sort((a, b) => a.startedAt - b.startedAt);
-          if (!ss.length) return null;
-          return (
-            <section key={role.id} aria-label={role.name} className="border-l-[3px] pl-2" style={{ borderColor: roleColor(role.id) }}>
-              <h2 className="mb-1 px-2 text-[13px] font-semibold">{role.name}</h2>
-              {ss.map(s => <Row key={s.id} s={s} history={histories.get(s.id) ?? []} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} />)}
-            </section>
-          );
-        })}
-        <Axis now={now} windowMs={windowMs} />
-      </div>
+    <div ref={ref} className="scroll-mt-4">
+      <Card id="timeline" title="타임라인" count={count || undefined} hint="최근 2시간" flush>
+        {!count ? (
+          <EmptyState>{projectId === undefined ? '아직 세션이 없어요.' : '이 프로젝트에는 아직 세션이 없어요.'}</EmptyState>
+        ) : (
+          <div className="@container">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-4 py-2 text-xs text-muted-foreground">
+              {LEGEND.map(st => <span key={st} className="inline-flex items-center gap-1.5"><Swatch state={st} />{STATE[st].label}</span>)}
+              <span className="inline-flex items-center gap-1.5"><span aria-hidden data-legend="failed" className={cn('inline-block h-3 w-[3px] bg-destructive', FORCED_FAIL)} />실패한 순간</span>
+            </div>
+            <div className="flex flex-col gap-4 px-2 py-3">
+              {lanes.map(lane => (
+                <section key={lane.id} aria-label={lane.name} className="border-l-[3px] pl-2" style={{ borderColor: roleColor(lane.id) }}>
+                  <h3 className="m-0 mb-1 px-2 text-[13px] font-semibold">{lane.name}</h3>
+                  {lane.sessions.map(s => (
+                    <Row key={s.id} s={s} history={histories.get(s.id) ?? []} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} />
+                  ))}
+                </section>
+              ))}
+              <Axis now={now} windowMs={windowMs} />
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

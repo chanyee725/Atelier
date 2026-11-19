@@ -1,6 +1,6 @@
-// Headless check of the project views (E505d, #484; in the shell since #731): the 세션 보드 offers the workspace's
-// projects as its scope, picking one (or an old /dispatch#folder= link) shows only its sessions, usage labels what is
-// account-wide, back/forward walk the board, and a project home has a 세션 tab linking to the scoped board in the shell.
+// Headless check of the project views (E505d, #484; in the shell since #731; a card dashboard since #879): the 세션
+// 보드's 프로젝트 card offers the workspace's projects as its scope, picking one (or an old /dispatch#folder= or
+// #board=timeline link) shows only its sessions and timeline, usage labels what is account-wide, back/forward walk the board, and a project home has a 세션 tab linking to the scoped board in the shell.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH of fake agent CLIs; it refuses to go on unless its log names its port and workspace.
 import { test } from 'node:test';
@@ -96,14 +96,15 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.goto(`${BASE}/dispatch`);
     await page.waitForURL(`${BASE}/#board`);
     const board = page.locator('[data-session-board]');
-    const scope = board.getByLabel('프로젝트');
+    const picker = board.getByRole('navigation', { name: '프로젝트 고르기' });
+    const pick = (folder) => picker.locator(`[data-project-pick="${folder}"]`);
     const row = (x) => board.locator(`button[data-session="${x.id}"]`);
-    const tabs = board.getByRole('navigation', { name: '세션 보드 화면' });
+    const timeline = board.locator('[data-card="timeline"]');
 
     at('board lists 전체, projects and 미분류');
     await row(a1).waitFor();
     assert.equal(await page.locator('[data-nav="board"]').getAttribute('aria-current'), 'page');
-    const options = await scope.locator('option').allTextContents();
+    const options = await picker.locator('[data-project-pick] > span:first-child').allTextContents();
     assert.equal(options[0], '전체 프로젝트');
     assert.equal(options.at(-1), '미분류');
     assert.ok(options.includes('알파') && options.includes('베타'), options.join());
@@ -115,20 +116,20 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     assert.equal(await tag.innerText(), 'Claude');
 
     at('pick a project');
-    await scope.selectOption(alpha);
+    await pick(alpha).click();
     await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
     await row(a2).waitFor();
+    assert.equal(await pick(alpha).getAttribute('aria-current'), 'page');
+    assert.equal(await pick('*').getAttribute('aria-current'), null);
     assert.equal(await row(b1).count(), 0);
     assert.equal(await row(u1).count(), 0);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-board.png') });
 
-    at('timeline and usage keep the project');
-    await tabs.getByRole('link', { name: '타임라인' }).click();
-    await page.locator(`[data-row="${a1.name}"]`).waitFor();
-    assert.equal(await page.locator(`[data-row="${b1.name}"]`).count(), 0);
-    assert.match(await page.evaluate(() => location.hash), /^#board=timeline&folder=/);
-    assert.equal(await tabs.getByRole('link', { name: '타임라인' }).getAttribute('aria-current'), 'page');
-    await tabs.getByRole('link', { name: '사용량' }).click();
+    at('timeline card and usage keep the project');
+    await timeline.locator(`[data-row="${a1.name}"]`).waitFor();
+    assert.equal(await timeline.locator(`[data-row="${b1.name}"]`).count(), 0);
+    await board.locator('[data-card="usage"]').getByRole('button', { name: '자세히' }).click();
+    await page.waitForFunction(() => location.hash.startsWith('#board=usage&folder='));
     await page.getByRole('heading', { name: '알파 사용량' }).waitFor();
     await page.getByRole('heading', { name: /한도 · 계정 전체/ }).waitFor();
     await page.getByText('이 프로젝트의 세션만').waitFor();
@@ -136,14 +137,20 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
 
     at('back walks the board, then leaves it');
     await page.goBack();
-    await page.locator(`[data-row="${a1.name}"]`).waitFor();
+    await timeline.locator(`[data-row="${a1.name}"]`).waitFor();
+    assert.equal(await pick(alpha).getAttribute('aria-current'), 'page');
     await page.locator('[data-nav="all"]').click();
     await page.waitForFunction(() => !location.hash.startsWith('#board'));
     assert.equal(await page.locator('[data-session-board]').count(), 0);
     await page.goBack();
     await page.locator(`[data-row="${a1.name}"]`).waitFor();
 
-    at('old links: #folder= (미분류) and #folder=<path> open the board');
+    at('old links: #board=timeline, #folder= (미분류) and #folder=<path> open the board');
+    await page.goto(`${BASE}/#board=timeline&folder=${encodeURIComponent(beta)}`);
+    await page.reload(); // a hash-only goto keeps the loaded page
+    await timeline.locator(`[data-row="${b1.name}"]`).waitFor();
+    assert.equal(await timeline.locator(`[data-row="${a1.name}"]`).count(), 0);
+    assert.equal(await pick(beta).getAttribute('aria-current'), 'page');
     await page.goto(`${BASE}/dispatch#folder=`);
     await page.waitForURL(`${BASE}/#board&folder=`);
     await row(u1).waitFor();
@@ -209,7 +216,7 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-home.png') });
     await link.click();
     await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
-    assert.equal(await scope.inputValue(), alpha);
+    assert.equal(await pick(alpha).getAttribute('aria-current'), 'page');
     await row(a1).waitFor();
     assert.equal(await row(b1).count(), 0);
     assert.deepEqual(errors, []);
