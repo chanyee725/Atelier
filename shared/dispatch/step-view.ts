@@ -27,6 +27,8 @@ export interface StepInput {
   sessions: ReadonlyArray<{ state?: SessionState }>;
   /** Paused by the usage-limit guard. */
   paused?: boolean;
+  /** A session of the step waits on an open in-document question (#738, `askingSteps`). */
+  asking?: boolean;
 }
 
 export type StepView = 'pending' | 'active' | 'review' | 'done' | 'blocked';
@@ -79,7 +81,7 @@ export function relinkOffer(steps: readonly PlanStepRef[], before: Iterable<stri
 /** The display state of one step. */
 export function stepView(s: StepInput): StepView {
   if (s.stage === 'done') return 'done';
-  if (s.stage === 'blocked' || s.paused || s.sessions.some((x) => x.state === 'failed' || x.state === 'stuck')) return 'blocked';
+  if (s.stage === 'blocked' || s.paused || s.asking || s.sessions.some((x) => x.state === 'failed' || x.state === 'stuck')) return 'blocked';
   if (s.stage === 'review') return 'review';
   if (s.stage === 'impl' || s.stage === 'test' || s.stage === 'merge') return 'active';
   if (s.stage === 'plan' || s.sessions.length === 0) return 'pending';
