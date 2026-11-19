@@ -1,7 +1,11 @@
 # Third-party notices
 
-Atelier bundles small parts of the following projects. Only the icons listed in
-`scripts/build-icons.mjs` are copied, as SVG path data, into `shared/render/icon-data.ts`.
+Atelier bundles small parts of the following projects. A core set of icons listed in
+`scripts/build-icons.mjs` is copied, as SVG path data, into `shared/render/icon-data.ts`.
+
+The full bundled icon library (AWS, Azure and Google Cloud architecture icons, Simple Icons, Lucide) lives in
+`web/icons/`, imported by `scripts/import-icons.mjs`. Each set, its version and its licence or terms are listed in
+`web/icons/THIRD-PARTY.md`. The app never fetches icons from outside: they are served by the local server.
 
 ## Lucide (`lucide-static`)
 
@@ -62,8 +66,9 @@ https://creativecommons.org/publicdomain/zero/1.0/
 
 Only icons without a separate per-icon licence (or with CC0-1.0) are bundled; the generator
 refuses the others. The logos are trademarks of their respective owners. Their use here does
-not imply endorsement, and each brand's own guidelines apply. No AWS, Google Cloud or Azure
-logos or architecture icons are bundled.
+not imply endorsement, and each brand's own guidelines apply. AWS, Google Cloud and Azure icons
+are not taken from Simple Icons; they come from the publishers' own architecture icon packages
+(see `web/icons/THIRD-PARTY.md`).
 
 ## shadcn/ui
 
