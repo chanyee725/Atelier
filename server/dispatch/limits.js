@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { userDir } from "./paths.js";
 
 // Usage limits per provider (ported from standalone Dispatch, issue #587). Claude reports its windows
 // in the stream; Codex's are read from what the codex CLI already records locally (only the limit
@@ -77,11 +78,11 @@ export const isQuotaError = text => /RESOURCE_EXHAUSTED|quota reached|code 429/i
 
 /* ---------------- Shared Claude / Gemini limits ---------------- */
 // Claude windows and the Gemini quota are account-wide, so every Dispatch server on this machine
-// reads and writes one file, ~/.dispatch/limits.json, next to prefs.json and servers/. Only numbers
+// reads and writes one file, ~/.atelier/limits.json (paths.js), next to drawing.json. Only numbers
 // and reset times go in it — no account, email or token. Keys this server does not know are kept
 // untouched on write.
 
-export const LIMITS_FILE = path.join(os.homedir(), ".dispatch", "limits.json");
+export const LIMITS_FILE = path.join(userDir({}), "limits.json");
 // fable: the weekly window the CLI reports as seven_day_overage_included (models with their own weekly
 // bucket, Fable today). Only Fable turns carry it, so it keeps its last value between them.
 const EMPTY_CLAUDE = () => ({ five: null, seven: null, fable: null, fiveReset: null, sevenReset: null, fableReset: null, updatedAt: null });
@@ -163,7 +164,7 @@ export class SharedLimits extends EventEmitter {
   }
 
   /**
-   * Holds ~/.dispatch/limits.json.lock (O_EXCL create) around read → merge → rename, so two servers
+   * Holds ~/.atelier/limits.json.lock (O_EXCL create) around read → merge → rename, so two servers
    * writing at once cannot replace a newer value with an older one. A lock older than STALE_MS is
    * left over from a crashed server and is taken over; if the lock cannot be had within WAIT_MS the
    * write goes ahead anyway and refresh() repairs the file on its next tick.

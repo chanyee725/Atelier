@@ -132,7 +132,7 @@ export class Hub extends EventEmitter {
     this.roles = roles;
     // The port is known only once the server listens: a number or a getter.
     this.portOf = typeof port === "function" ? port : () => port;
-    // Claude limits and the Gemini quota are account-wide: shared by every server via ~/.dispatch/limits.json.
+    // Claude limits and the Gemini quota are account-wide: shared by every server via ~/.atelier/limits.json.
     this.shared = limits || new SharedLimits();
     this.shared.on("change", () => { this.emit("limits", this.currentLimits()); this.checkTickets(); });
     this.live = new Map(); // id -> { proc, transcript, perms, seenMsgIds }
@@ -606,7 +606,7 @@ export class Hub extends EventEmitter {
       for (let k = 0; k < (it.n || 1); k++) {
         const n = ++this.store.data.seq;
         const slug = `${role.id}-${n}`;
-        const wd = await prepareWorkdir(this.root, slug, worktree, { shareDeps: this.team().shareDeps });
+        const wd = await prepareWorkdir(this.root, slug, worktree, { shareDeps: this.team().shareDeps, ...(this.store.layout && { worktrees: this.store.layout.worktrees }) });
         const s = {
           id: randomUUID(), n, name: this.pickName(n), role: role.id, roleName: role.name,
           color: pickColor(this.sessions.map(x => x.color)),
@@ -912,7 +912,7 @@ export class Hub extends EventEmitter {
     const info = {};
     const dropped = this.remove(id, { strict: true, info });
     const kept = worktree && (await dropped) === false && existsSync(cwd);
-    // The project-relative path (.dispatch/wt/<slug>) is shorter for the lead and does not spell out the home folder.
+    // The project-relative path (.atelier/worktrees/<slug>) is shorter for the lead and does not spell out the home folder.
     const rel = cwd && path.relative(this.root, cwd);
     const where = rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : cwd;
     const why = info.detached ? ` 분리된 HEAD라 worktree를 남겼어요${info.sha ? ` (커밋 ${info.sha})` : ""}. 작업 폴더는 ${where}예요.`

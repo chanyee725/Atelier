@@ -68,7 +68,7 @@ export function rowStatus(meta: ProviderMeta, p: ProviderState | undefined, enab
 /** Dialog state label (Dispatch StateLabel). */
 export const STATE_TEXT: Record<ConnectKey, string> = { off: '연결 안 됨', missing: '설치 안 됨', busy: '로그인 중', connected: '연결됨', idle: '연결 안 됨' };
 
-/** The dialog's one action button for a state. null: nothing to press (pipelines off on this server). */
+/** The dialog's one action button for a state. null: nothing to press (agent sessions are off on this server). */
 export type Action = 'connect' | 'cancel' | 'disconnect' | 'recheck';
 export function actionFor(key: ConnectKey): Action | null {
   if (key === 'off') return null;

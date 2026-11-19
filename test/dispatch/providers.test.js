@@ -27,7 +27,7 @@ function scratchRepo() {
   writeFileSync(join(root, 'README.md'), 'scratch\n');
   git('add', '.');
   git('commit', '-qm', 'init');
-  const ws = join(root, 'pipelines');
+  const ws = join(root, 'workspace');
   mkdirSync(ws);
   return { root, ws };
 }
@@ -184,7 +184,7 @@ test('claude not installed: login answers 400 and installed turns false', async 
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const enabledOnDisk = (root) => {
-  const file = join(root, '.dispatch', 'state.json');
+  const file = join(root, '.atelier', 'state.json');
   return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).settings?.enabled?.claude : undefined;
 };
 

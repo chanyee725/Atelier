@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Starts the Atelier server for a git project, in project mode (the whole app for that one project).
 #   start.sh <project>
-# Workspace = <project>/atelier (created when missing; an older <project>/pipelines is moved there once, #773). The port is kept in
-# <project>/.dispatch/server.port (its pid in server.pid, which stop.sh reads; both written only once
+# Workspace = <project>/.atelier (created when missing; an older <project>/atelier or <project>/pipelines is moved into it
+# once, keeping its structure, #782/#773). The port is kept in
+# <project>/.atelier/server.port (or an older <project>/.dispatch/ until the server moves it, #782; its pid in server.pid, which stop.sh reads; both written only once
 # the server is ready, a failed start leaves the old files alone; reusing a server rewrites server.pid
-# from the lock); a server that already answers there is reused only when <project>/atelier/.drawing/server.lock names it (live pid, same
+# from the lock); a server that already answers there is reused only when <project>/.atelier/.drawing/server.lock names it (live pid, same
 # port), so another project's server on a recycled port is never mistaken for ours. Port order: remembered live server, else $DRAW_PORT, else $DISPATCH_PORT (team.sh and
 # restart.sh pass it; handed to the server as DRAW_PORT). No ~/.dispatch/servers registry is written, else a free port. Prints nothing but the URL on success.
 # The server binds 127.0.0.1 only. Prints the URL on stdout; nothing else is written outside the project.
@@ -20,26 +21,63 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 home=${DRAWING_HOME:-$(cd "$here/../.." && pwd -P)}
 [ -f "$home/server/index.js" ] || { echo "Drawing server not found in $home (DRAWING_HOME must be a Drawing checkout)" >&2; exit 1; }
 
-workspace=$project/atelier
-state=$project/.dispatch
+workspace=$project/.atelier
+# State folder: <project>/.atelier, or an older <project>/.dispatch until the server moves it (#782).
+state_of() { if [ -d "$project/.dispatch" ] && [ ! -L "$project/.dispatch" ]; then echo "$project/.dispatch"; else echo "$project/.atelier"; fi; }
+state=$(state_of)
 portfile=$state/server.port
-old=$project/pipelines
 
-# One-time move of the pre-#773 folder. Refused while a server still runs on it (stop.sh first).
-if [ -d "$old" ] && [ ! -L "$old" ] && [ ! -e "$workspace" ]; then
-  oldpid=$(node -e 'try { const l = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.kill(l.pid, 0); console.log(l.pid); } catch (e) { if (e && e.code === "EPERM") console.log("eperm"); }' "$old/.drawing/server.lock" 2>/dev/null || true)
-  if [ -n "$oldpid" ]; then
-    echo "An Atelier server still runs on $old (pid $oldpid). Stop it first (stop.sh $project), then start again to move it to atelier/." >&2
-    exit 1
+# One-time move of the older workspace folders into .atelier/, structure kept: <project>/atelier (#782), then the
+# pre-#773 <project>/pipelines. Entry by entry with mv -n: a name .atelier/ already has is never overwritten; it stays
+# in the old folder, which is then kept and reported. Refused while a server still runs on an old folder (its agent
+# sessions may still write there; stop.sh first). A lock folder keeps two start.sh runs from moving at once.
+olds=()
+for o in "$project/atelier" "$project/pipelines"; do
+  [ -d "$o" ] && [ ! -L "$o" ] && olds+=("$o")
+done
+if [ ${#olds[@]} -gt 0 ]; then
+  movelock=$project/.atelier-move.lock
+  if ! mkdir "$movelock" 2>/dev/null; then
+    lp=$(tr -dc '0-9' < "$movelock/pid" 2>/dev/null || true)
+    if [ -z "$lp" ] || kill -0 "$lp" 2>/dev/null; then
+      echo "Another start.sh is moving the workspace into $workspace. Try again in a moment (or remove $movelock if none runs)." >&2
+      exit 1
+    fi
+    rm -rf "$movelock"
+    mkdir "$movelock" 2>/dev/null || { echo "Another start.sh is moving the workspace into $workspace. Try again in a moment." >&2; exit 1; }
   fi
-  mv "$old" "$workspace"
-  echo "Moved $old to $workspace" >&2
+  echo "$$" > "$movelock/pid"
+  trap 'rm -rf "$movelock"' EXIT
+  for old in "${olds[@]}"; do
+    oldpid=$(node -e 'try { const l = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.kill(l.pid, 0); console.log(l.pid); } catch (e) { if (e && e.code === "EPERM") console.log("eperm"); }' "$old/.drawing/server.lock" 2>/dev/null || true)
+    if [ -n "$oldpid" ]; then
+      echo "An Atelier server still runs on $old (pid $oldpid). Stop it first (stop.sh $project), then start again to move it to .atelier/." >&2
+      exit 1
+    fi
+  done
+  mkdir -p "$workspace"
+  shopt -s dotglob nullglob
+  for old in "${olds[@]}"; do
+    kept=()
+    for e in "$old"/*; do
+      n=${e##*/}
+      if [ -e "$workspace/$n" ] || [ -L "$workspace/$n" ]; then kept+=("$n"); else mv -n -- "$e" "$workspace/$n"; fi
+    done
+    if [ ${#kept[@]} -eq 0 ] && rmdir "$old" 2>/dev/null; then
+      echo "Moved $old to $workspace" >&2
+    else
+      echo "Moved $old to $workspace; left in $old because .atelier/ already has them: ${kept[*]:-}" >&2
+    fi
+  done
+  shopt -u dotglob nullglob
+  rm -rf "$movelock"
+  trap - EXIT
 fi
 mkdir -p "$workspace" "$state"
 
 lockfile=$workspace/.drawing/server.lock
 
-# Succeeds only when OUR server answers on $1: /api/info says project mode on "atelier" (every
+# Succeeds only when OUR server answers on $1: /api/info says project mode on ".atelier" (every
 # project-mode server says that), and our workspace lock names a live pid listening on that same port.
 # With $2, the lock's pid must also be that pid (the server we just started).
 ours() {
@@ -54,7 +92,7 @@ ours() {
     try { process.kill(lock.pid, 0); } catch (e) { if (e.code !== "EPERM") process.exit(1); }
     const req = http.get({ host: "127.0.0.1", port: Number(port), path: "/api/info", timeout: 1500 }, (res) => {
       let b = ""; res.on("data", (c) => (b += c));
-      res.on("end", () => { try { const i = JSON.parse(b); if (i.mode === "project" && i.workspace === "atelier") { if (!want) { process.stdout.write(lock.pid + "\n", () => process.exit(0)); return; } process.exit(0); } process.exit(1); } catch { process.exit(1); } });
+      res.on("end", () => { try { const i = JSON.parse(b); if (i.mode === "project" && i.workspace === ".atelier") { if (!want) { process.stdout.write(lock.pid + "\n", () => process.exit(0)); return; } process.exit(0); } process.exit(1); } catch { process.exit(1); } });
     });
     req.on("error", () => process.exit(1)); req.on("timeout", () => req.destroy());
   ' "$1" "$lockfile" "${2:-}"
@@ -84,7 +122,8 @@ DRAW_PORT=$port nohup node "$home/server/index.js" --project-mode "$workspace" >
 pid=$!
 
 for _ in $(seq 1 100); do
-  ours "$port" "$pid" && { echo "$pid" > "$state/server.pid"; echo "$port" > "$portfile"; echo "http://127.0.0.1:$port/"; exit 0; }
+  # The server may have moved .dispatch to .atelier while starting: write where the state is now.
+  ours "$port" "$pid" && { state=$(state_of); echo "$pid" > "$state/server.pid"; echo "$port" > "$state/server.port"; echo "http://127.0.0.1:$port/"; exit 0; }
   kill -0 "$pid" 2>/dev/null || break
   sleep 0.1
 done

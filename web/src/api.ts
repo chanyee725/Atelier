@@ -207,7 +207,7 @@ export const api = {
 };
 
 // Project view: GET /api/workspace/projects (docs/workspace-api.md "Projects view"), mapped to the shapes the screens use.
-type DocNodeDto = { type: 'doc' | 'group'; path: string; name: string; title?: string; created: string | null; modified: string | null; children: DocNodeDto[] };
+type DocNodeDto = { type: 'doc' | 'group'; path: string; name: string; title?: string; created: string | null; modified: string | null; pipeline?: PipelineMark; children: DocNodeDto[] };
 type ProjectDto = { path: string; name: string; icon: string | null; description: string; created: string | null; modified: string | null; count: number; docs: DocNodeDto[] };
 export type ProjectDoc = {
   path: string;
@@ -218,6 +218,8 @@ export type ProjectDoc = {
   /** ms since epoch (0 = unknown) */
   createdAt: number;
   modifiedAt: number;
+  /** A plan document's state (계획 · 실행 중 · 멈춤 · 완료); absent for other documents. */
+  plan?: PipelineMark['state'];
   children: ProjectDoc[];
 };
 export type ProjectInfo = {
@@ -242,6 +244,7 @@ const toDoc = (n: DocNodeDto): ProjectDoc => ({
   bundle: n.type === 'group',
   createdAt: time(n.created),
   modifiedAt: time(n.modified),
+  ...(n.pipeline ? { plan: n.pipeline.state } : {}),
   children: n.children.map(toDoc),
 });
 export const projectsApi = {

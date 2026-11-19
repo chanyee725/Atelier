@@ -5,7 +5,7 @@ import { ApiError, type DpxFile } from '../../web/src/api.ts';
 import { openPlanConfirm, requestStart, SAVE_FIRST } from '../../web/src/run/planOpen.ts';
 import { confirmSnapshot, type PipelineStatus } from '../../web/src/run/planStripModel.ts';
 
-const PATH = 'pipelines/a.dpx.json';
+const PATH = 'plans/a.dpx.json';
 const file = (): DpxFile => ({ version: 2, title: 't', document: { type: 'doc', content: [] }, canvas: {}, blocks: [], revision: 3 });
 const status = (revision: number): PipelineStatus => ({
   path: PATH,

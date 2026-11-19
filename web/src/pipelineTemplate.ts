@@ -4,14 +4,19 @@ import type { Block, DpxFile } from './api.ts';
 import { fileStem } from './fileName.ts';
 import { DIAGRAM_NODE, type DocNode } from './doc/model.ts';
 
-/** Folder a pipeline goes in when its name has none. */
-export const PIPELINE_DIR = 'pipelines';
+/** File name (no suffix) of a plan inside its feature folder, as write_plan names it (#782). */
+export const PLAN_FILE_STEM = '계획';
 
-/** Workspace path (no suffix) for a typed pipeline name: a bare name goes under `pipelines/`. '' when the name is empty. */
-export function pipelinePath(name: string): string {
-  const stem = fileStem(name).replace(/^\/+|\/+$/g, '');
-  if (!stem) return '';
-  return stem.includes('/') ? stem : `${PIPELINE_DIR}/${stem}`;
+/**
+ * Workspace path (no suffix) for a typed plan name: <area>/<feature>/계획, the layout lead plans use (#782). A bare
+ * name is the feature inside `dir` (the area shown, '' = top level); a name with a folder is used as the feature path.
+ * '' when the name is empty.
+ */
+export function planPath(dir: string, name: string): string {
+  const feature = fileStem(name).split('/').map((s) => s.trim()).filter(Boolean).join('/');
+  if (!feature) return '';
+  const area = dir.replace(/^\/+|\/+$/g, '');
+  return `${feature.includes('/') || !area ? feature : `${area}/${feature}`}/${PLAN_FILE_STEM}`;
 }
 
 export const PIPELINE_STEPS = ['계획', '구현', '리뷰'] as const;

@@ -169,7 +169,7 @@ export type ModelLine = { id: string; name: string; installed: boolean | null; c
 export type ModelTone = 'ok' | 'warn' | 'off';
 /**
  * One sidebar model row: the short visible text next to the name (never colour alone, doc 6 §6) and the dot tone
- * (--ok, --warn, --muted-foreground). `enabled` false: pipelines are off on this server, so every model reads 연결 안 됨 (text, not colour alone).
+ * (--ok, --warn, --muted-foreground). `enabled` false: agent sessions are off on this server, so every model reads 연결 안 됨 (text, not colour alone).
  */
 export function modelStatus(m: ModelLine, enabled: boolean): { text: string; long: string; tone: ModelTone } {
   if (!enabled) return { text: '연결 안 됨', long: '연결 안 됨', tone: 'off' };

@@ -209,8 +209,9 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
         {n.type === 'doc' && n.pipeline && <PipelineBadge state={n.pipeline.state} />}
         {has && !expanded && <SidebarMenuBadge className={COUNT} aria-label={`하위 ${n.count}개`}>{n.count}</SidebarMenuBadge>}
       </SidebarMenuButton>
-      {has && n.type === 'doc' && (
-        <SidebarMenuAction aria-label={`${label} 하위 문서 ${expanded ? '접기' : '펼치기'}`} aria-expanded={expanded} className="right-7 max-md:right-11" onClick={() => toggle(n.path)}>
+      {/* Feature folders (groups) get the chevron too, so area -> feature -> document reads as one tree (#782). */}
+      {has && (
+        <SidebarMenuAction aria-label={`${label} ${n.type === 'doc' ? '하위 문서 ' : ''}${expanded ? '접기' : '펼치기'}`} aria-expanded={expanded} className="right-7 max-md:right-11" onClick={() => toggle(n.path)}>
           <ChevronRight className={cn('transition-transform', expanded && 'rotate-90')} />
         </SidebarMenuAction>
       )}

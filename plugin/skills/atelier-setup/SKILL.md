@@ -5,14 +5,14 @@ description: Start Atelier (local docs, diagrams and agent teams) in a project, 
 
 # Atelier setup
 
-Atelier serves `http://127.0.0.1:<port>` (4330 by default) for one project and runs agent sessions there, each in its own git worktree at `.dispatch/wt/<role>-<n>`. `<skill-dir>` is this file's folder; `<plugin-root>` is two levels up. The workspace is `<project>/pipelines`.
+Atelier serves `http://127.0.0.1:<port>` (4330 by default) for one project and runs agent sessions there, each in its own git worktree at `.atelier/worktrees/<role>-<n>`. `<skill-dir>` is this file's folder; `<plugin-root>` is two levels up. The workspace is `<project>/.atelier` (an older `<project>/atelier` or `<project>/pipelines` is moved into it on start).
 
 ## Steps
 
 1. Check the CLIs: `<skill-dir>/scripts/setup.sh --status`.
    Done when: each provider the user wants shows `logged in`. For `not logged in`, ask the user to run `! <skill-dir>/scripts/setup.sh <claude|codex>` in their own terminal (browser login; the token stays with the CLI). For `not installed`, relay the hint the script prints.
 2. Start or reuse the server: `<plugin-root>/scripts/start.sh "<project-root>"`.
-   Done when: it prints the URL. If the port serves another project, rerun with `DISPATCH_PORT=<next free port>` and keep that port. Log: `<project>/.dispatch/server.log`.
+   Done when: it prints the URL. If the port serves another project, rerun with `DISPATCH_PORT=<next free port>` and keep that port. Log: `<project>/.atelier/server.log`.
 3. Connect providers. Providers start disconnected. Read `GET /api/state` → `providers.<claude|openai|gemini>.connected`; connect only the ones the user named with `POST /api/providers/<id>/login` (header `x-drawing: 1`).
    Done when: each named provider shows `connected: true`.
 4. Give the user the URL.

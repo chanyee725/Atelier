@@ -1,7 +1,8 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { stateLayout } from "./paths.js";
 
-// Persists session metadata and usage totals to <project>/.dispatch/state.json. Transcripts are
+// Persists session metadata and usage totals to <project>/.atelier/state.json (paths.js). Transcripts are
 // never written: the Hub keeps them in memory only. Free text that came from a person or a CLI is
 // kept in memory and left out of the file: `last` (a clip of the latest reply), `prompt` (the role
 // prompt, read from the role again after a restart) and `error` (CLI error text).
@@ -32,8 +33,10 @@ export function diskView(data) {
 }
 
 export class Store {
-  constructor(root) {
-    this.file = path.join(root, ".dispatch", "state.json");
+  /** `layout` (paths.js stateLayout) names the folder; a not-yet-moved .dispatch/ passes its own. */
+  constructor(root, layout = stateLayout(root)) {
+    this.layout = layout;
+    this.file = layout.stateFile;
     this.data = { seq: 0, sessions: {}, daily: {}, settings: { guard: { enabled: true, five: 0.9, seven: 0.85 }, enabled: { claude: false, openai: false, gemini: false } } };
     this.timer = null;
     this.closed = false;

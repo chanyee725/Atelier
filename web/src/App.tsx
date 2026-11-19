@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 import { api, ApiError, type Block, type DocNode, type DpxFile, type Project, type ProjectsView, type TreeNode } from './api';
 import type { CanvasData, CanvasFocus } from './canvas/ExcalidrawCanvas';
 import { newBlockId, sameDrawing } from './canvas/sync';
-import { pipelineTemplate } from './pipelineTemplate';
+import { pipelineTemplate, planPath } from './pipelineTemplate';
 import { blocksInFrame, frameScene as sceneOf, frameSceneSig, type CanvasEl } from './doc/model';
 import { Sidebar } from './Sidebar';
 import { Home, type CreateKind } from './home/Home';
@@ -434,11 +434,13 @@ export function App() {
     });
     const stem = name ? fileStem(name) : '';
     if (!stem) return;
-    const p = stem.includes('/') ? stem : folderPrefix(dir || null) + stem;
+    // A plan goes to <area>/<feature>/계획 like a lead's (#782), titled with the typed name.
+    const p = kind === 'plan' ? planPath(dir, stem) : stem.includes('/') ? stem : folderPrefix(dir || null) + stem;
+    const title = (kind === 'plan' ? stem.replace(/\/+$/, '') : p).split('/').pop()?.trim() || p;
     await session.flush();
     try {
       // A pipeline plan starts from the pipeline template (E18); other kinds start empty.
-      await api.createFile(p, p.split('/').pop() ?? p, kind === 'plan' ? pipelineTemplate(newBlockId()) : undefined);
+      await api.createFile(p, title, kind === 'plan' ? pipelineTemplate(newBlockId()) : undefined);
       notifyApp({ type: 'created', kind: kind === 'canvas' ? 'canvas' : 'doc', path: p });
       await refreshTree();
       if (await open(p) && kind === 'canvas') setView('canvas');
