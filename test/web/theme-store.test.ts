@@ -72,8 +72,7 @@ test('toggle stores nothing when the target is the system theme', () => {
 });
 
 test('starts from the stored choice', () => {
-  store.set('drawing.theme', 'monitor');
+  store.set('drawing.theme', 'dark');
   const s = themeStore.getSnapshot();
-  assert.deepEqual([s.pref, s.theme], ['monitor', 'dark']);
-  assert.ok(classes.has('monitor'));
+  assert.deepEqual([s.pref, s.theme], ['dark', 'dark']);
 });

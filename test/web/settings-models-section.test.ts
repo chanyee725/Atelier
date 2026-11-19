@@ -17,7 +17,8 @@ test('modelGroups puts providers in PROVIDERS order, unknown ones last, keeping 
   assert.deepEqual(g.map((x) => x.provider), ['claude', 'openai', 'gemini', 'zeta']);
   assert.deepEqual(g[0].models.map((m) => m.id), ['claude-opus-5-5', 'claude-sonnet-5-5']);
   assert.deepEqual(g.map((x) => x.name), ['Claude', 'OpenAI Codex', 'Gemini', 'Zeta']);
-  assert.deepEqual(modelGroups([], providers), []);
+  // Every known provider shows even with no models, so it can be connected from the list.
+  assert.deepEqual(modelGroups([], providers).map((x) => [x.provider, x.models.length]), [['claude', 0], ['openai', 0], ['gemini', 0]]);
 });
 
 test('roleChoice warns for an unlisted model and for a provider that is not connected', () => {
