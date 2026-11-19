@@ -1,7 +1,7 @@
 // What the lead's `write_plan` tool puts in a pipeline file (E20, docs/design/dispatch-integration/3-ux-flow.md §2),
 // and the "바뀐 점" between two plans that the start confirm shows and the lead receives on approval.
 // Pure: the server validates and writes, the web only reads `planChanges`.
-import { MAX_PLAN_N, MAX_PLAN_STEPS, PLAN_PERMS, type Plan, type PlanStep } from './plan.ts';
+import { MAX_PLAN_N, MAX_PLAN_STEPS, PLAN_MODES, PLAN_PERMS, type Plan, type PlanStep } from './plan.ts';
 
 /** Step ids are short and safe in DSL code and run records (server/runs/plan.js uses the same rule). */
 export const PLAN_STEP_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -18,6 +18,7 @@ export interface WritePlanStep {
   model?: string;
   effort?: string;
   perm?: string;
+  mode?: string;
   n?: number;
   after?: string[];
   files?: string[];
@@ -69,6 +70,7 @@ export function writePlanProblem(input: unknown): string | null {
     if (!line(s.role, 200)) return `${at}.role이 비어 있어요`;
     for (const k of ['model', 'effort'] as const) if (s[k] !== undefined && !line(s[k], 200)) return `${at}.${k}가 비어 있어요`;
     if (s.perm !== undefined && !(PLAN_PERMS as readonly unknown[]).includes(s.perm)) return `${at}.perm은 ${PLAN_PERMS.join(', ')} 중 하나예요`;
+    if (s.mode !== undefined && !(PLAN_MODES as readonly unknown[]).includes(s.mode)) return `${at}.mode는 ${PLAN_MODES.join(', ')} 중 하나예요`;
     if (s.n !== undefined && (!Number.isInteger(s.n) || (s.n as number) < 1 || (s.n as number) > MAX_PLAN_N)) return `${at}.n은 1-${MAX_PLAN_N}이에요`;
     if (s.after !== undefined && (!Array.isArray(s.after) || !s.after.every((a) => typeof a === 'string'))) return `${at}.after는 단계 id 배열이에요`;
     if (s.files !== undefined && (!Array.isArray(s.files) || s.files.length > MAX_PLAN_LIST || !s.files.every((a) => typeof a === 'string'))) return `${at}.files는 문자열 ${MAX_PLAN_LIST}개까지의 배열이에요`;
@@ -146,6 +148,7 @@ export function buildPlanFile(input: WritePlanInput, previous?: Block | null): W
       if (s.model) step.model = line(s.model, 200);
       if (s.effort) step.effort = line(s.effort, 200);
       if (s.perm) step.perm = s.perm as PlanStep['perm'];
+      if (s.mode) step.mode = s.mode;
       if (s.n) step.n = s.n;
       step.after = [...new Set(s.after ?? [])];
       return step;
@@ -154,7 +157,7 @@ export function buildPlanFile(input: WritePlanInput, previous?: Block | null): W
   return { title, document: { type: 'doc', content }, block, plan };
 }
 
-const FIELD_NAMES: Record<string, string> = { role: '역할', model: '모델', effort: '강도', perm: '권한', n: '세션 수', provider: '제공자', gate: '확인' };
+const FIELD_NAMES: Record<string, string> = { role: '역할', model: '모델', effort: '강도', perm: '권한', mode: '모드', n: '세션 수', provider: '제공자', gate: '확인' };
 
 /**
  * Plain lines saying how `after` differs from `before` by step id: added, removed, and changed role / model /

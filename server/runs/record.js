@@ -34,7 +34,7 @@ const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ?
 export function pickSession(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch']) {
+  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch', 'mode']) {
     const v = short(s[k]);
     if (v !== undefined) out[k] = v;
   }
@@ -47,6 +47,8 @@ export function pickSession(s) {
     if (r.ok && r.value) out.accountLabel = r.value;
   }
   if (Number.isInteger(s.issue) && s.issue > 0 && s.issue < 1e7) out.issue = s.issue;
+  // Why the mode's profile fell back to another model (#748): a server-written line, no transcript text.
+  if (typeof s.profileNote === 'string' && s.profileNote.length <= 200 && !EMAIL.test(s.profileNote)) out.profileNote = s.profileNote;
   for (const k of ['stateSince', 'startedAt', 'endedAt', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;

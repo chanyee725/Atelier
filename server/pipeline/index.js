@@ -67,6 +67,7 @@ function sessionMeta(s) {
     sid: s.id, name: s.name, role: s.role, provider: s.provider, model: s.model, effort: s.effort ?? undefined, branch: s.branch ?? undefined,
     accountLabel: s.accountLabel ?? undefined, issue: s.issue ?? undefined, startedAt: s.startedAt,
     endedAt: s.status === 'done' ? s.updatedAt : undefined,
+    mode: s.mode ?? undefined, profileNote: s.profileNote ?? undefined,
     state: s.state, stateSince: s.stateSince, cost: s.cost ?? undefined, ctxPct, tokens: s.usage,
     ...(s.pr !== undefined && { pr: s.pr }),
   };
@@ -246,6 +247,12 @@ export async function setup(ctx) {
           blockers.push(`단계 ${s.id}의 역할 "${s.role.slice(0, 40)}"을 몰라요`);
           continue;
         }
+        // A step with a mode and no model takes the mode's profile at create_sessions, which falls back to a
+        // connected provider by itself (#748): only the guard check needs to assume Claude may be used.
+        if (!s.model && s.mode) {
+          usesClaude = true;
+          continue;
+        }
         const modelId = s.model || role.model;
         const model = d.models.find((m) => m.id === modelId);
         if (!model) blockers.push(`단계 ${s.id}의 모델 "${String(modelId).slice(0, 60)}"을 몰라요`);
@@ -412,7 +419,7 @@ export async function setup(ctx) {
       auto ? '단계 하나짜리 계획이라 바로 시작했다.' : '사용자가 이 계획으로 시작하기를 눌렀다.',
       changes.length ? `바뀐 점(네 초안 이후 사용자가 고친 것):\n${changes.map((c) => `- ${c}`).join('\n')}` : '바뀐 점: 없음',
       ...(carried.length ? [`지난 실행에서 끝난 단계(다시 하지 마라): ${carried.join(', ')}`] : []),
-      `승인된 리비전을 따른다. 단계마다 create_sessions로 팀원을 만들고, set_task에 step(${record && Object.keys(record.steps).join(', ')})과 owner(세션 이름)를 넣는다. 단계에 남길 한 줄은 note_step으로 남긴다.`,
+      `승인된 리비전을 따른다. 단계마다 create_sessions로 팀원을 만들고(단계에 mode가 있으면 create_sessions에도 같은 mode를 넣는다), set_task에 step(${record && Object.keys(record.steps).join(', ')})과 owner(세션 이름)를 넣는다. 단계에 남길 한 줄은 note_step으로 남긴다.`,
     ];
     try {
       d.hub.send(entry.lead, lines.join('\n'));

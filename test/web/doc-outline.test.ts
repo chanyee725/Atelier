@@ -32,6 +32,10 @@ test('file hash: path and heading round-trip, other hashes are not file links', 
   assert.equal(parseHash(''), null);
   assert.equal(parseHash('#other'), null);
   assert.equal(parseHash('#file=%E0%A4%A'), null);
+  // The open agent live view rides along at the end (#728).
+  assert.deepEqual(parseHash('#file=x.dpx.json&agent=s1'), { path: 'x.dpx.json', heading: null });
+  assert.deepEqual(parseHash('#file=x.dpx.json&h=h_1&agent=s1'), { path: 'x.dpx.json', heading: 'h_1' });
+  assert.equal(parseHash('#agent=s1'), null);
 });
 
 test('wikilink items cover files, headings with an id, and diagrams; the query filters them', () => {
