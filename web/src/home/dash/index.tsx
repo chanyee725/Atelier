@@ -7,8 +7,8 @@ import { cn } from '../../lib/utils';
 /**
  * Two halves side by side (5:5 by default) that stack below 880px of *container* width, so the split
  * follows the main pane, not the window (the sidebar takes part of the window).
- * It grows to the bottom of its flex parent and the last card of each column takes the spare height, so a short
- * dashboard has no empty band below the cards (#699); a long one scrolls with the page as before.
+ * It grows to the bottom of its flex parent (#699); a long one scrolls with the page as before. Cards stay as tall as
+ * their content (#715): growing the last card only left an empty band inside it.
  */
 export function DashGrid({ children, className, ratio = '1fr 1fr', fill }: { children: ReactNode; className?: string; ratio?: string; fill?: boolean }) {
   // fill (#819): side by side, the grid is exactly as tall as its pane (a flex parent of fixed height, e.g. <main>) and
@@ -32,8 +32,8 @@ export function DashGrid({ children, className, ratio = '1fr 1fr', fill }: { chi
 /** A column of cards inside one half. */
 export function DashColumn({ children, className, label, fill }: { children: ReactNode; className?: string; label?: string; fill?: boolean }) {
   return (
-    // Filled (#819), the cards' own <Card fill> shares set the split, so the last card is not forced to flex-grow 1.
-    <div className={cn('flex min-w-0 flex-col gap-4', fill ? '@min-[880px]:min-h-0' : '*:last:grow', className)} role={label ? 'region' : undefined} aria-label={label}>
+    // Filled (#819), the cards' own <Card fill> shares set the split; otherwise each card is as tall as its content (#715).
+    <div className={cn('flex min-w-0 flex-col gap-4', fill && '@min-[880px]:min-h-0', className)} role={label ? 'region' : undefined} aria-label={label}>
       {children}
     </div>
   );

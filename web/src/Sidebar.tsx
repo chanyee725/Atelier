@@ -4,7 +4,7 @@
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, GitBranch, LayoutGrid, Clock, File, FolderClosed, FolderInput, House, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, Clock, File, FolderClosed, FolderInput, GitBranch, House, LayoutGrid, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
