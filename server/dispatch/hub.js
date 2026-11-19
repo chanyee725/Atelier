@@ -1434,14 +1434,23 @@ export class Hub extends EventEmitter {
     this.touch(s, { status: "running", error: null });
   }
 
-  /** Stores a finished agy turn's answer as `last` and hands it to the lead (once per turn). */
-  endGeminiTurn(s, turn, response) {
+  /** Stores a finished agy turn's answer as `last` and hands it to the lead (once per turn). Every turn
+   *  replaces `last` and reports, even one with no answer: agy ends a turn whose tool needed a permission
+   *  headless mode cannot ask for with an empty response (denied_actions), and keeping the previous answer
+   *  left the lead waiting for a report that never came (#846). */
+  endGeminiTurn(s, turn, response, denied) {
     turn.ended = true;
-    const text = response && response.trim() ? response : turn.text;
-    if (text.trim()) {
-      s.last = redact(clip(text, 400));
-      this.rt(s.id).lastText = text;
+    let text = response && response.trim() ? response : turn.text.trim() ? turn.text : "";
+    const blocked = (Array.isArray(denied) ? denied : [])
+      .map(d => [d?.display_name, d?.action].filter(Boolean).join(" ")).filter(Boolean);
+    if (blocked.length) {
+      const note = `[Dispatch] agy가 headless에서 허락을 물을 수 없어 막은 도구: ${[...new Set(blocked)].join(", ")}. 이 턴은 거기서 끝났다.`;
+      this.push(s, { kind: "info", text: note });
+      text = text ? `${text.trimEnd()}\n\n${note}` : note;
     }
+    if (!text) text = "[Dispatch] 답변 없이 턴이 끝났다.";
+    s.last = redact(clip(text, 400));
+    this.rt(s.id).lastText = text;
     this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
     this.reportToParent(s);
   }
@@ -1506,7 +1515,7 @@ export class Hub extends EventEmitter {
           this.push(s, { kind: "error", text: clip(res.error || "Turn failed", 400) });
           this.touch(s, { status: "error", error: clip(res.error || "Turn failed", 300) });
         } else {
-          this.endGeminiTurn(s, turn, res.response ?? m.response);
+          this.endGeminiTurn(s, turn, res.response ?? m.response, res.denied_actions);
         }
         break;
       }
