@@ -32,12 +32,14 @@ const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ?
 export function pickSession(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const k of ['sid', 'name', 'provider', 'model', 'effort', 'branch']) {
+  for (const k of ['sid', 'name', 'provider', 'model', 'effort', 'branch', 'mode']) {
     const v = short(s[k]);
     if (v !== undefined) out[k] = v;
   }
   if (typeof s.commit === 'string' && /^[0-9a-f]{4,40}$/.test(s.commit)) out.commit = s.commit;
   if (SESSION_STATES.includes(s.state)) out.state = s.state;
+  // Why the mode's profile fell back to another model (#748): a server-written line, no transcript text.
+  if (typeof s.profileNote === 'string' && s.profileNote.length <= 200 && !EMAIL.test(s.profileNote)) out.profileNote = s.profileNote;
   for (const k of ['stateSince', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;

@@ -15,6 +15,8 @@ export const MAX_PLAN_NAME = 200;
 export const MAX_PLAN_N = 4;
 /** Permission modes a step may ask for. There is no looser mode on purpose. */
 export const PLAN_PERMS = ['manual', 'acceptEdits', 'auto', 'plan'] as const;
+/** Harness modes a step can run in (#748; same ids as server/dispatch/mode-profiles.js MODES). */
+export const PLAN_MODES = ['plan', 'impl', 'review', 'docs', 'quickfix', 'research'] as const;
 export const PLAN_GATES = ['auto', 'manual'] as const;
 
 export type PlanPerm = (typeof PLAN_PERMS)[number];
@@ -27,6 +29,8 @@ export interface PlanStepFields {
   model?: string;
   effort?: string;
   perm?: PlanPerm;
+  /** Harness mode (#748): the step's sessions use that mode's profile unless model/effort/perm say otherwise. */
+  mode?: string;
   /** Sessions for this step (1-4). */
   n?: number;
   task?: string;
@@ -52,7 +56,7 @@ export interface Plan {
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isName = (v: unknown): v is string => typeof v === 'string' && v.length >= 1 && v.length <= MAX_PLAN_NAME;
-const NAME_FIELDS = ['provider', 'role', 'model', 'effort'] as const;
+const NAME_FIELDS = ['provider', 'role', 'model', 'effort', 'mode'] as const;
 
 function fieldsProblem(f: Record<string, unknown>, at: string): string | null {
   for (const k of NAME_FIELDS) {
