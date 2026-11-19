@@ -17,7 +17,7 @@ export type ProviderMeta = {
   cliName: string;
   /** Usage from /api/limits, read under `limits[id]` (Claude also has Fable's own weekly window). */
   usage: boolean;
-  /** Reports no usage windows, only that its quota was hit (Gemini). */
+  /** May report no usage windows, only that its quota was hit (Gemini when agy /usage gives none); no block thresholds. */
   windowless?: boolean;
   /** The CLI can log in with an API key (POST /api/providers/<id>/key; Codex only, as in Dispatch). */
   keyLogin?: boolean;
@@ -115,8 +115,8 @@ const subWindows = (id: string, limits: ProviderLimits) =>
 
 /**
  * This provider's usage from /api/limits, read under its own id (PR #598 review: never Claude's numbers on another row).
- * Claude: account windows, plus Fable's own weekly window once reported. Codex: its CLI's windows. Gemini reports no
- * windows, only that the quota was hit and when it clears.
+ * Claude: account windows, plus Fable's own weekly window once reported. Codex: its CLI's windows. Gemini: the windows
+ * agy's /usage reports (#878), plus whether the quota was hit and when it clears.
  */
 export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { windows: LimitWindow[]; extra: LimitWindow[]; reached: boolean; reset: number | null } {
   if (!meta.usage) return { windows: [], extra: [], reached: false, reset: null };
@@ -129,8 +129,8 @@ export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { win
 }
 
 /**
- * The 사용량 설정 card's line for a provider that reports no usage windows (Gemini, #819): agy's stream gives token
- * counts per turn but no share of a quota, only a quota error with when it clears. So the line says the share can't be
+ * The 사용량 설정 card's line for a provider that reports no usage windows (Gemini when agy's /usage gave none, #819,
+ * #878): agy's stream gives token counts per turn but no share of a quota, only a quota error with when it clears. So the line says the share can't be
  * known, and once the quota was hit, until when new work waits. `untilText` formats the time left ("3시간 5분").
  */
 export function windowlessText(connected: boolean, reached: boolean, reset: number | null, untilText: (t: number) => string): string {

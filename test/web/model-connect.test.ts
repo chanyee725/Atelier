@@ -137,3 +137,12 @@ test('windowlessText: Gemini says its share is unknown, and until when work wait
   assert.equal(windowlessText(true, true, 123, fmt), '한도에 닿아 새 작업을 멈췄어요 · 3시간 5분 뒤 풀려요');
   assert.equal(windowlessText(true, true, null, fmt), '한도에 닿아 새 작업을 멈췄어요');
 });
+
+test('limitGroups: Gemini shows the windows agy /usage reported, as bars, still windowless for its fallback line (#878)', () => {
+  const limits = { gemini: { reached: false, reset: null, windows: [{ label: '주간', used: 0.75, reset: 9 }] } };
+  const [g] = limitGroups({ gemini: { connected: true } }, limits);
+  assert.deepEqual(g!.rows, [{ label: '주간', pct: 75, reset: 9 }]);
+  assert.equal(g!.reached, false);
+  const full = limitGroups({ gemini: { connected: true } }, { gemini: { windows: [{ label: '주간', used: 1 }] } });
+  assert.equal(full[0]!.reached, true);
+});

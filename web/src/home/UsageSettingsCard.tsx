@@ -89,7 +89,8 @@ function ProviderLimitRow({ meta, models, settings, onOpen }: { meta: ProviderMe
   const connected = status.key === 'connected';
   const usage = providerUsage(meta, models.limits);
   const limits = LIMIT_OF[meta.id];
-  const windows = limits ? usage.windows.filter((w) => limits[w.label]) : [];
+  // Gemini has no block thresholds: its /usage windows (#878) show as bars without a tick.
+  const windows = limits ? usage.windows.filter((w) => limits[w.label]) : meta.windowless ? usage.windows : [];
   return (
     <li data-provider={meta.id}>
       <button
@@ -108,7 +109,8 @@ function ProviderLimitRow({ meta, models, settings, onOpen }: { meta: ProviderMe
           </span>
           {windows.length > 0 ? (
             windows.map((w) => {
-              const id = limits![w.label]!;
+              const id = limits?.[w.label];
+              if (!id) return <LimitBar key={w.label} label={w.label} used={percent(w.used)} limit={null} unguarded />;
               const limit = settings ? guardValue(id, settings) : null;
               return <LimitBar key={w.label} label={w.label} used={percent(w.used)} limit={limit} />;
             })
@@ -125,19 +127,19 @@ function ProviderLimitRow({ meta, models, settings, onOpen }: { meta: ProviderMe
 }
 
 /** One window: how full it is, a tick where new work stops, and both numbers. Over the limit turns the fill warm. */
-function LimitBar({ label, used, limit }: { label: string; used: number | null; limit: number | null }) {
+function LimitBar({ label, used, limit, unguarded = false }: { label: string; used: number | null; limit: number | null; unguarded?: boolean }) {
   const u = Math.min(100, Math.max(0, used ?? 0));
   const over = used != null && limit != null && used >= limit;
   return (
     <span className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-x-2.5 text-xs">
       <span className="text-muted-foreground">{label}</span>
-      <span className="relative h-1.5 rounded-full bg-muted" role="img" aria-label={`${label} ${used ?? 0}% 사용, ${limit ?? '-'}%에서 멈춤`}>
+      <span className="relative h-1.5 rounded-full bg-muted" role="img" aria-label={unguarded ? `${label} ${used ?? 0}% 사용` : `${label} ${used ?? 0}% 사용, ${limit ?? '-'}%에서 멈춤`}>
         <span className={cn('absolute inset-y-0 left-0 rounded-full', over ? 'bg-warn' : 'bg-ok')} style={{ width: `${u}%` }} />
         {limit != null && <span aria-hidden className="absolute -inset-y-1 w-0.5 rounded-full bg-foreground/70" style={{ left: `calc(${limit}% - 1px)` }} />}
       </span>
       <span className="tabular-nums whitespace-nowrap">
         <span className={over ? 'font-medium text-foreground' : undefined}>{used ?? 0}%</span>
-        <span className="text-muted-foreground"> / {limit ?? '–'}%</span>
+        {!unguarded && <span className="text-muted-foreground"> / {limit ?? '–'}%</span>}
       </span>
     </span>
   );
