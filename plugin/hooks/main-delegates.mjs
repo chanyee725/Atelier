@@ -1,20 +1,28 @@
 #!/usr/bin/env node
-// Claude Code PreToolUse hook shipped with the Dispatch plugin (issue #31).
-// Inside a Dispatch session (DISPATCH_SESSION / DISPATCH_PARENT / DISPATCH_SELF set) it does nothing. In any other
-// Claude Code session, before a file edit — or a Bash command that looks like a write (issue #33) — it checks whether
-// a Drawing server runs for the project that holds the file: the project is the git top-level of the hook's cwd, its
-// port is in <project>/.dispatch/server.port (written by plugin/scripts/start.sh) and must be all digits, the project's
+// Claude Code PreToolUse hook shipped with the Atelier plugin (issues #31, #33, #769).
+// Inside an Atelier session (DISPATCH_SESSION / DISPATCH_PARENT / DISPATCH_SELF set) it does nothing. In any other
+// Claude Code session, before a file edit — or a Bash command that looks like a write — it checks whether an Atelier
+// server runs for the project that holds the file: the project is the git top-level of the hook's cwd, its port is in
+// <project>/.dispatch/server.port (written by plugin/scripts/start.sh) and must be all digits, the project's
 // <project>/pipelines/.drawing/server.lock must name that port and a live pid (the rule of ours() in start.sh), and
-// http://127.0.0.1:<port>/api/info must answer as a project-mode server (loopback only, short timeout). If so it adds
-// a note to the model's context: the main session delegates implementation to a lead instead of editing files itself. It repeats the note at most every REMIND_MS (30 min) per session. It never blocks the tool.
+// http://127.0.0.1:<port>/api/info must answer as a project-mode server (loopback only, short timeout).
+// Lanes (#768): the main session may do a quickfix (1-3 files) itself. The hook counts the distinct files the session
+// writes in that project; once it passes QUICKFIX_FILES it adds a note to the model's context: hand normal and risky
+// work to a lead. It repeats the note at most every REMIND_MS (30 min) per session. It never blocks the tool.
 // Any failure exits 0 silently. The marker holds no personal data: its name is the sanitized session id, its content
-// is empty, and its mtime is the time of the last note. Command text is never stored.
-import { existsSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+// is JSON with short hashes of the written paths (never the paths) and the time of the last note. Command text is
+// never stored.
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { get } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
-export const NOTE = "[Dispatch 훅] 이 프로젝트에는 Dispatch 서버가 돌고 있다. 메인 세션은 구현·수정·조사를 직접 하지 않는다. 파일을 직접 고치지 말고 Dispatch 관리자(lead)에게 맡겨라: 브리프를 쓰고, 머지 전에 확인하고, PR에 코멘트하고 머지하는 것만 한다. 다른 흐름의 일(다른 영역·저장소, 또는 지금 관리자의 컨텍스트가 무겁거나 longRun)이면 기존 관리자에 얹지 말고 새 관리자를 만들어라. 리뷰의 작은 should-fix도 담당 관리자에게 돌려보낸다.";
+export const NOTE = "[Atelier 훅] 이 프로젝트에는 Atelier 서버가 돌고 있다. 메인 세션이 직접 하는 일은 1–3개 파일의 빠른 수정(atelier-quickfix)까지다. 이 세션은 3개 파일을 넘게 고치고 있다: 일반·위험 작업이니 atelier-team 으로 관리자(lead)에게 넘겨라. 인증·데이터·삭제·구조를 건드리는 위험 작업은 파일 수와 상관없이 넘긴다. 다른 흐름의 일이면 새 관리자를 만든다.";
+
+// Distinct files the main session may write in one project before the note (quickfix lane). ATELIER_QUICKFIX_FILES
+// overrides it (tests use 0).
+export const QUICKFIX_FILES = 3;
 
 export const REMIND_MS = 30 * 60 * 1000;
 
@@ -153,16 +161,33 @@ async function check(env, input, markDir, home, now) {
   const sid = typeof input.session_id === "string" ? input.session_id.replace(/[^\w-]/g, "_").slice(0, 80) : "";
   if (!sid) return null;
   const cwd = typeof input.cwd === "string" && isAbsolute(input.cwd) ? input.cwd : null;
-  if (input.tool_name === "Bash" && !looksLikeWrite(input.tool_input?.command)) return null;
+  const bash = input.tool_name === "Bash";
+  if (bash && !looksLikeWrite(input.tool_input?.command)) return null;
   const fp = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
   const target = typeof fp === "string" && fp ? resolve(cwd ?? "/", expandHome(fp, home)) : cwd;
   if (!target || !isAbsolute(target)) return null;
-  const mark = join(markDir, `dispatch-main-${sid}`);
-  if (existsSync(mark) && now - statSync(mark).mtimeMs < REMIND_MS) return null;
+  const mark = join(markDir, `atelier-main-${sid}`);
+  const state = readMark(mark);
+  if (now - state.noteAt < REMIND_MS) return null;
   if (!cwd || !(await findServer(target, cwd))) return null;
-  writeFileSync(mark, "");
-  utimesSync(mark, new Date(now), new Date(now));
-  return { hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: NOTE } };
+  // A Bash write has no known file: all of them share one slot.
+  const key = createHash("sha256").update(bash ? "bash:" : target).digest("hex").slice(0, 12);
+  if (!state.files.includes(key)) state.files.push(key);
+  const raw = env.ATELIER_QUICKFIX_FILES;
+  const limit = typeof raw === "string" && /^[0-9]+$/.test(raw) ? Number(raw) : QUICKFIX_FILES;
+  const over = state.files.length > limit;
+  if (over) state.noteAt = now;
+  writeFileSync(mark, JSON.stringify({ files: state.files.slice(-50), noteAt: state.noteAt }));
+  return over ? { hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: NOTE } } : null;
+}
+
+// { files: string[], noteAt: number } from the marker; an unreadable or old (empty) marker counts as fresh.
+function readMark(mark) {
+  try {
+    const m = JSON.parse(readFileSync(mark, "utf8"));
+    const files = Array.isArray(m?.files) ? m.files.filter(f => typeof f === "string" && /^[0-9a-f]{12}$/.test(f)) : [];
+    return { files, noteAt: Number.isFinite(m?.noteAt) ? m.noteAt : 0 };
+  } catch { return { files: [], noteAt: 0 }; }
 }
 
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("main-delegates.mjs")) {

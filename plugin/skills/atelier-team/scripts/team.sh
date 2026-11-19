@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Create a Dispatch team for a task.
-#   team.sh <project-dir> <small|standard|ui|full> "<task>"
-# Starts or reuses the server (sibling dispatch skill), connects Claude when the CLI is logged in,
+# Create an Atelier team for a task.
+#   team.sh <project-dir> <small|risky|standard|ui|full> "<task>"
+# Starts or reuses the server (plugin scripts/start.sh), connects Claude when the CLI is logged in,
 # and creates the preset's sessions with the shared team rules prepended to the task.
 set -euo pipefail
 
@@ -9,10 +9,10 @@ here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 skill="$(dirname "$here")"
 plugin_root="$(dirname "$(dirname "$skill")")"
 start_sh="$plugin_root/scripts/start.sh"
-setup_sh="$(dirname "$skill")/dispatch/scripts/setup.sh"
+setup_sh="$(dirname "$skill")/atelier-setup/scripts/setup.sh"
 
-project="${1:?usage: team.sh <project-dir> <small|standard|ui|full> \"<task>\"}"
-preset="${2:?preset: small | standard | ui | full}"
+project="${1:?usage: team.sh <project-dir> <small|risky|standard|ui|full> \"<task>\"}"
+preset="${2:?preset: small | risky | standard | ui | full}"
 task="${3:?task text}"
 project="$(cd "$project" && pwd)"
 port="${DISPATCH_PORT:-4330}"
@@ -21,10 +21,11 @@ H=(-H 'content-type: application/json' -H 'x-dispatch: 1')
 
 case "$preset" in
   small)    items='[{"role":"lead"},{"role":"impl"},{"role":"review"}]' ;;
+  risky)    items='[{"role":"lead"},{"role":"impl"},{"role":"review","n":2}]' ;;
   standard) items='[{"role":"lead"},{"role":"impl","n":2},{"role":"review"},{"role":"test"}]' ;;
   ui)       items='[{"role":"lead"},{"role":"impl"},{"role":"design"},{"role":"review"}]' ;;
   full)     items='[{"role":"lead"},{"role":"impl","n":3},{"role":"review","n":2},{"role":"test"},{"role":"docs"}]' ;;
-  *) echo "Unknown preset '$preset' (small | standard | ui | full)" >&2; exit 2 ;;
+  *) echo "Unknown preset '$preset' (small | risky | standard | ui | full)" >&2; exit 2 ;;
 esac
 
 # Server: reuse when it already serves this project; start.sh prints why it can't otherwise.
@@ -78,4 +79,4 @@ lead_line="$(post "$(mk "$lead_items" "Your team is being created right now as y
 lead_id="${lead_line##*$'\t'}"
 team_lines="$(post "$(mk "$team_items" "Your lead is the 관리자 session. Wait for its assignment before starting work: answer this first message only with a one-line ready note. Your final answer each turn is forwarded to the lead automatically; use message_lead only for questions mid-turn." "$lead_id")")"
 printf '%s\n%s\n' "$lead_line" "$team_lines" | cut -f1-3
-echo "Dispatch: $url"
+echo "Atelier: $url"

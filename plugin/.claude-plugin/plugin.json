@@ -1,18 +1,18 @@
 {
-  "name": "dispatch",
+  "name": "atelier",
   "version": "0.1.0",
-  "description": "Run a team of Claude Code, Codex and Gemini sessions in parallel from Drawing: roles, one git worktree per session, a lead that assigns, reviews and merges. Skills to start Drawing in a project, start a team, and update from the release bundle.",
+  "description": "Atelier skills and hooks: start Atelier in a project, run a team or a quickfix, write plans, documents and diagrams, watch status, and update from the release bundle.",
   "author": {
     "name": "chanyee725",
     "url": "https://github.com/chanyee725"
   },
-  "homepage": "https://github.com/chanyee725/Drawing",
-  "repository": "https://github.com/chanyee725/Drawing",
+  "homepage": "https://github.com/chanyee725/Atelier",
+  "repository": "https://github.com/chanyee725/Atelier",
   "keywords": [
     "multi-agent",
     "team",
     "worktree",
-    "orchestration",
+    "diagrams",
     "codex",
     "gemini"
   ]

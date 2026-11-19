@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -17,11 +17,11 @@ function fakeRoot({ version = '1.2.3', withPublic = true, withStart = true } = {
   put('server/index.js');
   put('server/node_modules/dep/index.js');
   put('shared/dispatch/plan.ts');
-  put('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'dispatch', version: '0.0.0' }));
+  put('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'atelier', version: '0.0.0' }));
   put('plugin/hooks/hooks.json', '{}');
-  put('plugin/skills/dispatch/SKILL.md');
+  put('plugin/skills/atelier-setup/SKILL.md');
   for (const f of ['restart.sh', 'stop.sh']) {
-    put(`plugin/skills/dispatch/scripts/${f}`, readFileSync(new URL(`../plugin/skills/dispatch/scripts/${f}`, import.meta.url), 'utf8'));
+    put(`plugin/skills/atelier-setup/scripts/${f}`, readFileSync(new URL(`../plugin/skills/atelier-setup/scripts/${f}`, import.meta.url), 'utf8'));
   }
   put('plugin/scripts/server-check.sh', readFileSync(new URL('../plugin/scripts/server-check.sh', import.meta.url), 'utf8'));
   if (withStart) put('plugin/scripts/start.sh', '#!/bin/sh\necho "$DRAW_PORT $DISPATCH_PORT $1" > "$HOME/started"; echo "$DRAWING_HOME" > "$HOME/started-home"\n');
@@ -41,7 +41,7 @@ test('pack: bundle holds server, shared, public, plugin and nothing else', () =>
     const file = packBundle({ root, out });
     assert.equal(file, join(out, 'drawing-1.2.3.tgz'));
     const names = list(file);
-    for (const want of ['server/index.js', 'shared/dispatch/plan.ts', 'public/index.html', 'plugin/hooks/hooks.json', 'plugin/skills/dispatch/SKILL.md', 'package.json', 'NOTICE.md']) {
+    for (const want of ['server/index.js', 'shared/dispatch/plan.ts', 'public/index.html', 'plugin/hooks/hooks.json', 'plugin/skills/atelier-setup/SKILL.md', 'package.json', 'NOTICE.md']) {
       assert.ok(names.includes(`drawing-1.2.3/${want}`), `missing ${want}`);
     }
     for (const bad of ['node_modules', '.env', 'test/', 'web/']) {
@@ -97,15 +97,19 @@ test('pack: refuses without a built public/ or a semver version', () => {
 test('pack: shipped plugin has valid manifests, hooks.json and skills', () => {
   const dir = new URL('../plugin/', import.meta.url).pathname;
   const mp = JSON.parse(readFileSync(join(dir, '.claude-plugin/marketplace.json'), 'utf8'));
-  assert.equal(mp.name, 'dispatch');
-  assert.equal(JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8')).name, 'dispatch');
+  assert.equal(mp.name, 'atelier');
+  assert.equal(JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8')).name, 'atelier');
   assert.ok(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8')).hooks.PostToolUse);
-  for (const s of ['dispatch', 'dispatch-team', 'dispatch-update']) {
-    assert.match(readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8'), new RegExp(`^---\\nname: ${s}\\n`));
+  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-status', 'atelier-update'];
+  assert.deepEqual(readdirSync(join(dir, 'skills')).sort(), [...skills].sort());
+  for (const s of skills) {
+    const md = readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8');
+    assert.match(md, new RegExp(`^---\\nname: ${s}\\ndescription: \\S`));
+    assert.doesNotMatch(md, /\bIMPORTANT\b|\bNEVER\b/, s);
   }
 });
 
-test('dispatch-update: unpacks the release bundle that gh serves, into DRAWING_INSTALL_BASE', () => {
+test('atelier-update: unpacks the release bundle that gh serves, into DRAWING_INSTALL_BASE', () => {
   const root = fakeRoot({ version: '3.1.4' });
   const work = mkdtempSync(join(tmpdir(), 'upd-'));
   try {
@@ -120,7 +124,7 @@ cp "${bundle}" "$dir/"
 `, { mode: 0o755 });
     const home = join(work, 'home');
     mkdirSync(home);
-    const script = new URL('../plugin/skills/dispatch-update/scripts/update.sh', import.meta.url).pathname;
+    const script = new URL('../plugin/skills/atelier-update/scripts/update.sh', import.meta.url).pathname;
     const out = execFileSync('bash', [script], {
       encoding: 'utf8',
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: home, DRAWING_INSTALL_BASE: join(home, 'd') },
@@ -134,7 +138,7 @@ cp "${bundle}" "$dir/"
   }
 });
 
-test('dispatch-update: warns in Korean when DRAWING_HOME holds an old install, stays quiet otherwise', () => {
+test('atelier-update: warns in Korean when DRAWING_HOME holds an old install, stays quiet otherwise', () => {
   const root = fakeRoot({ version: '3.1.4' });
   const work = mkdtempSync(join(tmpdir(), 'upd-'));
   try {
@@ -150,7 +154,7 @@ cp "${bundle}" "$dir/"
     const legacy = join(work, 'legacy');
     mkdirSync(join(legacy, 'drawing-1.0.0'), { recursive: true });
     symlinkSync(join(legacy, 'drawing-1.0.0'), join(legacy, 'current'));
-    const script = new URL('../plugin/skills/dispatch-update/scripts/update.sh', import.meta.url).pathname;
+    const script = new URL('../plugin/skills/atelier-update/scripts/update.sh', import.meta.url).pathname;
     const run = (env) => spawnSync('bash', [script, '--no-restart'], {
       encoding: 'utf8',
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: home, DRAWING_INSTALL_BASE: '', DRAWING_HOME: '', ...env },
@@ -188,7 +192,7 @@ cp "${bundle}" "$dir/"
   const project = join(work, 'proj');
   mkdirSync(join(project, '.dispatch'), { recursive: true });
   execFileSync('git', ['init', '-q', project]);
-  const script = new URL('../plugin/skills/dispatch-update/scripts/update.sh', import.meta.url).pathname;
+  const script = new URL('../plugin/skills/atelier-update/scripts/update.sh', import.meta.url).pathname;
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: home, DRAWING_INSTALL_BASE: join(home, 'd') };
   const run = (args = []) => execFileSync('bash', [script, ...args], { encoding: 'utf8', env, cwd: project, stdio: ['ignore', 'pipe', 'pipe'] });
   const cleanup = () => { rmSync(root, { recursive: true, force: true }); rmSync(work, { recursive: true, force: true }); };
@@ -203,7 +207,7 @@ function fakeServer(dir, project) {
 }
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
-test('dispatch-update: restarts only this project server, with the port passed as DRAW_PORT and DISPATCH_PORT', () => {
+test('atelier-update: restarts only this project server, with the port passed as DRAW_PORT and DISPATCH_PORT', () => {
   const t = updateEnv();
   const child = fakeServer(t.work, t.project);
   try {
@@ -228,7 +232,7 @@ test('dispatch-update: restarts only this project server, with the port passed a
   }
 });
 
-test('dispatch-update: no running server means no restart; a bad port value is never executed', () => {
+test('atelier-update: no running server means no restart; a bad port value is never executed', () => {
   const t = updateEnv();
   try {
     writeFileSync(join(t.project, '.dispatch/server.pid'), '999999');
@@ -241,7 +245,7 @@ test('dispatch-update: no running server means no restart; a bad port value is n
   }
 });
 
-test('dispatch-update: a bundle without plugin/scripts/start.sh stops before current is switched', () => {
+test('atelier-update: a bundle without plugin/scripts/start.sh stops before current is switched', () => {
   const t = updateEnv({ withStart: false });
   try {
     assert.throws(() => t.run(), /start\.sh/);
@@ -254,7 +258,7 @@ test('dispatch-update: a bundle without plugin/scripts/start.sh stops before cur
   }
 });
 
-test('dispatch-update: re-downloading the same version replaces it without leftovers', () => {
+test('atelier-update: re-downloading the same version replaces it without leftovers', () => {
   const t = updateEnv();
   try {
     t.run();
@@ -270,7 +274,7 @@ test('dispatch-update: re-downloading the same version replaces it without lefto
   }
 });
 
-test('dispatch-update: a pid file naming some other live process is stale: not signalled, no restart', () => {
+test('atelier-update: a pid file naming some other live process is stale: not signalled, no restart', () => {
   const t = updateEnv();
   const other = spawn('sleep', ['60'], { stdio: 'ignore' });
   try {
@@ -285,7 +289,7 @@ test('dispatch-update: a pid file naming some other live process is stale: not s
   }
 });
 
-test('dispatch-update: a node server of another workspace is not ours either', () => {
+test('atelier-update: a node server of another workspace is not ours either', () => {
   const t = updateEnv();
   const otherProject = join(t.work, 'elsewhere');
   mkdirSync(otherProject);
