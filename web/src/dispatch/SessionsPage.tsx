@@ -13,7 +13,7 @@ import { nowLine } from './lib/turn.ts';
 import { Meter, ModelTag, StatusBadge } from './parts';
 import { useDispatch } from './store';
 import { useScoped } from './scope';
-import { useAccountLabels } from '../accountLabels';
+import { shownAccount, useAccountLabels } from '../accountLabels';
 import type { Session, SessionState } from './types';
 
 const FILTERS: { id: 'all' | SessionState; label: string }[] = [
@@ -43,7 +43,7 @@ function NowLine({ s, now }: { s: Session; now: number }) {
 function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session; now: number; onOpen: () => void }) {
   // The label the session started under when the server records one (#747), else the provider's current label.
   const labels = useAccountLabels();
-  const account = (s as Session & { accountLabel?: string | null }).accountLabel ?? labels[s.provider] ?? null;
+  const account = shownAccount(s.provider, (s as Session & { accountLabel?: string | null }).accountLabel, labels);
   const ctx = s.ctxWindow ? s.ctx / s.ctxWindow : 0;
   const state = stateOf(s);
   const live = s.status === 'running' || s.status === 'starting';

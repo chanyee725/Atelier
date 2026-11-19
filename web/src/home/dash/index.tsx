@@ -129,7 +129,8 @@ export function CardTile({ icon, title, sub, meta, onClick, href, className, dat
     <div className={cls}>{body}</div>
   );
   return (
-    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-md border', className)}>
+    // An open <details> in the footer widens the tile to the whole row, so its list is not squeezed into a third.
+    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-md border has-[details[open]]:col-span-full', className)}>
       {target}
       {footer}
     </li>

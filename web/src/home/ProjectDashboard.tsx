@@ -17,8 +17,8 @@ import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, 
 import { ColumnHead, DocList } from './DocList';
 import { allDocs, filterDocs, relativeTime } from './model';
 import { useAgents } from './useAgents';
-import { IssueSessionList } from './IssueSessionList';
-import { fromSessions } from './issueSessions';
+import { PrIssueSessions } from './IssueSessionList';
+import { fromSessions, issueOf } from './issueSessions';
 import { useAccountLabels } from '../accountLabels';
 import { usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches, type Branches, type Feed, type PrAnswer } from './projectFeeds';
 import type { Session } from '../../../shared/dispatch/types.ts';
@@ -260,7 +260,7 @@ function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; b
                 key={branch}
                 data={`pr-${pr.number}`}
                 href={pr.url}
-                footer={<IssueSessionList sessions={fromSessions(sessions, branch, labels, pr.number)} />}
+                footer={<PrIssueSessions issue={issueOf(sessions, branch)} fallback={fromSessions(sessions, branch, labels)} version={Math.floor((s?.updatedAt ?? 0) / 60_000)} />}
                 icon={<GitPullRequest />}
                 title={
                   <span className="inline-flex items-center gap-2">

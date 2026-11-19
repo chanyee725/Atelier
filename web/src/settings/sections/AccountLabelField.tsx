@@ -52,7 +52,7 @@ export function AccountLabelField({ meta }: { meta: ProviderMeta }) {
       if (s.error) throw new Error('설정 파일을 읽지 못해서 저장하지 않았어요.');
       setAccountLabelsCache(s.values.accountLabels);
       setValue(v);
-      setNote({ text: v ? `${accountText(meta.short, v)}로 보여요.` : '라벨을 지웠어요.' });
+      setNote({ text: v ? '저장했어요.' : '라벨을 지웠어요.' });
     } catch (err) {
       setNote({ text: err instanceof Error ? err.message : '저장하지 못했어요.', bad: true });
     } finally {
