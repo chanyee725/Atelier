@@ -3,7 +3,7 @@
 // session itself). Metadata only: role, provider, model, effort, the account *label* as it was when the session
 // started, times, token counts, cost, branch names and issue numbers. Never transcripts, prompts, answers,
 // emails or account ids. Strings are short tokens (pickSession's rule in server/runs/record.js).
-import { accountsSummary } from "../../shared/dispatch/accounts.js";
+import { accountsSummary, checkAccountLabel } from "../../shared/dispatch/accounts.js";
 
 export const LEDGER_MAX = 2000;
 const BRANCHES_MAX = 6;
@@ -12,8 +12,8 @@ const SHORT = /^[A-Za-z0-9._:/+-]{1,120}$/;
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const short = v => (typeof v === "string" && SHORT.test(v) && !EMAIL.test(v) ? v : null);
 const num = v => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
-// A label is checked when it is saved (shared/dispatch/accounts.js); here only its length and `@` again.
-const label = v => (typeof v === "string" && v.length <= 80 && !v.includes("@") ? v : null);
+// A label is checked when it is saved; checked again here with the same rule (shared/dispatch/accounts.js).
+const label = v => { const r = checkAccountLabel(v); return r.ok ? r.value : null; };
 
 /** A positive issue number (1..9_999_999) from a number or a "#747"/"747" string, else null. */
 export function issueNumber(v) {

@@ -20,6 +20,7 @@ import { SharedLimits } from "./limits.js";
 import { codexModels, staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
+import { patchProfiles, profileGrid, readStored, resolveProfile } from "./mode-profiles.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
 import { readLegacyTheme, UserDefaults } from "../user-defaults.js";
 
@@ -175,7 +176,30 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   // Only this project: other servers are no longer found by registry files or port scans.
   const projects = async () => [{ port: hub.port, name: path.basename(root), path: tilde(root), current: true }];
 
+  // Harness profiles per mode (#748), stored in ~/.dispatch/drawing.json as `modeProfiles`.
+  const isConnected = provider => !!providers[provider]?.connected;
+  const storedProfiles = async () => readStored((await userDefaults.current()).modeProfiles);
+  const modeProfiles = {
+    async get() {
+      return { ...profileGrid({ stored: await storedProfiles(), models, isConnected, roleModels: teamSettings(store).roleModels }), error: userDefaults.status().error };
+    },
+    async put(body) {
+      const next = patchProfiles(await storedProfiles(), body, models);
+      await userDefaults.update({ modeProfiles: next });
+      const out = await modeProfiles.get();
+      broadcast("mode-profiles", out);
+      return out;
+    },
+    /** What team creation calls (PR2): the profile for `role` in `mode`, with a fallback note. */
+    async resolve(mode, role, { perm } = {}) {
+      return resolveProfile({ mode, role, stored: await storedProfiles(), models, isConnected, roleModel: teamSettings(store).roleModels[role], perm });
+    },
+  };
+
+  hub.resolveProfile = (mode, role, opts) => modeProfiles.resolve(mode, role, opts);
+
   const d = {
+    modeProfiles,
     root, store, hub, ledger, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,

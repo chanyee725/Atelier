@@ -23,10 +23,11 @@ test('checkAccountLabel: trims, caps at 40, refuses emails, ids and keys', () =>
   assert.deepEqual(checkAccountLabel('Codex · 팀 계정'), { ok: true, value: 'Codex · 팀 계정' });
   assert.deepEqual(checkAccountLabel(''), { ok: true, value: null });
   assert.deepEqual(checkAccountLabel(null), { ok: true, value: null });
-  for (const bad of ['a@b.co', 'me@work', 'x'.repeat(41), 'acct 12345678', '3f2a9c1e8b7d6a5f4e3d', '123e4567-e89b-12d3-a456-426614174000', 'sk-abcdef123456', 'a\u0007b', 42]) {
+  for (const bad of ['a@b.co', 'me@work', 'x'.repeat(41), 'acct 12345678', '3f2a9c1e8b7d6a5f4e3d', '123e4567-e89b-12d3-a456-426614174000', 'sk-abcdef123456', 'a\u0007b', 42, '０１２３４５６７８９', '010-1234-5678', '1234 5678 9012', 'me﹫corp', 'me＠corp', '12.34.56', 'Codex · ０１０-１２３４']) {
     assert.equal(checkAccountLabel(bad).ok, false, String(bad));
   }
   assert.equal(checkAccountLabel('가'.repeat(40)).ok, true);
+  for (const ok of ['Claude · Max', 'Codex · 팀 계정 2', 'Gemini · 2026']) assert.equal(checkAccountLabel(ok).ok, true, ok);
   assert.deepEqual(cleanAccountLabels({ claude: 'Max', openai: 'x@y.z', gemini: 3, other: 'A' }), { claude: 'Max' });
   assert.equal(accountLabelOf({ claude: 'Claude · Max' }, 'claude'), 'Claude · Max');
   assert.equal(accountLabelOf({}, 'openai'), 'Codex');
@@ -83,7 +84,7 @@ test('Ledger: snapshot label kept, issues from item and branch, leads included, 
 test('pickSession keeps role, accountLabel, issue and times; refuses email-shaped labels', () => {
   const p = pickSession({ sid: 's', role: 'impl', accountLabel: 'Claude · Max', issue: 747, startedAt: 1, endedAt: 2, last: 'secret answer' });
   assert.deepEqual(p, { sid: 's', role: 'impl', accountLabel: 'Claude · Max', issue: 747, startedAt: 1, endedAt: 2 });
-  assert.equal(pickSession({ sid: 's', accountLabel: 'a@b.co' }).accountLabel, undefined);
+  for (const bad of ['a@b.co', 'me﹫corp', '010-1234-5678']) assert.equal(pickSession({ sid: 's', accountLabel: bad }).accountLabel, undefined, bad);
 });
 
 async function start() {

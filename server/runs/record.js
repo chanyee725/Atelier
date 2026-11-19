@@ -2,6 +2,8 @@
 // Metadata only: step states, times, model, token counts, cost, branch, commit, PR number.
 // Never transcripts, prompts, a session's answers, questions, tool output, emails or keys.
 
+import { checkAccountLabel } from '../../shared/dispatch/accounts.js';
+
 export const RECORD_VERSION = 1;
 export const RUN_ID = /^\d{13}-[0-9a-f]{6,16}$/;
 export const TIMELINE_MAX = 500;
@@ -22,6 +24,12 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 // Strings are kept only when they look like a short token and not like an email address (never stored, even in a branch name).
 const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ? v : undefined);
+// A server-written one-line note (Korean allowed, unlike short()): control characters folded, capped at 200, never an email.
+const shortNote = (v) => {
+  if (typeof v !== 'string') return undefined;
+  const t = v.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return t && !EMAIL.test(t) ? t : undefined;
+};
 
 /**
  * Keep only whitelisted metadata from a session object (Dispatch session or a patch of one).
@@ -32,7 +40,7 @@ const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ?
 export function pickSession(s) {
   const out = {};
   if (!s || typeof s !== 'object') return out;
-  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch']) {
+  for (const k of ['sid', 'name', 'role', 'provider', 'model', 'effort', 'branch', 'mode']) {
     const v = short(s[k]);
     if (v !== undefined) out[k] = v;
   }
@@ -40,8 +48,14 @@ export function pickSession(s) {
   if (SESSION_STATES.includes(s.state)) out.state = s.state;
   // The account label as the session started (#747): a user-set name like `Claude · Max`, never an email or id.
   if (s.accountLabel === null) out.accountLabel = null;
-  else if (typeof s.accountLabel === 'string' && s.accountLabel.length <= 80 && !s.accountLabel.includes('@') && !/[\u0000-\u001f]/.test(s.accountLabel)) out.accountLabel = s.accountLabel;
+  else if (typeof s.accountLabel === 'string') {
+    const r = checkAccountLabel(s.accountLabel);
+    if (r.ok && r.value) out.accountLabel = r.value;
+  }
   if (Number.isInteger(s.issue) && s.issue > 0 && s.issue < 1e7) out.issue = s.issue;
+  // Why the mode's profile fell back to another model (#748): a server-written line, no transcript text.
+  const note = shortNote(s.profileNote);
+  if (note !== undefined) out.profileNote = note;
   for (const k of ['stateSince', 'startedAt', 'endedAt', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;

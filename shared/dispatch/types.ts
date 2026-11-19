@@ -29,6 +29,9 @@ export interface Session {
   modelLabel: string;
   effort: string | null;
   perm: string;
+  /** Harness mode the session was created in (#748), and why its profile fell back to another model. */
+  mode?: string;
+  profileNote?: string;
   prompt: string;
   canSpawn: boolean;
   cwd: string;

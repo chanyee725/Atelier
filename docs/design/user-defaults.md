@@ -33,6 +33,7 @@ Metadata only: no tokens, API keys, emails, names or transcripts.
 | `accountLabels` | object `{ claude?, openai?, gemini? }` | The user's name for each provider connection (#747), e.g. `Claude · Max`. At most 40 characters; values with `@`, control characters, 6+ digit runs, 16+ hex runs, UUIDs or key prefixes are refused (never an email or account id). Unset: the provider name. |
 | `workspaces` | array of `{ path, name }` | Registered workspace folders (see below). |
 | `lastWorkspace` | path | The workspace opened last (see below). |
+| `modeProfiles` | object | Harness profiles per mode × role (#748): `cells.<mode>.<role> = { provider, model, effort, perm }` and `hints.<model id or provider>` (≤ 40 chars). Only changed cells are stored; built-in grid in `server/dispatch/mode-profiles.js`. |
 
 ## Format rules
 
