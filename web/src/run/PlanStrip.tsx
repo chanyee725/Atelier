@@ -201,7 +201,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
             계획이에요. 지금은 시작할 수 없어요: <span data-testid="plan-blockers">{status.blockers.join(' · ')}</span>
           </>
         ) : (
-          !error && <>{approval?.kind === 'revised' || inTab ? approval?.text : '계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.'}</>
+          !error && <>{(approval?.kind === 'revised' || inTab) ? approval?.text : '계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.'}</>
         )}
       </span>
       <span className="text-muted-foreground">예상 {status.sessions}세션</span>
