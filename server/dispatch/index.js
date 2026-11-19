@@ -16,7 +16,8 @@ import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
 import { createIssueList } from "./issues.js";
-import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
+import { findProject, OFF_MESSAGES } from "./project.js";
+import { claimState } from "./state-migrate.js";
 import { SharedLimits } from "./limits.js";
 import { codexModels, staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
@@ -45,9 +46,9 @@ const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: nu
  * `deps.userDefaults` is the server's UserDefaults (~/.atelier/drawing.json); without it nothing outside the
  * project is read or written for settings (memory only).
  */
-export async function createDispatch({ root, broadcast, port, workspaceDir, deps = {} }) {
+export async function createDispatch({ root, broadcast, port, workspaceDir, layout, deps = {} }) {
   const dep = { providerStatus, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
-  const store = new Store(root);
+  const store = new Store(root, ...(layout ? [layout] : []));
   await store.load();
   // The user's defaults file wins over the project's state.json, key by key (docs/design/user-defaults.md).
   const userDefaults = dep.userDefaults ?? new UserDefaults(null);
@@ -252,12 +253,13 @@ export async function setup(ctx, deps = {}) {
 
   const found = await findProject(ctx.workspaceDir, { gitTop });
   if (!found.root) return off(found.reason);
-  const claim = await claimProject(found.root);
+  // Takes the project lock; an older version's .dispatch/ moves to .atelier/ here once no session needs it.
+  const claim = await claimState(found.root);
   if (!claim.ok) return off(claim.reason, claim.port);
   let d;
   try {
     const topFolders = async () => ((await ctx.modules.workspace?.store?.tree()) ?? []).filter(n => n.type === "folder").map(n => n.name);
-    d = await createDispatch({ root: found.root, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.modules.userDefaults?.defaults && { userDefaults: ctx.modules.userDefaults.defaults }), ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
+    d = await createDispatch({ root: found.root, layout: claim.layout, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.modules.userDefaults?.defaults && { userDefaults: ctx.modules.userDefaults.defaults }), ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
   } catch (e) {
     await claim.lock.release();
     throw e;

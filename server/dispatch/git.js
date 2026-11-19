@@ -21,7 +21,7 @@ async function hasHead(dir) {
 // Keep the session worktrees and the team state out of `git status` without touching the tracked
 // .gitignore. Only Atelier's own entries: the rest of .atelier/ (documents) is the user's to track.
 // `worktrees` is the folder new worktrees go in; a not-yet-moved .dispatch/ is excluded whole, as before.
-async function ensureExcluded(root, worktrees) {
+export async function ensureExcluded(root, worktrees) {
   const rel = path.relative(root, worktrees).split(path.sep).join("/");
   const lines = rel.startsWith(STATE_DIR + "/")
     ? [`/${rel}/`, ...["state.json", "drawing.lock*", "server.port", "server.pid", "server.log"].map(f => `/${STATE_DIR}/${f}`)]
