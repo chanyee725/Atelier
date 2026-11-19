@@ -129,7 +129,9 @@ test('document screen: path, view switch, ⋯ menu, sub-documents, 390px', { ski
     const views = await box(page.getByRole('toolbar', { name: '보기 방식' }));
     const exp = await box(page.getByRole('button', { name: '내보내기' }));
     const more = await box(page.getByRole('button', { name: '더 보기' }));
-    assert.ok(views.x > (await box(save)).x + 100 && views.x + views.width < exp.x && exp.x < more.x && more.x + more.width > 1440 - 24, 'view switch sits on the right, before 내보내기 and ⋯');
+    // The 알림함 bell sits at the right end, after ⋯ (#786).
+    const bell = await box(page.locator('header [data-activity-bell]'));
+    assert.ok(views.x > (await box(save)).x + 100 && views.x + views.width < exp.x && exp.x < more.x && more.x + more.width <= bell.x && bell.x + bell.width > 1440 - 24, 'view switch sits on the right, before 내보내기, ⋯ and the bell');
     // Keyboard: one Tab stop in the toolbar, arrow keys move between the choices.
     await page.getByRole('button', { name: '둘 다', exact: true }).focus();
     await page.keyboard.press('ArrowRight');
@@ -194,9 +196,9 @@ test('document screen: path, view switch, ⋯ menu, sub-documents, 390px', { ski
     const page = await open(theme, 390);
     await page.getByRole('button', { name: '메뉴 열기' }).click();
     const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
+    // A top folder row only expands in place (#778), so the document is picked in the same drawer.
     await row(drawer, /결제 시스템/).click();
-    await page.getByRole('button', { name: '메뉴 열기' }).click();
-    await row(page.getByRole('dialog'), /^로그인 로직/).click();
+    await row(drawer, /^로그인 로직/).click();
     await page.locator('.ProseMirror').waitFor();
     await page.waitForTimeout(400);
     assert.deepEqual(await pressed(page), ['문서:true', '캔버스:false']);
