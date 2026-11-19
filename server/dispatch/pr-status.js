@@ -93,7 +93,7 @@ export function rollupCi(rollup) {
   return pending ? "pending" : "success";
 }
 
-function classify(err) {
+export function classify(err) {
   const text = `${err?.stderr ?? ""}\n${err?.message ?? ""}`.toLowerCase();
   if (err?.code === "ENOENT") return "gh-missing";
   if (err?.killed || err?.code === "ETIMEDOUT") return "timeout";
