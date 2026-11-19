@@ -100,7 +100,7 @@ test('pack: shipped plugin has valid manifests, hooks.json and skills', () => {
   assert.equal(mp.name, 'atelier');
   assert.equal(JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8')).name, 'atelier');
   assert.ok(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8')).hooks.PostToolUse);
-  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-status', 'atelier-update'];
+  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-organize', 'atelier-status', 'atelier-update'];
   assert.deepEqual(readdirSync(join(dir, 'skills')).sort(), [...skills].sort());
   for (const s of skills) {
     const md = readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8');
