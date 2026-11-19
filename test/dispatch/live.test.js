@@ -146,3 +146,31 @@ test("hub: live events carry no transcript text, tool output, secrets or home pa
   hub.touch(s, { status: "idle" });
   assert.equal(hub.liveState("a").current, null);
 });
+
+test("commandTarget: home folders and the session folder never reach the UI", () => {
+  const t = commandTarget(`cd ${CWD} && cat ${CWD}/src/x.ts /home/someone/work/a /Users/jane/x /root/y`, where);
+  assert.equal(t, "cd . && cat src/x.ts ~/work/a ~/x ~/y");
+  assert.equal(liveOf("Bash", JSON.stringify({ command: "ls /home/someone/secret" }), where).target, "ls ~/secret");
+});
+
+test("tracker: a re-touched file comes first in the delta", () => {
+  const { tr, events } = tracker(1000);
+  const s = { id: "a", cwd: CWD };
+  const read = (id, f) => tr.note(s, { kind: "tool", id, name: "Read", text: JSON.stringify({ file_path: `${CWD}/${f}` }), final: true });
+  read(1, "x");
+  read(2, "a"); read(3, "b"); read(4, "a");
+  tr.flush("a");
+  assert.deepEqual(events.at(-1).files.map(f => f.path), ["a", "b"]);
+  const live = events.reduce((l, ev) => applyLiveDelta(l, ev), { sid: "a", current: null, recent: [], files: [] });
+  assert.deepEqual(live.files.map(f => f.path), tr.snapshot("a").files.map(f => f.path));
+});
+
+test("tracker: unknown ids (outside writers, removed sessions) get no state", () => {
+  const ids = new Set(["a"]);
+  const tr = new LiveTracker({ emit() {}, workspaceDir: WS, flushMs: 0, known: id => ids.has(id) });
+  tr.noteDoc("outside:zz", "p.dpx.json", 1);
+  assert.equal(tr.byId.has("outside:zz"), false);
+  ids.delete("a");
+  tr.note({ id: "a", cwd: CWD }, { kind: "tool", id: 1, name: "Read", text: "{}" });
+  assert.equal(tr.byId.has("a"), false);
+});

@@ -12,6 +12,7 @@ import { useEffect, useId, useRef, type CSSProperties, type MouseEvent } from 'r
 import { ChevronDown, ChevronRight, ChevronUp, PanelRightClose } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { roleLabel } from '../run/overlayModel';
+import { openAgentLive } from '../live/store';
 import type { MarginForm } from './agentMargin';
 import type { DocSpot } from './docCursor';
 import type { MarginCard } from './marginStore';
@@ -82,7 +83,10 @@ function Card({ card, onJump }: { card: MarginCard; onJump: (spot: DocSpot, card
     <li className="margin-card" data-margin-card={card.sid} data-phase={card.phase} style={agentStyle(card)}>
       <div className="margin-who">
         <span className="margin-swatch" aria-hidden="true" />
-        <span className="margin-name">{name}</span>
+        {/* Opens the agent's live view (#728); focus stays where it was (the editor) and returns there on close. */}
+        <button type="button" className="margin-name" data-margin-live={card.sid} onMouseDown={keepFocus} onClick={() => openAgentLive(card.sid, { from: 'doc' })} title={`${name} 진행상황 보기`}>
+          {name}
+        </button>
         {(card.model || card.provider) && (
           <span className="margin-model">
             <ProviderIcon provider={card.provider} />

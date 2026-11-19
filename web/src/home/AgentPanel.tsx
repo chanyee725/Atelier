@@ -6,6 +6,8 @@ import { useId } from 'react';
 import { File, RotateCw } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
+import { FOCUS_RING } from '../lib/focus';
+import { openAgentLive } from '../live/store';
 import { agentMeta, agentStateLabel, fileStem, isBusy, needsLook, safeColor, type AgentPresence } from './agents';
 import { relativeTime } from './model';
 
@@ -98,7 +100,16 @@ function AgentRow({ agent: a, title, onOpen }: { agent: AgentPresence; title: st
   return (
     <li data-agent={a.sid} data-state={a.state ?? a.status} className="grid gap-1 px-4 pt-1.5 pb-2.5">
       <div className="flex min-w-0 items-start gap-2">
-        <AgentTag agent={a} />
+        {/* The name opens the agent's live view (#728); the file below stays a link to the document. */}
+        <button
+          type="button"
+          data-agent-live={a.sid}
+          title={`${a.name} 진행상황 보기`}
+          onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'doc' })}
+          className={cn('-m-0.5 flex min-w-0 rounded-md p-0.5 hover:bg-accent/60', FOCUS_RING)}
+        >
+          <AgentTag agent={a} />
+        </button>
         <span className={cn('mt-[7px] ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs leading-5', busy ? 'text-foreground' : 'text-muted-foreground')}>
           <span aria-hidden className={cn('size-1.5 rounded-full', busy ? 'bg-ok' : needsLook(a) ? 'bg-warn' : 'bg-muted-foreground/50')} />
           {agentStateLabel(a)}
