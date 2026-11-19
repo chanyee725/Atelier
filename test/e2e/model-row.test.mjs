@@ -92,50 +92,61 @@ test('model row and 설정 > 모델 연결: connect, cancel, reload, disconnect 
   // One row per provider id: Claude, OpenAI Codex, Gemini (#587).
   await row.first().waitFor();
   assert.deepEqual(await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => e.getAttribute('data-provider'))), ['claude', 'openai', 'gemini']);
-  // Each row shows its provider's own mark (react-icons, #621): decorative inline SVG in the row's text colour, beside
-  // the status dot; the accessible name stays the provider name and its state.
+  // Each row shows its provider's own mark (react-icons, #621): decorative inline SVG in its brand colour for the
+  // current theme (#670), beside the status dot; the accessible name stays the provider name and its state.
   const marks = await page.getByTestId('model-row').evaluateAll((els) => els.map((e) => {
     const svg = e.querySelector('svg[data-provider-icon]');
-    return svg && [svg.getAttribute('data-provider-icon'), svg.closest('[aria-hidden="true"]') !== null, getComputedStyle(svg).fill === getComputedStyle(e).color, !!e.querySelector('[data-testid="model-row-dot"]')];
+    if (!svg) return null;
+    const probe = document.createElement('i');
+    probe.style.color = svg.style.getPropertyValue(`--brand-${document.documentElement.dataset.theme}`);
+    document.body.append(probe);
+    const brand = getComputedStyle(probe).color === getComputedStyle(svg).color;
+    probe.remove();
+    return [svg.getAttribute('data-provider-icon'), svg.closest('[aria-hidden="true"]') !== null, brand, !!e.querySelector('[data-testid="model-row-dot"]')];
   }));
   assert.deepEqual(marks, [['claude', true, true, true], ['openai', true, true, true], ['gemini', true, true, true]]);
   assert.match(await row.getAttribute('aria-label'), /^Claude /);
 
-  // 1. 테마 switch (E527, from Dispatch): four icon radios, 시스템 first and checked; a click applies at once, survives a
-  // reload, and arrows/Home/End move the choice with focus. 모니터링 renders dark plus html.monitor.
+  // 1. 테마 switch (E527, from Dispatch): three icon radios, 시스템 first and checked; a click applies at once, survives a
+  // reload, and arrows/Home/End move the choice with focus. 모니터링 is no longer offered (#702): html.monitor never
+  // appears, and a stored 'monitor' choice falls back to 시스템.
   const radio = (name) => themes.getByRole('radio', { name, exact: true });
   const html = () => page.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.classList.contains('monitor')]);
   const checked = () => themes.getByRole('radio', { checked: true }).getAttribute('aria-label');
-  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))), ['시스템', '라이트', '다크', '모니터링']);
+  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label'))), ['시스템', '라이트', '다크']);
   assert.equal(await checked(), '시스템');
   await radio('다크').click();
   assert.deepEqual(await html(), ['dark', false]);
-  await radio('모니터링').click();
-  assert.deepEqual(await html(), ['dark', true]);
-  await shot('theme-monitor.png');
+  await shot('theme-dark.png');
   await page.reload();
   await themes.waitFor();
-  assert.equal(await checked(), '모니터링', 'persists after reload');
-  assert.deepEqual(await html(), ['dark', true]);
-  await radio('모니터링').focus();
+  assert.equal(await checked(), '다크', 'persists after reload');
+  assert.deepEqual(await html(), ['dark', false]);
+  await radio('다크').focus();
   await page.keyboard.press('ArrowRight');
   assert.equal(await checked(), '시스템', 'arrows wrap');
   assert.equal(await radio('시스템').evaluate((el) => el === document.activeElement), true, 'focus follows the choice');
   await page.keyboard.press('ArrowRight');
   assert.deepEqual([await checked(), await html()], ['라이트', ['light', false]]);
   await page.keyboard.press('End');
-  assert.equal(await checked(), '모니터링');
+  assert.equal(await checked(), '다크');
   await page.keyboard.press('Home');
   assert.equal(await checked(), '시스템');
   assert.equal(await page.evaluate(() => localStorage.getItem('drawing.theme')), null, '시스템 stores nothing');
-  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.tabIndex)), [0, -1, -1, -1], 'one tab stop');
-  // #612: one theme store. 모니터링 picked in the sidebar stays through prefers-color-scheme flips, here and on the
+  assert.deepEqual(await themes.getByRole('radio').evaluateAll((els) => els.map((e) => e.tabIndex)), [0, -1, -1], 'one tab stop');
+  // A 'monitor' choice stored before #702 reads as 시스템, with no html.monitor.
+  await page.evaluate(() => localStorage.setItem('drawing.theme', 'monitor'));
+  await page.reload();
+  await themes.waitFor();
+  assert.equal(await checked(), '시스템', 'stored monitor falls back to 시스템');
+  assert.equal((await html())[1], false, 'no html.monitor');
+  // #612: one theme store. 다크 picked in the sidebar stays through prefers-color-scheme flips, here and on the
   // Dispatch screen (its own useTheme() caller).
-  await radio('모니터링').click();
+  await radio('다크').click();
   const kept = async (p) => {
     for (const scheme of ['dark', 'light']) {
       await p.emulateMedia({ colorScheme: scheme });
-      assert.deepEqual(await p.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.classList.contains('monitor'), localStorage.getItem('drawing.theme')]), ['dark', true, 'monitor'], `kept after ${scheme}`);
+      assert.deepEqual(await p.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.classList.contains('monitor'), localStorage.getItem('drawing.theme')]), ['dark', false, 'dark'], `kept after ${scheme}`);
     }
   };
   await kept(page);
@@ -147,8 +158,8 @@ test('model row and 설정 > 모델 연결: connect, cancel, reload, disconnect 
   // Forced colours: only the chosen radio takes Highlight; the others keep the system button colours.
   await page.emulateMedia({ forcedColors: 'active' });
   const fills = await themes.getByRole('radio').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
-  assert.equal(new Set(fills.slice(0, 3)).size, 1, `unchosen radios look alike: ${fills}`);
-  assert.notEqual(fills[3], fills[0], `chosen radio stands out: ${fills}`);
+  assert.equal(new Set(fills.slice(0, 2)).size, 1, `unchosen radios look alike: ${fills}`);
+  assert.notEqual(fills[2], fills[0], `chosen radio stands out: ${fills}`);
   await shot('theme-forced-colors.png');
   await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
   await radio('라이트').click();
