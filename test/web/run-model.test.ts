@@ -80,10 +80,10 @@ test('stepRows: views, times and agents from the record', () => {
       [5, 'Merge', 'pending', '건너뜀', '건너뜀'],
     ],
   );
-  assert.deepEqual(rows[0]!.agents, [{ name: 'Mira', role: 'lead' }]);
+  assert.deepEqual(rows[0]!.agents, [{ name: 'Mira', role: 'lead', state: 'done' }]);
   // The step's role comes from plan defaults when the step names none.
-  assert.deepEqual(rows[1]!.agents, [{ name: 'Juno', role: 'impl', eta: { kind: 'unknown' } }]);
-  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', agents: [{ name: 'Juno', role: 'impl', eta: { kind: 'unknown' } }] });
+  assert.deepEqual(rows[1]!.agents, [{ name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }]);
+  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', agents: [{ name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }] });
 });
 
 test('stepRows: live Dispatch state wins while running; a done run closes its steps', () => {
@@ -320,4 +320,19 @@ test('agent time left (#735): estimating until two steps of the role finished, t
   const two = { ...r, steps: { impl: one.steps.impl!, plan2: { state: 'done', startedAt: T0, endedAt: T0 + 20 * MIN, sessions: [] } } } as RunRecord;
   two.plan.snapshot.steps.push({ id: 'plan2', node: 'plan2' });
   assert.equal(roleDurations(two).get('impl'), 20 * MIN);
+});
+
+test('stepRows (#687): a failed session marks the step failed (red), a plain block does not; agents carry their live state', () => {
+  const now = T0 + 24 * MIN;
+  const failed = record({ steps: { ...record().steps, test: { state: 'failed', startedAt: T0 + 13 * MIN, endedAt: null, sessions: [{ sid: 's4', name: 'Pell', state: 'failed' }] } } });
+  const row = stepRows(failed, new Map(), now)[3]!;
+  assert.equal(row.failed, true);
+  assert.equal(overlaySteps([row])[0]!.failed, true);
+  const blocked = record({ steps: { ...record().steps, test: { state: 'blocked', startedAt: null, endedAt: null, sessions: [] } } });
+  const b = stepRows(blocked, new Map(), now)[3]!;
+  assert.deepEqual([b.view, b.failed], ['blocked', false]);
+  assert.equal(overlaySteps([b])[0]!.failed, undefined);
+  const r = record({ steps: { ...record().steps, test: { state: 'working', startedAt: T0 + 13 * MIN, endedAt: null, sessions: [{ sid: 's4', name: 'Pell', state: 'working' }] } } });
+  const live = new Map([['s4', { id: 's4', name: 'Pell', role: 'test', state: 'waiting' as const }]]);
+  assert.equal(stepRows(r, live, now)[3]!.agents[0]!.state, 'waiting');
 });

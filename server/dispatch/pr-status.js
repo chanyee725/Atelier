@@ -3,7 +3,7 @@
 // No title, body, author, branch text or check names are kept. `gh` starts only through cli.js.
 //
 // Per-workspace switch: <workspace>/.drawing/settings.json { "prStatus": false } turns it off. A workspace
-// without its own value follows the user's default (`prStatus` in ~/.dispatch/drawing.json), else on. Off, or a missing gh, never throws: the result says why.
+// without its own value follows the user's default (`prStatus` in ~/.atelier/drawing.json), else on. Off, or a missing gh, never throws: the result says why.
 import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -110,7 +110,7 @@ export function validBranch(branch) {
 
 /**
  * Makes `prStatus(branch)`. Resolves to one of
- *   { ok: true, pr: { number, state: "open"|"closed"|"merged", ci: "success"|"failure"|"pending"|"none", url?, review?, conflict? } }
+ *   { ok: true, pr: { number, state: "open"|"closed"|"merged", ci: "success"|"failure"|"pending"|"none", url?, review?, conflict?, mergeable?, draft? } }
  *   { ok: false, reason: "disabled"|"gh-missing"|"not-logged-in"|"no-pr"|"timeout"|"invalid-branch"|"error" }
  * and never throws. Answers are cached per branch (cacheMs, `force: true` skips the cache) and gh
  * starts at most once per minGapMs with at most maxConcurrent running, so a run watching many steps does not hammer GitHub.
@@ -140,7 +140,7 @@ export function createPrStatus({ workspaceDir, cwd, env, prDefault = async () =>
     const wait = start - now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     try {
-      const { stdout } = await run("gh", ["pr", "view", "--json", "number,state,statusCheckRollup,url,reviewDecision,mergeable", "--", branch], { cwd, env, timeout: timeoutMs, maxBuffer: 1 << 20 });
+      const { stdout } = await run("gh", ["pr", "view", "--json", "number,state,statusCheckRollup,url,reviewDecision,mergeable,isDraft", "--", branch], { cwd, env, timeout: timeoutMs, maxBuffer: 1 << 20 });
       const j = JSON.parse(stdout);
       const state = String(j.state || "").toLowerCase();
       const number = Number(j.number);
@@ -150,7 +150,7 @@ export function createPrStatus({ workspaceDir, cwd, env, prDefault = async () =>
       const url = typeof j.url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(j.url) ? j.url : null;
       // Review decision and merge conflicts, only when gh says so (open PRs): "approved" | "changes" | "required".
       const review = REVIEW[j.reviewDecision] ?? null;
-      return { ok: true, pr: { number, state, ci: CI.has(ci) ? ci : "none", ...(url && { url }), ...(review && { review }), ...(j.mergeable === "CONFLICTING" && { conflict: true }) } };
+      return { ok: true, pr: { number, state, ci: CI.has(ci) ? ci : "none", ...(url && { url }), ...(review && { review }), ...(j.mergeable === "CONFLICTING" && { conflict: true }), ...(j.mergeable === "MERGEABLE" && { mergeable: true }), ...(j.isDraft === true && { draft: true }) } };
     } catch (e) {
       return { ok: false, reason: classify(e) };
     }

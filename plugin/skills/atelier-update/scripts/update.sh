@@ -6,7 +6,7 @@
 #   update.sh --no-restart unpack only
 #
 # Only the given project (default: the git project of the current folder) is restarted, found by
-# <project>/.dispatch/server.pid and server.port. Other projects: run restart.sh in each of them.
+# <project>/.atelier/server.pid and server.port (.dispatch before its one-time move). Other projects: run restart.sh in each of them.
 #
 # DRAWING_INSTALL_BASE overrides ~/.dispatch/drawing.
 # Uses gh (already logged in) for the download. Unpacks into ~/.dispatch/drawing/<ver>/ and points
@@ -92,8 +92,8 @@ ok "$base/$ver (current)"
 
 if $restart; then
   step "4. Restart this project's server"
-  pid_file="$project/.dispatch/server.pid"
-  port_file="$project/.dispatch/server.port"
+  pid_file="$(state_dir "$project")/server.pid"
+  port_file="$(state_dir "$project")/server.port"
   pid=""; port=""
   [ ! -f "$pid_file" ] || pid="$(cat "$pid_file")"
   [ ! -f "$port_file" ] || port="$(cat "$port_file")"

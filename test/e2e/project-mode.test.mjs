@@ -32,7 +32,7 @@ test('project mode: / opens the run screen, not the editor', { skip: !ON && 'set
   writeFileSync(join(repo, 'README'), 'scratch\n');
   git('add', '.');
   git('commit', '-qm', 'init');
-  const ws = join(repo, 'pipelines');
+  const ws = join(repo, 'workspace');
   mkdirSync(ws);
   const fake = fakeCliBin({ scenario: [] });
   const port = await freePort();

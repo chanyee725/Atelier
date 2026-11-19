@@ -1,12 +1,12 @@
 // Workspace file store: one `*.dpx.json` per diagram file, sub-folders = folders.
 // Writes are atomic (temp file in the same dir + rename) and serialized; stale writes are refused by revision.
-import { watch } from 'node:fs';
+import { lstatSync, readdirSync, watch } from 'node:fs';
 import { pollWatch } from './poll-watch.js';
 import { link, mkdir, readdir, readFile, rename, rm, rmdir, stat, lstat, unlink, writeFile } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { basename, dirname, join, sep } from 'node:path';
 import { ensureDirInside, LockPathError } from '../lock.js';
-import { createResolver, parseRelPath, PathError } from './paths.js';
+import { createResolver, parseWorkspacePath, PathError } from './paths.js';
 import { FILE_EXT, FORMAT_VERSION, newFile, normalizeContent, parseStored, ValidationError } from './model.js';
 import { applyPlanOps } from './plan-ops.js';
 import { PLAN_VERSION } from '../../shared/dispatch/plan.ts';
@@ -48,9 +48,12 @@ export function pickWatchFn(env = process.env) {
 
 export function createStore(
   workspaceDir,
-  { onExternalChange, watchDebounceMs = 60, watchRestartMs = 1000, watchFn = pickWatchFn(), now = Date.now, historyIntervalMs = HISTORY_INTERVAL_MS, historyMax = HISTORY_MAX } = {},
+  { onExternalChange, watchDebounceMs = 60, watchRestartMs = 1000, watchFn = pickWatchFn(), now = Date.now, historyIntervalMs = HISTORY_INTERVAL_MS, historyMax = HISTORY_MAX, reserved = [] } = {},
 ) {
-  const fsr = createResolver(workspaceDir);
+  // reserved: top-level names that are never documents (project mode: `worktrees`, #782); not listed, watched or written.
+  const fsr = createResolver(workspaceDir, { reserved });
+  const parseRelPath = (rel) => parseWorkspacePath(rel, reserved);
+  const skip = (e, relDir) => e.name.startsWith('.') || e.isSymbolicLink() || (!relDir && reserved.includes(e.name));
   const known = new Map(); // rel file path -> { hash, revision } of the content we last wrote or saw
   const knownDirs = new Set();
   // rel file path -> last revision seen before the file was deleted or moved away, so a file that
@@ -595,7 +598,7 @@ export function createStore(
       return out;
     }
     for (const e of entries) {
-      if (e.name.startsWith('.') || e.isSymbolicLink()) continue;
+      if (skip(e, relDir)) continue;
       const rel = `${relDir}/${e.name}`;
       if (e.isDirectory()) out.push(...(await collectFiles(join(absDir, e.name), rel)));
       else if (e.isFile() && isDpx(e.name)) out.push({ rel, text: await readFile(join(absDir, e.name), 'utf8').catch(() => null) });
@@ -614,7 +617,7 @@ export function createStore(
     }
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const e of entries) {
-      if (e.name.startsWith('.') || e.isSymbolicLink()) continue;
+      if (skip(e, relDir)) continue;
       const rel = relDir ? `${relDir}/${e.name}` : e.name;
       if (e.isDirectory()) {
         out.push({ type: 'folder', name: e.name, path: rel, children: await walk(join(absDir, e.name), rel) });
@@ -1051,7 +1054,7 @@ export function createStore(
       return;
     }
     for (const e of entries) {
-      if (e.name.startsWith('.') || e.isSymbolicLink()) continue;
+      if (skip(e, relDir)) continue;
       const rel = relDir ? `${relDir}/${e.name}` : e.name;
       if (e.isDirectory()) {
         knownDirs.add(rel);
@@ -1128,15 +1131,73 @@ export function createStore(
   // Logged once per server run: a watcher that keeps failing must not fill the log.
   let warned = false;
 
-  function watchRoot() {
-    watcher = watchFn(fsr.root, { recursive: true }, (_ev, filename) => {
+  // With reserved names (project mode, #782) one recursive watch on the root would also cover .atelier/worktrees
+  // (whole git checkouts with node_modules) and .drawing/: inotify watches on all of it. Instead the root is watched
+  // alone (top-level names only) and each top-level document folder recursively. A folder that appears later gets its
+  // own watch; one that goes away has it closed. Hidden, reserved and symlinked top-level entries are never watched.
+  // Returns one watcher-like object (on('error'), close()); an error from any part reaches the 'error' listeners.
+  function watchByFolder() {
+    const subs = new Map(); // top folder name -> fs watcher
+    const errorFns = [];
+    let done = false;
+    const fail = (err) => { for (const fn of errorFns) fn(err); };
+    const watchable = (name) => {
+      if (!name || name.startsWith('.') || reserved.includes(name)) return false;
+      try { const st = lstatSync(join(fsr.root, name)); return st.isDirectory() && !st.isSymbolicLink(); } catch { return false; }
+    };
+    const add = (name) => {
+      if (done || subs.has(name) || !watchable(name)) return;
+      const w = watchFn(join(fsr.root, name), { recursive: true }, (_ev, filename) => {
+        if (filename) onWatchEvent(`${name}/${String(filename).split('\\').join('/')}`);
+      });
+      w.on?.('error', (err) => {
+        // The folder itself went away (moved or deleted): drop its watch; the root watch reports the change.
+        try { w.close(); } catch { /* already closed */ }
+        subs.delete(name);
+        if (watchable(name)) fail(err);
+      });
+      subs.set(name, w);
+    };
+    const root = watchFn(fsr.root, { recursive: false }, (_ev, filename) => {
       if (!filename) return;
-      const rel = String(filename).split('\\').join('/');
-      clearTimeout(timers.get(rel));
-      timers.set(rel, setTimeout(() => {
-        timers.delete(rel);
-        reconcile(rel).catch(() => {});
-      }, watchDebounceMs));
+      const name = String(filename).split('\\').join('/').split('/')[0];
+      if (name.startsWith('.') || reserved.includes(name)) return;
+      if (watchable(name)) add(name);
+      else if (subs.has(name)) { try { subs.get(name).close(); } catch { /* closed */ } subs.delete(name); }
+      onWatchEvent(name);
+    });
+    root.on?.('error', fail);
+    try {
+      for (const e of readdirSync(fsr.root, { withFileTypes: true })) if (e.isDirectory()) add(e.name);
+    } catch (err) {
+      try { root.close(); } catch { /* closed */ }
+      for (const w of subs.values()) try { w.close(); } catch { /* closed */ }
+      throw err;
+    }
+    return {
+      on(ev, fn) { if (ev === 'error') errorFns.push(fn); return this; },
+      close() {
+        done = true;
+        try { root.close(); } catch { /* closed */ }
+        for (const w of subs.values()) try { w.close(); } catch { /* closed */ }
+        subs.clear();
+      },
+      folders: () => [...subs.keys()],
+    };
+  }
+
+  function onWatchEvent(rel) {
+    clearTimeout(timers.get(rel));
+    timers.set(rel, setTimeout(() => {
+      timers.delete(rel);
+      reconcile(rel).catch(() => {});
+    }, watchDebounceMs));
+  }
+
+  function watchRoot() {
+    watcher = reserved.length ? watchByFolder() : watchFn(fsr.root, { recursive: true }, (_ev, filename) => {
+      if (!filename) return;
+      onWatchEvent(String(filename).split('\\').join('/'));
     });
     const mine = watcher;
     // Errors after start (the root removed, watch limit hit, ...) arrive here. Log the code once, no path,

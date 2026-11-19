@@ -966,3 +966,52 @@ test('pollWatch reports outside edits, new files and deletions, and stops on clo
     await rm(ws, { recursive: true, force: true });
   }
 });
+
+test('project mode (reserved worktrees): root watched alone, each document folder recursively, never worktrees or .drawing', async (t) => {
+  const ws = await mkdtemp(join(tmpdir(), 'draw-ws-'));
+  const watches = [];
+  const watchFn = (dir, opts, cb) => {
+    const w = Object.assign(new EventEmitter(), { dir, opts, cb, closed: false, close() { this.closed = true; } });
+    watches.push(w);
+    return w;
+  };
+  const changes = [];
+  await mkdir(join(ws, 'worktrees', 'impl-1', 'docs'), { recursive: true });
+  await writeFile(join(ws, 'worktrees', 'impl-1', 'docs', 'copy.dpx.json'), '{}');
+  await mkdir(join(ws, 'Server', '저장'), { recursive: true });
+  const store = createStore(ws, { watchFn, reserved: ['worktrees'], watchDebounceMs: 0, onExternalChange: (c) => changes.push(c) });
+  const warn = t.mock.method(console, 'warn', () => {});
+  try {
+    await store.createFile('Server/저장/계획');
+    await store.startWatching();
+    const rel = (w) => w.dir.slice(ws.length).replace(/^[/\\]/, '');
+    const live = () => watches.filter((w) => !w.closed).map((w) => `${rel(w) || '<root>'}:${w.opts.recursive}`).sort();
+    assert.deepEqual(live(), ['<root>:false', 'Server:true']);
+    // Tree and API never show or accept the reserved folder.
+    assert.deepEqual((await store.tree()).map((n) => n.name), ['Server']);
+    await assert.rejects(store.createFile('worktrees/x'), /reserved/);
+    // An outside edit in a document folder arrives with its full workspace path.
+    const file = join(ws, 'Server', '저장', '계획.dpx.json');
+    const cur = JSON.parse(await readFile(file, 'utf8'));
+    await writeFile(file, JSON.stringify({ ...cur, title: 'edited outside', revision: cur.revision + 1 }));
+    watches.find((w) => rel(w) === 'Server').cb('change', join('저장', '계획.dpx.json'));
+    for (let i = 0; i < 100 && !changes.length; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.ok(changes.some((c) => c.path === 'Server/저장/계획.dpx.json'));
+    // A new top-level folder gets its own watch; a root event for worktrees adds none.
+    await mkdir(join(ws, 'Web'));
+    const root = watches.find((w) => rel(w) === '');
+    root.cb('rename', 'Web');
+    root.cb('rename', 'worktrees');
+    root.cb('rename', '.drawing');
+    assert.deepEqual(live(), ['<root>:false', 'Server:true', 'Web:true']);
+    // A folder that goes away has its watch closed.
+    await rm(join(ws, 'Web'), { recursive: true });
+    root.cb('rename', 'Web');
+    assert.deepEqual(live(), ['<root>:false', 'Server:true']);
+  } finally {
+    warn.mock.restore();
+    await store.close();
+    await rm(ws, { recursive: true, force: true });
+  }
+  assert.ok(watches.every((w) => w.closed), 'close() closes every watch');
+});

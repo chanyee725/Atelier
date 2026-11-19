@@ -1,5 +1,6 @@
 // Workspace module: HTTP API over the file store + SSE "workspace" events for outside changes.
 import { createStore, StoreError } from './store.js';
+import { RESERVED_PROJECT_NAMES } from './paths.js';
 import { listProjects } from './projects.js';
 import { listLocalFolders } from './local-folders.js';
 import { cleanSessionLabel, sessionIdOf } from '../cursor/presence.js';
@@ -50,6 +51,8 @@ export async function setup(ctx) {
     for (const fn of changeListeners) fn(path, opts);
   };
   const store = createStore(ctx.workspaceDir, {
+    // Project mode keeps agent git worktrees in <project>/.atelier/worktrees (#782): never documents, never watched.
+    reserved: ctx.projectMode ? RESERVED_PROJECT_NAMES : [],
     onExternalChange: ({ catchUp, ...e }) => {
       ctx.hub.broadcast('workspace', e);
       if (e.kind === 'change' || e.kind === 'create') changed(e.path, { catchUp: catchUp === true });

@@ -39,7 +39,7 @@ test('the start request carries the revision the confirm dialog showed, not a la
   const live = { revision: 5, sessions: 4, changes: [], limits: null };
   assert.equal(shown.revision, 4);
   assert.notEqual(shown.revision, live.revision);
-  assert.deepEqual(startBody('pipelines/a.dpx.json', shown), { path: 'pipelines/a.dpx.json', revision: 4 });
+  assert.deepEqual(startBody('plans/a.dpx.json', shown), { path: 'plans/a.dpx.json', revision: 4 });
 });
 
 test('a 409 from start asks the person to confirm the new plan again', () => {

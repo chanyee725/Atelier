@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INDENT, ROW_HEIGHT, filterDocs, wholeProject, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
-import type { ProjectDoc } from '../../web/src/api.ts';
+import { INDENT, ROW_HEIGHT, filterDocs, plansByArea, wholeProject, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
+import type { ProjectDoc, ProjectInfo } from '../../web/src/api.ts';
 
 const d = (path: string, title: string, children: ProjectDoc[] = []): ProjectDoc => ({ path, name: path, title, bundle: false, createdAt: 1, modifiedAt: 2, children });
 const docs = [d('a', 'Login', [d('a/t', 'Token', [d('a/t/r', 'Refresh')])]), d('b', 'Collect')];
@@ -103,4 +103,22 @@ test('wholeProject: top folders become groups next to the loose documents, path 
   assert.equal(w.docs[0].children, docs);
   assert.equal(w.docCount, 5);
   assert.equal(w.modifiedAt, 7);
+});
+
+test('plansByArea: every plan grouped by area with its feature folder, newest first; areas without plans dropped (#782)', () => {
+  const plan = (path: string, title: string, state: ProjectDoc['plan'], modifiedAt: number): ProjectDoc => ({ ...d(path, title), plan: state, modifiedAt });
+  const group = (path: string, children: ProjectDoc[]): ProjectDoc => ({ ...d(path, path.split('/').pop()!, children), bundle: true });
+  const area = (path: string, name: string, list: ProjectDoc[]): ProjectInfo => ({ id: path, path, name, icon: '', description: '', docCount: 0, createdAt: 0, modifiedAt: 0, docs: list });
+  const projects = [
+    area('Server', 'Server', [group('Server/저장', [plan('Server/저장/계획', '저장', 'done', 1), plan('Server/저장/계획-2', '저장 복사', 'plan', 5)]), d('Server/메모', '메모')]),
+    area('Web', '웹', [plan('Web/계획', '웹 바로 아래', 'running', 3)]),
+    area('Docs', 'Docs', [d('Docs/readme', 'readme')]),
+  ];
+  const out = plansByArea(projects, [plan('old', '옛 계획', 'paused', 2), d('note', 'note')]);
+  assert.deepEqual(out.map((a) => [a.area, a.name, a.plans.map((p) => [p.path, p.feature, p.state])]), [
+    ['Server', 'Server', [['Server/저장/계획-2', '저장', 'plan'], ['Server/저장/계획', '저장', 'done']]],
+    ['Web', '웹', [['Web/계획', null, 'running']]],
+    [null, '최상위', [['old', null, 'paused']]],
+  ]);
+  assert.deepEqual(plansByArea([], []), []);
 });

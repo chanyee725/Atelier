@@ -6,13 +6,16 @@ import { createApp } from './app.js';
 import { parseArgs, USAGE } from './cli.js';
 import { claimWorkspace } from './lock.js';
 import { readDefaultsSync, startDefaults } from './user-defaults.js';
+import { copyUserStateSync } from './dispatch/state-migrate.js';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = 4330;
 
-// ~/.dispatch/drawing.json: the default workspace and port when the command line and DRAW_PORT name none.
+// ~/.atelier/drawing.json: the default workspace and port when the command line and DRAW_PORT name none.
+// An older version's ~/.dispatch files are copied to ~/.atelier once, before anything reads them (#782).
+if (copyUserStateSync() === 'copied') console.log('Copied ~/.dispatch settings to ~/.atelier');
 const userDefaults = readDefaultsSync();
-if (userDefaults.error) console.error(`~/.dispatch/drawing.json unreadable (${userDefaults.error}); using built-in defaults.`);
+if (userDefaults.error) console.error(`~/.atelier/drawing.json unreadable (${userDefaults.error}); using built-in defaults.`);
 const start = startDefaults(userDefaults.values, process.env, DEFAULT_PORT);
 
 let opts;

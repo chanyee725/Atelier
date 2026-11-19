@@ -18,6 +18,15 @@ test('branchRows drops the integration branch and puts live branches first, then
   assert.deepEqual(branchRows('failed'), []);
 });
 
+test('branchRows leaves out branches an open issue claims', () => {
+  const tips = new Map([
+    ['develop', tip('develop', { base: true })],
+    ['feat/1-a', tip('feat/1-a', { lastAt: 20 })],
+    ['spike', tip('spike', { lastAt: 10 })],
+  ]);
+  assert.deepEqual(branchRows({ base: 'develop', tips }, new Set(['feat/1-a'])).map((t) => t.branch), ['spike']);
+});
+
 test('prRows lists each PR once, open first, with CI and review of its branch', () => {
   const issues: ApiIssue[] = [
     { number: 1, title: 'a', prs: [{ number: 10, state: 'merged', branch: 'x' }, { number: 12, state: 'open', branch: 'y' }] },

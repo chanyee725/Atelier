@@ -10,8 +10,8 @@ import { setup } from '../server/cursor/activity.js';
 import { ACTIVITY_MAX, activitySentence, fileStemOf, objectOf, parseActivityLog, subjectOf, unreadOf } from '../shared/dispatch/agent-activity.ts';
 
 const sessions = {
-  s1: { id: 's1', name: 'Jude', role: 'impl', color: '#3b82f6', status: 'running' },
-  s2: { id: 's2', name: '민수', role: 'review', color: 'red', status: 'running' },
+  s1: { id: 's1', name: 'Jude', role: 'impl', provider: 'claude', color: '#3b82f6', status: 'running' },
+  s2: { id: 's2', name: '민수', role: 'review', provider: 'Not A Provider', color: 'red', status: 'running' },
 };
 
 function logRig() {
@@ -40,8 +40,9 @@ test('activity log: start on the first edit, progress once per section left, fin
     ['start', 's1', 'b.dpx.json', null],
     ['finish', 's1', 'b.dpx.json', null],
   ]);
-  // Metadata only: who, file, when, kind (and the colour when it is a real hex).
-  assert.deepEqual(Object.keys(out[0]).sort(), ['at', 'color', 'file', 'kind', 'name', 'role', 'sid']);
+  // Metadata only: who, file, when, kind (and the colour when it is a real hex, the provider id when it looks like one).
+  assert.deepEqual(Object.keys(out[0]).sort(), ['at', 'color', 'file', 'kind', 'name', 'provider', 'role', 'sid']);
+  assert.equal(out[0].provider, 'claude');
   assert.equal(out[0].name, 'Jude');
   assert.ok(out.every((e, i) => i === 0 || e.at > out[i - 1].at));
   assert.equal(log.size, 0);
@@ -56,6 +57,7 @@ test('activity log: outside edits and bad reports are ignored; a bad colour is l
   assert.equal(out.length, 0);
   log.held({ sid: 's2', file: 'a.dpx.json' });
   assert.equal('color' in out[0], false);
+  assert.equal('provider' in out[0], false);
   log.held({ sid: 'zz', file: 'a.dpx.json' });
   assert.deepEqual([out[1].name, out[1].role], ['', '']);
 });
@@ -165,7 +167,7 @@ test('activity module: events get ids and titles, go out over SSE and are stored
   assert.equal(disk.readAt, 7000);
   assert.deepEqual(disk.events.map((e) => e.kind), ['start', 'progress', 'finish', 'start']);
   // Metadata only: no transcript or tool text fields.
-  for (const e of disk.events) for (const k of Object.keys(e)) assert.ok(['id', 'at', 'kind', 'sid', 'name', 'role', 'color', 'file', 'title', 'section'].includes(k), k);
+  for (const e of disk.events) for (const k of Object.keys(e)) assert.ok(['id', 'at', 'kind', 'sid', 'name', 'role', 'provider', 'color', 'file', 'title', 'section'].includes(k), k);
 
   // A new start reads the stored log back.
   const again = await moduleRig(dir, { now: () => clock });

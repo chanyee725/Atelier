@@ -10,10 +10,10 @@ export function topFolder(path) {
 }
 
 /**
- * The folder of a session saved before the field existed: the plan it is still linked to (pipelines[path].links,
+ * The folder of a session saved before the field existed: the plan it is still linked to (plans[path].links,
  * reset per run, so best effort), else null.
  */
-export function deriveFolder(s, pipelines) {
-  const hit = Object.entries(pipelines || {}).find(([, e]) => e?.links && s?.id in e.links);
+export function deriveFolder(s, plans) {
+  const hit = Object.entries(plans || {}).find(([, e]) => e?.links && s?.id in e.links);
   return hit ? topFolder(hit[0]) : null;
 }

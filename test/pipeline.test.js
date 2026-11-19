@@ -3,7 +3,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../server/app.js';
@@ -68,7 +68,9 @@ async function start(again = null) {
   // Connect Claude the way the UI does (the CLI reports itself logged in).
   assert.equal((await call('POST', '/api/providers/claude/login')).body.connected, true);
   const d = app.ctx.modules.dispatch;
-  const lead = again?.lead ?? (await call('POST', '/api/sessions', { items: [{ role: 'lead', task: 'plan it' }], worktree: false })).body.sessions[0];
+  // The lead works for area App, so its plans go to App/<feature>/계획.dpx.json (#782).
+  if (!again) mkdirSync(join(ws, 'App'), { recursive: true });
+  const lead = again?.lead ?? (await call('POST', '/api/sessions', { items: [{ role: 'lead', task: 'plan it' }], worktree: false, folder: 'App' })).body.sessions[0];
   if (!again) await until(() => ['idle', 'done'].includes(d.hub.get(lead.id).status), 10_000);
   return { app, call, d, lead, root, ws, bin, stop: () => app.close() };
 }
@@ -92,7 +94,7 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
 
     const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크로 로그인해요', steps: STEPS, risks: ['쿠키 이름이 바뀌어요'], asks: ['링크 유효 시간은 15분?'] });
     assert.equal(w.status, 200, JSON.stringify(w.body));
-    assert.equal(w.body.path, 'pipelines/로그인-개편.dpx.json');
+    assert.equal(w.body.path, 'App/로그인-개편/계획.dpx.json');
     assert.equal(w.body.state, 'plan');
     const file = JSON.parse(readFileSync(join(ws, w.body.path), 'utf8'));
     assert.deepEqual(file.plan.steps.map((s) => s.id), ['api', 'ui', 'review']);
@@ -180,7 +182,7 @@ test('the 알림함 lists plans that wait for 시작하기 until they start, are
     const waiting = async () => (await call('GET', '/api/pipeline/waiting')).body.plans;
     assert.deepEqual(await waiting(), []);
     const a = (await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '가', goal: 'x', steps: STEPS })).body;
-    const b = (await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'pipelines/나', title: '나', goal: 'y', steps: STEPS })).body;
+    const b = (await call('POST', '/api/pipeline/plan', { lead: lead.id, path: '결제/나', title: '나', goal: 'y', steps: STEPS })).body;
     let list = await waiting();
     assert.deepEqual(list.map((p) => p.path).sort(), [a.path, b.path].sort());
     const first = list.find((p) => p.path === a.path);
@@ -221,7 +223,7 @@ test('blockers: unknown role, cycle, no lead; moving the file keeps its approval
     assert.deepEqual(st.body.changes, []);
 
     // A file nobody's lead wrote cannot start.
-    const plain = await call('POST', '/api/file', { path: 'pipelines/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'impl' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
+    const plain = await call('POST', '/api/file', { path: 'plans/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'impl' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
     assert.equal(plain.status, 201, JSON.stringify(plain.body));
     st = await call('GET', `/api/pipeline?path=${encodeURIComponent(plain.body.path)}`);
     assert.equal(st.body.state, 'plan');
@@ -253,7 +255,7 @@ test('a one-step plan with autostart starts at once', { timeout: 60_000 }, async
   }
 });
 
-test('a new plan goes into the folder write_plan names, else the one its steps\' files share (#726)', { timeout: 60_000 }, async () => {
+test('a new plan goes to <area>/<feature>/계획.dpx.json: the area write_plan names, else the lead\'s, else the steps\' (#726, #782)', { timeout: 60_000 }, async () => {
   const t = await start();
   try {
     const { call, d, ws } = t;
@@ -265,28 +267,34 @@ test('a new plan goes into the folder write_plan names, else the one its steps\'
       return s;
     };
     const one = [{ title: 'a', role: 'impl', files: ['Proj/doc.dpx.json'] }];
-    // A folder that is not a top-level workspace folder, or one that leaves the workspace, is refused and writes nothing.
-    for (const folder of ['Nope', '../x', 'Proj/sub', '.drawing']) {
-      const r = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, folder, goal: '틀린 폴더', steps: one });
-      assert.equal(r.status, 400, folder);
-      assert.match(r.body.error, /프로젝트 폴더/);
+    // Area or feature names that are not one plain folder are refused and write nothing, even with a path.
+    for (const [key, bad] of [['area', '../x'], ['area', 'Proj/sub'], ['area', '.drawing'], ['area', '..'], ['area', 'worktrees'], ['feature', 'a/b'], ['feature', '..'], ['feature', '.hidden'], ['feature', 'x\\y'], ['folder', '../x'], ['area', 'a\u0000b']]) {
+      const r = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, [key]: bad, goal: '틀린 폴더', steps: one });
+      assert.equal(r.status, 400, `${key}=${bad}`);
+      assert.match(r.body.error, /폴더 하나/);
+      const withPath = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, path: 'Proj/ok', [key]: bad, goal: 'x', steps: one });
+      assert.equal(withPath.status, 400, `${key}=${bad} with path`);
     }
-    // The named folder wins over the steps' files and becomes the lead's project.
-    const named = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, folder: 'Other', title: '이름 붙인 폴더', goal: 'x', steps: one });
+    assert.ok(!existsSync(join(ws, 'x')) && !existsSync(join(ws, 'worktrees')) && !existsSync(join(ws, 'Proj', 'ok.dpx.json')));
+    // The named area and feature win; a new area folder is made; the lead works for that area now.
+    const named = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, area: 'Server', feature: '단일-폴더-저장', title: '이름 붙인 계획', goal: 'x', steps: one });
     assert.equal(named.status, 200, JSON.stringify(named.body));
-    assert.equal(named.body.path, 'Other/pipelines/이름-붙인-폴더.dpx.json');
-    assert.equal(d.hub.get(t.lead.id).folder, 'Other');
-    // No folder and a lead without one: the folder every step's files share.
+    assert.equal(named.body.path, 'Server/단일-폴더-저장/계획.dpx.json');
+    assert.equal(d.hub.get(t.lead.id).folder, 'Server');
+    // A second plan for the same feature (another lead) gets 계획-2; the older `folder` still names the area.
+    const lead1 = await fresh();
+    const again = await call('POST', '/api/pipeline/plan', { lead: lead1.id, folder: 'Server', feature: '단일-폴더-저장', goal: 'x', steps: one });
+    assert.equal(again.body.path, 'Server/단일-폴더-저장/계획-2.dpx.json');
+    // No area and a lead without one: the folder every step's files share; the feature defaults to the title.
     const lead2 = await fresh();
     const inferred = await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '추론', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['./Proj/x/y.dpx.json'] }, { title: 'c', role: 'review' }] });
-    assert.equal(inferred.body.path, 'Proj/pipelines/추론.dpx.json');
-    // Files in two folders, or in a folder the workspace does not have, stay at the top level.
+    assert.equal(inferred.body.path, 'Proj/추론/계획.dpx.json');
+    // No area at all: refused with the areas there are, nothing written.
     const lead3 = await fresh();
     const mixed = await call('POST', '/api/pipeline/plan', { lead: lead3.id, title: '섞임', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['Other/z.dpx.json'] }] });
-    assert.equal(mixed.body.path, 'pipelines/섞임.dpx.json');
-    const lead4 = await fresh();
-    const code = await call('POST', '/api/pipeline/plan', { lead: lead4.id, title: '코드', goal: 'x', steps: STEPS });
-    assert.equal(code.body.path, 'pipelines/코드.dpx.json');
+    assert.equal(mixed.status, 400);
+    assert.match(mixed.body.error, /area\(영역\)를 정해 주세요.*Other/);
+    assert.ok(!existsSync(join(ws, '섞임')));
   } finally {
     await t.stop();
   }
@@ -780,7 +788,9 @@ test('완료: closing every step ends the run done, writes the summary block onc
     const dup = await call('POST', '/api/pipeline/duplicate', { path });
     assert.equal(dup.status, 200, JSON.stringify(dup.body));
     assert.notEqual(dup.body.path, path);
-    assert.match(dup.body.path, /^pipelines\/.*복사.*\.dpx\.json$/);
+    // The copy stays in the original's area and feature folder (#782).
+    assert.equal(dup.body.path, `${path.slice(0, path.lastIndexOf('/'))}/계획-2.dpx.json`);
+    assert.match(path, /^App\/[^/]+\/계획\.dpx\.json$/);
     assert.equal(dup.body.lead, lead.id);
     const copy = JSON.parse(readFileSync(join(ws, dup.body.path), 'utf8'));
     assert.deepEqual(copy.plan, file.plan);

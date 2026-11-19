@@ -84,7 +84,7 @@ export function routeTable(d) {
       const before = { guard: store.data.settings.guard, team: store.data.settings.team };
       if (b.guard) store.data.settings.guard = patchGuard(store.data.settings.guard, b.guard);
       if (b.team) patchTeam(store, b.team, { roles: ROLES, models });
-      // The user's defaults file (~/.dispatch/drawing.json) gets the change first; a broken file refuses it and the
+      // The user's defaults file (~/.atelier/drawing.json) gets the change first; a broken file refuses it and the
       // project's state.json stays as it was, so the two never disagree about what was saved.
       try {
         await d.saveUserDefaults({ guard: b.guard ? store.data.settings.guard : undefined, team: b.team ? store.data.settings.team : undefined });
@@ -118,6 +118,8 @@ export function routeTable(d) {
     ["GET", /^\/api\/timeline$/, async () => hub.timeline()],
     ["GET", /^\/api\/tasks$/, async () => ({ tasks: hub.tasks })],
     ["GET", /^\/api\/branches$/, async () => branchGraph(root, { active: hub.sessions.filter(x => x.status !== "done" && x.branch).map(x => x.branch) })],
+    // One row per session branch (#792): owner sessions, issue, ahead/behind, last commit, dirty flag, PR phase.
+    ["GET", /^\/api\/branches\/live$/, async () => (d.liveBranches ? d.liveBranches() : { base: null, pr: "disabled", rows: [] })],
     // ?branches=a,b: PR state and CI per branch (project dashboard, #686). At most PR_BRANCHES per call; each answer is
     // { ok, pr: { number, state, ci } } or { ok: false, reason } ("disabled" when PR tracking is off).
     ["GET", /^\/api\/prs$/, async (_, __, url) => {

@@ -97,6 +97,12 @@ test("agent prompts call the tool Atelier, carry the lanes and the lead merge, a
   assert.match(SPAWN_PROMPT, /git merge --ff-only origin\/develop/);
   assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
   assert.doesNotMatch(SPAWN_PROMPT, /20분/);
+  // Areas (#782): no fixed list, taken from the project, reused; plans at <영역>/<기능>/계획.dpx.json.
+  assert.match(SPAWN_PROMPT, /\[영역\]/);
+  assert.match(SPAWN_PROMPT, /<영역>\/<기능>\/계획\.dpx\.json/);
+  assert.match(SPAWN_PROMPT, /고정 목록이 아니다/);
+  assert.match(SPAWN_PROMPT, /이미 있는 영역을 다시 쓴다/);
+  assert.doesNotMatch(all, /pipelines/);
   assert.match(SPAWN_PROMPT, /리뷰어는 늘 새 세션이고 작성자가 아니다/);
   for (const p of [SPAWN_PROMPT, CHILD_PROMPT]) {
     assert.match(p, /전체 e2e는 돌리지 않는다/);
@@ -116,4 +122,17 @@ test("implementer and designer prompts carry the UI library rules (#764)", async
     assert.doesNotMatch(p, /꼭/);
   }
   for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /Sonner/);
+});
+
+test("docs role and lead prompt carry the writing style; other roles do not (#737)", async () => {
+  const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT } = await import("../../server/dispatch/roles.js");
+  for (const p of [roles.find(r => r.id === "docs").prompt, SPAWN_PROMPT]) {
+    assert.match(p, /\[글쓰기\]/);
+    assert.match(p, /다음 행동/);
+    assert.match(p, /번호 목록/);
+    assert.match(p, /끝난 것과 남은 것/);
+    assert.match(p, /docs\/design\/writing-style\.md/);
+  }
+  for (const id of ["impl", "review", "test", "design"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /\[글쓰기\]/);
+  assert.doesNotMatch(CHILD_PROMPT, /\[글쓰기\]/);
 });

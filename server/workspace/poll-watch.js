@@ -7,7 +7,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-function snapshot(root) {
+function snapshot(root, recursive = true) {
   const seen = new Map();
   const walk = (abs, rel) => {
     let entries;
@@ -18,19 +18,20 @@ function snapshot(root) {
       let st;
       try { st = statSync(p); } catch { continue; }
       seen.set(r, `${st.mtimeMs}:${st.size}:${st.isDirectory() ? 'd' : 'f'}`);
-      if (e.isDirectory() && !e.name.startsWith('.')) walk(p, r);
+      if (recursive && e.isDirectory() && !e.name.startsWith('.')) walk(p, r);
     }
   };
   walk(root, '');
   return seen;
 }
 
-export function pollWatch(root, _opts, listener, intervalMs = 250) {
-  let prev = snapshot(root);
+export function pollWatch(root, opts, listener, intervalMs = 250) {
+  const recursive = opts?.recursive !== false;
+  let prev = snapshot(root, recursive);
   let closed = false;
   const timer = setInterval(() => {
     if (closed) return;
-    const next = snapshot(root);
+    const next = snapshot(root, recursive);
     for (const [rel, sig] of next) if (prev.get(rel) !== sig) listener('change', rel);
     for (const rel of prev.keys()) if (!next.has(rel)) listener('rename', rel);
     prev = next;

@@ -23,8 +23,8 @@ const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
  * switchWorkspace(dir) (E554) moves the running server to another workspace folder: every module is closed and
  * set up again for the new folder, so modules never need to handle a changing ctx.workspaceDir themselves.
  */
-// Project mode (start.sh <project>, issue #773): the whole app for one git project, its documents in
-// <project>/atelier/. Only the workspace folder list stays closed: the server belongs to that one project.
+// Project mode (start.sh <project>, issues #773, #782): the whole app for one git project, its documents in
+// <project>/.atelier/. Only the workspace folder list stays closed: the server belongs to that one project.
 const PROJECT_MODE_BLOCKED = [
   ['POST', /^\/api\/workspaces(\/open)?$/],
   ['DELETE', /^\/api\/workspaces$/],
@@ -32,7 +32,7 @@ const PROJECT_MODE_BLOCKED = [
 
 /**
  * The git project's folder name for /api/info: the Dispatch module's project root when it runs, else in project
- * mode the folder that holds the workspace (<project>/atelier). Folder name only, never the full path.
+ * mode the folder that holds the workspace (<project>/.atelier). Folder name only, never the full path.
  */
 export function projectName(ctx) {
   const root = ctx.modules?.dispatch?.projectRoot;

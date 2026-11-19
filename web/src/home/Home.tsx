@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { ProjectDashboard } from './ProjectDashboard';
-import { flatFiles, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
+import { flatFiles, plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
 import { isFindKey } from './dashboardRows';
+import { PlanAreas } from './PlanList';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -141,7 +142,7 @@ function Dashboard({ data, ...p }: Shared) {
   );
 }
 
-type PTab = 'docs' | 'pipelines' | 'sessions' | 'overview';
+type PTab = 'docs' | 'plans' | 'sessions' | 'overview';
 
 /** Project head (layout B): icon badge, title, description, then 문서 수 · 실행 중 · 폴더. */
 function ProjectHeader({ project, running }: { project: ProjectInfo; running: number }) {
@@ -185,6 +186,7 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
 function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
   const [tab, setTab] = useState<PTab>('docs');
   const recent = useMemo(() => flatFiles([project], []), [project]);
+  const plans = useMemo(() => plansByArea([project], []), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -203,7 +205,7 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
         </p>
         <TabsList aria-label="프로젝트 보기">
           <TabsTrigger value="docs">대시보드</TabsTrigger>
-          <TabsTrigger value="pipelines">파이프라인</TabsTrigger>
+          <TabsTrigger value="plans">파이프라인</TabsTrigger>
           <TabsTrigger value="sessions">세션</TabsTrigger>
           <TabsTrigger value="overview">개요</TabsTrigger>
         </TabsList>
@@ -217,8 +219,11 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
         <TabsContent value="docs" className="flex flex-col">
           <ProjectDashboard project={project} recent={recent} onOpen={p.onOpen} onBoard={p.onBoard} />
         </TabsContent>
-        <TabsContent value="pipelines">
-          <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>
+        <TabsContent value="plans">
+          <div className="flex flex-col gap-3 px-2 pt-3">
+            <PlanAreas areas={plans} query="" onOpen={p.onOpen} empty="이 영역에는 아직 계획이 없어요." />
+            <RunsBlock folder={project.path} onOpen={p.onOpen} />
+          </div>
         </TabsContent>
         <TabsContent value="sessions">
           <ProjectSessions folder={project.path} onOpen={p.onOpen} onBoard={p.onBoard} />

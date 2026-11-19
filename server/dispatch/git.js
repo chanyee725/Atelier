@@ -2,6 +2,7 @@ import { ownGitEnv, runCli } from "./cli.js";
 import { appendFile, copyFile, link, mkdir, readFile, readdir, readlink, symlink } from "node:fs/promises";
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { STATE_DIR, stateLayout } from "./paths.js";
 
 const git = (cwd, ...args) => runCli("git", ["-C", cwd, ...args], { maxBuffer: 32 << 20, env: ownGitEnv() });
 
@@ -17,27 +18,36 @@ async function hasHead(dir) {
   try { await git(dir, "rev-parse", "--verify", "HEAD"); return true; } catch { return false; }
 }
 
-// Keep .dispatch/ (worktrees, state) out of `git status` without touching the tracked .gitignore.
-async function ensureExcluded(root) {
+// Keep the session worktrees and the team state out of `git status` without touching the tracked
+// .gitignore. Only Atelier's own entries: the rest of .atelier/ (documents) is the user's to track.
+// `worktrees` is the folder new worktrees go in; a not-yet-moved .dispatch/ is excluded whole, as before.
+export async function ensureExcluded(root, worktrees) {
+  const rel = path.relative(root, worktrees).split(path.sep).join("/");
+  const lines = rel.startsWith(STATE_DIR + "/")
+    ? [`/${rel}/`, ...["state.json", "drawing.lock*", "server.port", "server.pid", "server.log"].map(f => `/${STATE_DIR}/${f}`)]
+    : [`${rel.split("/")[0]}/`];
   const file = path.join(root, ".git", "info", "exclude");
   try {
     const cur = await readFile(file, "utf8").catch(() => "");
-    if (!cur.split("\n").includes(".dispatch/")) {
+    const have = new Set(cur.split("\n"));
+    const add = lines.filter(l => !have.has(l));
+    if (add.length) {
       await mkdir(path.dirname(file), { recursive: true });
-      await appendFile(file, (cur.endsWith("\n") || !cur ? "" : "\n") + ".dispatch/\n");
+      await appendFile(file, (cur.endsWith("\n") || !cur ? "" : "\n") + add.join("\n") + "\n");
     }
   } catch { /* not a git repo */ }
 }
 
 // Returns { cwd, branch, worktree, warning }. Falls back to the project dir when a worktree can't be made.
-export async function prepareWorkdir(root, slug, useWorktree, { shareDeps: share = true } = {}) {
+// `worktrees` is the folder the worktree goes in: <project>/.atelier/worktrees unless the store still uses .dispatch/.
+export async function prepareWorkdir(root, slug, useWorktree, { shareDeps: share = true, worktrees = stateLayout(root).worktrees } = {}) {
   if (!useWorktree) return { cwd: root, branch: await currentBranch(root), worktree: false };
   if (!(await hasHead(root))) {
     return { cwd: root, branch: await currentBranch(root), worktree: false,
       warning: "커밋이 없는 레포라 worktree를 만들 수 없어 프로젝트 폴더에서 실행해요." };
   }
-  await ensureExcluded(root);
-  const dir = path.join(root, ".dispatch", "wt", slug);
+  await ensureExcluded(root, worktrees);
+  const dir = path.join(worktrees, slug);
   const branch = `dispatch/${slug}`;
   try {
     await git(root, "worktree", "add", dir, "-b", branch);
@@ -222,6 +232,24 @@ export async function branchStatus(root, branch, base) {
   const [behind, ahead] = counts.split(/\s+/).map(n => +n || 0);
   const state = ahead > 0 ? "open" : born && born !== tip ? "merged" : "empty";
   return { ahead, behind: behind ?? 0, lastAt: ct ? +ct * 1000 : null, state };
+}
+
+/** The subject line of `branch`'s tip commit, or null when the branch is gone. */
+export async function tipSubject(root, branch) {
+  if (typeof branch !== "string" || !branch || branch.startsWith("-")) return null;
+  try { return (await git(root, "log", "-1", "--format=%s", branch, "--")).stdout.trim(); } catch { return null; }
+}
+
+/**
+ * Whether a worktree holds uncommitted work: changed tracked files, or untracked files outside build noise
+ * (the same rule dropWorktree uses). null when git cannot tell (folder gone, not a repo).
+ */
+export async function worktreeDirty(dir) {
+  if (!dir || !existsSync(dir)) return null;
+  try {
+    const st = (await git(dir, "--no-optional-locks", "status", "--porcelain")).stdout;
+    return st.split("\n").filter(Boolean).some(l => !noiseLine(l));
+  } catch { return null; }
 }
 
 export async function branchGraph(root, { base = "develop", limit = 80, active = [] } = {}) {

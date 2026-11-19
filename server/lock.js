@@ -1,6 +1,6 @@
 // One-server locks (E13): a small JSON file { pid, port } that says which server owns a folder.
 // `<workspace>/.drawing/server.lock` keeps two Atelier servers off one workspace;
-// `<project>/.dispatch/drawing.lock` keeps two Dispatch modules off one project's `.dispatch/`.
+// `<project>/.atelier/drawing.lock` keeps two Dispatch modules off one project's state (server/dispatch/paths.js).
 // A lock whose owner is gone (dead pid, or its port no longer answers as that server) is stale and
 // gets replaced, so a crash never blocks the next start.
 import { readFileSync, unlinkSync } from 'node:fs';

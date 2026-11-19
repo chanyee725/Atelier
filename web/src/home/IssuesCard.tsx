@@ -2,8 +2,7 @@
 // (Linear-like): number, the full title (cut at the panel edge), owner session initials, the open PR and a state chip.
 // 작업 중 first, then PR 리뷰, then 열림; closed issues are not listed. Nothing is shown for an empty bit (no "맡은 세션
 // 없음"). The row's chevron opens its details below: branches with ahead/behind, every PR (review, CI, conflicts) and
-// the sessions' accounts. Open session branches that no issue claims are listed at the end, so no work drops out of
-// view. Read-only; links open GitHub in a new tab.
+// the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only; links open GitHub in a new tab.
 import { useId, useRef, useState } from 'react';
 import { ChevronRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
@@ -13,7 +12,7 @@ import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { PrIssueSessions } from './IssueSessionList';
 import { Pager, useFitRows, usePaging } from './Pager';
 import { fromSessions } from './issueSessions';
-import { ISSUE_STATE, initials, issueRows, issuesBlankReason, looseBranches, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
+import { ISSUE_STATE, initials, issueRows, issuesBlankReason, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
@@ -40,8 +39,6 @@ type Props = {
 const ROW_H = 37;
 /** Pager, the card's bottom border and the page padding under the card, px. */
 const PAGER_RESERVE = 72;
-/** The closed 이슈 없는 브랜치 line. */
-const LOOSE_H = 31;
 
 /** The head branches of open PRs, for the CI/review lookup (#686's /api/prs). */
 export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
@@ -50,10 +47,9 @@ export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
 export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: Props) {
   const list = Array.isArray(sessions) ? sessions : [];
   const rows = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
-  const loose = looseBranches(rows, list);
   // Rows that fit above the card's bottom edge become one page (#800); the rest goes to the next pages.
   const listRef = useRef<HTMLUListElement>(null);
-  const size = useFitRows(listRef, { rowHeight: ROW_H, reserve: PAGER_RESERVE + (loose.length > 0 ? LOOSE_H : 0), min: 5, max: 15, active: rows.length > 0 });
+  const size = useFitRows(listRef, { rowHeight: ROW_H, reserve: PAGER_RESERVE, min: 5, max: 15, active: rows.length > 0 });
   const paged = usePaging(rows, size, filterKey);
   return (
     <Card id="issues" grow={5} title="이슈" count={rows.length || undefined} flush>
@@ -75,7 +71,6 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: 
           <Pager page={paged.page} count={paged.count} onPage={paged.setPage} label="이슈 페이지" />
         </>
       )}
-      {loose.length > 0 && <LooseBranches names={loose} sessions={list} branches={branches} />}
     </Card>
   );
 }
@@ -90,7 +85,7 @@ function liveOf(pr: IssueRow['prs'][number] | undefined, prs: Feed<ReadonlyMap<s
 function StateChip({ row }: { row: IssueRow }) {
   const st = ISSUE_STATE[row.state];
   return (
-    <span data-issue-state={row.state} className="inline-flex h-5 w-[4.5rem] shrink-0 items-center gap-1.5 rounded-full border px-2 text-[11px] text-muted-foreground">
+    <span data-issue-state={row.state} className="inline-flex h-6 w-[5.25rem] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs text-muted-foreground">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', TONE[st.tone], row.state === 'progress' && 'motion-safe:animate-pulse')} />
       <span className="truncate">{st.label}</span>
     </span>
@@ -252,27 +247,3 @@ function IssueDetails({ row: r, sessions, branches, prs }: { row: IssueRow; sess
   );
 }
 
-/** Open session branches no issue claims, so work without an issue still shows. */
-function LooseBranches({ names, sessions, branches }: { names: string[]; sessions: Session[]; branches: Feed<Branches> }) {
-  return (
-    <details data-loose-branches className="group/d border-t text-xs">
-      <summary className={SUMMARY}>
-        <Chevron />
-        <span>이슈 없는 브랜치 {names.length}</span>
-      </summary>
-      <ul className="m-0 list-none divide-y border-t p-0">
-        {names.map((b) => {
-          const s = sessions.find((x) => x.branch === b);
-          return (
-            <li key={b} data-branch={b} className="flex min-w-0 items-center gap-1.5 px-3 py-1.5">
-              <GitBranch aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-              <span className="min-w-0 truncate font-mono" title={b}>{b}</span>
-              {s && <span className="min-w-0 truncate text-muted-foreground">{s.name}</span>}
-              <AheadBehind branch={b} branches={branches} />
-            </li>
-          );
-        })}
-      </ul>
-    </details>
-  );
-}

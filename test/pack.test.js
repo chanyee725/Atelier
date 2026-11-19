@@ -190,7 +190,7 @@ cp "${bundle}" "$dir/"
   const home = join(work, 'home');
   mkdirSync(home);
   const project = join(work, 'proj');
-  mkdirSync(join(project, '.dispatch'), { recursive: true });
+  mkdirSync(join(project, '.atelier'), { recursive: true });
   execFileSync('git', ['init', '-q', project]);
   const script = new URL('../plugin/skills/atelier-update/scripts/update.sh', import.meta.url).pathname;
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, HOME: home, DRAWING_INSTALL_BASE: join(home, 'd') };
@@ -199,11 +199,11 @@ cp "${bundle}" "$dir/"
   return { work, home, project, env, run, cleanup };
 }
 
-// A stand-in for the Drawing server: node running <dir>/server/index.js --project-mode <project>/pipelines.
+// A stand-in for the Drawing server: node running <dir>/server/index.js --project-mode <project>/.atelier.
 function fakeServer(dir, project) {
   mkdirSync(join(dir, 'fake/server'), { recursive: true });
   writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
-  return spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(realpathSync(project), 'pipelines')], { stdio: 'ignore' });
+  return spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(realpathSync(project), '.atelier')], { stdio: 'ignore' });
 }
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
@@ -211,8 +211,8 @@ test('atelier-update: restarts only this project server, with the port passed as
   const t = updateEnv();
   const child = fakeServer(t.work, t.project);
   try {
-    writeFileSync(join(t.project, '.dispatch/server.pid'), String(child.pid));
-    writeFileSync(join(t.project, '.dispatch/server.port'), '4411');
+    writeFileSync(join(t.project, '.atelier/server.pid'), String(child.pid));
+    writeFileSync(join(t.project, '.atelier/server.port'), '4411');
     // A leftover standalone-Dispatch registry entry must be ignored.
     mkdirSync(join(t.home, '.dispatch/servers'), { recursive: true });
     const other = join(t.work, 'other');
@@ -235,8 +235,8 @@ test('atelier-update: restarts only this project server, with the port passed as
 test('atelier-update: no running server means no restart; a bad port value is never executed', () => {
   const t = updateEnv();
   try {
-    writeFileSync(join(t.project, '.dispatch/server.pid'), '999999');
-    writeFileSync(join(t.project, '.dispatch/server.port'), `1; touch ${join(t.work, 'pwned')}`);
+    writeFileSync(join(t.project, '.atelier/server.pid'), '999999');
+    writeFileSync(join(t.project, '.atelier/server.port'), `1; touch ${join(t.work, 'pwned')}`);
     assert.match(t.run(), /no running server/);
     assert.ok(!existsSync(join(t.home, 'started')));
     assert.ok(!existsSync(join(t.work, 'pwned')));
@@ -278,8 +278,8 @@ test('atelier-update: a pid file naming some other live process is stale: not si
   const t = updateEnv();
   const other = spawn('sleep', ['60'], { stdio: 'ignore' });
   try {
-    writeFileSync(join(t.project, '.dispatch/server.pid'), String(other.pid));
-    writeFileSync(join(t.project, '.dispatch/server.port'), '4411');
+    writeFileSync(join(t.project, '.atelier/server.pid'), String(other.pid));
+    writeFileSync(join(t.project, '.atelier/server.port'), '4411');
     assert.match(t.run(), /no running server/);
     assert.ok(!existsSync(join(t.home, 'started')));
     assert.ok(alive(other.pid), 'unrelated process left alone');
@@ -295,7 +295,7 @@ test('atelier-update: a node server of another workspace is not ours either', ()
   mkdirSync(otherProject);
   const other = fakeServer(t.work, otherProject);
   try {
-    writeFileSync(join(t.project, '.dispatch/server.pid'), String(other.pid));
+    writeFileSync(join(t.project, '.atelier/server.pid'), String(other.pid));
     assert.match(t.run(), /no running server/);
     assert.ok(alive(other.pid));
   } finally {

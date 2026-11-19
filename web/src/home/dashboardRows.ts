@@ -9,11 +9,14 @@ export const BRANCH_STATE: Record<NonNullable<BranchTip['state']>, { label: stri
   empty: { label: '커밋 없음', tone: 'idle' },
 };
 
-/** Work branches (not the integration branch): live sessions' first, then the newest commit first. */
-export function branchRows(branches: Feed<Branches>): BranchTip[] {
+/**
+ * Work branches (not the integration branch): live sessions' first, then the newest commit first. Branches in
+ * `claimed` (those an open issue already lists) are left out, so the dashboard card shows only work without an issue.
+ */
+export function branchRows(branches: Feed<Branches>, claimed: ReadonlySet<string> = new Set()): BranchTip[] {
   if (!branches || branches === 'failed') return [];
   return [...branches.tips.values()]
-    .filter((t) => !t.base)
+    .filter((t) => !t.base && !claimed.has(t.branch))
     .sort((a, b) => Number(!!b.active) - Number(!!a.active) || (b.lastAt ?? 0) - (a.lastAt ?? 0) || a.branch.localeCompare(b.branch));
 }
 

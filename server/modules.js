@@ -11,7 +11,7 @@ import * as activity from './cursor/activity.js';
 import * as code from './code/index.js';
 
 export const modules = [
-  // The user's defaults, ~/.dispatch/drawing.json (E555): read first by the modules below, written by the 설정 UI.
+  // The user's defaults, ~/.atelier/drawing.json (E555): read first by the modules below, written by the 설정 UI.
   { name: 'userDefaults', setup: userDefaults.setup },
   { name: 'workspace', setup: workspace.setup },
   // Pipeline run records beside each file (.drawing/runs/); the recorder E20 drives.

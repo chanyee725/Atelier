@@ -71,20 +71,20 @@ export function UsageCard({ onBoard }: { onBoard: (folder: string, tab?: 'usage'
   );
 }
 
-/** Work branches against the integration branch: ahead/behind, state, last commit. */
-export function BranchesCard({ branches, grow }: { branches: Feed<Branches>; grow?: number }) {
-  const rows = branchRows(branches);
+/** Work branches no open issue claims (#793), against the integration branch: ahead/behind, state, last commit. */
+export function BranchesCard({ branches, claimed, grow }: { branches: Feed<Branches>; claimed: ReadonlySet<string>; grow?: number }) {
+  const rows = branchRows(branches, claimed);
   const base = branches && branches !== 'failed' ? branches.base : null;
   return (
-    <Card id="branches" grow={grow} scroll title="브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
+    <Card id="branches" grow={grow} scroll title="이슈 없는 브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
       {branches === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : branches === 'failed' ? (
         <EmptyState>브랜치를 불러오지 못했어요.</EmptyState>
       ) : rows.length === 0 ? (
-        <EmptyState>작업 중인 브랜치가 없어요.</EmptyState>
+        <EmptyState>이슈 없이 작업 중인 브랜치가 없어요.</EmptyState>
       ) : (
-        <ul aria-label="브랜치" className="m-0 list-none divide-y p-0">
+        <ul aria-label="이슈 없는 브랜치" className="m-0 list-none divide-y p-0">
           {rows.map((t) => {
             const st = t.state ? BRANCH_STATE[t.state] : null;
             return (

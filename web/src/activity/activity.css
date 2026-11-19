@@ -1,4 +1,5 @@
-/* Agent activity (E537, #654): the bell's badge and feed, and the toasts. Tokens only, so light and dark follow. */
+/* Agent activity (E537, #654): the bell's badge and its 알림함 feed (no toasts since #811). Tokens only, so light and
+   dark follow. */
 
 .activity-badge {
   position: absolute;
@@ -24,11 +25,11 @@
   inset: auto;
   margin: 0;
   box-sizing: border-box;
-  inline-size: min(360px, calc(100vw - 16px));
+  inline-size: min(380px, calc(100vw - 16px));
   max-block-size: min(480px, calc(100dvh - 16px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--menu-pad) var(--menu-pad) var(--menu-end);
+  padding: 8px 12px 12px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--popover);
@@ -38,36 +39,14 @@
 }
 .activity-feed-title { margin: 4px 8px 6px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
 .activity-empty { margin: 8px; color: var(--muted-foreground); }
-.activity-list { list-style: none; margin: 0; padding: 0; }
-.activity-item {
-  display: grid;
-  grid-template-columns: 15px 1fr auto;
-  align-items: baseline;
-  gap: 8px;
-  inline-size: 100%;
-  min-inline-size: 0;
-  padding: 7px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.activity-item:hover { background: var(--accent); }
-.activity-item:focus-visible,
-.activity-close:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-.activity-item:not([data-unread]) .activity-text { color: var(--muted-foreground); }
-.activity-item[data-unread] .activity-text { font-weight: 500; }
+.activity-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .activity-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--idle); translate: 0 -1px; }
-.activity-text { min-inline-size: 0; text-wrap: pretty; }
+.activity-text { margin: 0; min-inline-size: 0; text-wrap: pretty; overflow-wrap: anywhere; }
 .activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
-[data-kind='error'] .activity-dot { box-shadow: 0 0 0 2px var(--destructive); }
 
-/* The 알림함 (#797): a head with 모두 읽음 and 전체 삭제, then one row per toast — icon, text, time, and 지우기 on the
-   right (shown on hover or focus where there is a pointer that hovers, always on touch). */
-.activity-inbox-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block-start: 4px; }
+/* The 알림함 (#797, #811): a head with 모두 읽음 and 전체 삭제, then one row per item — who raised it (model mark,
+   이름 · 역할, time), the line, and the one action 확인하기. */
+.activity-inbox-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block: 6px 4px; }
 .activity-inbox-head .activity-feed-title { margin-block: 4px; }
 .activity-inbox-actions { display: flex; gap: 2px; }
 .activity-inbox-action {
@@ -87,146 +66,59 @@
 .activity-inbox-action:hover:not(:disabled) { background: var(--accent); color: var(--foreground); }
 .activity-inbox-action:disabled { opacity: 0.5; cursor: default; }
 .activity-inbox-action:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-.activity-inbox-row { display: grid; grid-template-columns: 1fr auto; align-items: center; border-radius: 6px; }
-.activity-inbox-row:has([data-unread]) { background: color-mix(in oklab, var(--primary) 7%, transparent); }
-.activity-icon { inline-size: 15px; block-size: 15px; align-self: center; color: var(--muted-foreground); }
-.activity-item[data-unread] .activity-icon { color: var(--primary); }
-.activity-item[data-kind='error'] .activity-icon { color: var(--destructive); }
-@media (hover: hover) {
-  .activity-inbox-row:not(:hover, :focus-within) .activity-close { opacity: 0; }
+.activity-inbox-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
 }
+.activity-inbox-row[data-unread] { background: color-mix(in oklab, var(--primary) 7%, transparent); }
+.activity-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.activity-mark-icon { inline-size: 16px; block-size: 16px; }
+[data-kind='error'] > .activity-mark { box-shadow: 0 0 0 2px var(--destructive); }
+.activity-inbox-body { display: flex; flex-direction: column; align-items: start; gap: 4px; min-inline-size: 0; }
+.activity-who { display: flex; align-items: baseline; gap: 8px; inline-size: 100%; margin: 0; }
+.activity-name { flex: 1; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.activity-inbox-row:not([data-unread]) .activity-text { color: var(--muted-foreground); }
+.activity-check {
+  margin-block-start: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-check:hover { background: var(--accent); }
+.activity-check:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
-/* Plans waiting for 시작하기 (#786): what and where on the left, the one action on the right. */
+/* Plans waiting for 시작하기 (#786): what and where on the left, 확인하기 (opens the plan's confirm) on the right. */
 .activity-plan {
   display: grid;
   grid-template-columns: 8px 1fr auto;
   align-items: center;
-  gap: 8px;
-  padding: 7px 8px;
+  gap: 10px;
+  padding: 12px;
 }
 .activity-plan .activity-dot { background: var(--primary); }
+.activity-plan .activity-check { margin: 0; }
 .activity-plan-body { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
 .activity-plan-body .activity-text { font-weight: 500; }
-.activity-plan-link {
-  align-self: start;
-  max-inline-size: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--primary);
-  font: inherit;
-  text-align: start;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.activity-plan-link:hover { text-decoration: underline; }
+.activity-plan-title { color: var(--primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-plan-body .activity-when { overflow: hidden; text-overflow: ellipsis; }
-.activity-plan-start {
-  padding: 4px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font: inherit;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.activity-plan-start:hover { background: color-mix(in oklab, var(--primary) 88%, black); }
-.activity-plan-link:focus-visible,
-.activity-plan-start:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-
-/* Toasts: one region in the top layer, top right just under the top bar (#730; full width on a narrow screen).
-   --toast-top is the top bar's bottom edge plus a gap, set from JS (the bar's height changes with the screen); the
-   fallback leaves room for the bar and the inset main pane. */
-.activity-toasts {
-  --toast-x: max(16px, env(safe-area-inset-right));
-  --toast-y: var(--toast-top, calc(var(--h-bar) + 16px));
-  position: fixed;
-  inset: var(--toast-y) var(--toast-x) auto auto;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  overflow: visible;
-  inline-size: min(360px, calc(100vw - 2 * var(--toast-x)));
-}
-.activity-toasts ol { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.activity-toast {
-  display: grid;
-  grid-template-columns: 8px 1fr auto auto;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 8px 10px 14px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--popover);
-  color: var(--popover-foreground);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
-  font-size: 13px;
-}
-.activity-open {
-  padding: 3px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--primary);
-  font: inherit;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.activity-open:hover { background: var(--accent); }
-.activity-open:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-.activity-toast[data-kind='error'] { border-color: color-mix(in oklab, var(--destructive) 45%, var(--border)); }
-.activity-toast[data-kind='error'] .activity-dot { background: var(--destructive); box-shadow: none; }
-.activity-close {
-  display: grid;
-  place-items: center;
-  inline-size: 26px;
-  block-size: 26px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.activity-close:hover { background: var(--accent); color: var(--foreground); }
-.activity-close svg { inline-size: 15px; block-size: 15px; }
-@media (prefers-reduced-motion: no-preference) {
-  .activity-toast { transition: opacity 0.2s ease-out, translate 0.2s ease-out; }
-  @starting-style {
-    .activity-toast { opacity: 0; translate: 0 -8px; }
-  }
-}
-@media (max-width: 480px) {
-  /* Edge to edge with an 8px margin, clear of a notch on either side. */
-  .activity-toasts {
-    --toast-x: max(8px, env(safe-area-inset-right));
-    inset-inline-start: max(8px, env(safe-area-inset-left));
-    inline-size: auto;
-  }
-}
-/* A short window (a phone on its side, 320x256 zoomed): a stack taller than the room left scrolls instead of being
-   cut off (WCAG 1.4.10 Reflow). Only here, since a scroll box clips the toasts' shadows. */
-@media (max-height: 560px) {
-  .activity-toasts {
-    max-block-size: calc(100dvh - var(--toast-y) - 8px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-  }
-}
-/* The bell's feed opens under the top bar's right end, where the toasts are (#786): while it is open the toasts step
-   to its left on a wide screen and out of sight on a narrow one, so they never cover it. */
-:root:has(.activity-feed:popover-open) .activity-toasts {
-  --toast-x: calc(min(360px, 100vw - 16px) + 40px);
-}
-@media (max-width: 800px) {
-  :root:has(.activity-feed:popover-open) .activity-toasts { visibility: hidden; }
-}
 
 @media (forced-colors: active) {
   .activity-dot { forced-color-adjust: none; }

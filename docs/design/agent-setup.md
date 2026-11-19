@@ -7,6 +7,7 @@ Issue #766. How agent sessions working on this repo are set up, after the talk "
 - `CLAUDE.md`, the role prompts in `server/dispatch/roles.js` and `plugin/skills/*/SKILL.md` carry only non-obvious facts: hidden dependencies, commands, traps, policy.
 - No emphasis words (IMPORTANT, NEVER, 반드시, 꼭). `test/dispatch/lanes.test.js` checks the role prompts.
 - Implementer and designer prompts carry the web UI library rules; the full table is `docs/design/ui-libraries.md` (#764).
+- The docs role and the lead prompt carry the document writing style (next action first, numbered steps, done/left lists); the guide is `docs/design/writing-style.md` (#737).
 - Nothing a tool schema or the code already says (mode lists, model defaults, file layout).
 - Rerun the audit (`/doctor prompt-audit`) when the default model changes.
 

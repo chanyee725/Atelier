@@ -1,7 +1,8 @@
 // The 알림함 (E582, #797): every toast the app shows — app events (appToasts.ts), agent activity and plans waiting for
 // 시작하기 — kept as an item in the bell's popover, newest first, at most INBOX_MAX. Read, delete one, read all and
 // clear all. Kept per browser (localStorage, inboxStore.ts). Pure (no React or DOM), so it runs under `node --test`.
-// Metadata only: the toast's one line (file, session and provider names, PR numbers), when, and where it leads.
+// Metadata only: the toast's one line (file, session and provider names, PR numbers), when, where it leads, and the
+// agent that raised it (session name, role and provider ids, #811).
 import { activitySentence, type ActivityEvent, type ActivityLog } from '../../../shared/dispatch/agent-activity.ts';
 import type { AppToast, ToastCategory, ToastTarget } from './appEvents';
 
@@ -13,6 +14,13 @@ export type InboxKind = ToastCategory | 'plan';
 /** Where a click goes: a document, a session on the board, or a plan's 시작하기 confirm. */
 export type InboxTarget = ToastTarget | { plan: string };
 
+/** Who raised the item (#811): an agent session's own name, role id and provider id. Absent: the app itself. */
+export interface InboxAgent {
+  name: string;
+  role: string;
+  provider?: string;
+}
+
 export interface InboxItem {
   id: string;
   kind: InboxKind;
@@ -21,6 +29,7 @@ export interface InboxItem {
   at: number;
   read: boolean;
   target?: InboxTarget;
+  agent?: InboxAgent;
 }
 
 /** items newest first; agentSeen: the newest agent event already taken in, so a deleted one never comes back. */
@@ -54,6 +63,14 @@ export const clearInbox = (box: Inbox): Inbox => (box.items.length ? { ...box, i
 
 export const inboxUnread = (box: Inbox) => box.items.reduce((n, i) => n + (i.read ? 0 : 1), 0);
 
+/** The bell's badge number: unread items plus waiting plans, a waiting plan counted once even when its
+ * 'plan-waiting' toast is also an unread item (#802). */
+export function bellCount(box: Inbox, waiting: readonly string[]): number {
+  const plans = new Set(waiting);
+  const unread = box.items.reduce((n, i) => n + (i.read || (i.target && 'plan' in i.target && plans.has(i.target.plan)) ? 0 : 1), 0);
+  return unread + plans.size;
+}
+
 const clip = (s: string) => (s.length > TEXT_MAX ? `${s.slice(0, TEXT_MAX - 1)}…` : s);
 
 /** The item for an app toast shown (or sent as a browser notification) at `at`. */
@@ -67,6 +84,7 @@ export function itemOfToast(t: AppToast, at: number, seq: number): InboxItem {
     at,
     read: false,
     ...(plan ? { target: { plan: (t.target as { file: string }).file } } : t.target ? { target: t.target } : {}),
+    ...(t.agent ? { agent: t.agent } : {}),
   };
 }
 
@@ -86,10 +104,17 @@ export function takeActivity(box: Inbox, log: ActivityLog): Inbox {
       at: e.at,
       read: e.at <= log.readAt,
       target: { file: e.file },
+      ...(e.name ? { agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) } } : {}),
     }),
   );
   const agentSeen = Math.max(box.agentSeen, ...news.map((e) => e.at));
   return { ...addItems(box, items), agentSeen };
+}
+
+function agentOf(x: unknown): InboxAgent | undefined {
+  const a = x as Record<string, unknown> | null;
+  if (!a || typeof a !== 'object' || !str(a.name)) return undefined;
+  return { name: a.name.slice(0, 40), role: typeof a.role === 'string' ? a.role : '', ...(str(a.provider) ? { provider: a.provider } : {}) };
 }
 
 const KINDS = new Set<InboxKind>(['agents', 'files', 'sessions', 'models', 'runs', 'settings', 'plan']);
@@ -113,7 +138,8 @@ export function parseInbox(raw: string | null): Inbox {
     for (const x of v.items as Record<string, unknown>[]) {
       if (!x || !str(x.id) || !KINDS.has(x.kind as InboxKind) || !str(x.text) || typeof x.at !== 'number' || !Number.isFinite(x.at)) continue;
       const target = targetOf(x.target);
-      items.push({ id: x.id, kind: x.kind as InboxKind, error: x.error === true, text: clip(x.text), at: x.at, read: x.read === true, ...(target ? { target } : {}) });
+      const agent = agentOf(x.agent);
+      items.push({ id: x.id, kind: x.kind as InboxKind, error: x.error === true, text: clip(x.text), at: x.at, read: x.read === true, ...(target ? { target } : {}), ...(agent ? { agent } : {}) });
     }
     const seen = typeof v.agentSeen === 'number' && Number.isFinite(v.agentSeen) ? v.agentSeen : 0;
     return addItems({ items: [], agentSeen: seen }, items);

@@ -27,8 +27,15 @@ is_our_server() {
   [[ "$cmd" == *"/server/index.js --project-mode $workspace" ]]
 }
 
-# Succeeds when pid $1 is our server for project $2: on <project>/atelier, or on the older <project>/pipelines
-# (a server started before #773, so stop/restart/update still find it).
+# Succeeds when pid $1 is our server for project $2: on <project>/.atelier, or on the older <project>/atelier or
+# <project>/pipelines (a server started before #782 or #773, so stop/restart/update still find it).
 is_our_project_server() {
-  is_our_server "$1" "$2/atelier" || is_our_server "$1" "$2/pipelines"
+  is_our_server "$1" "$2/.atelier" || is_our_server "$1" "$2/atelier" || is_our_server "$1" "$2/pipelines"
+}
+
+# The project's state folder (server.pid, server.port, server.log): <project>/.atelier, or an older
+# version's <project>/.dispatch while it is still there (the server moves it once no session is saved,
+# #782). A .dispatch symlink is never used. Never creates either folder.
+state_dir() {
+  if [ -d "$1/.dispatch" ] && [ ! -L "$1/.dispatch" ]; then echo "$1/.dispatch"; else echo "$1/.atelier"; fi
 }
