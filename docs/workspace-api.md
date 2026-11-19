@@ -25,7 +25,7 @@ Paths are relative to the workspace, `/`-separated. No `..`, absolute paths, hid
 
 ## Local folder projects (E554)
 
-`GET /api/local-folders?path=<abs>` lists sub-folder names of a folder on the server machine (home folder without `path`): no files, no hidden entries, symlinks skipped. `POST /api/workspace/local-project { path }` links that folder as a new project (`201 { path, name, linkedPath }`, 409 `{ project }` when already linked). Design: `docs/design/local-folder-projects.md`.
+`GET /api/local-folders?path=<abs>` lists sub-folder names of a folder on the server machine (home folder without `path`): no files, no hidden entries, symlinks skipped. `POST /api/workspace/local-project { path }` links that folder as a new project (`201 { path, name, linkedPath }`, 409 `{ project, code: 'already_linked' }` when already linked; 400 with `code` `inside_workspace` or `filesystem_root` for the workspace or the root). Links run one at a time. Design: `docs/design/local-folder-projects.md`.
 
 ## Live agents and who is writing (E528)
 

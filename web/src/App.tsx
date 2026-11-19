@@ -403,7 +403,21 @@ export function App() {
     }
   };
   // A project is a top-level folder (design doc 6 §1); 새 프로젝트 links a folder of the server PC to one (E554).
+  // The dialog also makes a blank project (a plain named folder, no linked folder).
   const newProject = () => setFolderPickerOpen(true);
+  const createBlankProject = async (raw: string): Promise<string | null> => {
+    const name = raw.trim();
+    if (!name) return '이름을 입력해 주세요';
+    const problem = nameProblem({ type: 'folder' }, name) ?? (/[\\/]/.test(name) ? '이름에 / 나 \\를 넣을 수 없어요.' : null);
+    if (problem) return problem;
+    try {
+      await api.createFolder(name);
+    } catch (e) {
+      return e instanceof ApiError && e.status === 409 ? '같은 이름의 프로젝트가 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요';
+    }
+    await projectLinked(name);
+    return null;
+  };
   const projectLinked = async (path: string) => {
     setFolderPickerOpen(false);
     await refreshTree();
@@ -875,7 +889,7 @@ export function App() {
         <ActivityAlerts onOpen={openFile} onSession={() => window.location.assign('/dispatch')} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
-          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onLinked={(p) => void projectLinked(p)} />}
+          {folderPickerOpen && <FolderPickerDialog onClose={() => setFolderPickerOpen(false)} onLinked={(p) => void projectLinked(p)} onCreateBlank={createBlankProject} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
           {paletteOpen && <CommandPalette commands={registry.list()} scope={paletteScope(docScreen ? section : homeSection, projects, path)} onlyGroup={paletteGroup} onClose={() => setPaletteOpen(false)} />}
           {conflict && (

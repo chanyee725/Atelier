@@ -85,10 +85,13 @@ export type HistoryVersion = DpxFile & { id: string; time: number };
 export class ApiError extends Error {
   status: number;
   revision?: number;
-  constructor(status: number, message: string, revision?: number) {
+  /** A stable reason the server gives for some errors (e.g. 'already_linked'); branch on this, not the message. */
+  code?: string;
+  constructor(status: number, message: string, revision?: number, code?: string) {
     super(message);
     this.status = status;
     this.revision = revision;
+    this.code = code;
   }
 }
 
@@ -105,7 +108,7 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.revision);
+  if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`, data.revision, typeof data.code === 'string' ? data.code : undefined);
   return data as T;
 }
 

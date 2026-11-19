@@ -19,8 +19,11 @@ A project is still a top-level folder of the workspace (design doc 6 §1). Linki
 - The linked folder itself is never written to. Documents stay in the workspace, so the server's write rules do not
   change: it still writes only inside the workspace, its git project and `~/.dispatch/`.
 - `.project.json` holds only the folder name and its path. No owner, user name or email is read or stored.
-- The same folder can be linked once; a second try answers 409 with the existing project's path.
+- The same folder can be linked once; a second try answers 409 with the existing project's path. Links run one at a
+  time per workspace, so two requests for the same folder at once still make one project.
 - The workspace itself (or any folder inside it) and the filesystem root cannot be linked.
+- Refusals carry a stable `code` next to the English `error`: `already_linked` (409), `inside_workspace` (400),
+  `filesystem_root` (400). The client branches on `code`, never on the message.
 
 `GET /api/workspace/projects` returns `linkedPath` (or `null`) for each project; the project 개요 tab shows it as
 연결한 폴더.
@@ -53,13 +56,17 @@ workspace path. Closed in project mode, like the other document writes. The `.pr
 
 ## Web
 
-`FolderPickerDialog` (opened by 새 프로젝트 in the sidebar) replaces the old name prompt:
+`FolderPickerDialog` (opened by 새 프로젝트 in the sidebar) replaces the old name prompt; it still makes blank
+projects:
 
 - Up and home buttons, a breadcrumb (`nav` > `ol`, the current folder marked `aria-current="location"`), then the
   sub-folders as buttons: one click goes into a folder.
 - 이 폴더 선택 adds the folder shown (the root cannot be picked). On success the dialog closes, the tree is refreshed
   and the new project opens; the "created" toast is raised after the dialog is gone.
-- Errors show as an alert line in the dialog (Korean, by status).
+- 빈 프로젝트 switches the dialog to a name form (label + input, native form submit, so Enter while composing Korean
+  does not submit). 만들기 makes a plain top-level folder through `POST /api/folder`, as before E554; 폴더 고르기
+  goes back to the folder browser.
+- Errors show as an alert line in the dialog (Korean, by status and `code`).
 
 ## Not in this change
 
