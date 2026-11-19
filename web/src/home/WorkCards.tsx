@@ -1,6 +1,6 @@
-// Side cards of the card dashboard (#793): 사용량, 브랜치, PR과 머지 and 최근 문서. Each is a compact card with one
+// Side cards of the card dashboard (#793): 사용량, 브랜치, PR과 머지. Each is a compact card with one
 // dense row per item; long lists scroll inside their card so the page keeps one screen (#800). Read-only, metadata only.
-import { ArrowRight, FileText, GitBranch, GitPullRequest } from 'lucide-react';
+import { ArrowRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Meter } from '../dispatch/parts';
 import { pct, until } from '../dispatch/lib/format.ts';
@@ -8,7 +8,6 @@ import { boardHash, plainClick } from '../projectNav';
 import { Card, EmptyState, StatusDot } from './dash';
 import { useUsage } from './homeDashboardData';
 import { relativeTime } from './model';
-import type { RecentFile } from '../api';
 import { BRANCH_STATE, branchRows, prRows } from './dashboardRows';
 import { issuesBlankReason, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
@@ -144,30 +143,6 @@ export function PrsCard({ issues, prs, grow }: { issues: Feed<IssuesAnswer>; prs
               </li>
             );
           })}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-/** The most recently changed documents; a row opens the document. */
-export function RecentDocsCard({ files, onOpen, grow }: { files: readonly RecentFile[]; onOpen: (path: string) => void; grow?: number }) {
-  return (
-    <Card id="recent" grow={grow} scroll title="최근 문서" count={files.length || undefined} flush>
-      {files.length === 0 ? (
-        <EmptyState>아직 문서가 없어요.</EmptyState>
-      ) : (
-        <ul aria-label="최근 문서" className="m-0 list-none divide-y p-0">
-          {files.map((f) => (
-            <li key={f.path} data-doc={f.path}>
-              <button type="button" onClick={() => onOpen(f.path)} className={`${ROW} w-full text-left hover:bg-accent/40 focus-visible:bg-accent focus-visible:outline-none`}>
-                <FileText aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm">{f.title}</span>
-                {f.project && <span className="max-w-[35%] shrink truncate text-muted-foreground">{f.project}</span>}
-                <span className="w-14 shrink-0 text-right text-muted-foreground tabular-nums">{relativeTime(f.modifiedAt)}</span>
-              </button>
-            </li>
-          ))}
         </ul>
       )}
     </Card>

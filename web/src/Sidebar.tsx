@@ -4,7 +4,7 @@
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, GitBranch, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, GitBranch, LayoutGrid, Clock, File, FolderClosed, FolderInput, House, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -308,7 +308,7 @@ export function Sidebar(p: Props) {
     sayTimer.current = setTimeout(() => setSaid(`${item.label}을(를) ${dest.label}(으)로 옮겼어요.`), 500);
   };
   const views = [
-    { id: 'all', label: '대시보드', icon: Files, key: 'A', run: () => p.onSection({ kind: 'all' }) },
+    { id: 'all', label: '대시보드', icon: House, key: 'A', run: () => p.onSection({ kind: 'all' }) },
     { id: 'recent', label: '최근', icon: Clock, key: 'R', run: () => p.onSection({ kind: 'recent' }) },
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
