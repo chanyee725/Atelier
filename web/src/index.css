@@ -727,9 +727,9 @@ body {
 .plan-arrow[data-done] path { fill: var(--step-done); }
 .plan-node { position: absolute; }
 .plan-node-box {
-  display: flex; flex-direction: column; justify-content: center; gap: 4px; block-size: 100%; padding: 8px 12px;
-  border: 1px solid color-mix(in oklch, var(--tone) 55%, var(--border)); border-radius: var(--radius);
-  background: color-mix(in oklch, var(--tone) 8%, var(--card)); color: var(--card-foreground);
+  position: relative; display: flex; flex-direction: column; justify-content: center; gap: 4px; block-size: 100%; padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--tone) 55%, var(--border)); border-radius: var(--radius);
+  background: color-mix(in srgb, var(--tone) 8%, var(--card)); color: var(--card-foreground);
 }
 .plan-node[data-tone='pending'] .plan-node-box { border-style: dashed; background: var(--card); }
 .plan-node:is([data-tone='active'], [data-tone='failed'], [data-tone='blocked']) .plan-node-box { border-width: 2px; border-color: var(--tone); }
@@ -743,12 +743,17 @@ body {
   border: 2px solid var(--background); color: var(--background); font: 600 10px/1 var(--font-sans); cursor: default;
 }
 .plan-badge-more { background: var(--muted); color: var(--foreground); font-size: 9px; }
+/* A running step: a ring outside the box pulses (the text never fades); still and thicker with reduced motion. */
+.plan-node-box.is-live::after {
+  content: ''; position: absolute; inset: -5px; border: 2px solid var(--tone); border-radius: calc(var(--radius) + 4px);
+  opacity: 0.35; pointer-events: none;
+}
 @media (prefers-reduced-motion: no-preference) {
-  .plan-node-box.is-live { animation: run-pulse 0.8s ease-in-out infinite alternate; }
+  .plan-node-box.is-live::after { animation: run-pulse 0.8s ease-in-out infinite alternate; }
 }
 @media (forced-colors: active) {
   .plan-node-box { border-color: CanvasText; background: Canvas; }
-  .plan-node-box.is-live { border-color: Highlight; }
+  .plan-node-box.is-live, .plan-node-box.is-live::after { border-color: Highlight; }
   .plan-edge { stroke: CanvasText; }
   .plan-arrow path { fill: CanvasText; }
   .plan-badge { background: Canvas !important; color: CanvasText; border-color: CanvasText; }
