@@ -93,7 +93,7 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     // /dispatch is an old address now: the shell's 세션 보드 takes over (#731).
     await page.goto(`${BASE}/dispatch`);
     await page.waitForURL(`${BASE}/#board`);
-    const board = page.locator('[data-board]');
+    const board = page.locator('[data-session-board]');
     const scope = board.getByLabel('프로젝트');
     const rows = board.locator('button[data-session]');
     const tabs = board.getByRole('navigation', { name: '세션 보드 화면' });
@@ -137,7 +137,7 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     await page.locator(`[data-row="${a1}"]`).waitFor();
     await page.locator('[data-nav="all"]').click();
     await page.waitForFunction(() => !location.hash.startsWith('#board'));
-    assert.equal(await page.locator('[data-board]').count(), 0);
+    assert.equal(await page.locator('[data-session-board]').count(), 0);
     await page.goBack();
     await page.locator(`[data-row="${a1}"]`).waitFor();
 

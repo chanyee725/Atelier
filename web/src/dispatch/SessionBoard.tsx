@@ -130,7 +130,7 @@ export default function SessionBoard(p: BoardProps) {
   const offline = ready && !online && !unavailable;
   return (
     <ScopeProvider value={ctx}>
-      <div data-board className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
+      <div data-session-board className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <BoardHeader
           tab={p.tab}
           scope={scope}
@@ -454,6 +454,7 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
     <button
       type="button"
       data-session={s.id}
+      data-session-live={s.id}
       aria-expanded={expanded}
       onClick={(e) => onOpen(s.id, e.currentTarget)}
       title={parent ? `${parent.name}이(가) 만든 세션` : undefined}
