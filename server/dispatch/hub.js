@@ -617,7 +617,7 @@ export class Hub extends EventEmitter {
   async applyProfile({ mode: _m, profileNote: _n, ...it }, mode) {
     if (!MODE_IDS.includes(mode)) return it;
     if (it.model || !this.resolveProfile) return { ...it, mode };
-    const p = await this.resolveProfile(mode, it.role);
+    const p = await this.resolveProfile(mode, it.role, { perm: it.perm });
     if (!p) return { ...it, mode };
     return { ...it, mode, model: p.model, effort: it.effort || p.effort || undefined, perm: it.perm || p.perm, ...(p.note && { profileNote: p.note }) };
   }

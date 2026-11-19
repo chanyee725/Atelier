@@ -173,12 +173,12 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
       return out;
     },
     /** What team creation calls (PR2): the profile for `role` in `mode`, with a fallback note. */
-    async resolve(mode, role) {
-      return resolveProfile({ mode, role, stored: await storedProfiles(), models, isConnected, roleModel: teamSettings(store).roleModels[role] });
+    async resolve(mode, role, { perm } = {}) {
+      return resolveProfile({ mode, role, stored: await storedProfiles(), models, isConnected, roleModel: teamSettings(store).roleModels[role], perm });
     },
   };
 
-  hub.resolveProfile = (mode, role) => modeProfiles.resolve(mode, role);
+  hub.resolveProfile = (mode, role, opts) => modeProfiles.resolve(mode, role, opts);
 
   const d = {
     modeProfiles,

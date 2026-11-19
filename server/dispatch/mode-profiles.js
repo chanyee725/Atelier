@@ -179,10 +179,11 @@ const why = (choice, isConnected, models) => {
  *
  * @param {{ mode?: string, role: string, stored?: object, models: object[], isConnected: (provider: string) => boolean, roleModel?: string }} o
  *   roleModel: the role's model from 설정 (roleModels), used before the built-in preset as the last resort.
+ *   perm: a permission mode the caller already chose (plan step or item); choices whose provider cannot run it are skipped.
  * @returns {{ mode, role, provider, model, effort, perm, source: "user"|"default"|"preset", note: string|null } | null}
  *   null when nothing usable is connected at all.
  */
-export function resolveProfile({ mode, role, stored = {}, models, isConnected, roleModel }) {
+export function resolveProfile({ mode, role, stored = {}, models, isConnected, roleModel, perm: askedPerm }) {
   const m = MODE_IDS.includes(mode) ? mode : DEFAULT_MODE;
   const preset = ROLES.find(r => r.id === role);
   if (!preset) return null;
@@ -201,9 +202,10 @@ export function resolveProfile({ mode, role, stored = {}, models, isConnected, r
     const reason = why(c, isConnected, models);
     if (reason) { skipped.push(reason); continue; }
     const model = c.model ?? models.find(x => x.provider === c.provider).id;
-    if (avoid && model === avoid) { crossSkipped ??=  { ...c, model }; continue; }
-    let perm = c.perm;
+    // A perm the caller asked for (a plan step's or item's own) wins; a provider that cannot run it is skipped.
+    const perm = askedPerm || c.perm;
     try { checkPerm(c.provider, perm); } catch { skipped.push(`${PROVIDER_NAMES[c.provider]}는 ${perm} 모드를 쓸 수 없음`); continue; }
+    if (avoid && model === avoid) { crossSkipped ??= { ...c, model, perm }; continue; }
     let effort = c.effort ?? null;
     try { checkEffort(models.find(x => x.id === model), effort); } catch { effort = null; }
     return { mode: m, role, provider: c.provider, model, effort, perm, source: c.source, note: skipped.length ? `대신 ${model}: ${[...new Set(skipped)].join(", ")}` : null };
