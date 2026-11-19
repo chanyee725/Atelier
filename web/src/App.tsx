@@ -14,7 +14,7 @@ import { ActivityAlerts } from './activity/ActivityAlerts';
 import { AgentLiveHost } from './live/AgentLivePanel';
 import { notifyApp } from './activity/appToasts';
 import type { EntryKind } from './activity/appEvents';
-import { asTreeNode, docPlace, newFileDir, paletteScope, shellKey, subFolderOf, type Crumb, type Section } from './projectNav';
+import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHash, shellKey, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
 import type { Editor } from '@tiptap/core';
@@ -34,6 +34,8 @@ import type { CursorEvent, CursorStatusEvent } from './canvas/agentCursor';
 import type { RunEvent } from './run/runModel';
 // The run view (E22) loads when it is first shown.
 const RunView = lazy(() => import('./run/RunView'));
+// The 세션 보드 (#731) loads only when opened, so the editor bundle does not carry the Dispatch screens.
+const SessionBoard = lazy(() => import('./dispatch/SessionBoard'));
 // TipTap and the diagram renderer are big; they load when a file is first opened.
 const DocPane = lazy(() => import('./DocPane').then((m) => ({ default: m.DocPane })));
 import { CanvasPane } from './CanvasPane';
@@ -70,11 +72,22 @@ const entryKind = (n: TreeNode): EntryKind => (n.type === 'file' ? 'doc' : n.pat
 
 // The open file lives in the URL hash so a reload reopens it. Only the workspace-relative path is kept, plus the
 // open agent live view (`&agent=<sid>`, web/src/live/store.ts), which survives a file change.
+// Leaving the 세션 보드 adds a history entry, so 뒤로 goes back to the board (#731).
 const setHashPath = (p: string | null) => {
   const sid = agentFromHash(window.location.hash);
   const url = `${window.location.pathname}${window.location.search}${withAgent(p ? `#file=${encodeURIComponent(p)}` : '', sid)}`;
-  window.history.replaceState({ drawing: 1 }, '', url);
+  if (parseBoardHash(window.location.hash)) window.history.pushState({ drawing: 1 }, '', url);
+  else window.history.replaceState({ drawing: 1 }, '', url);
 };
+// The 세션 보드's address: a new history entry when it changes, so back/forward walk the board's tabs and scope.
+const setBoardHash = (b: BoardSection, replace = false) => {
+  const url = `${window.location.pathname}${window.location.search}${withAgent(boardHash(b), agentFromHash(window.location.hash))}`;
+  if (`${window.location.pathname}${window.location.search}${window.location.hash}` === url) return;
+  if (replace) window.history.replaceState({ drawing: 1 }, '', url);
+  else window.history.pushState({ drawing: 1 }, '', url);
+};
+/** The board route of the address this page opened with, if any. */
+const initialBoard = () => parseBoardHash(window.location.hash);
 // A link followed in this tab was cancelled or failed: the browser already added a history entry for it.
 // Step back over that entry (state is null on entries the browser made) so history has no duplicate of the open file.
 const undoLinkEntry = (current: string | null) => {
@@ -214,7 +227,14 @@ export function App() {
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [projects, setProjects] = useState<ProjectsView | null>(null);
   // What the main panel shows; opening a file switches to the document screen.
-  const [section, setSection] = useState<Section>({ kind: 'all' });
+  const [section, setSection] = useState<Section>(() => {
+    const b = initialBoard();
+    return b ? { kind: 'board', tab: b.tab, folder: b.folder } : { kind: 'all' };
+  });
+  // 상시 화면 / 설정 asked for by a board address (old /dispatch#tv, #settings); the board handles it once.
+  const [boardExtra, setBoardExtra] = useState<BoardExtra | null>(() => initialBoard()?.extra ?? null);
+  // A session to open on the board, from a toast (`n` makes each request new).
+  const [boardOpen, setBoardOpen] = useState<{ id: string; n: number } | null>(null);
   const [wideView, setView] = useState<View>('both');
   // Below md only one pane fits: the split view falls back to the document (design doc 6 §6).
   const baseView = shownView(wideView, narrow);
@@ -318,12 +338,24 @@ export function App() {
   // A heading link pasted into the address bar of this tab (only the hash changes, so the page does not reload).
   useEffect(() => {
     const onHash = () => {
+      // Back/forward into or within the 세션 보드 (#731).
+      const board = parseBoardHash(window.location.hash);
+      if (board) {
+        setSection({ kind: 'board', tab: board.tab, folder: board.folder });
+        if (board.extra) setBoardExtra(board.extra);
+        return;
+      }
       const link = parseHash(window.location.hash);
-      if (!link) return;
+      if (!link) {
+        // Back from the board to an entry without a file: the dashboard.
+        setSection((s) => (s.kind === 'board' ? { kind: 'all' } : s));
+        return;
+      }
       // Drop `&h=` (same file) or restore the open file's hash (cancelled or failed open), so the
       // address bar always names the open file and following the same link again fires `hashchange`.
       const current = session.getState().path;
       if (link.path === current) {
+        setSection({ kind: 'doc' });
         setHashPath(current);
         return jumpTo(link.heading);
       }
@@ -833,11 +865,40 @@ export function App() {
     (s: Section) => {
       setSection(s);
       // The file stays loaded (its edits are already in the session); the address no longer names it.
-      setHashPath(null);
+      if (s.kind === 'board') setBoardHash(s);
+      else setHashPath(null);
       if (narrow) setNavOpen(false);
     },
     [narrow],
   );
+  // A toast's session request is for the board shown now; leaving the board drops it so coming back does not reopen it.
+  useEffect(() => {
+    if (section.kind !== 'board') setBoardOpen(null);
+  }, [section.kind]);
+  const showBoard = useCallback((folder?: string | null) => showSection({ kind: 'board', tab: 'sessions', folder }), [showSection]);
+  // 세션 열기 on a toast: the board opens (keeping its tab and scope when it is already shown) with that session.
+  const openBoardSession = useCallback(
+    (id: string) => {
+      setSection((s) => {
+        const b: BoardSection = s.kind === 'board' ? s : { kind: 'board', tab: 'sessions' };
+        setBoardHash(b);
+        return b;
+      });
+      setBoardOpen({ id, n: Date.now() });
+      if (narrow) setNavOpen(false);
+    },
+    [narrow],
+  );
+  // The board's own header (tabs, scope) moves within the board.
+  const routeBoard = useCallback((tab: BoardSection['tab'], folder: string | null | undefined) => showSection({ kind: 'board', tab, folder }), [showSection]);
+  const extraDone = useCallback(() => {
+    setBoardExtra(null);
+    // Drop `#board=tv` / `=settings` from the address so a reload does not open it again.
+    setSection((s) => {
+      if (s.kind === 'board') setBoardHash(s, true);
+      return s;
+    });
+  }, []);
   const openCrumb = (c: Crumb) => (c.kind === 'project' ? showSection({ kind: 'project', path: c.path }) : void open(c.path));
 
   // Shell shortcuts (doc 6 §5): A 홈, R 최근, B 보관함, N 새 파일. Never inside a text field,
@@ -851,12 +912,13 @@ export function App() {
       e.preventDefault();
       if (k === 'all') showSection({ kind: 'all' });
       else if (k === 'recent') showSection({ kind: 'recent' });
+      else if (k === 'board') showBoard();
       else if (k === 'archive') setTrashOpen(true);
       else if (k === 'new') void newFileRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [showSection]);
+  }, [showSection, showBoard]);
 
   // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise.
   useEffect(() => {
@@ -904,7 +966,7 @@ export function App() {
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
-        <ActivityAlerts onOpen={openFile} onSession={() => window.location.assign('/dispatch')} />
+        <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
@@ -930,7 +992,13 @@ export function App() {
               </button>
             </Alert>
           )}
-          {!docScreen ? (
+          {section.kind === 'board' ? (
+            <LazyBoundary>
+              <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>}>
+                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} />
+              </Suspense>
+            </LazyBoundary>
+          ) : !docScreen ? (
             <Home
               narrow={narrow}
               project={homeProject}
@@ -938,6 +1006,7 @@ export function App() {
               onProject={goProject}
               onOpen={openFile}
               onCreate={(k, project) => void newFile(project, k)}
+              onBoard={showBoard}
               // The projects view has the document's sub-documents, so the confirm can say they go too.
               onDelete={(p, t) => void remove(docPlace(projects, p).node ?? { type: 'doc', name: p.split('/').pop() ?? p, path: p, title: t, revision: null, created: null, modified: null, count: 0, children: [] })}
             />

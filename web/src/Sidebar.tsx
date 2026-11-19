@@ -59,8 +59,6 @@ type Props = {
   systemTheme: Theme;
 };
 
-/** Session board URL, scoped to `folder` when given (same hash the project dashboard's link uses). */
-const boardHref = (folder: string | null) => (folder ? `/dispatch#folder=${encodeURIComponent(folder)}` : '/dispatch');
 
 /** The project in view: the picked project section, or the project holding the open document. */
 const boardFolder = (p: Pick<Props, 'section' | 'view' | 'current'>) => (p.section.kind === 'project' ? p.section.path : (projectOf(p.view, p.current)?.path ?? null));
@@ -357,7 +355,7 @@ export function Sidebar(p: Props) {
         <SidebarMenu>
           {views.map((v) => (
             <SidebarMenuItem key={v.id}>
-              <SidebarMenuButton aria-current={p.section.kind === v.id ? 'page' : undefined} onClick={v.run} className="group/row">
+              <SidebarMenuButton aria-current={p.section.kind === v.id ? 'page' : undefined} onClick={v.run} data-nav={v.id} className="group/row">
                 <v.icon aria-hidden />
                 <span className="truncate">{v.label}</span>
                 <Kbd className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">{v.key}</Kbd>
@@ -365,12 +363,16 @@ export function Sidebar(p: Props) {
             </SidebarMenuItem>
           ))}
           <SidebarMenuItem>
-            {/* The board is its own page (/dispatch, #699): it opens scoped to the project in view, else all projects. */}
-            <SidebarMenuButton asChild>
-              <a href={boardHref(boardFolder(p))} data-nav="board">
-                <LayoutGrid aria-hidden />
-                <span className="truncate">세션 보드</span>
-              </a>
+            {/* The board is a section of the shell (#731): it opens scoped to the project in view, else all projects. */}
+            <SidebarMenuButton
+              aria-current={p.section.kind === 'board' ? 'page' : undefined}
+              onClick={() => p.onSection(p.section.kind === 'board' ? p.section : { kind: 'board', tab: 'sessions', folder: boardFolder(p) ?? undefined })}
+              data-nav="board"
+              className="group/row"
+            >
+              <LayoutGrid aria-hidden />
+              <span className="truncate">세션 보드</span>
+              <Kbd className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">S</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

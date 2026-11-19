@@ -1,6 +1,6 @@
-// Headless check of the project views (E505d, #484): the 세션 board lists the workspace's projects with open-session
-// counts, picking one (or opening #folder=) shows only its sessions, usage labels what is account-wide, and a project
-// home has a 세션 tab with its sessions and a link to the filtered board.
+// Headless check of the project views (E505d, #484; in the shell since #731): the 세션 보드 offers the workspace's
+// projects as its scope, picking one (or an old /dispatch#folder= link) shows only its sessions, usage labels what is
+// account-wide, back/forward walk the board, and a project home has a 세션 tab linking to the scoped board in the shell.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH of fake agent CLIs; it refuses to go on unless its log names its port and workspace.
 import { test } from 'node:test';
@@ -90,85 +90,78 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     const errors = [];
     page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
     page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
+    // /dispatch is an old address now: the shell's 세션 보드 takes over (#731).
     await page.goto(`${BASE}/dispatch`);
-    const rail = page.getByRole('navigation', { name: '프로젝트' });
-    const cards = page.locator('main button[class*="rounded-lg"]');
+    await page.waitForURL(`${BASE}/#board`);
+    const board = page.locator('[data-session-board]');
+    const scope = board.getByLabel('프로젝트');
+    const rows = board.locator('button[data-session]');
+    const tabs = board.getByRole('navigation', { name: '세션 보드 화면' });
 
-    at('rail lists 전체, projects and 미분류');
-    await rail.getByRole('link', { name: /알파/ }).waitFor();
-    assert.deepEqual(await rail.getByRole('link').evaluateAll((els) => els.map((e) => e.querySelector('span').textContent)), ['전체', '베타', '알파', '미분류']);
-    assert.equal(await rail.getByRole('link', { name: /전체/ }).getAttribute('aria-current'), 'page');
-    await page.getByText(a1, { exact: true }).waitFor();
-    await page.getByText(b1, { exact: true }).waitFor();
-    await page.getByText(u1, { exact: true }).waitFor();
+    at('board lists 전체, projects and 미분류');
+    await rows.filter({ hasText: a1 }).waitFor();
+    assert.equal(await page.locator('[data-nav="board"]').getAttribute('aria-current'), 'page');
+    const options = await scope.locator('option').allTextContents();
+    assert.equal(options[0], '전체 프로젝트');
+    assert.equal(options.at(-1), '미분류');
+    assert.ok(options.includes('알파') && options.includes('베타'), options.join());
+    await rows.filter({ hasText: b1 }).waitFor();
+    await rows.filter({ hasText: u1 }).waitFor();
     // The model tag names the provider by its display name, not the raw id (#521).
-    const tag = cards.filter({ hasText: a1 }).locator('[data-provider]');
+    const tag = rows.filter({ hasText: a1 }).locator('[data-provider]');
     assert.equal(await tag.getAttribute('data-provider'), 'claude');
     assert.equal(await tag.innerText(), 'Claude');
 
     at('pick a project');
-    await rail.getByRole('link', { name: /알파/ }).click();
-    await page.waitForFunction(() => location.hash.startsWith('#folder='));
-    await page.getByText(a2, { exact: true }).waitFor();
-    assert.equal(await page.getByText(b1, { exact: true }).count(), 0);
-    assert.equal(await page.getByText(u1, { exact: true }).count(), 0);
-    assert.equal(await rail.getByRole('link', { name: /알파/ }).getAttribute('aria-current'), 'page');
+    await scope.selectOption(alpha);
+    await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
+    await rows.filter({ hasText: a2 }).waitFor();
+    assert.equal(await rows.filter({ hasText: b1 }).count(), 0);
+    assert.equal(await rows.filter({ hasText: u1 }).count(), 0);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-board.png') });
 
-    at('forced colours: a focused rail item keeps a visible outline (#524)');
-    await page.emulateMedia({ forcedColors: 'active' });
-    const outline = (name) => rail.getByRole('link', { name }).evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return { style: cs.outlineStyle, width: cs.outlineWidth, color: cs.outlineColor, offset: cs.outlineOffset };
-    });
-    const picked = await outline(/알파/);
-    assert.equal(picked.style, 'solid', 'the picked item keeps its Highlight outline');
-    await page.keyboard.press('Shift'); // keyboard modality, so programmatic focus matches :focus-visible
-    for (const name of [/베타/, /알파/]) {
-      await rail.getByRole('link', { name }).focus();
-      const o = await outline(name);
-      assert.equal(o.style, 'solid', `${name} shows a focus outline`);
-      assert.equal(o.width, '2px');
-      assert.equal(o.offset, '1px', 'focus sits outside the item, unlike the inset selected outline');
-    }
-    await page.emulateMedia({ forcedColors: 'none' });
-    await page.locator('body').focus();
-
     at('timeline and usage keep the project');
-    await page.getByRole('navigation', { name: '세션 화면' }).getByRole('link', { name: '타임라인' }).click();
+    await tabs.getByRole('link', { name: '타임라인' }).click();
     await page.locator(`[data-row="${a1}"]`).waitFor();
     assert.equal(await page.locator(`[data-row="${b1}"]`).count(), 0);
-    assert.match(await page.evaluate(() => location.hash), /^#timeline&folder=/);
-    await page.getByRole('navigation', { name: '세션 화면' }).getByRole('link', { name: '사용량' }).click();
+    assert.match(await page.evaluate(() => location.hash), /^#board=timeline&folder=/);
+    assert.equal(await tabs.getByRole('link', { name: '타임라인' }).getAttribute('aria-current'), 'page');
+    await tabs.getByRole('link', { name: '사용량' }).click();
     await page.getByRole('heading', { name: '알파 사용량' }).waitFor();
     await page.getByRole('heading', { name: /한도 · 계정 전체/ }).waitFor();
     await page.getByText('이 프로젝트의 세션만').waitFor();
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-usage.png') });
 
-    at('미분류 and a link with #folder=');
-    await page.goto(`${BASE}/dispatch#folder=`);
-    await page.getByText(u1, { exact: true }).waitFor();
-    assert.equal(await page.getByText(a1, { exact: true }).count(), 0);
-    await page.goto(`${BASE}/dispatch#folder=${encodeURIComponent(beta)}`);
-    await page.getByText(b1, { exact: true }).waitFor();
-    assert.equal(await page.getByText(a1, { exact: true }).count(), 0);
+    at('back walks the board, then leaves it');
     await page.goBack();
-    await page.getByText(u1, { exact: true }).waitFor();
+    await page.locator(`[data-row="${a1}"]`).waitFor();
+    await page.locator('[data-nav="all"]').click();
+    await page.waitForFunction(() => !location.hash.startsWith('#board'));
+    assert.equal(await page.locator('[data-session-board]').count(), 0);
+    await page.goBack();
+    await page.locator(`[data-row="${a1}"]`).waitFor();
 
-    at('project list fails: 미분류 does not file every session (#522)');
-    await page.route('**/api/workspace/projects', (r) => r.fulfill({ status: 500, body: '{}' }));
+    at('old links: #folder= (미분류) and #folder=<path> open the board');
     await page.goto(`${BASE}/dispatch#folder=`);
+    await page.waitForURL(`${BASE}/#board&folder=`);
+    await rows.filter({ hasText: u1 }).waitFor();
+    assert.equal(await rows.filter({ hasText: a1 }).count(), 0);
+    await page.goto(`${BASE}/dispatch#folder=${encodeURIComponent(beta)}`);
+    await rows.filter({ hasText: b1 }).waitFor();
+    assert.equal(await rows.filter({ hasText: a1 }).count(), 0);
+
+    at('project list fails: a notice, sessions grouped by folder name');
+    await page.route('**/api/workspace/projects', (r) => r.fulfill({ status: 500, body: '{}' }));
+    await page.goto(`${BASE}/#board`);
     await page.reload(); // a hash-only goto keeps the loaded page
-    await page.getByText('프로젝트 목록이 없어서 미분류를 가려낼 수 없어요.').waitFor();
-    assert.equal(await page.getByText(u1, { exact: true }).count(), 0);
-    assert.equal(await page.getByText(a1, { exact: true }).count(), 0);
+    await page.getByText('프로젝트 목록을 불러오지 못했어요.', { exact: false }).waitFor();
     await page.unroute('**/api/workspace/projects');
 
     at('project usage fails, then 다시 불러오기 (#522)');
     let failUsage = true;
     await page.route(/\/api\/usage\?folder=/, (r) => (failUsage ? r.fulfill({ status: 500, body: '{}' }) : r.continue()));
     await page.goto(`${BASE}/dispatch#usage&folder=${encodeURIComponent(alpha)}`);
-    await page.reload();
+    await page.waitForURL(/#board=usage&folder=/);
     const panel = page.getByRole('region', { name: '알파 사용량' });
     await panel.getByText('프로젝트 사용량을 불러오지 못했어요.').waitFor();
     failUsage = false;
@@ -177,17 +170,26 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     assert.equal(await panel.getByText('프로젝트 사용량을 불러오지 못했어요.').count(), 0);
     await page.unroute(/\/api\/usage\?folder=/);
 
-    at('narrow screen: rail becomes a row');
-    await page.setViewportSize({ width: 480, height: 800 });
-    await page.goto(`${BASE}/dispatch`);
-    await rail.getByRole('link', { name: /알파/ }).waitFor();
-    const [a, b] = await rail.getByRole('link').evaluateAll((els) => els.slice(0, 2).map((e) => e.getBoundingClientRect().top));
-    assert.equal(a, b, 'rail entries sit on one row');
+    at('phone: the board fits without sideways scrolling');
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.goto(`${BASE}/#board`);
+    await page.reload();
+    await rows.filter({ hasText: a1 }).waitFor();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'no horizontal overflow');
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-narrow.png') });
 
-    at('project home 세션 tab');
+    at('shortcut S opens the board from the dashboard');
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`${BASE}/`);
+    await page.reload();
+    await page.getByText('알파').first().waitFor();
+    await page.keyboard.press('s');
+    await page.waitForFunction(() => location.hash === '#board');
+    await rows.filter({ hasText: a1 }).waitFor();
+
+    at('project home 세션 tab links to the board in the shell');
+    await page.goto(`${BASE}/`);
+    await page.reload();
     await page.getByText('알파').first().waitFor();
     await page.getByRole('link', { name: /알파/ }).first().click().catch(async () => { await page.getByText('알파').first().click(); });
     await page.getByRole('tab', { name: '세션' }).click();
@@ -195,8 +197,13 @@ test('세션 board and project home follow the project', { skip: !ON && 'set DRA
     assert.equal(await page.getByRole('region', { name: '세션' }).getByText(b1, { exact: true }).count(), 0);
     await page.getByRole('region', { name: '실행 기록' }).getByText('아직 없어요', { exact: false }).waitFor();
     const link = page.getByRole('link', { name: /세션 보드에서 보기/ });
-    assert.equal(await link.getAttribute('href'), `/dispatch#folder=${encodeURIComponent(alpha)}`);
+    assert.equal(await link.getAttribute('href'), `/#board&folder=${encodeURIComponent(alpha)}`);
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e505d-home.png') });
+    await link.click();
+    await page.waitForFunction(() => location.hash.startsWith('#board&folder='));
+    assert.equal(await scope.inputValue(), alpha);
+    await rows.filter({ hasText: a1 }).waitFor();
+    assert.equal(await rows.filter({ hasText: b1 }).count(), 0);
     assert.deepEqual(errors, []);
   } catch (e) {
     const shot = join(tmpdir(), `dispatch-projects-fail-${Date.now()}.png`);

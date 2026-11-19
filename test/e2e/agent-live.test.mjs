@@ -84,7 +84,7 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   await page.goto(`${BASE}/dispatch`);
   const open = page.locator(`[data-session-live="${s.id}"]`);
   await open.waitFor({ timeout: 15_000 });
-  assert.equal(await open.getAttribute('aria-label'), '진행상황 보기');
+  // The board row is the trigger itself (#731): its accessible name is the session's own text.
   const panel = page.locator(`dialog[data-agent-live="${s.id}"]`);
   const isOpen = () => panel.evaluate((el) => el.matches(':popover-open')).catch(() => false);
 
@@ -109,7 +109,7 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   await panel.getByRole('button', { name: '닫기' }).first().click();
   await page.waitForFunction((id) => !document.querySelector(`dialog[data-agent-live="${id}"]:popover-open`), s.id);
   assert.equal(await open.getAttribute('aria-expanded'), 'false');
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-session-live')), s.id, 'focus back on the trigger');
+  await page.waitForFunction((id) => document.activeElement?.getAttribute('data-session-live') === id, s.id, { timeout: 3000 }); // focus returns in the next frame
 
   // 3. Esc closes it (pressed once focus has moved into the panel: Esc is handled there).
   await open.click();
