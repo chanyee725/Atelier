@@ -19,6 +19,8 @@ export interface ActivityEvent {
   name: string;
   /** Role id (`impl`, `lead`, ...). */
   role: string;
+  /** Provider id (`claude`, `openai`, `gemini`) of the session, when known: the 알림함 shows its mark (#811). */
+  provider?: string;
   /** Cursor colour `#rrggbb`, when the session has one. */
   color?: string;
   /** Workspace-relative path of the file. */
