@@ -219,7 +219,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
                 {pending === 'key' && <Loader2 aria-hidden className="connect-spin size-3.5" />}키로 연결
               </button>
             </div>
-            <p className="text-xs text-muted-foreground">키는 {meta.cliName}에만 넘기고 Drawing에는 남기지 않아요.</p>
+            <p className="text-xs text-muted-foreground">키는 {meta.cliName}에만 넘기고 Atelier에는 남기지 않아요.</p>
           </form>
         ) : (
           <button

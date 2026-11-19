@@ -1,5 +1,5 @@
 // /dispatch in project mode (no workspace, server/app.js sends every editor URL here): the same 세션 보드 the
-// Drawing shell shows (#731), without the sidebar since there is no workspace to list. The address uses the shell's
+// Atelier shell shows (#731), without the sidebar since there is no workspace to list. The address uses the shell's
 // `#board…` hashes; old `/dispatch#usage`, `#folder=`, `#tv`, `#settings` links still work. In drawing mode main.tsx
 // sends /dispatch to `/#board…` instead, so this file is only the project-mode wrapper.
 // Loaded lazily from main.tsx so the editor bundle does not carry it.

@@ -316,7 +316,7 @@ async function startServer(ws, home) {
   const code = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve('timeout'), 10_000);
     child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
-    child.stdout.on('data', () => { if (out.includes('Drawing: http://')) { clearTimeout(timer); resolve(null); } });
+    child.stdout.on('data', () => { if (out.includes('Atelier: http://')) { clearTimeout(timer); resolve(null); } });
   });
   const stop = async () => {
     if (child.exitCode !== null) return;
@@ -346,7 +346,7 @@ test('real server: a second server on the same workspace refuses; a second works
     const b = await startServer(ws, home);
     servers.push(b);
     assert.equal(b.code, 1);
-    assert.match(b.output(), new RegExp(`Another Drawing server is already running for this workspace: http://127.0.0.1:${a.port}/`));
+    assert.match(b.output(), new RegExp(`Another Atelier server is already running for this workspace: http://127.0.0.1:${a.port}/`));
 
     const c = await startServer(docs, home);
     servers.push(c);
@@ -358,7 +358,7 @@ test('real server: a second server on the same workspace refuses; a second works
     assert.match(status.message, /다른 Drawing 서버/);
     assert.equal((await fetch(`${c.base}/api/state`)).status, 404);
     assert.equal((await fetch(`${c.base}/api/tree`)).status, 200, 'drawing still works');
-    const extra = c.output().split('\n').filter((l) => !l.startsWith('Drawing: '));
+    const extra = c.output().split('\n').filter((l) => !l.startsWith('Atelier: '));
     assert.ok(!extra.some((l) => l.includes(root)), 'no project path in the log besides the workspace line');
 
     // Stopping the first server frees both locks.

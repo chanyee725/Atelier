@@ -1,6 +1,6 @@
 # Third-party notices
 
-Drawing bundles small parts of the following projects. Only the icons listed in
+Atelier bundles small parts of the following projects. Only the icons listed in
 `scripts/build-icons.mjs` are copied, as SVG path data, into `shared/render/icon-data.ts`.
 
 ## Lucide (`lucide-static`)
@@ -97,7 +97,7 @@ SOFTWARE.
 ## UI font
 
 Pretendard 1.3.9 (`pretendard` npm package, https://github.com/orioncactus/pretendard) is bundled with the app. The app
-itself fetches no font from outside: every font file is a local build asset served by the Drawing server.
+itself fetches no font from outside: every font file is a local build asset served by the Atelier server.
 
 - Copyright (c) 2021-2023, Kil Hyung-jin (https://github.com/orioncactus/pretendard), with Reserved Font Name 'Pretendard'.
   (The license file says 2021; the font files' copyright record says 2023.)

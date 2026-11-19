@@ -1,11 +1,11 @@
 # CLAUDE.md
 
-Drawing: a local, internal-only diagramming tool that works and looks like Eraser.io (document + infinite canvas per file, Eraser-compatible diagram-as-code, free-form drawing), and runs agent pipelines planned in those documents (merged from Dispatch, issue #87; design in docs/design/dispatch-integration.md). Work items are in `docs/tickets.md`; the spec is `docs/research/eraser/` (start with `00-summary.md`). The old draw.io live viewer is retired.
+Atelier: a local, internal-only diagramming tool that works and looks like Eraser.io (document + infinite canvas per file, Eraser-compatible diagram-as-code, free-form drawing), and runs agent pipelines planned in those documents (merged from Dispatch, issue #87; design in docs/design/dispatch-integration.md). Work items are in `docs/tickets.md`; the spec is `docs/research/eraser/` (start with `00-summary.md`). The old draw.io live viewer is retired.
 
 ## Rules
 
 - Talk to the user in Korean. Code, comments, identifiers, commit messages and this file in English. `README.md` in Korean. UI copy in Korean 해요체, short and plain.
-- Git: `develop` is the integration branch (GitHub `chanyee725/Drawing`). Never use `main`.
+- Git: `develop` is the integration branch (GitHub `chanyee725/Atelier`). Never use `main`.
 - GitHub flow, every step leaves a trace: one issue per ticket or bug (`gh issue create`, title `E<n>: ...`), branch off `develop` (`feat/`, `fix/`, `docs/`, `chore/`), push the branch, open a PR against `develop` with `Closes #<issue>` and what was checked, review findings as PR comments, then `gh pr merge --merge`. Pushing feature branches and merging reviewed PRs into `develop` is allowed; force-push, deleting remote branches and pushing to `main` are not.
 - Commits: English conventional commits, `type(scope): summary`.
 - The server binds to 127.0.0.1 only and its own code makes no outbound network requests (loopback only); everything (fonts, Excalidraw assets, icons) is bundled or vendored. It writes only inside the workspace folder (run records under <workspace>/.drawing/), the git project that holds it (<project>/.dispatch/ and session worktrees), and ~/.dispatch/ (shared usage limits). To add a project, it may list sub-folder names (never files, file contents or hidden entries, never following symlinks) of folders on the server machine, and a project may record a linked local folder path in its `.project.json` inside the workspace; it never writes into the linked folder.
