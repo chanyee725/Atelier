@@ -409,7 +409,7 @@ function Group({
             type="button"
             aria-expanded={!collapsed}
             aria-controls={body}
-            aria-label={`${g.label} ${collapsed ? '펼치기' : '접기'}`}
+            aria-label={`${g.label} 세션`}
             onClick={() => setCollapsed((c) => !c)}
             className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:size-9"
           >
