@@ -944,7 +944,7 @@ export function App() {
   );
 
   // The 알림함 sits at the right end of whichever top bar is on screen (#786).
-  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} />;
+  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} onSession={openBoardSession} />;
   return (
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
