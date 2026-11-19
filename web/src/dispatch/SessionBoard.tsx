@@ -150,11 +150,12 @@ export default function SessionBoard(p: BoardProps) {
         />
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
-          {listState === 'failed' && !unavailable && ready && (
-            <p role="status" className="m-0 border-b px-6 py-2 text-sm text-muted-foreground max-md:px-4">
-              프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.
-            </p>
-          )}
+          {/* The live region stays mounted so the notice is read when it appears. */}
+          <div role="status">
+            {listState === 'failed' && !unavailable && ready && (
+              <p className="m-0 border-b px-6 py-2 text-sm text-muted-foreground max-md:px-4">프로젝트 목록을 불러오지 못했어요. 작업 폴더 이름으로 묶어서 보여 줘요.</p>
+            )}
+          </div>
           {unavailable ? (
             <OffNote status={offStatus} className="m-6" />
           ) : !ready ? (
@@ -307,7 +308,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
 
 function Skeleton() {
   return (
-    <div aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-6 max-md:p-4">
+    <div role="status" aria-busy="true" aria-label="불러오는 중이에요" className="flex flex-col gap-6 p-6 max-md:p-4">
       {[0, 1].map((g) => (
         <div key={g} className="flex flex-col gap-2">
           <div className="h-4 w-32 rounded bg-muted motion-safe:animate-pulse" />
@@ -578,7 +579,7 @@ function UsageColumn({ ref, onSettings }: { ref: React.Ref<HTMLElement>; onSetti
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
         <span>
           {guardOn && settings?.guard
-            ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션 멈춤`
+            ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션을 멈춰요`
             : '가드가 꺼져 있어요'}
         </span>
         <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">

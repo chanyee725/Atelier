@@ -56,7 +56,6 @@ type Props = {
   systemTheme: Theme;
 };
 
-
 const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
 
 // 새 파일 is the one raised control in the header: white with a hairline in light, a lighter square in dark and
