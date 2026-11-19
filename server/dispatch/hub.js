@@ -8,6 +8,7 @@ import { redact, redactDeep } from "./redact.js";
 import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
 import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT } from "./roles.js";
+import { MODE_IDS } from "./mode-profiles.js";
 import { replyStyle } from "./style.js";
 import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
@@ -134,7 +135,7 @@ export class Hub extends EventEmitter {
     this.shared.on("change", () => { this.emit("limits", this.currentLimits()); this.checkTickets(); });
     this.live = new Map(); // id -> { proc, transcript, perms, seenMsgIds }
     // The live view per session (#728): metadata only, in memory, sent as throttled `live` events.
-    this.liveView = new LiveTracker({ workspaceDir, emit: ev => this.emit("live", ev) });
+    this.liveView = new LiveTracker({ workspaceDir, emit: ev => this.emit("live", ev), known: id => !!this.get(id) });
     this.isConnected = () => true; // replaced by the server with the Dispatch-level connection check
     // Pipeline hooks (server/pipeline, E20). createGate(parent) -> refusal text or null: a lead whose plan
     // waits for approval may not create teammates. taskStepCheck(lead, step) -> refusal text or null.
@@ -532,12 +533,14 @@ export class Hub extends EventEmitter {
 
   /* ---------------- create ---------------- */
 
-  // items: [{ role, model, effort, perm, prompt, n }]
-  async create({ items, commonPrompt, worktree = true, parent = null, folder }) {
+  // items: [{ role, model, effort, perm, prompt, n, mode }]. `mode` (per item, else the call's) picks the harness
+  // profile of that mode (#748, mode-profiles.js); an item's own model, effort and perm still win over it.
+  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode }) {
     const total = items.reduce((a, x) => a + (x.n || 1), 0);
     if (!total) throw new Error("만들 세션이 없어요");
     const gate = parent && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
+    items = await Promise.all(items.map(it => this.applyProfile(it, it.mode ?? mode)));
     const roles = effectiveRoles(this.roles, this.store, this.models);
     // The model of an item: its own, else its role's. Unknown models and roles are refused before anything starts.
     const modelOf = it => {
@@ -585,6 +588,7 @@ export class Hub extends EventEmitter {
           color: pickColor(this.sessions.map(x => x.color)),
           provider: model.provider, model: model.id, modelLabel: model.label,
           effort: it.effort || null, perm: it.perm || role.perm,
+          ...(it.mode && { mode: it.mode }), ...(it.profileNote && { profileNote: it.profileNote }),
           prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
           cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder: top,
           status: "starting", startedAt: Date.now(), updatedAt: Date.now(),
@@ -595,6 +599,7 @@ export class Hub extends EventEmitter {
         };
         this.store.data.sessions[s.id] = s;
         if (wd.warning) this.push(s, { kind: "system", text: wd.warning });
+        if (it.profileNote) this.push(s, { kind: "system", text: `모드 프로필: ${it.profileNote}` });
         const first = it.task || commonPrompt;
         this.push(s, { kind: "user", text: first, label: parent ? "관리자 지시" : "공통 프롬프트" });
         this.touch(s);
@@ -603,6 +608,18 @@ export class Hub extends EventEmitter {
       }
     }
     return made.map(s => this.publicSession(s));
+  }
+
+  /**
+   * An item with its mode's profile filled in (#748): only when a known mode is named and the item names no model.
+   * The item's own effort and perm win; `profileNote` keeps the fallback reason (metadata only).
+   */
+  async applyProfile({ mode: _m, profileNote: _n, ...it }, mode) {
+    if (!MODE_IDS.includes(mode)) return it;
+    if (it.model || !this.resolveProfile) return { ...it, mode };
+    const p = await this.resolveProfile(mode, it.role);
+    if (!p) return { ...it, mode };
+    return { ...it, mode, model: p.model, effort: it.effort || p.effort || undefined, perm: it.perm || p.perm, ...(p.note && { profileNote: p.note }) };
   }
 
   /** The folder a new session gets: the asked-for top folder (must exist, else 400), else the parent's, else null. */

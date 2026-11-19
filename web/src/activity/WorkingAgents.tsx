@@ -1,8 +1,11 @@
 // "작업 중인 에이전트" in the app sidebar (E537, #654): every agent session at work in the workspace with its status
-// line ("다이어그램 작성 중…") and the file it edits; a click opens that file. Hidden while none is working. From the
-// live agent list (home/useAgents.ts, SSE `agents`). Memory only.
+// line ("다이어그램 작성 중…") and the file it edits. A row click opens the agent's live view (#728); the file opens
+// from the row's trailing button. Hidden while none is working. From the live agent list (home/useAgents.ts, SSE
+// `agents`). Memory only.
 import type { CSSProperties } from 'react';
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '../components/ui/sidebar';
+import { FileText } from 'lucide-react';
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '../components/ui/sidebar';
+import { openAgentLive, useAgentLiveTarget } from '../live/store';
 import { agentStateLabel, fileStem, safeColor, type AgentPresence } from '../home/agents';
 import { useAgents } from '../home/useAgents';
 import { cn } from '../lib/utils';
@@ -15,6 +18,7 @@ export const workingRows = (agents: readonly AgentPresence[]) => [...agents.filt
 
 export function WorkingAgents({ current, onOpen, titleOf }: { current: string | null; onOpen: (path: string) => void; titleOf?: (path: string) => string | null }) {
   const { agents } = useAgents();
+  const openSid = useAgentLiveTarget();
   if (!Array.isArray(agents) || agents.length === 0) return null;
   return (
     <SidebarGroup className="mt-3" data-working-agents="">
@@ -39,22 +43,21 @@ export function WorkingAgents({ current, onOpen, titleOf }: { current: string | 
           );
           return (
             <SidebarMenuItem key={a.sid}>
-              {a.file ? (
-                <SidebarMenuButton
-                  // Editing the open file: a hover-strength tint, so the document's own row stays the one selected row.
-                  className={cn(ROW, 'aria-[current=page]:bg-sidebar-foreground/5')}
-                  data-working-agent={a.sid}
-                  aria-current={a.file === current ? 'page' : undefined}
-                  title={doc ? `${doc} 열기` : undefined}
-                  onClick={() => a.file && onOpen(a.file)}
-                >
-                  {body}
-                </SidebarMenuButton>
-              ) : (
-                // Nothing to open: a status line, not a dimmed (disabled) button.
-                <div className={cn('flex w-full min-w-0 gap-2 rounded-md px-2 text-sm', ROW)} data-working-agent={a.sid}>
-                  {body}
-                </div>
+              <SidebarMenuButton
+                // Editing the open file: a hover-strength tint, so the document's own row stays the one selected row.
+                className={cn(ROW, a.file && 'pr-8', 'aria-[current=page]:bg-sidebar-foreground/5')}
+                data-working-agent={a.sid}
+                aria-current={a.file && a.file === current ? 'page' : undefined}
+                aria-expanded={openSid === a.sid}
+                title={`${a.name} 진행상황 보기`}
+                onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'sidebar' })}
+              >
+                {body}
+              </SidebarMenuButton>
+              {a.file && doc && (
+                <SidebarMenuAction showOnHover aria-label={`${doc} 열기`} title={`${doc} 열기`} data-working-agent-file={a.file} onClick={() => a.file && onOpen(a.file)}>
+                  <FileText />
+                </SidebarMenuAction>
               )}
             </SidebarMenuItem>
           );

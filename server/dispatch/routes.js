@@ -102,7 +102,7 @@ export function routeTable(d) {
     ["GET", /^\/api\/mode-profiles$/, async () => d.modeProfiles.get()],
     ["PUT", /^\/api\/mode-profiles$/, async (_, b) => d.modeProfiles.put(b)],
     ["POST", /^\/api\/sessions$/, async (_, b) => ({
-      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder }),
+      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }) }),
     })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
