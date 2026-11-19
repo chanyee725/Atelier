@@ -25,14 +25,14 @@ test("modes: plan, impl, review, docs, quickfix, research; every cell of the def
   for (const m of MODE_IDS) assert.deepEqual(Object.keys(d[m]).sort(), ROLES.map(x => x.id).sort());
 });
 
-test("defaults follow model strengths: research Codex, plan Fable, impl Opus, quickfix Sonnet, docs Sonnet, review cross-checks", () => {
+test("defaults follow model strengths: research Codex, plan Fable, impl Opus, quickfix Opus (#768), docs Sonnet, review cross-checks", () => {
   assert.equal(r("research", "impl").provider, "openai");
   assert.equal(r("research", "impl").model, "gpt-a");
   assert.equal(r("plan", "impl").model, "claude-fable-5-2");
   assert.equal(r("plan", "lead").model, "claude-fable-5-2");
   assert.equal(r("impl", "impl").model, "claude-opus-5-5");
-  assert.equal(r("quickfix", "impl").model, "claude-sonnet-5-5");
-  assert.equal(r("quickfix", "impl").effort, "low");
+  assert.equal(r("quickfix", "impl").model, "claude-opus-5-5");
+  assert.equal(r("quickfix", "impl").effort, null);
   assert.equal(r("docs", "docs").model, "claude-sonnet-5-5");
   // Review differs from the implementer (Opus) when Codex is connected...
   assert.equal(r("impl", "review").model, "gpt-a");
