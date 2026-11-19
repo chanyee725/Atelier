@@ -13,6 +13,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// Answers the in-app dialog (#732): types `text` into its field when given, presses its confirm button and
+// returns the dialog's text.
+async function answerDialog(page, text) {
+  const d = page.locator('dialog[data-app-dialog][open]');
+  await d.waitFor();
+  const message = await d.innerText();
+  if (text !== undefined) await d.getByRole('textbox').fill(text);
+  await d.locator('button[value="ok"]').click();
+  await d.waitFor({ state: 'detached' });
+  return message;
+}
+
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const SHOTS = process.env.DRAW_SHOTS;
 const freePort = () =>
@@ -158,9 +170,9 @@ test('document screen: path, view switch, ⋯ menu, sub-documents, 390px', { ski
     await page.waitForFunction(() => document.querySelector('input[aria-label="파일 제목"]')?.value === '로그인 로직');
 
     // ⋯ → 하위 문서 추가 makes it in the folder named after the document and opens it.
-    page.once('dialog', (d) => d.accept('세부 규칙'));
     await page.getByRole('button', { name: '더 보기' }).click();
     await page.getByRole('menuitem', { name: '하위 문서 추가' }).click();
+    await answerDialog(page, '세부 규칙');
     await page.waitForFunction(() => document.querySelector('input[aria-label="파일 제목"]')?.value === '세부 규칙');
     assert.equal((await call('GET', `/api/file?path=${encodeURIComponent('결제 시스템/로그인 로직/세부 규칙')}`)).status, 200);
     // The closing menu keeps the header aria-hidden for a moment; wait for the path to be readable again.
