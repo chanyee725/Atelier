@@ -171,3 +171,11 @@ test('free text with codeRefs gets a badge labelled by its text; bound text neve
   const out = placeBadges([free, bound] as never, view, { left: 0, top: 0 }, () => undefined, () => undefined, null);
   assert.deepEqual(out.map((x) => [x.node, x.label]), [['ft', '로그인']]);
 });
+
+test('BPMN blocks: nodes in lanes carry their code and labels (#841)', () => {
+  const code = 'Sales {\n  Call [type: activity, code: "src/call.ts:3-9"]\n  Done [type: event]\n}\nCall > Done';
+  const info = blockCodeInfo(block({ type: 'bpmn', code }));
+  assert.deepEqual(Object.keys(info.labels).sort(), ['Call', 'Done']);
+  assert.deepEqual(info.nodes.Call!.refs, [{ path: 'src/call.ts', start: 3, end: 9 }]);
+  assert.deepEqual(info.orphans, []);
+});

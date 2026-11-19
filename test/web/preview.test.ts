@@ -12,7 +12,15 @@ test('renderPreview draws valid code as SVG', async () => {
 });
 
 test('renderPreview returns null for unsupported types', async () => {
-  assert.equal(await renderPreview('bpmn', 'x', 'light'), null);
+  assert.equal(await renderPreview('mindmap', 'x', 'light'), null);
+});
+
+test('BPMN blocks parse and render with their lanes (#841)', async () => {
+  const r = await renderPreview('bpmn', 'Lane {\n  A [type: event]\n  B\n}\nA > B', 'light');
+  assert.ok(r);
+  assert.equal(r.scene.type, 'bpmn');
+  assert.ok(r.scene.items.some((i) => i.kind === 'box' && i.id === 'Lane'));
+  assert.equal(analyzeDiagram('bpmn', 'A > B').parsed, true);
 });
 
 test('errors keep the last good render', async () => {
@@ -52,10 +60,10 @@ test('a failed render keeps the drawing but does not claim zero errors', async (
 test('switching a block to an unsupported type drops the earlier drawing', async () => {
   const good = nextPreview(null, await renderPreview('architecture', GOOD, 'light'), 'architecture');
   assert.ok(good);
-  const r = await renderPreview('bpmn', GOOD, 'light');
+  const r = await renderPreview('mindmap', GOOD, 'light');
   assert.equal(r, null);
-  assert.equal(nextPreview(good, r, 'bpmn'), null);
-  assert.equal(analyzeDiagram('bpmn', '').parsed, false);
+  assert.equal(nextPreview(good, r, 'mindmap'), null);
+  assert.equal(analyzeDiagram('mindmap', '').parsed, false);
 });
 
 test('a theme change repaints the last good drawing while the code has errors', async () => {
