@@ -1,4 +1,8 @@
 // Readability counts for a laid-out graph scene, shared by the wrap tests and scripts/capture-group-wrap.mjs.
+//
+// "Zero crossings" means line-line: no two connectors cross each other (`crossings` for elbow segments,
+// `lineCrossings` for segments at any angle). A connector running through a node is a separate count,
+// `throughNodes`, and is not a crossing (#796).
 
 import type { Scene, SceneBox, SceneEdge } from '../../shared/render/index.ts';
 
@@ -20,6 +24,20 @@ function crosses(s: Seg, t: Seg): boolean {
   return x > lo(h[0].x, h[1].x) + 1 && x < hi(h[0].x, h[1].x) - 1 && y > lo(v[0].y, v[1].y) + 1 && y < hi(v[0].y, v[1].y) - 1;
 }
 
+/** Two segments at any angle that cross properly: each passes from one side of the other to the other side, away
+ * from both segments' ends. Touching at an end, or running along each other, is not a crossing. */
+function segmentsCross([a, b]: Seg, [c, d]: Seg): boolean {
+  const side = (p: P, q: P, r: P): number => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const near = (p: P, q: P): boolean => Math.hypot(p.x - q.x, p.y - q.y) < 1;
+  if (near(a, c) || near(a, d) || near(b, c) || near(b, d)) return false;
+  const d1 = side(c, d, a);
+  const d2 = side(c, d, b);
+  const d3 = side(a, b, c);
+  const d4 = side(a, b, d);
+  const eps = 1e-6;
+  return ((d1 > eps && d2 < -eps) || (d1 < -eps && d2 > eps)) && ((d3 > eps && d4 < -eps) || (d3 < -eps && d4 > eps));
+}
+
 /** Two parallel segments that run on top of each other for more than 2 px. */
 function overlaps(s: Seg, t: Seg): boolean {
   if (flat(s) && flat(t) && Math.abs(s[0].y - t[0].y) < 1) return lo(hi(s[0].x, s[1].x), hi(t[0].x, t[1].x)) - hi(lo(s[0].x, s[1].x), lo(t[0].x, t[1].x)) > 2;
@@ -39,8 +57,10 @@ export interface LayoutMetrics {
   edges: number;
   /** Total bends over all connectors. */
   bends: number;
-  /** Pairs of connectors that cross. */
+  /** Pairs of connectors whose horizontal and vertical (elbow) segments cross: line-line, not line-through-node. */
   crossings: number;
+  /** Pairs of connectors whose segments cross at any angle (straight and diagonal lines too): line-line. */
+  lineCrossings: number;
   /** Pairs of connectors with no node in common that run on top of each other. */
   overlaps: number;
   /** Connectors that pass through a node that is not one of their ends. */
@@ -53,6 +73,7 @@ export function layoutMetrics(scene: Scene): LayoutMetrics {
   const edges = scene.items.filter((it): it is SceneEdge => it.kind === 'edge');
   const nodes = scene.items.filter((it): it is SceneBox => it.kind === 'box' && it.role === 'node');
   let crossings = 0;
+  let lineCrossings = 0;
   let over = 0;
   for (let i = 0; i < edges.length; i++) {
     for (let j = i + 1; j < edges.length; j++) {
@@ -61,6 +82,7 @@ export function layoutMetrics(scene: Scene): LayoutMetrics {
       const sa = segs(a);
       const sb = segs(b);
       if (sa.some((s) => sb.some((t) => crosses(s, t)))) crossings++;
+      if (sa.some((s) => sb.some((t) => segmentsCross(s, t)))) lineCrossings++;
       const shared = a.from === b.from || a.from === b.to || a.to === b.from || a.to === b.to;
       if (!shared && sa.some((s) => sb.some((t) => overlaps(s, t)))) over++;
     }
@@ -81,6 +103,7 @@ export function layoutMetrics(scene: Scene): LayoutMetrics {
     edges: edges.length,
     bends: edges.reduce((s, e) => s + Math.max(0, e.points.length - 2), 0),
     crossings,
+    lineCrossings,
     overlaps: over,
     throughNodes,
     labelsOnNodes,
