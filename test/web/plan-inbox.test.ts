@@ -9,8 +9,8 @@ import { REQUEST_MS, requestPlanConfirm, takePlanConfirm } from '../../web/src/r
 test('parseWaiting keeps well-formed plans; newlyWaiting picks the ones not seen before', () => {
   const list = parseWaiting({ plans: [{ path: 'web/run/로그인.dpx.json', title: '로그인 개편', lead: 'Jae', since: 5 }, { title: 'x' }, null, { path: 'a.dpx.json', title: '', lead: 3 }] });
   assert.deepEqual(list, [
-    { path: 'web/run/로그인.dpx.json', title: '로그인 개편', lead: 'Jae', since: 5 },
-    { path: 'a.dpx.json', title: null, lead: null, since: null },
+    { path: 'web/run/로그인.dpx.json', title: '로그인 개편', lead: 'Jae', since: 5, revision: null, blockers: [], leadGone: false },
+    { path: 'a.dpx.json', title: null, lead: null, since: null, revision: null, blockers: [], leadGone: false },
   ]);
   assert.deepEqual(parseWaiting(null), []);
   assert.deepEqual(newlyWaiting(new Set(['a.dpx.json']), list).map((p) => p.path), ['web/run/로그인.dpx.json']);

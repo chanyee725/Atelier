@@ -80,7 +80,7 @@ export function confirmSnapshot(status: PlanSnapshot): PlanSnapshot {
 }
 
 /** The start request for the plan the person saw. */
-export function startBody(path: string, shown: PlanSnapshot): { path: string; revision: number } {
+export function startBody(path: string, shown: Pick<PlanSnapshot, 'revision'>): { path: string; revision: number } {
   return { path, revision: shown.revision };
 }
 

@@ -13,6 +13,7 @@ import { ProjectDashboard } from './ProjectDashboard';
 import { plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
 import { isFindKey } from './dashboardRows';
 import { PlanAreas } from './PlanList';
+import { ApprovalCard } from './ApprovalCard';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -136,6 +137,7 @@ function Dashboard({ data, ...p }: Shared) {
         <h1 className="m-0 shrink-0 text-[15px] font-semibold">대시보드</h1>
         <span className="ml-auto">{p.bell}</span>
       </header>
+      <ApprovalCard onOpen={p.onOpen} />
       <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} fill />
     </>
   );

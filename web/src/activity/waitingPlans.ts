@@ -1,5 +1,7 @@
 // The page's list of plans that wait for 시작하기 (E579, #786): GET /api/pipeline/waiting once, again on every SSE
-// `pipeline` event (write_plan, start, reopen, a trashed plan), on file deletes and moves, and on a reconnect. A plan
+// `pipeline` event (write_plan, start, reopen, a trashed plan), on file deletes and moves, and on a reconnect. While
+// something waits, also when a session goes (its lead: 시작하기 turns into 정리) and when limits or providers change
+// (blockers). A plan
 // that starts waiting after the first load raises one toast; what was already waiting when the page opened does not.
 import { useSyncExternalStore } from 'react';
 import { events } from '../lib/events';
@@ -43,6 +45,8 @@ function start() {
   if (started) return;
   started = true;
   events.subscribe('pipeline', soon);
+  // The server sends no `pipeline` event for these; nothing waiting means nothing to re-check.
+  for (const t of ['removed', 'limits', 'providers']) events.subscribe(t, () => void (plans.length && soon()));
   events.subscribeJson<{ kind?: string }>('workspace', (e) => {
     if (e?.kind === 'delete' || e?.kind === 'tree') soon();
   });
