@@ -104,8 +104,10 @@ export function CardGrid({ children, label }: { children: ReactNode; label?: str
 /**
  * One cell of a <CardGrid>: icon and main line on top, then the muted second line, then the meta line. Same props as
  * <CardRow>; `onClick` or `href` makes the whole tile the target.
+ * `footer` (#747) sits under the target inside the same frame, outside the link or button, so it can hold its own
+ * controls (e.g. a <details>).
  */
-export function CardTile({ icon, title, sub, meta, onClick, href, className, data }: { icon?: ReactNode; title: ReactNode; sub?: ReactNode; meta?: ReactNode; onClick?: () => void; href?: string; className?: string; data?: string }) {
+export function CardTile({ icon, title, sub, meta, onClick, href, className, data, footer }: { icon?: ReactNode; title: ReactNode; sub?: ReactNode; meta?: ReactNode; onClick?: () => void; href?: string; className?: string; data?: string; footer?: ReactNode }) {
   const body = (
     <>
       <span className="flex min-w-0 items-center gap-2">
@@ -116,17 +118,21 @@ export function CardTile({ icon, title, sub, meta, onClick, href, className, dat
       {meta && <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground tabular-nums">{meta}</span>}
     </>
   );
-  const cls = 'grid h-full w-full min-w-0 content-start gap-1 rounded-md border px-3 py-2 text-left';
+  // With a footer the frame (border) moves to the cell and the target fills its top part.
+  const cls = cn('grid w-full min-w-0 content-start gap-1 rounded-md px-3 py-2 text-left', footer ? 'grow' : 'h-full border');
   const hit = 'hover:bg-accent/60 focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
+  const target = href ? (
+    <a href={href} target="_blank" rel="noreferrer" className={cn(cls, hit, 'text-inherit no-underline')}>{body}</a>
+  ) : onClick ? (
+    <button type="button" onClick={onClick} className={cn(cls, hit)}>{body}</button>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
   return (
-    <li data-row={data} className={cn('min-w-0', className)}>
-      {href ? (
-        <a href={href} target="_blank" rel="noreferrer" className={cn(cls, hit, 'text-inherit no-underline')}>{body}</a>
-      ) : onClick ? (
-        <button type="button" onClick={onClick} className={cn(cls, hit)}>{body}</button>
-      ) : (
-        <div className={cls}>{body}</div>
-      )}
+    // An open <details> in the footer widens the tile to the whole row, so its list is not squeezed into a third.
+    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-md border has-[details[open]]:col-span-full', className)}>
+      {target}
+      {footer}
     </li>
   );
 }
