@@ -3,6 +3,8 @@
 #   team.sh <project-dir> <small|risky|standard|ui|full> "<task>"
 # Starts or reuses the server (plugin scripts/start.sh), connects Claude when the CLI is logged in,
 # and creates the preset's sessions with the shared team rules prepended to the task.
+# Models: each role's default (the project's 설정 → roleModels), else DISPATCH_TEAM_ROLE_MODELS
+# (JSON { role: modelId }, e.g. '{"impl":"gemini-3.8-flash-high"}' for a UI issue), else DISPATCH_TEAM_MODEL for all.
 set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -20,13 +22,19 @@ url="http://127.0.0.1:$port"
 H=(-H 'content-type: application/json' -H 'x-dispatch: 1')
 
 case "$preset" in
-  small)    items='[{"role":"lead"},{"role":"impl"},{"role":"review"}]' ;;
+  small)    items='[{"role":"lead"},{"role":"impl"},{"role":"review"},{"role":"test"}]' ;;
   risky)    items='[{"role":"lead"},{"role":"impl"},{"role":"review","n":2}]' ;;
   standard) items='[{"role":"lead"},{"role":"impl","n":2},{"role":"review"},{"role":"test"}]' ;;
   ui)       items='[{"role":"lead"},{"role":"impl"},{"role":"design"},{"role":"review"}]' ;;
   full)     items='[{"role":"lead"},{"role":"impl","n":3},{"role":"review","n":2},{"role":"test"},{"role":"docs"}]' ;;
   *) echo "Unknown preset '$preset' (small | risky | standard | ui | full)" >&2; exit 2 ;;
 esac
+
+# Checked before anything starts: a bad value inside mk's command substitution would not stop the script.
+if [ -n "${DISPATCH_TEAM_ROLE_MODELS:-}" ]; then
+  node -e 'const v = JSON.parse(process.argv[1]); if (!v || typeof v !== "object" || Array.isArray(v)) throw 0' "$DISPATCH_TEAM_ROLE_MODELS" 2>/dev/null \
+    || { echo 'DISPATCH_TEAM_ROLE_MODELS is not JSON like {"impl":"gemini-3.8-flash-high"}' >&2; exit 2; }
+fi
 
 # Server: reuse when it already serves this project; start.sh prints why it can't otherwise.
 DISPATCH_PORT="$port" "$start_sh" "$project"
@@ -47,12 +55,14 @@ fi
 mk() { # mk <items-json> <role-note> [parent-id] → POST body
   node -e '
     const fs = require("fs");
-    const [rulesPath, task, items, note, parent, model, effort, perm] = process.argv.slice(1);
+    const [rulesPath, task, items, note, parent, model, effort, perm, roleModelsRaw] = process.argv.slice(1);
     const rules = fs.readFileSync(rulesPath, "utf8").trim();
+    let roleModels = {};
+    try { roleModels = roleModelsRaw ? JSON.parse(roleModelsRaw) : {}; } catch { console.error("DISPATCH_TEAM_ROLE_MODELS is not JSON"); process.exit(1); }
     // DISPATCH_TEAM_MODEL / _EFFORT / _PERM override every item (cheap test runs: claude-haiku-5-5, low;
     // a fully hands-off team: auto).
     const list = JSON.parse(items).map((i) => ({
-      ...i, ...(model && { model }), ...(effort && { effort }), ...(perm && { perm }),
+      ...i, ...(roleModels[i.role] && { model: roleModels[i.role] }), ...(model && { model }), ...(effort && { effort }), ...(perm && { perm }),
     }));
     process.stdout.write(JSON.stringify({
       commonPrompt: `${rules}\n\n${note}\n\nTask from the user:\n${task}`,
@@ -60,7 +70,7 @@ mk() { # mk <items-json> <role-note> [parent-id] → POST body
       items: list,
       ...(parent && { parent }),
     }));
-  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}"
+  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}" "${DISPATCH_TEAM_ROLE_MODELS:-}"
 }
 post() { # post <body> → prints sessions, exits on error; sets $ids
   local resp
