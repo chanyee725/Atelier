@@ -1,6 +1,6 @@
 // Headless check of agent activity across the app (E537, #654): a fake Claude session and a fake Codex session edit
 // the same document. The agent panel takes 4 of 10 parts beside the text with one card each (status line, current
-// target, recent steps), the sidebar lists both under "작업 중인 에이전트" (a click opens the file), and the bell's
+// target, recent steps), the dashboard (not the sidebar, #876) lists the sessions, and the bell's
 // feed records their work (start, finish) with an unread badge that clears when the feed opens; a toast shows.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_SHOTS=<dir> also saves light/dark x desktop/narrow screenshots there.
@@ -136,10 +136,8 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   const names = (await page.locator('[data-margin-card] .margin-name').allTextContents()).join(' ');
   assert.ok(names.includes(a.name) && names.includes(b.name), names);
 
-  // 2. The sidebar lists both, with the file; a click opens it.
-  await page.waitForFunction(() => document.querySelectorAll('[data-working-agent]').length >= 2, null, { timeout: 10_000 });
-  const side = await page.locator('[data-working-agents]').textContent();
-  assert.ok(side.includes(a.name) && side.includes(b.name) && side.includes('plan'), side);
+  // 2. The sidebar has no 작업 중인 에이전트 group (#876): the dashboard's 실행 중인 세션 card shows the sessions.
+  assert.equal(await page.locator('[data-working-agents]').count(), 0);
 
   // 3. The bell: unread badge and no toast (#811: the 알림함 only); the feed records the starts.
   await page.locator('[data-activity-badge]').waitFor({ timeout: 10_000 });
