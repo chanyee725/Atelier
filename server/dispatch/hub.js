@@ -820,6 +820,7 @@ export class Hub extends EventEmitter {
     const s = this.get(id), r = this.live.get(id);
     if (!s || !r?.proc) return;
     this.handoffOnInterrupt(s);
+    if (r.agyTurn) r.agyTurn.ended = true; // agy: the [중단] note is this turn's only report
     if (s.provider === "claude") {
       r.proc.stdin.write(JSON.stringify({ type: "control_request", request_id: randomUUID(), request: { subtype: "interrupt" } }) + "\n");
     } else {
@@ -1422,11 +1423,13 @@ export class Hub extends EventEmitter {
     // One agy process is one turn. Its answer arrives as text_delta chunks; they add up in `turn.text`.
     const turn = { text: "", ended: false };
     this.rt(s.id).agyTurn = turn;
-    onJsonLines(proc.stdout, m => this.onGemini(s, m));
-    // No result event before agy closed (it exited early or the line was lost): the turn still ends with
-    // what agy said, so the lead gets the report. A failed exit is left to attach().
+    onJsonLines(proc.stdout, m => this.onGemini(s, m, turn));
+    // No result event before agy exited cleanly (the line was lost): the turn still ends with what agy said,
+    // so the lead gets the report. Only for exit code 0 of the current turn: a signal (interrupt, rotate,
+    // stopAll) gives code null and is handled elsewhere; an old process closing after rotate() must not
+    // touch the new turn. A failed exit is left to attach().
     proc.on("close", code => {
-      if (!turn.ended && !code && !s._killed && s.status !== "done") this.endGeminiTurn(s, turn);
+      if (code === 0 && !turn.ended && this.rt(s.id).agyTurn === turn && !s._killed && s.status !== "done") this.endGeminiTurn(s, turn);
     });
     this.touch(s, { status: "running", error: null });
   }
@@ -1443,33 +1446,43 @@ export class Hub extends EventEmitter {
     this.reportToParent(s);
   }
 
-  onGemini(s, m) {
-    if (m.event === "step_update") this.cancelAutoRemove(s.id);
+  /** `turn` is the agy process's own turn; lines from a process that is no longer current (rotate) change no
+   *  text, state or report, only add their token usage. Without `turn` the current one is used. */
+  onGemini(s, m, turn) {
+    const r = this.rt(s.id);
+    const cur = r.agyTurn ??= { text: "", ended: false };
+    const stale = !!turn && turn !== cur;
+    turn = cur;
+    if (m.event === "step_update" && !stale) this.cancelAutoRemove(s.id);
     switch (m.event) {
       case "init":
-        if (m.conversation_id) this.touch(s, { providerSessionId: m.conversation_id });
+        if (m.conversation_id && !stale) this.touch(s, { providerSessionId: m.conversation_id });
         break;
       case "step_update": {
         const su = m.step_update || {};
         if (su.step_type === "agent_response") {
-          // text_delta is a chunk of the answer, not the whole of it.
-          const chunk = su.text_delta ?? su.text ?? "";
-          if (chunk) {
-            const turn = this.rt(s.id).agyTurn ??= { text: "", ended: false };
-            turn.text += chunk;
-            if (chunk.trim()) this.push(s, { kind: "assistant", text: chunk });
+          // text_delta is a chunk of the answer, not the whole of it. Only without one is `text` read, as the
+          // answer so far (replaced, never appended, so a cumulative field cannot double the text).
+          const chunk = su.text_delta ?? "";
+          if (!stale && !turn.ended && (chunk || su.text)) {
+            if (chunk) turn.text += chunk;
+            else turn.text = String(su.text);
+            const shown = chunk || String(su.text);
+            if (shown.trim()) this.push(s, { kind: "assistant", text: shown });
             if (turn.text.trim()) {
               s.last = redact(clip(turn.text, 400));
-              this.rt(s.id).lastText = turn.text;
+              r.lastText = turn.text;
             }
           }
           if (su.usage) {
             const u = su.usage;
             const delta = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_tokens || 0, cacheWrite: 0 };
             for (const k in delta) s.usage[k] += delta[k];
-            s.ctx = delta.input + delta.output; this.checkCtx(s); this.checkLong(s);
+            if (!stale) { s.ctx = delta.input + delta.output; this.checkCtx(s); this.checkLong(s); }
             this.store.addDaily(s.model, s.role, delta);
           }
+        } else if (stale) {
+          // an old process's tool steps are not shown
         } else if (su.step_type === "tool") {
           if (su.state === "ACTIVE") {
             this.push(s, { kind: "tool", name: su.tool_name, text: clip(JSON.stringify(su.tool_info?.parameters || {}), 600) });
@@ -1482,7 +1495,7 @@ export class Hub extends EventEmitter {
       }
       case "result": {
         const res = m.result || {};
-        const turn = this.rt(s.id).agyTurn ??= { text: "", ended: false };
+        if (stale || turn.ended) break;
         if (res.status === "ERROR") {
           turn.ended = true;
           if (res.response && res.response.trim()) {
@@ -1492,7 +1505,7 @@ export class Hub extends EventEmitter {
           if (isQuotaError(res.error)) this.setGeminiQuota(res.error);
           this.push(s, { kind: "error", text: clip(res.error || "Turn failed", 400) });
           this.touch(s, { status: "error", error: clip(res.error || "Turn failed", 300) });
-        } else if (!turn.ended) {
+        } else {
           this.endGeminiTurn(s, turn, res.response ?? m.response);
         }
         break;
