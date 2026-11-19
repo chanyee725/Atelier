@@ -1,5 +1,7 @@
 // Dispatch HTTP API as Drawing module routes. Paths are the ones the standalone Dispatch server had
 // (so mcp.js, the skills and the hook keep working); only /api/events is shared, see index.js.
+import path from "node:path";
+import { agentsSummary } from "./agents-summary.js";
 import { branchGraph, diff } from "./git.js";
 import { issueAccounts } from "./ledger.js";
 import { ROLES } from "./roles.js";
@@ -117,6 +119,13 @@ export function routeTable(d) {
     ["GET", /^\/api\/limits$/, async () => hub.providerLimits()],
     ["GET", /^\/api\/timeline$/, async () => hub.timeline()],
     ["GET", /^\/api\/tasks$/, async () => ({ tasks: hub.tasks })],
+    // Compact read-only summary for the Claude Code mod pane (#755): usage windows, leads with their task board and
+    // team, issue/PR numbers. Metadata only (agents-summary.js). PRs come from the cached issue list; ?pr=0 skips it.
+    ["GET", /^\/api\/agents\/summary$/, async (_, __, url) => {
+      const issues = url?.searchParams.get("pr") === "0" || !d.issues ? null : await d.issues().catch(() => null);
+      return agentsSummary({ project: { name: root ? path.basename(root) : "" }, limits: hub.currentLimits(),
+        sessions: hub.sessions.map(s => hub.publicSession(s)), tasks: hub.tasks, issues });
+    }],
     ["GET", /^\/api\/branches$/, async () => branchGraph(root, { active: hub.sessions.filter(x => x.status !== "done" && x.branch).map(x => x.branch) })],
     // One row per session branch (#792): owner sessions, issue, ahead/behind, last commit, dirty flag, PR phase.
     ["GET", /^\/api\/branches\/live$/, async () => (d.liveBranches ? d.liveBranches() : { base: null, pr: "disabled", rows: [] })],
