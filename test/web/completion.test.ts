@@ -92,3 +92,10 @@ test('badge, badgeColor and the divider shape are offered on graph nodes (E41)',
   assert.ok(labels(attributeCompletions('flowchart', 'A [badgeColor: re')).includes('red'));
   assert.ok(labels(attributeCompletions('flowchart', 'A [shape: di')).includes('divider'));
 });
+
+test('once the name index is loaded, icon values offer every bundled icon name', async () => {
+  const { loadIconNames } = await import('../../shared/render/icon-registry.ts');
+  await loadIconNames();
+  const all = labels(attributeCompletions('architecture', 'Web [icon: az'));
+  assert.ok(all.length > 6000 && all.includes('azure-cosmos-db') && all.includes('aws-ec2') && all.includes('postgres'));
+});

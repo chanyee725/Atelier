@@ -1,7 +1,9 @@
 # Third-party notices
 
-Atelier bundles small parts of the following projects. Only the icons listed in
-`scripts/build-icons.mjs` are copied, as SVG path data, into `shared/render/icon-data.ts`.
+Atelier bundles parts of the following projects. Icons are copied by `scripts/build-icons.mjs` as SVG data into
+`shared/render/icon-data.ts` (a small always-loaded set) and `shared/render/icon-packs/` (the full sets, loaded on
+demand). `shared/render/icon-packs/THIRD-PARTY.md` lists every bundled icon set with its version, icon count and
+licence or terms.
 
 ## Lucide (`lucide-static`)
 
@@ -62,8 +64,25 @@ https://creativecommons.org/publicdomain/zero/1.0/
 
 Only icons without a separate per-icon licence (or with CC0-1.0) are bundled; the generator
 refuses the others. The logos are trademarks of their respective owners. Their use here does
-not imply endorsement, and each brand's own guidelines apply. No AWS, Google Cloud or Azure
-logos or architecture icons are bundled.
+not imply endorsement, and each brand's own guidelines apply. Simple Icons never supplies AWS,
+Google Cloud or Azure logos; those come from the vendors' own sets below.
+
+## Cloud architecture icons (AWS, Microsoft Azure, Google Cloud)
+
+The official architecture icon packages, imported by `scripts/import-cloud-icons.mjs` into
+`shared/vendor/icons/` (sanitized SVG, unaltered artwork and colours) and drawn only inside diagrams:
+
+- AWS Architecture Icons (https://aws.amazon.com/architecture/icons/). AWS permits customers and partners to use
+  them to create architecture diagrams. Amazon Web Services, AWS and the service names are trademarks of
+  Amazon.com, Inc. or its affiliates.
+- Azure Architecture Icons (https://learn.microsoft.com/azure/architecture/icons/), under the Microsoft Terms of
+  Use shipped in the package: for architectural diagrams, training materials or documentation; not cropped, flipped
+  or rotated. Microsoft, Azure and the product names are trademarks of the Microsoft group of companies.
+- Google Cloud icons (https://cloud.google.com/icons), for architecture diagrams that show Google Cloud products.
+  Google Cloud and the product names are trademarks of Google LLC.
+
+Versions and icon counts: `shared/render/icon-packs/THIRD-PARTY.md`. Icon names follow the names used by the
+Eraser diagram syntax (`aws-ec2`, `postgres`); no Eraser icon files are copied.
 
 ## shadcn/ui
 

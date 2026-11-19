@@ -1,14 +1,20 @@
-// Generate shared/render/icon-data.ts from the Lucide (ISC) and Simple Icons (CC0-1.0) npm packages.
-// Only the icons listed below are copied, so the render bundle stays small.
+// Generate the bundled icon data (no runtime fetch; everything is a local build asset):
+// - shared/render/icon-data.ts: a small set of Lucide (ISC) and Simple Icons (CC0-1.0) icons listed below,
+//   always in the render bundle (fallback glyphs).
+// - shared/render/icon-packs/: the full sets, split into chunks that load on demand, plus `names.ts` (icon
+//   name → set, key, chunk file) and THIRD-PARTY.md (each set, version and licence). Sources: lucide-static,
+//   simple-icons (npm) and the official AWS / Azure / Google Cloud icons vendored in shared/vendor/icons/
+//   by scripts/import-cloud-icons.mjs.
 //
-//   node scripts/build-icons.mjs          write the file
-//   node scripts/build-icons.mjs --check  exit 1 if the checked-in file is out of date
+//   node scripts/build-icons.mjs          write the files
+//   node scripts/build-icons.mjs --check  exit 1 if a checked-in file is out of date
 //
 // Rules enforced here (the build fails instead of quietly shipping something we may not use):
 // - Simple Icons: only icons with no per-icon licence or CC0-1.0 (some logos carry CC-BY/Apache/...).
-// - No AWS / Google Cloud / Azure logos: those names fall back to generic Lucide glyphs.
+// - Simple Icons never supplies AWS / Google Cloud / Azure logos: those come from the vendors' own
+//   architecture icon sets, under their terms.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -151,19 +157,296 @@ export function generate() {
   ].join('\n');
 }
 
+
+// ---------------------------------------------------------------------------------------------------------
+// Full icon packs (shared/render/icon-packs/)
+
+const PACK_DIR = fileURLToPath(new URL('../shared/render/icon-packs/', import.meta.url));
+const VENDOR_DIR = fileURLToPath(new URL('../shared/vendor/icons/', import.meta.url));
+/** Rough size of one chunk file; sets are split so a diagram loads only the chunks its icons are in. */
+const CHUNK_BYTES = 320_000;
+
+/** Lucide names that a Simple Icons logo of the same name replaces (the brand is what people mean). */
+const BRAND_OVER_LUCIDE = new Set(['apple', 'bitcoin', 'blender', 'snowflake']);
+/** Names never given to a logo: they usually mean the generic thing (see BRANDS in icons.ts). */
+const NOT_A_BRAND = new Set(['vault']);
+/**
+ * Extra spellings for logos, written like the names people use in Eraser-style code. Values are
+ * Simple Icons slugs. Rules below add `apache<name>`, `<name>dotjs` and the logos' own "aka" names.
+ */
+const SIMPLE_ALIASES = {
+  postgres: 'postgresql', pg: 'postgresql', mongo: 'mongodb', k8s: 'kubernetes', node: 'nodedotjs', nodejs: 'nodedotjs',
+  golang: 'go', reactjs: 'react', next: 'nextdotjs', nextjs: 'nextdotjs', vue: 'vuedotjs', vuejs: 'vuedotjs', rails: 'rubyonrails',
+  'spring-boot': 'springboot', envoy: 'envoyproxy', 'hashicorp-vault': 'vault', 'socket-io': 'socketdotio',
+  'three-js': 'threedotjs', 'fly-io': 'flydotio', 'bunny-net': 'bunnydotnet', 'box-com': 'box',
+  'flask-python': 'flask', 'material-ui': 'mui',
+  'delta-lake': 'delta', 'plane-so': 'plane', 'cursor-ide': 'cursor', 'vs-code': 'vscodium',
+};
+/** Cloud names that point at another icon of the same set (renamed services, common short forms). */
+const CLOUD_ALIASES = {
+  'aws-vpc': 'aws-virtual-private-cloud-vpc',
+  'aws-s3': 'aws-simple-storage-service',
+  'aws-sqs': 'aws-simple-queue-service',
+  'aws-sns': 'aws-simple-notification-service',
+  'aws-ses': 'aws-simple-email-service',
+  'aws-eks': 'aws-elastic-kubernetes-service',
+  'aws-ecs': 'aws-elastic-container-service',
+  'aws-ecr': 'aws-elastic-container-registry',
+  'aws-ebs': 'aws-elastic-block-store',
+  'aws-kms': 'aws-key-management-service',
+  'aws-iam': 'aws-identity-and-access-management',
+  'aws-elb-application-load-balancer': 'aws-elastic-load-balancing-application-load-balancer',
+  'aws-elb-network-load-balancer': 'aws-elastic-load-balancing-network-load-balancer',
+  'aws-elb-classic-load-balancer': 'aws-elastic-load-balancing-classic-load-balancer',
+  'aws-elb-gateway-load-balancer': 'aws-elastic-load-balancing-gateway-load-balancer',
+  'aws-elb': 'aws-elastic-load-balancing',
+  'aws-alb': 'aws-elastic-load-balancing-application-load-balancer',
+  'aws-nlb': 'aws-elastic-load-balancing-network-load-balancer',
+  'aws-internet-gateway': 'aws-vpc-internet-gateway',
+  'aws-nat-gateway': 'aws-vpc-nat-gateway',
+  'aws-vpn-gateway': 'aws-vpc-vpn-gateway',
+  'aws-vpn-connection': 'aws-vpc-vpn-connection',
+  'aws-route-table': 'aws-vpc-router',
+  'aws-endpoints': 'aws-vpc-endpoints',
+  'aws-network-access-control-list': 'aws-vpc-network-access-control-list',
+  'aws-elastic-ip': 'aws-ec2-elastic-ip-address',
+  'aws-ami': 'aws-ec2-ami',
+  'aws-iam-role': 'aws-identity-access-management-role',
+  'aws-route53': 'aws-route-53',
+  'aws-kinesis-firehose': 'aws-data-firehose',
+  'aws-kinesis-data-analytics': 'aws-managed-service-for-apache-flink',
+  'aws-memorydb-for-redis': 'aws-memorydb',
+  'aws-workspaces': 'aws-workspaces-family',
+  'aws-appstream': 'aws-appstream-2',
+  'aws-container': 'aws-elastic-container-service-container-1',
+  'azure-vm': 'azure-virtual-machine',
+  'azure-sql': 'azure-sql-database',
+  'azure-storage': 'azure-storage-accounts',
+  'azure-functions': 'azure-function-apps',
+  'azure-aks': 'azure-kubernetes-services',
+  'azure-front-doors': 'azure-front-door-and-cdn-profiles',
+  'gcp-gke': 'gcp-google-kubernetes-engine',
+  'gcp-kubernetes-engine': 'gcp-google-kubernetes-engine',
+};
+
+/** `AlertCircle` → `alert-circle`, `BarChart2` → `bar-chart-2`. */
+function kebab(pascal) {
+  return pascal
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([a-zA-Z])(\d)/g, '$1-$2')
+    .toLowerCase();
+}
+
+/** Old and alternative Lucide names (`alert-circle`), read from lucide-react's export list. */
+function lucideAliases(known) {
+  const src = readFileSync(require.resolve('lucide-react').replace(/dist\/cjs\/.*$/, 'dist/esm/lucide-react.mjs'), 'utf8');
+  const out = new Map();
+  for (const m of src.matchAll(/export \{([^}]*)\} from '\.\/icons\/([a-z0-9-]+)\.mjs'/g)) {
+    if (!known.has(m[2])) continue;
+    for (const [, name] of m[1].matchAll(/default as (\w+)/g)) {
+      if (name.startsWith('Lucide') || name.endsWith('Icon')) continue;
+      const k = kebab(name);
+      if (k !== m[2] && !known.has(k)) out.set(k, m[2]);
+    }
+  }
+  return out;
+}
+
+/** Split `{ key: entry }` into chunk objects by packChunk. */
+function chunked(entries, packChunk) {
+  const bytes = entries.reduce((n, [k, v]) => n + k.length + JSON.stringify(v).length, 0);
+  const n = Math.max(1, Math.ceil(bytes / CHUNK_BYTES));
+  const chunks = Array.from({ length: n }, () => []);
+  for (const e of entries) chunks[packChunk(e[0], n)].push(e);
+  return chunks;
+}
+
+export async function generatePacks() {
+  const { packChunk } = await import('../shared/render/icon-hash.ts');
+  const PATH = /^[MmLlHhVvCcSsQqTtAaZz0-9.,\s+eE-]+$/;
+  const sets = [];
+
+  // Lucide: every icon, stroked on a 24 grid.
+  const lucideNodes = JSON.parse(readFileSync(require.resolve('lucide-static/icon-nodes.json'), 'utf8'));
+  const lucideVersion = JSON.parse(readFileSync(require.resolve('lucide-static/package.json'), 'utf8')).version;
+  const lucide = Object.keys(lucideNodes)
+    .sort()
+    .map((name) => {
+      const d = lucideNodes[name].map(elementToPath).join(' ');
+      if (!PATH.test(d)) throw new Error(`lucide: "${name}" has unexpected path data`);
+      return [name, ['0 0 24 24', d]];
+    });
+  sets.push({ id: 'lucide', kind: 'stroke', title: 'Lucide', version: lucideVersion, license: 'ISC (some icons MIT, from Feather)', url: 'https://lucide.dev', entries: lucide });
+
+  // Simple Icons: every logo without its own non-CC0 licence, filled in its brand colour.
+  const siDir = `${dirname(require.resolve('simple-icons'))}/`;
+  const siVersion = JSON.parse(readFileSync(`${siDir}package.json`, 'utf8')).version;
+  const siRaw = JSON.parse(readFileSync(`${siDir}data/simple-icons.json`, 'utf8'));
+  const siMeta = new Map((Array.isArray(siRaw) ? siRaw : siRaw.icons).map((i) => [i.slug, i]));
+  const simple = Object.values(require('simple-icons'))
+    .filter((i) => i && i.slug)
+    .filter((i) => !VENDOR_CLOUD.test(i.slug) && !NOT_A_BRAND.has(i.slug))
+    .filter((i) => !siMeta.get(i.slug)?.license || siMeta.get(i.slug).license.type === 'CC0-1.0')
+    .sort((a, b) => (a.slug < b.slug ? -1 : 1))
+    .map((i) => {
+      const hex = `#${i.hex.toLowerCase()}`;
+      if (!PATH.test(i.path)) throw new Error(`simple-icons: "${i.slug}" has unexpected path data`);
+      if (!/^#[0-9a-f]{6}$/.test(hex)) throw new Error(`simple-icons: "${i.slug}" has a bad colour`);
+      return [i.slug, ['0 0 24 24', i.path, hex], i.title];
+    });
+  sets.push({ id: 'simple', kind: 'fill', title: 'Simple Icons', version: siVersion, license: 'CC0-1.0 (logos are trademarks of their owners)', url: 'https://simpleicons.org', entries: simple });
+
+  // Official cloud icon sets, vendored and already sanitized.
+  for (const id of ['aws', 'azure', 'gcp']) {
+    const v = JSON.parse(readFileSync(`${VENDOR_DIR}${id}.json`, 'utf8'));
+    const entries = Object.entries(v.icons).map(([name, i]) => {
+      if (/<\/?(script|style|image|foreignObject|use|a)\b|\son\w+=|href="(?!#)/i.test(i.body)) throw new Error(`${id}: "${name}" has markup that is not allowed`);
+      return [name, [i.vb, i.body], i.label];
+    });
+    sets.push({ id, kind: 'art', title: v.title, version: v.version, license: v.license, url: v.url, entries });
+  }
+
+  // Names: name → "set:key" (key omitted when equal to the name). Earlier wins.
+  const names = new Map();
+  const titles = new Map();
+  const add = (name, set, key) => {
+    if (!/^[a-z0-9][a-z0-9.+-]*$/.test(name) || names.has(name)) return;
+    names.set(name, key === name ? set : `${set}:${key}`);
+  };
+  const byId = Object.fromEntries(sets.map((s) => [s.id, s]));
+  for (const id of ['aws', 'azure', 'gcp']) for (const [k, , title] of byId[id].entries) add(k, id, k), titles.set(`${id}:${k}`, title);
+  const cloudKeys = new Set(['aws', 'azure', 'gcp'].flatMap((id) => byId[id].entries.map((e) => e[0])));
+  for (const [alias, key] of Object.entries(CLOUD_ALIASES)) {
+    if (!cloudKeys.has(key)) throw new Error(`cloud alias ${alias}: no icon "${key}"`);
+    add(alias, key.split('-')[0], key);
+  }
+  const lucideKeys = new Set(lucide.map((e) => e[0]));
+  const simpleKeys = new Set(simple.map((e) => e[0]));
+  for (const k of BRAND_OVER_LUCIDE) add(k, 'simple', k);
+  for (const k of SIMPLE.filter((k) => simpleKeys.has(k))) add(k, 'simple', k);
+  for (const k of lucideKeys) add(k, 'lucide', k);
+  for (const [k, , title] of simple) add(k, 'simple', k), titles.set(`simple:${k}`, title);
+  for (const [alias, slug] of Object.entries(SIMPLE_ALIASES)) {
+    if (!siMeta.has(slug)) throw new Error(`simple alias ${alias}: no icon "${slug}"`);
+    // A logo left out for its licence keeps no alias either.
+    if (simpleKeys.has(slug)) add(alias, 'simple', slug);
+  }
+  for (const k of simpleKeys) {
+    const m = /^apache(.+)$/.exec(k) ?? /^(.+)dotjs$/.exec(k);
+    if (m) add(m[1], 'simple', k);
+  }
+  for (const [slug, meta] of siMeta) {
+    if (!simpleKeys.has(slug)) continue;
+    for (const aka of meta.aliases?.aka ?? []) add(aka.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), 'simple', slug);
+  }
+  for (const [alias, key] of lucideAliases(lucideKeys)) add(alias, 'lucide', key);
+
+  // Files.
+  const q = JSON.stringify;
+  const files = new Map();
+  const head = '// GENERATED by scripts/build-icons.mjs. Do not edit by hand; run `npm run icons`. See THIRD-PARTY.md.';
+  const chunkCounts = {};
+  for (const s of sets) {
+    const chunks = chunked(s.entries.map(([k, v]) => [k, v]), packChunk);
+    chunkCounts[s.id] = chunks.length;
+    chunks.forEach((c, i) => {
+      files.set(
+        `${s.id}-${i}.ts`,
+        [head, "import type { PackChunk } from '../icon-registry.ts';", '', 'const chunk: PackChunk = {', ...c.map(([k, v]) => `  ${q(k)}: ${q(v)},`), '};', 'export default chunk;', ''].join('\n'),
+      );
+    });
+  }
+  const loaders = sets.flatMap((s) => Array.from({ length: chunkCounts[s.id] }, (_, i) => `  ${q(`${s.id}-${i}`)}: () => import('./${s.id}-${i}.ts'),`));
+  files.set(
+    'loaders.ts',
+    [
+      head,
+      "import type { PackChunk, PackSet } from '../icon-registry.ts';",
+      '',
+      '/** Drawing kind and chunk count of each set. */',
+      `export const PACK_SETS: Record<PackSet, { kind: 'stroke' | 'fill' | 'art'; chunks: number }> = {`,
+      ...sets.map((s) => `  ${s.id}: { kind: ${q(s.kind)}, chunks: ${chunkCounts[s.id]} },`),
+      '};',
+      '',
+      '/** Chunk file loaders, `<set>-<n>`. */',
+      'export const PACK_LOADERS: Record<string, () => Promise<{ default: PackChunk }>> = {',
+      ...loaders,
+      '};',
+      '',
+    ].join('\n'),
+  );
+  const sortedNames = [...names].sort(([a], [b]) => (a < b ? -1 : 1));
+  files.set(
+    'names.ts',
+    [
+      head,
+      '',
+      '/** Icon name (as written in `icon: <name>`) → "set" (key = name) or "set:key". */',
+      'export const ICON_NAMES: Record<string, string> = {',
+      ...sortedNames.map(([k, v]) => `  ${q(k)}: ${q(v)},`),
+      '};',
+      '',
+      '/** "set:key" → the source title, for search (only where it differs from the name). */',
+      'export const ICON_TITLES: Record<string, string> = {',
+      ...[...titles].filter(([k, t]) => t && t.toLowerCase().replace(/[^a-z0-9]+/g, '-') !== k.split(':')[1]).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, t]) => `  ${q(k)}: ${q(t)},`),
+      '};',
+      '',
+    ].join('\n'),
+  );
+  files.set(
+    'THIRD-PARTY.md',
+    [
+      '# Bundled icon sets',
+      '',
+      'Generated by `scripts/build-icons.mjs`. The sets are bundled with the app (no runtime download); the full',
+      'licence texts of Lucide and Simple Icons are in the repository NOTICE.md. Logos and product icons are',
+      'trademarks of their owners; their use here does not imply endorsement.',
+      '',
+      '| Set | Version | Icons | Licence / terms | Source |',
+      '| --- | --- | --- | --- | --- |',
+      ...sets.map((s) => `| ${s.title} | ${s.version} | ${s.entries.length} | ${s.license} | ${s.url} |`),
+      '',
+      `Names: ${names.size} (icon names, aliases included).`,
+      '',
+    ].join('\n'),
+  );
+  return files;
+}
+
+/** Every generated file: path relative to the repo root → content. */
+async function allFiles() {
+  const out = new Map([[OUT, generate()]]);
+  for (const [name, text] of await generatePacks()) out.set(`${PACK_DIR}${name}`, text);
+  return out;
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const out = generate();
+  const files = await allFiles();
+  let existing = [];
+  try {
+    existing = readdirSync(PACK_DIR).map((f) => `${PACK_DIR}${f}`);
+  } catch {}
   if (process.argv.includes('--check')) {
-    let cur = '';
-    try {
-      cur = readFileSync(OUT, 'utf8');
-    } catch {}
-    if (cur !== out) {
-      console.error('shared/render/icon-data.ts is out of date: run `npm run icons`');
+    const stale = [...files].filter(([path, text]) => {
+      try {
+        return readFileSync(path, 'utf8') !== text;
+      } catch {
+        return true;
+      }
+    });
+    const extra = existing.filter((p) => !files.has(p));
+    if (stale.length || extra.length) {
+      console.error(`icon data is out of date (${[...stale.map(([p]) => p), ...extra].length} files): run \`npm run icons\``);
       process.exit(1);
     }
   } else {
-    writeFileSync(OUT, out);
-    console.log(`wrote ${OUT} (${out.length} bytes)`);
+    mkdirSync(PACK_DIR, { recursive: true });
+    for (const p of existing) if (!files.has(p)) rmSync(p);
+    let bytes = 0;
+    for (const [path, text] of files) {
+      writeFileSync(path, text);
+      bytes += text.length;
+    }
+    console.log(`wrote ${files.size} files (${bytes} bytes)`);
   }
 }

@@ -17,6 +17,7 @@ import { wrapTopLevel } from './layout-wrap.ts';
 import { routeOrthogonal } from './route-eraser.ts';
 import type { PartialRoute, RoutedEdge, RouterBox } from './route-eraser.ts';
 import type { Point, Scene, SceneBadge, SceneEdge, SceneHandle, SceneItem, ShapeKind } from './scene.ts';
+import { nodeAutoIcon, prepareIcons } from './auto-icon.ts';
 
 const SHAPES: readonly ShapeKind[] = [
   'rectangle', 'circle', 'cylinder', 'diamond', 'document', 'ellipse',
@@ -103,6 +104,8 @@ interface NodeGeom {
   /** `shape: divider`: a line broken by the label instead of a box. */
   divider?: boolean;
   iconSize: number;
+  /** The icon drawn: `icon:` or the automatic one from the label (#734). */
+  icon?: string;
   /** Second line from `subtitle:`, smaller and muted. */
   sub?: Label;
   w: number;
@@ -130,9 +133,14 @@ function measureSub(node: GraphNode, style: ElementStyle, maxWidth: number): Lab
 const textHeight = (label: Label, sub: Label | undefined): number => label.h + (sub ? SUBTITLE_GAP + sub.h : 0);
 
 function measureNode(d: GraphDiagram, node: GraphNode): NodeGeom {
+  const icon = node.attrs.icon ?? nodeAutoIcon(d, node);
+  const geom = measureNodeWith(d, node, icon);
+  return geom.iconSize ? { ...geom, icon } : geom;
+}
+
+function measureNodeWith(d: GraphDiagram, node: GraphNode, icon: string | undefined): NodeGeom {
   const style = styleFor(d, node.attrs, node.span.line);
   const size = fontSize(style);
-  const icon = node.attrs.icon;
   const shapeAttr = node.attrs.shape?.toLowerCase();
   if (shapeAttr === 'divider') {
     const label = measureLabel(node.label, round(size * DIVIDER_SCALE), style.typeface, style.wrap, NODE_TEXT_MAX * 2);
@@ -694,6 +702,7 @@ export interface GraphLayoutOptions {
 
 /** Measure the diagram and run ELK. Async and slow; cache the result per AST (and per `options`). */
 export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {}): Promise<GraphBase> {
+  await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
   const parent = new Map<string, string | undefined>();
@@ -1373,7 +1382,7 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
     const subItem = (x: number, y: number, anchor: 'start' | 'middle', on?: ElementStyle['paint']): SceneItem =>
       textItem(sub!.lines, x, y, { size: sub!.size, font: style.typeface, anchor, tone: 'muted', ...(on ? { on } : {}) });
     if (g.iconOnly) {
-      nodeItems.push({ kind: 'icon', name: g.node.attrs.icon!, x: r.x + r.w / 2 - g.iconSize / 2, y: r.y, size: g.iconSize, paint: style.paint });
+      nodeItems.push({ kind: 'icon', name: g.icon!, x: r.x + r.w / 2 - g.iconSize / 2, y: r.y, size: g.iconSize, paint: style.paint });
       nodeItems.push(textItem(label.lines, r.x + r.w / 2, r.y + g.iconSize + 6, { size: label.size, font: style.typeface }));
       if (sub) nodeItems.push(subItem(r.x + r.w / 2, r.y + g.iconSize + 6 + label.h + SUBTITLE_GAP, 'middle'));
       continue;
@@ -1385,7 +1394,7 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
     if (g.card) {
       // Box card: icon at the left edge, title and subtitle centred in the room right of it.
       const ix = r.x + CARD_INSET;
-      nodeItems.push({ kind: 'icon', name: g.node.attrs.icon!, x: ix, y: cy - g.iconSize / 2, size: g.iconSize, paint: style.paint, inside: true });
+      nodeItems.push({ kind: 'icon', name: g.icon!, x: ix, y: cy - g.iconSize / 2, size: g.iconSize, paint: style.paint, inside: true });
       const tx = (ix + g.iconSize + 8 + r.x + r.w - CARD_RIGHT) / 2;
       nodeItems.push(textItem(label.lines, tx, top, { size: label.size, font: style.typeface, on: style.paint }));
       if (sub) nodeItems.push(subItem(tx, subY, 'middle', style.paint));
@@ -1394,7 +1403,7 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
     const contentW = Math.max(label.w, sub?.w ?? 0) + (g.iconSize ? g.iconSize + 8 : 0);
     let x = r.x + r.w / 2 - contentW / 2;
     if (g.iconSize) {
-      nodeItems.push({ kind: 'icon', name: g.node.attrs.icon!, x, y: cy - g.iconSize / 2, size: g.iconSize, paint: style.paint, inside: true });
+      nodeItems.push({ kind: 'icon', name: g.icon!, x, y: cy - g.iconSize / 2, size: g.iconSize, paint: style.paint, inside: true });
       x += g.iconSize + 8;
     }
     const anchor = g.iconSize ? 'start' : 'middle';

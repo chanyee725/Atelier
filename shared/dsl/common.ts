@@ -26,10 +26,14 @@ export const ENUMS: Record<string, readonly string[]> = {
   wrap: ['on', 'off'],
   connectorStyle: ['elbow', 'straight', 'arc'],
   nodeStyle: ['box', 'icon'],
+  autoIcons: ['on', 'off'],
   shape: SHAPES,
 };
-/** `nodeStyle` is our extension: architecture nodes with an icon draw as box cards (`box`) or the old big icon (`icon`). */
-const STYLE_KEYWORDS = ['colorMode', 'styleMode', 'typeface', 'textSize', 'wrap', 'connectorStyle', 'nodeStyle'];
+/**
+ * `nodeStyle` is our extension: architecture nodes with an icon draw as box cards (`box`) or the old big icon (`icon`).
+ * `autoIcons` is ours too: `off` stops nodes without `icon:` from getting one from their label (#734).
+ */
+const STYLE_KEYWORDS = ['colorMode', 'styleMode', 'typeface', 'textSize', 'wrap', 'connectorStyle', 'nodeStyle', 'autoIcons'];
 const HEX_RE = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 export function spanOf(t: Span): Span {
