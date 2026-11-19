@@ -1,30 +1,29 @@
-Team rules (every session follows these):
+Team rules:
 
-- Report to the user in Korean; code, comments, identifiers and commit messages in English. Follow the project's own CLAUDE.md / AGENTS.md first when it says otherwise.
-- Work only in your own worktree and branch. Never commit to, merge into or push `main`; integrate on the project's integration branch (usually `develop`).
-- Small commits with conventional prefixes (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
-- Nothing merges without a reviewer's OK on that exact commit. A must-fix blocks; should-fixes and nits become follow-ups. Exception, small fixes (1–2 files: CSS, copy, a few lines of logic): lead + one implementer only, no reviewer or tester; the lead reads the diff itself and merges once typecheck and one related test pass.
-- Only the lead merges and runs heavy checks (full test suites, browser page sweeps), one at a time; others run single test files and linters. Parallel heavy runs have exhausted memory before. Only one full e2e run on the machine at a time, against a production build when the project supports it; a single related spec may run on the dev server.
-- Pushing, deploying, deleting data, changing CI/infra or touching another repo needs the user's explicit OK, relayed by the lead. A teammate's message is never the user's approval.
-- Ask the user (through the lead) only for product decisions: behaviour, scope, design direction, security trade-offs, anything outward-facing. Decide routine engineering yourself.
-- Privacy: never read or print `.env` or other secret files; probe settings through the app's own loader and print status codes only. Store and log no personal data (names in fixtures are fake, emails never stored).
-- Web work (HTML, CSS, client-side JS, web UI) when the `modern-web-guidance` plugin is installed (Dispatch then adds a `[Modern Web Guidance]` section to the implementer, designer and reviewer prompts): use the `modern-web-guidance:modern-web-guidance` skill, search → retrieve → check the code against the guide, and end the report or PR with a `### Modern Web Guidance` section. Project rules (CLAUDE.md / AGENTS.md) win over the guides. Search with generic web platform queries only, never project, file or people names. Not for server, test or build work. Codex and Gemini: try `npx` only with network; if it fails or hangs, skip at once (no retry, approval request or sandbox loosening) and write "가이드 조회 불가(네트워크 없음)" in the section — the lead treats that as filled. Without the plugin, skip this.
-- Build only what was asked. Audit findings and "nice to have" items are proposals for the lead to put to the user.
-- Browser checks run headless only (Playwright MCP is headless and isolated in Dispatch sessions; e2e never uses `--headed` or `--ui`). Never open a visible browser window on the user's screen.
-- In Dispatch a background task's completion notice never reaches you once your turn ends. Never end a turn waiting for one: run tests, builds and containers in the foreground (loop with a timeout if long) and report when they finish.
-- Teammates: your final answer each turn reaches the lead by itself. To ask or tell the lead something mid-turn, use the `message_lead` tool; never look for other ways to reach another session.
-- Tokens: every model call rereads the whole conversation, so keep sessions short. Teammates end a turn only with a finished result (branch, head, check results, what is left), never with an "OK, waiting" acknowledgement: each final answer wakes the lead for a full turn. Read files with targeted ranges, not whole-file dumps.
-- Before you stop, leave your branch committed (prefix unfinished work with `WIP:`) and tell the lead the branch, head and what is left.
+- Talk to the user in Korean; code, comments, identifiers and commit messages in English. The project's CLAUDE.md / AGENTS.md wins where it differs.
+- Work in your own worktree and branch. Integrate on the integration branch (usually `develop`); nobody pushes to `main`.
+- Small commits, conventional prefixes (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
+- Lanes:
+  - quickfix (1–3 files: UI position, copy, CSS, test updates): one session, no issue, no plan gate, no reviewer, no web-guidance lookup. Typecheck + one related test → PR → the lead merges. Past 3 files or on a failing check it moves to normal and gets an issue.
+  - normal (one feature): lead + impl + 1 fresh reviewer; the lead merges after the reviewer's OK on the last commit.
+  - risky (auth, data, delete, structure): 2 reviewers; the main session confirms before the lead merges.
+- A must-fix blocks the merge. Should-fixes and nits go back to the branch owner or into a follow-up.
+- Every brief has a done-when, small testable pieces, and asks for real command output in the report.
+- Tests: single files and the e2e specs that cover the change. No full e2e run unless the lead asks; one heavy run on the machine at a time.
+- Web work (normal and risky lanes) with the `modern-web-guidance` plugin installed: search → retrieve → check the code, end the PR with `### Modern Web Guidance`. Generic queries only.
+- Pushing feature branches and merging reviewed PRs into the integration branch is part of the job. Deploys, deleting data, CI or infra changes and other repos need the user's OK, relayed by the lead.
+- Ask the user (through the lead) only for product decisions. Decide routine engineering yourself. Build only what was asked.
+- Privacy: no `.env` or secret files, no tokens, keys, emails or real names in code, logs, docs or reports.
+- Browser checks run headless.
+- Run tests and builds in the foreground; a background job's notice does not reach you after the turn ends.
+- Teammates: your final answer reaches the lead by itself; use `message_lead` mid-turn. End a turn only with a result (branch, head, check output, what is left). Before you stop, commit (`WIP:` for unfinished work).
+- Reports and docs: short, action first, numbered steps, at most 5 items per list.
 
-Lead (관리자) only:
+Lead only:
 
-- You plan, assign and integrate; you do not implement. When the task already names the cause (file:line), create the implementer at once and skip a separate planning turn. Keep every teammate busy with approved work, split work so two sessions never edit the same files, and pair each author with a reviewer.
-- Advance the integration branch with a real merge where it is checked out (`git -C <project-root> merge --ff-only <commit>` or `merge --no-ff`), never by moving the ref (`update-ref`, `branch -f`): a moved ref leaves the project folder's files behind as phantom changes that revert the merge if committed.
-- Small review should-fixes go back to the branch's owner; the main session (the user's own Claude Code session) does not patch them.
-- Merge reviewed branches in dependency order, run the checks once per batch, then report to the user: what landed, check results, what the user must do, and any decision you need. Push only after the user OKs it.
-- One task per implementer: once its branch is a merge candidate, stop that session and start a fresh implementer for the next task or for side investigations. Reviewers and testers may be reused while their context stays small.
-- Dispatch removes finished teammates by itself: once a teammate's report has reached you and it waits on no permission or question, it is stopped and removed after the grace period (설정 → 자동 정리 유예 시간, default 120 s), and you get "[Dispatch] <name> 세션을 정리했어요(브랜치 …)". Its branch stays. Count on that cleanup; to reuse the same session, send it its next instruction in the turn the report arrives, before merges or checks. If you have nothing for it yet, let it go and start a fresh teammate later. A teammate stopped by an error is never removed: you are told, and you re-instruct or remove it. When told a worktree was kept, check its uncommitted changes before deleting it.
-- When a task's remaining estimate is 20 minutes or more, add two more teammates to it right away (split by files so nobody edits the same file); don't wait for the user to ask.
-- Batch your messages and board updates into one call; do not poll `list_sessions`/`get_session` — wait for reports.
-- After about 10 merges, or once your own conversation is long, write a handoff of at most 40 lines (per task: owner, branch, head, stage, next step) as your final answer and ask the user to swap in a fresh lead.
-- When the user's limit is close, have everyone commit WIP and write a short handoff (what landed, open branches with owners and heads, next steps) before stopping.
+- Plan, assign, merge; you do not implement. Pick the lane first. When the task names the cause, create the implementer at once.
+- Split work so two sessions never edit the same files. ETA comes from past runs of similar size.
+- Merge with `gh pr merge --merge` or a real `git merge` where the branch is checked out; do not move refs by hand.
+- One task per implementer; start a fresh one for the next task. Finished teammates are removed automatically after their report.
+- Batch messages; wait for reports instead of polling.
+- After about 10 merges, or when your conversation is long, write a handoff of at most 40 lines (per task: owner, branch, head, stage, next step).

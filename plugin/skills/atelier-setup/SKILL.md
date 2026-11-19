@@ -1,56 +1,30 @@
 ---
-name: dispatch
-description: Dispatch — local web UI that runs several role-based Claude Code, Codex and Gemini sessions in parallel in one project. Use when the user wants to set up, open or update Dispatch ("디스패치 업데이트"), log Claude/Codex/Gemini in for it, fan a task out to multiple agent sessions (관리자, 구현자, 리뷰어, 테스터, 디자이너, 문서화), check what those sessions are doing, or see session cost, context and usage limits.
+name: atelier-setup
+description: Start Atelier (local docs, diagrams and agent teams) in a project, connect Claude, Codex or Gemini to it, check it runs, and stop or restart its server. Use when the user says "아틀리에 켜줘", "Atelier 시작", "Claude 연결", "서버 재시작", or another Atelier skill needs a running server.
 ---
 
-# Dispatch (in Drawing)
+# Atelier setup
 
-Drawing (the Dispatch plugin) serves http://127.0.0.1:4330 and spawns `claude` / `codex` CLI sessions inside the **project it was started from**. Each session gets a role prompt, a model, an effort level, a permission mode and its own git worktree at `.dispatch/wt/<role>-<n>` on branch `dispatch/<role>-<n>`. `<skill-dir>` below is the directory containing this file; `<plugin-root>` is two levels up. The server starts with `<plugin-root>/scripts/start.sh <project>` and its workspace is `<project>/pipelines`.
+Atelier serves `http://127.0.0.1:<port>` (4330 by default) for one project and runs agent sessions there, each in its own git worktree at `.dispatch/wt/<role>-<n>`. `<skill-dir>` is this file's folder; `<plugin-root>` is two levels up. The workspace is `<project>/pipelines`.
 
 ## Steps
 
-1. **Check readiness.** Run `<skill-dir>/scripts/setup.sh --status`.
-   Done when every provider the user wants shows `logged in`. For a provider that shows `not logged in`, ask the user to run `! <skill-dir>/scripts/setup.sh <claude|codex>` in their own terminal: login opens a browser OAuth page, so it needs their terminal, and any token or key stays with the CLI. For `not installed`, give the install hint the script prints.
+1. Check the CLIs: `<skill-dir>/scripts/setup.sh --status`.
+   Done when: each provider the user wants shows `logged in`. For `not logged in`, ask the user to run `! <skill-dir>/scripts/setup.sh <claude|codex>` in their own terminal (browser login; the token stays with the CLI). For `not installed`, relay the hint the script prints.
+2. Start or reuse the server: `<plugin-root>/scripts/start.sh "<project-root>"`.
+   Done when: it prints the URL. If the port serves another project, rerun with `DISPATCH_PORT=<next free port>` and keep that port. Log: `<project>/.dispatch/server.log`.
+3. Connect providers. Providers start disconnected. Read `GET /api/state` → `providers.<claude|openai|gemini>.connected`; connect only the ones the user named with `POST /api/providers/<id>/login` (header `x-drawing: 1`).
+   Done when: each named provider shows `connected: true`.
+4. Give the user the URL.
+   Done when: the user has the URL and knows which providers are connected.
 
-2. **Start or reuse the server.** Run `<skill-dir>/../../scripts/start.sh "<project-root>"`.
-   Done when it prints `Dispatch running for <project> → <url>` or `already running`. If it reports the port serves another project, rerun with `DISPATCH_PORT=4331` (or the next free port) and use that port from here on. Logs: `<project>/.dispatch/server.log`.
+## Stop and restart
 
-3. **Connect providers inside Drawing.** Providers start disconnected even when the CLI is logged in, and Dispatch refuses sessions for a disconnected provider. Read `GET /api/state` → `providers.<claude|openai>.connected`.
-   Done when every provider the user named has `connected: true`. Connect exactly the providers the user named, either by pointing them to the first screen of Drawing의 실행 화면 or with `POST /api/providers/<claude|openai>/login` (connects immediately when `cliLoggedIn: true`; otherwise it starts the CLI's browser login on the user's machine).
+- Stop: `<skill-dir>/scripts/stop.sh "<project-root>"`.
+- Restart (loads new server code): `<skill-dir>/scripts/restart.sh "<project-root>"`. Running turns are cut and resumed with a note; transcripts live in memory only, so they are gone after a restart.
 
-4. **Hand over or drive.** Give the user the URL. When the user asked you to start work, create the sessions through the API in [reference/api.md](reference/api.md), then report each session's name, model and branch.
-   Done when every requested session appears in `GET /api/state` with status `running`, `waiting` or `idle`.
+Done when: `GET /api/state` answers again (restart) or the port is free (stop).
 
-Stop the server with `<skill-dir>/scripts/stop.sh "<project-root>"`; restart it (to load new server code) with `<skill-dir>/scripts/restart.sh "<project-root>"`. A restart cuts running turns, but those sessions are resumed with a note; the transcript itself lives in memory only and is gone after a restart.
+## Reference
 
-## Code-analysis diagrams
-
-When you draw a diagram of code in Drawing, label nodes by feature in short Korean (never file names) and attach code locations as refs. Format, full example and the save call: `docs/agent-diagrams.md` in the Drawing repo (not in your project; the short rule is also in your session prompt).
-
-## Update
-
-When the user asks to update ("디스패치 업데이트", "최신으로"), use the `dispatch-update` skill: it downloads the latest release bundle from GitHub and restarts running servers.
-
-## Roles
-
-| id | name | default model | permission | notes |
-|---|---|---|---|---|
-| `lead` | 관리자 | claude-sonnet-5-5 | auto | Splits work and creates/steers other sessions through the Dispatch MCP tools (max 8 open children). Mostly bookkeeping, so it runs on Sonnet; swap in a fresh lead after ~10 merges because every call rereads its whole conversation. |
-| `impl` | 구현자 | claude-opus-5-5 | auto | Implements in small commits, runs tests. |
-| `review` | 리뷰어 | claude-opus-5-5 | auto | Reads only, reports risks in priority order. |
-| `test` | 테스터 | claude-sonnet-5-5 | auto | Adds edge-case tests. |
-| `design` | 디자이너 | claude-sonnet-5-5 | auto | Layout, spacing, colour, accessibility; leaves logic alone. |
-| `docs` | 문서화 | claude-haiku-5-5 | auto | README / CHANGELOG. |
-
-Any role can run on any listed model; model ids come from `GET /api/state` → `models` (Codex models are read live from `codex debug models`).
-
-## Rules that shape what you do
-
-- **The main session delegates.** You, the session talking to the user, do not implement, fix or investigate code yourself. Hand every task to a Dispatch lead; your part is writing briefs, verifying before merge, commenting on PRs and merging. Start a **new** lead for a different stream (another area or repo, or when the current lead's context is heavy or it shows `longRun`) instead of adding it to an existing lead. Send small review should-fixes back to the owning lead; do not patch them. The plugin's hook (`hooks/main-delegates.mjs`) reminds you when you edit a file or run a Bash command that writes one in a project with a live Dispatch server, and again every 30 minutes; it never blocks the edit.
-- **Limits.** Claude sessions share the user's 5-hour and weekly limits (`limits.five` / `limits.seven`, 0–1). The server refuses new Claude sessions at or above the guard in `settings.guard` (default 90% / 85%); Codex sessions are not gated by it. Size the fan-out to what the task needs.
-- **Long sessions.** A session that runs for many turns re-reads its whole history on every call, even when turn rotation keeps its context small (one lead processed 29M tokens). Replace it instead of feeding it more work: past `settings.team.handoffMTokens` (default 15M tokens processed, `0` = off) Dispatch flags the session (`longRun`, a 확인 필요 warning, `long: true` in the lead's `list_sessions`) and says once who should act — a teammate's lead is told to stop it and give the rest to a fresh teammate; a lead is told to write a handover. When you drive a lead yourself and it shows `longRun`, read its handover, create a fresh lead with that handover as its task, and remove the old one. The plugin's hook (`hooks/long-session.mjs`) repeats the notice inside the session after a tool call, in case the lead missed it.
-- **Permissions.** Claude sessions in `manual` mode wait for the user to approve tools in Drawing의 실행 화면 (status `waiting`). Codex runs non-interactively: `acceptEdits` / `auto` → workspace-write sandbox, `manual` / `plan` → read-only.
-- **Cost.** Claude reports USD (an API-price estimate, not a bill on subscriptions); Codex reports tokens only, so its cost is `null`.
-- **Privacy.** Transcripts live in the server's memory only. Disk keeps metadata only (step states, times, model, token counts, cost, branch, commit, PR number) in `<project>/.dispatch/`; keep `.dispatch/` gitignored. Keys and account details stay inside the CLIs.
-- **Watchdog.** Every 30 s the server retries undelivered reports and sets `session.stall` (shown on the card) for a teammate with no lead, or a lead whose whole team has been idle over 10 minutes.
-- **Worktrees** need a git repo with at least one commit; otherwise the session runs in the project folder and its transcript says so.
+HTTP endpoints, session fields and MCP tools: [reference/api.md](reference/api.md). Run a team with `atelier-team`, a small change with `atelier-quickfix`, the live board with `atelier-status`.
