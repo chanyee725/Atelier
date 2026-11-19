@@ -8,6 +8,9 @@ const DRIVE = process.platform === 'win32' ? /^[a-zA-Z]:/ : /^[a-zA-Z]:(\/|$)/;
 
 export class PathError extends Error {}
 
+/** Top-level workspace names project mode keeps for itself (#782): agent git worktrees, never document folders. */
+export const RESERVED_PROJECT_NAMES = Object.freeze(['worktrees']);
+
 /** Validate an API path and return its segments. Throws PathError. */
 export function parseRelPath(p) {
   if (typeof p !== 'string' || p === '') throw new PathError('path is required');
@@ -23,12 +26,22 @@ export function parseRelPath(p) {
   return segs;
 }
 
-export function createResolver(rootDir) {
+/**
+ * parseRelPath that also refuses a path under a reserved top-level name. Project mode reserves `worktrees`
+ * (<project>/.atelier/worktrees holds agent git worktrees, #782): never a document folder.
+ */
+export function parseWorkspacePath(p, reserved = []) {
+  const segs = parseRelPath(p);
+  if (reserved.includes(segs[0])) throw new PathError('reserved name');
+  return segs;
+}
+
+export function createResolver(rootDir, { reserved = [] } = {}) {
   const root = realpathSync(rootDir);
 
   /** Absolute path for a relative API path; refuses symlink escapes. `segs` must come from parseRelPath. */
   async function resolve(relPath) {
-    const segs = parseRelPath(relPath);
+    const segs = parseWorkspacePath(relPath, reserved);
     const abs = join(root, ...segs);
     await assertInside(abs);
     return abs;
