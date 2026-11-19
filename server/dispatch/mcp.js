@@ -83,7 +83,7 @@ const LEAD_TOOLS = [
             type: "object",
             required: ["role", "task"],
             properties: {
-              role: { type: "string", description: "역할 id (list_roles 참고)" },
+              role: { type: "string", description: "역할 id: impl, review, test, design, docs (list_roles 참고). implementer·reviewer·tester·designer도 받아요" },
               task: { type: "string", description: "이 세션에게 줄 지시" },
               model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 mode의 프로필, mode도 없으면 역할 기본값" },
               effort: { type: "string" },

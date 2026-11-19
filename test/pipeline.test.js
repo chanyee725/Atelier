@@ -207,13 +207,15 @@ test('blockers: unknown role, cycle, no lead; moving the file keeps its approval
   const t = await start();
   try {
     const { call, d, lead } = t;
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '순환', steps: [{ id: 'a', title: 'A', role: 'nobody' }] });
+    // write_plan refuses an unknown role with the valid list and maps common aliases (#788).
+    const unknown = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '순환', steps: [{ id: 'a', title: 'A', role: 'nobody' }] });
+    assert.equal(unknown.status, 400);
+    assert.match(unknown.body.error, /역할 "nobody"을 몰라요\. 쓸 수 있는 역할: .*impl, review/);
+    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '순환', steps: [{ id: 'a', title: 'A', role: 'implementer' }, { id: 'b', title: 'B', role: 'reviewer', after: ['a'] }] });
     assert.equal(w.status, 200, JSON.stringify(w.body));
+    assert.deepEqual(JSON.parse(readFileSync(join(t.ws, w.body.path), 'utf8')).plan.steps.map((s) => s.role), ['impl', 'review']);
     let st = await call('GET', `/api/pipeline?path=${encodeURIComponent(w.body.path)}`);
-    assert.match(st.body.blockers.join('|'), /역할 "nobody"을 몰라요/);
-    const refused = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
-    assert.equal(refused.status, 409);
-    assert.ok(refused.body.blockers.length);
+    assert.deepEqual(st.body.blockers, []);
 
     // Writing again without a path revises the same draft.
     const again = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: '순환', steps: [{ id: 'a', title: 'A', role: 'impl', after: ['b'] }, { id: 'b', title: 'B', role: 'impl', after: ['a'] }] });
@@ -223,11 +225,15 @@ test('blockers: unknown role, cycle, no lead; moving the file keeps its approval
     assert.deepEqual(st.body.changes, []);
 
     // A file nobody's lead wrote cannot start.
-    const plain = await call('POST', '/api/file', { path: 'plans/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'impl' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
+    const plain = await call('POST', '/api/file', { path: 'plans/hand', plan: { v: 1, block: 'b1', steps: [{ id: 's', node: 's', role: 'nobody' }] }, blocks: [{ id: 'b1', type: 'flowchart', code: 's', x: 0, y: 0, w: 0, h: 0 }] });
     assert.equal(plain.status, 201, JSON.stringify(plain.body));
     st = await call('GET', `/api/pipeline?path=${encodeURIComponent(plain.body.path)}`);
     assert.equal(st.body.state, 'plan');
     assert.match(st.body.blockers.join('|'), /관리자가 쓴 계획이 아니에요/);
+    assert.match(st.body.blockers.join('|'), /역할 "nobody"을 몰라요/);
+    const refused = await call('POST', '/api/pipeline/start', { path: plain.body.path, revision: plain.body.revision });
+    assert.equal(refused.status, 409);
+    assert.ok(refused.body.blockers.length);
 
     // Move: the approval state follows the file.
     const mv = await call('POST', '/api/move', { from: w.body.path, to: 'done/cycle.dpx.json', type: 'file' });
