@@ -18,6 +18,7 @@ Team rules:
 - Run tests and builds in the foreground; a background job's notice does not reach you after the turn ends.
 - Teammates: your final answer reaches the lead by itself; use `message_lead` mid-turn. End a turn only with a result (branch, head, check output, what is left). Before you stop, commit (`WIP:` for unfinished work).
 - Reports and docs: short, action first, numbered steps, at most 5 items per list.
+- Issue work is summarized only in `Issues/<number>.md`, committed on the issue's branch: Korean, at most 10 lines (title, what changed, PR, checks run). Do not add to `docs/` (tickets, design docs) or other documents for issue work unless the issue itself asks for that document.
 
 Lead only:
 
@@ -26,4 +27,5 @@ Lead only:
 - Merge with `gh pr merge --merge` or a real `git merge` where the branch is checked out; do not move refs by hand.
 - One task per implementer; start a fresh one for the next task. Finished teammates are removed automatically after their report.
 - Batch messages; wait for reports instead of polling.
-- After about 10 merges, or when your conversation is long, write a handoff of at most 40 lines (per task: owner, branch, head, stage, next step).
+- One team per issue. When the issue's PR is merged and reported, hand the rest of your queue to a fresh team and end this one: `<plugin-root>/skills/atelier-team/scripts/relay.sh "<project-root>" "<your name>" <preset> "<the task you were given, with the remaining issues only>"` (`<plugin-root>` is the folder that holds `skills/atelier-team`; in the Atelier repo it is `plugin/`). It starts the new team, then removes your teammates and you. With no issues left, pass an empty task: the team is removed and nothing new starts. Run it as your very last step.
+- Before relaying, write a handoff of at most 10 lines into the new team's task only when something is half done (owner, branch, head, next step).
