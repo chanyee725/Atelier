@@ -74,6 +74,8 @@ export interface OverlayNode {
   badges: NodeBadges;
   /** In progress only: the agents whose live view the node opens (hover card, click, Enter; #736). */
   open: LiveTarget[];
+  /** Step title (the node id when the plan names none). */
+  title: string;
   /** Step elapsed time text, when known. */
   time?: string;
 }
@@ -82,6 +84,12 @@ export interface OverlayNode {
 export interface LiveTarget {
   sid: string;
   name: string;
+}
+
+/** What a press on the node does: one agent opens its live view at once; several show the list to pick from. */
+export function pressAction(open: readonly LiveTarget[]): { kind: 'open'; sid: string } | { kind: 'pick' } | null {
+  if (!open.length) return null;
+  return open.length === 1 ? { kind: 'open', sid: open[0]!.sid } : { kind: 'pick' };
 }
 
 /** The agents of an in-progress step that have a session id, in step order; empty for any other step. */
@@ -262,7 +270,7 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     const waiting = !!s.waiting && live;
     const text = [st.label, ...(who.length > 2 ? [`${who[0]} 외 ${who.length - 1}`] : who)].join(' · ');
     const label = [s.title ?? stepNode(s), st.label, ...(s.agents ?? []).map((a) => `${a.name}(${roleLabel(a.role)})`), ...(waiting ? ['사람 기다림'] : [])].join(' · ');
-    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors), open: liveTargets(s), ...(s.time ? { time: s.time } : {}) };
+    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors), open: liveTargets(s), title: s.title ?? stepNode(s), ...(s.time ? { time: s.time } : {}) };
     byNode.set(node, n);
     nodes.push(n);
   }

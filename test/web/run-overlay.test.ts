@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 
 async function scene(code: string): Promise<Scene> {
@@ -220,4 +220,10 @@ test('live targets (#736): only an in-progress node opens live views, one per ag
     ['a', 2, '8분째'],
     ['b', 0, undefined],
   ]);
+});
+
+test('press (#736): one agent opens its live view at once, several show the list to pick from', () => {
+  assert.equal(pressAction([]), null);
+  assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }]), { kind: 'open', sid: 's1' });
+  assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }, { sid: 's3', name: 'Oren' }]), { kind: 'pick' });
 });

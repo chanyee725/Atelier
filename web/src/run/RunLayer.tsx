@@ -10,6 +10,7 @@ import { boardShown, etaPanel, legendOf, legendSpot, overlayModel, pathData, run
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
+import { NodeLiveCard } from './NodeLiveCard';
 
 type Props = {
   scene: Scene;
@@ -55,6 +56,7 @@ export function RunLayer({ scene, steps, left, top, scale, motionInside, hideEta
           <Step key={n.node} n={n} labels={labels} />
         ))}
       </svg>
+      {model.nodes.map((n) => n.open.length > 0 && <NodeLiveCard key={n.node} open={n.open} title={n.title} time={n.time} box={badgeBox(n, scale)} />)}
       {!hideEta && <EtaCorner panel={model.etas} />}
       {moving && (
         <button type="button" className="run-motion" onClick={() => setStill(!still)}>
@@ -170,6 +172,21 @@ function Badges({ n }: { n: OverlayNode }) {
         .reverse()}
     </g>
   );
+}
+
+/** Smallest hit target of a node's live button, CSS px (WCAG 2.5.8). */
+const MIN_HIT = 24;
+
+/** Where a node's live button sits (#736): over its badge row, in CSS px of the layer, at least MIN_HIT square. */
+export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number): { left: number; top: number; width: number; height: number } {
+  const count = Math.max(1, n.badges.shown.length + (n.badges.more > 0 ? 1 : 0));
+  const x = n.rect.x;
+  const y = n.rect.y - PAD - 4 - BADGE_R * 2;
+  const w = BADGE_R * 2 + (count - 1) * BADGE_STEP;
+  const h = BADGE_R * 2;
+  const width = Math.max(MIN_HIT, w * scale);
+  const height = Math.max(MIN_HIT, h * scale);
+  return { left: (x + w / 2) * scale - width / 2, top: (y + h / 2) * scale - height / 2, width, height };
 }
 
 /**
