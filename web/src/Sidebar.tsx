@@ -27,7 +27,6 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
-import { ActivityBell } from './activity/ActivityBell';
 import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
 import { ProjectName } from './ProjectName';
@@ -319,7 +318,6 @@ export function Sidebar(p: Props) {
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
         <ProjectName name={p.project} />
-        <ActivityBell className={ICON_BUTTON} onOpen={p.onOpen} />
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />
         </button>

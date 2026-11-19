@@ -58,10 +58,12 @@ type Props = {
   onSubDoc?: () => void;
   /** Opens the command menu (also Ctrl/Cmd+K). */
   onCommands?: () => void;
+  /** The 알림함 bell, at the right end (#786). */
+  bell?: ReactNode;
 };
 
 /** The document screen's 52px header (design doc 6 §2.4, frame A). */
-export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onView, onTitle, narrow, onToggleNav, trail = [], onCrumb, exportMenu, onHistory, onSubDoc, onCommands }: Props) {
+export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onView, onTitle, narrow, onToggleNav, trail = [], onCrumb, exportMenu, onHistory, onSubDoc, onCommands, bell }: Props) {
   const save = saveState(status, statusAlert);
   return (
     <header className="flex h-(--h-bar) shrink-0 items-center gap-2 border-b bg-sidebar px-2 md:gap-3 md:px-3">
@@ -159,6 +161,7 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      {bell}
       </div>
     </header>
   );
