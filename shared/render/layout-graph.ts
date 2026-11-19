@@ -15,7 +15,7 @@ import { routeEdges, straightPorts } from './layout-routes.ts';
 import { ROUTE_GAP, alongLine, routeAround } from './route-around.ts';
 import { wrapTopLevel } from './layout-wrap.ts';
 import { routeOrthogonal } from './route-eraser.ts';
-import type { RoutedEdge, RouterBox } from './route-eraser.ts';
+import type { PartialRoute, RoutedEdge, RouterBox } from './route-eraser.ts';
 import type { Point, Scene, SceneBadge, SceneEdge, SceneHandle, SceneItem, ShapeKind } from './scene.ts';
 
 const SHAPES: readonly ShapeKind[] = [
@@ -1294,7 +1294,15 @@ function routeIntoGroup(outer: Rect, header: number, inner: Rect, offset: number
 }
 
 /** Paint the diagram from `base`, with `layout` overrides applied. Synchronous and fast (drag previews). */
-export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLayout): Scene {
+export interface ComposeOptions {
+  /**
+   * A drag frame (#733): lines with a moved end take the quick old route instead of waiting for the
+   * corridor router (tens of ms on a 100-node diagram); compose the drop without it to route them.
+   */
+  draft?: boolean;
+}
+
+export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLayout, options: ComposeOptions = {}): Scene {
   const { nodes, groups } = base;
   const rects = placeRects(d, base, layout);
   const deltaOf = (id: string): Delta => {
@@ -1477,7 +1485,7 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
 
   // #733: elbow lines and their labels come from the eraser-diagrams corridor router, on the boxes as
   // drawn (moved ones included). Self loops, and edges it cannot solve, keep the routes below.
-  const routed = routeElbows(d, base, rects, drawn, deltaOf);
+  const routed = routeElbows(d, base, rects, drawn, deltaOf, options.draft === true);
 
   for (const be of base.edges) {
     const { edge: e, style } = be;
@@ -1559,19 +1567,20 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
   return scene;
 }
 
-/**
- * Elbow routes and label centres from the eraser-diagrams router (#733) for every elbow edge but self
- * loops. Groups are containers (their header blocks lines); nodes are obstacles at their drawn box.
- */
-/** Full routes per base on the unmoved boxes, so a drag reroutes only the edges whose boxes moved. */
-const baseRoutes = new WeakMap<GraphBase, Map<string, RoutedEdge>>();
+/** Router results for one set of drawn boxes, keyed by their geometry. */
+interface RouteSet {
+  sig: string;
+  routes: Map<string, RoutedEdge>;
+}
 
-function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string, Rect>, drawn: ReadonlyMap<string, Rect>, deltaOf: (id: string) => Delta): Map<string, RoutedEdge> {
-  const moved = new Set([...base.nodes.keys(), ...base.groups.keys()].filter((id) => !isZero(deltaOf(id))));
-  const cached = baseRoutes.get(base);
-  if (moved.size === 0 && cached) return cached;
-  if (moved.size > 0 && !cached) routeElbows(d, base, base.rects, dividerSpans(d, base.nodes, base.parent, base.rects), () => ZERO);
-  const previous = moved.size > 0 ? baseRoutes.get(base) : undefined;
+/**
+ * Per base: `home` = routes on the unmoved boxes (a drag reroutes only the edges whose boxes moved, the
+ * rest keep these), `last` = the latest moved picture (the drop composes the same layout more than once).
+ * Both are keyed by the box geometry they were routed on, so a different layout never reads stale routes.
+ */
+const routeCache = new WeakMap<GraphBase, { home?: RouteSet; last?: RouteSet }>();
+
+function routerBoxes(base: GraphBase, rects: ReadonlyMap<string, Rect>, drawn: ReadonlyMap<string, Rect>): RouterBox[] {
   const boxes: RouterBox[] = [];
   for (const [id, g] of base.groups) {
     const r = rects.get(id);
@@ -1581,6 +1590,19 @@ function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string
     const r = drawn.get(id) ?? rects.get(id);
     if (r) boxes.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, parent: base.parent.get(id), shape: g.divider ? undefined : g.shape });
   }
+  return boxes;
+}
+
+const boxSig = (boxes: readonly RouterBox[]): string => boxes.map((b) => `${b.id}\u0000${Math.round(b.x)},${Math.round(b.y)},${Math.round(b.w)},${Math.round(b.h)}`).join('\u0001');
+
+/**
+ * Elbow routes and label centres from the eraser-diagrams router (#733) for every elbow edge but self
+ * loops. Groups are containers (their header blocks lines); nodes are obstacles at their drawn box.
+ * `draft` (a drag frame): edges with a moved end are left to the quick old route and the rest keep their
+ * unmoved routes, so a frame never waits for the router; the drop composes without `draft` and routes them.
+ */
+function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string, Rect>, drawn: ReadonlyMap<string, Rect>, deltaOf: (id: string) => Delta, draft: boolean): Map<string, RoutedEdge> {
+  const moved = new Set([...base.nodes.keys(), ...base.groups.keys()].filter((id) => !isZero(deltaOf(id))));
   const edges = base.edges
     .filter((be) => !be.ownRoute && (be.forcedElbow || be.style.connectorStyle === 'elbow') && be.edge.from !== be.edge.to)
     .map((be) => ({
@@ -1591,27 +1613,49 @@ function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string
       endArrow: !!be.edge.endArrow,
       ...(be.label ? { label: { w: be.label.w + PLATE_PAD * 2, h: be.label.h + 4 } } : {}),
     }));
-  const out = previous
-    // An edge reroutes when one of its ends moved or was refitted (a group dragged as a whole moves
-    // every child too); the others keep their routes and the rerouted ones keep off them.
-    ? routeOrthogonal(boxes, edges, { previous, only: new Set(edges.filter((e) => moved.has(e.from) || moved.has(e.to)).map((e) => e.id)) })
-    : routeOrthogonal(boxes, edges);
-  // A line between two members of one group stays inside it; one that left falls back to the old route.
-  for (const e of edges) {
-    const r = out.get(e.id);
-    if (r && (!insideCommonGroup(base, rects, e.from, e.to, r.points) || !cleanRoute(base, drawn, rects, e.from, e.to, r.points))) out.delete(e.id);
-  }
-  if (!previous && moved.size === 0) baseRoutes.set(base, out);
-  return out;
+  const cache = routeCache.get(base) ?? {};
+  routeCache.set(base, cache);
+  const solve = (boxes: RouterBox[], rs: ReadonlyMap<string, Rect>, dr: ReadonlyMap<string, Rect>, list: typeof edges, partial?: PartialRoute): Map<string, RoutedEdge> => {
+    const out = routeOrthogonal(boxes, list, partial);
+    // A line between two members of one group stays inside it; one that left falls back to the old route.
+    for (const e of list) {
+      const r = out.get(e.id);
+      if (r && (!insideCommonGroup(base, rs, e.from, e.to, r.points) || !cleanRoute(base, dr, rs, e.from, e.to, r.points))) out.delete(e.id);
+    }
+    return out;
+  };
+
+  const homeDrawn = moved.size === 0 ? drawn : dividerSpans(d, base.nodes, base.parent, base.rects);
+  const homeBoxes = routerBoxes(base, base.rects, homeDrawn);
+  const homeSig = boxSig(homeBoxes);
+  if (cache.home?.sig !== homeSig) cache.home = { sig: homeSig, routes: solve(homeBoxes, base.rects, homeDrawn, edges) };
+  const home = cache.home.routes;
+  if (moved.size === 0) return home;
+
+  const only = new Set(edges.filter((e) => moved.has(e.from) || moved.has(e.to)).map((e) => e.id));
+  if (draft) return new Map([...home].filter(([id]) => !only.has(id)));
+
+  const boxes = routerBoxes(base, rects, drawn);
+  const sig = boxSig(boxes);
+  if (cache.last?.sig === sig) return cache.last.routes;
+  // An edge reroutes when one of its ends moved or was refitted (a group dragged as a whole moves every
+  // child too); the others keep their routes and the rerouted ones keep off them. An unmoved edge the
+  // router had no clean line for stays on the old route rather than being solved afresh mid-drag.
+  const routes = solve(boxes, rects, drawn, edges.filter((e) => only.has(e.id) || home.has(e.id)), { previous: home, only });
+  cache.last = { sig, routes };
+  return routes;
 }
 
 /**
- * A router line that jogs by a few pixels (parallel lanes squeezed between two ports) or grazes a node it
- * does not connect to reads as a glitch: such a line falls back to the old route.
+ * A router line that jogs by a few pixels (parallel lanes squeezed between two ports), grazes a node it
+ * does not connect to, or winds round with more than 3 bends (the old route never needs more) reads as a
+ * glitch: such a line falls back to the old route.
  */
 function cleanRoute(base: GraphBase, drawn: ReadonlyMap<string, Rect>, rects: ReadonlyMap<string, Rect>, from: string, to: string, points: readonly Point[]): boolean {
   const JOG = 4;
   const NEAR = 3;
+  const MAX_BENDS = 3;
+  if (points.length - 2 > MAX_BENDS) return false;
   for (let i = 1; i < points.length - 1; i++) {
     const len = Math.abs(points[i]!.x - points[i - 1]!.x) + Math.abs(points[i]!.y - points[i - 1]!.y);
     if (len > 0 && len <= JOG && i > 1 && i < points.length - 1) return false;

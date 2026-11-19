@@ -64,6 +64,48 @@
 .activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 [data-kind='error'] .activity-dot { box-shadow: 0 0 0 2px var(--destructive); }
 
+/* Plans waiting for 시작하기 (#786): what and where on the left, the one action on the right. */
+.activity-plan {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+}
+.activity-plan .activity-dot { background: var(--primary); }
+.activity-plan-body { display: flex; flex-direction: column; gap: 2px; min-inline-size: 0; }
+.activity-plan-body .activity-text { font-weight: 500; }
+.activity-plan-link {
+  align-self: start;
+  max-inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-plan-link:hover { text-decoration: underline; }
+.activity-plan-body .activity-when { overflow: hidden; text-overflow: ellipsis; }
+.activity-plan-start {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.activity-plan-start:hover { background: color-mix(in oklab, var(--primary) 88%, black); }
+.activity-plan-link:focus-visible,
+.activity-plan-start:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
 /* Toasts: one region in the top layer, top right just under the top bar (#730; full width on a narrow screen).
    --toast-top is the top bar's bottom edge plus a gap, set from JS (the bar's height changes with the screen); the
    fallback leaves room for the bar and the inset main pane. */
@@ -145,6 +187,15 @@
     scrollbar-width: thin;
   }
 }
+/* The bell's feed opens under the top bar's right end, where the toasts are (#786): while it is open the toasts step
+   to its left on a wide screen and out of sight on a narrow one, so they never cover it. */
+:root:has(.activity-feed:popover-open) .activity-toasts {
+  --toast-x: calc(min(360px, 100vw - 16px) + 40px);
+}
+@media (max-width: 800px) {
+  :root:has(.activity-feed:popover-open) .activity-toasts { visibility: hidden; }
+}
+
 @media (forced-colors: active) {
   .activity-dot { forced-color-adjust: none; }
   .activity-badge { border: 1px solid CanvasText; }

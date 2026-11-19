@@ -7,21 +7,38 @@ import type { SessionState } from '../../../shared/dispatch/types.ts';
 
 export type { AgentPresence };
 
-const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중' };
+const STATUS_LABEL: Record<string, string> = { starting: '시작 중', running: '작업 중', waiting: '기다리는 중', idle: '쉼' };
 /** The monitoring state when known (작업 중, 사람 기다림, 멈춤, …), else the hub status. */
 export const agentStateLabel = (a: Pick<AgentPresence, 'status' | 'state'>) =>
   (a.state && STATE[a.state as SessionState]?.label) || STATUS_LABEL[a.status] || a.status;
-/** Doing something now (green dot): working by the monitor, or running/starting by the hub when the monitor has no word. */
-export const isBusy = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'working' : a.status === 'running' || a.status === 'starting');
+/**
+ * Doing something now (the spinner, #785): running or starting by the hub, and working by the monitor when it has a
+ * word. An idle or waiting session is live but never busy.
+ */
+export const isBusy = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.status === 'running' || a.status === 'starting') && (!a.state || a.state === 'working');
 /** Needs a person or is stuck (amber dot). */
 export const needsLook = (a: Pick<AgentPresence, 'status' | 'state'>) => (a.state ? a.state === 'waiting' || a.state === 'stuck' || a.state === 'failed' : a.status === 'waiting');
 
-/** The project's agents: busy first, then whoever holds a file, then the most recent; a stable name order last. */
+/**
+ * The project's agents in a fixed team order (#785): each lead, then the teammates it created, teams and teammates in
+ * creation order; outside writers last by name. Activity never moves a row (busy shows as a spinner only), so the list
+ * does not reshuffle every second.
+ */
 export function agentsIn(all: readonly AgentPresence[], project: string): AgentPresence[] {
   // '' = the whole project this server belongs to (#778): every agent counts.
-  return all
-    .filter((a) => project === '' || a.project === project || (!!a.file && a.file.startsWith(`${project}/`)))
-    .sort((a, b) => Number(isBusy(b)) - Number(isBusy(a)) || Number(!!b.file) - Number(!!a.file) || (b.at ?? 0) - (a.at ?? 0) || a.name.localeCompare(b.name));
+  const mine = all.filter((a) => project === '' || a.project === project || (!!a.file && a.file.startsWith(`${project}/`)));
+  const nOf = new Map(all.map((a) => [a.sid, a.n ?? Infinity]));
+  const team = (a: AgentPresence) => (a.parent && nOf.has(a.parent) ? nOf.get(a.parent)! : (a.n ?? Infinity));
+  const order = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1);
+  return [...mine].sort(
+    (a, b) =>
+      Number(!!a.outside) - Number(!!b.outside) ||
+      order(team(a), team(b)) ||
+      Number(team(a) !== (a.n ?? Infinity)) - Number(team(b) !== (b.n ?? Infinity)) ||
+      order(a.n ?? Infinity, b.n ?? Infinity) ||
+      a.name.localeCompare(b.name) ||
+      a.sid.localeCompare(b.sid),
+  );
 }
 
 /** Who holds each file, for the marks on document rows. */

@@ -551,3 +551,19 @@ test('wrapText breaks long words between grapheme clusters, not code points (#31
   // One cluster wider than the limit is kept as it is, not cut into code points.
   assert.deepEqual(wrapText(keycap, 5, 10, 'clean', true), [keycap]);
 });
+
+test('sequence heads take one flowchart width bucket and at least 52 high; erd uses eraser-diagrams sizes (#733)', async () => {
+  const { scene } = await renderDiagram('A\nLonger participant name\nC\nA > B: hi', { type: 'sequence' });
+  const heads = scene.items.filter((i): i is SceneBox => i.kind === 'box' && i.role === 'column');
+  const widths = new Set(heads.map((h) => h.w));
+  assert.equal(widths.size, 1, 'every participant head has the same width');
+  assert.ok([160, 200, 260].includes([...widths][0]!), `width ${[...widths][0]} is a flowchart bucket`);
+  assert.ok(heads.every((h) => h.h >= 52));
+
+  const erd = await renderDiagram('users {\n  id int pk\n  name string\n}', { type: 'erd' });
+  const header = erd.scene.items.find((i): i is SceneBox => i.kind === 'box' && i.role === 'entity-header')!;
+  assert.ok(header.h >= 31);
+  const sizes = erd.scene.items.filter((i) => i.kind === 'text').map((t) => (t as { size: number }).size);
+  for (const s of [15.66, 14.79, 13.05]) assert.ok(sizes.includes(s), `text size ${s} present (${sizes.join(',')})`);
+  assert.match(erd.svg, /data-role="entity"[^>]*>(<rect[^>]*>)*?<rect[^>]*rx="5"[^>]*stroke-width="1.5"/);
+});

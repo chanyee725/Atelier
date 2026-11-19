@@ -4,18 +4,35 @@ import { agentMeta, agentStateLabel, agentsIn, isBusy, needsLook, fileStem, hold
 
 const a = (sid: string, x: Partial<AgentPresence> = {}): AgentPresence => ({ sid, name: sid, role: 'impl', model: null, status: 'waiting', state: 'resting', project: null, file: null, at: 0, ...x });
 
-test('agentsIn keeps the project\'s agents (by folder or held file), busy first, then file holders, then newest', () => {
+test('agentsIn keeps the project\'s agents (by folder or held file) in creation order', () => {
   const all = [
-    a('Idle', { project: 'P', at: 5 }),
-    a('Holder', { project: 'P', file: 'P/x.dpx.json', at: 1 }),
-    a('Busy', { project: 'P', state: 'working', at: 0 }),
-    a('ByFile', { file: 'P/sub/y.dpx.json', status: 'running', state: null, at: null }),
-    a('Other', { project: 'Q', state: 'working', file: 'Q/z.dpx.json' }),
-    a('Prefix', { file: 'PX/z.dpx.json' }),
+    a('Idle', { project: 'P', n: 4, at: 5 }),
+    a('Holder', { project: 'P', n: 3, file: 'P/x.dpx.json', at: 1 }),
+    a('Busy', { project: 'P', n: 2, status: 'running', state: 'working', at: 0 }),
+    a('ByFile', { n: 1, file: 'P/sub/y.dpx.json', status: 'running', state: null, at: null }),
+    a('Other', { project: 'Q', n: 5, state: 'working', file: 'Q/z.dpx.json' }),
+    a('Prefix', { n: 6, file: 'PX/z.dpx.json' }),
   ];
   assert.deepEqual(agentsIn(all, 'P').map((x) => x.sid), ['ByFile', 'Busy', 'Holder', 'Idle']);
   // '' = the whole project this server belongs to (#778): every agent.
   assert.equal(agentsIn(all, '').length, all.length);
+});
+
+test('agentsIn: fixed team order (lead, then its teammates), never moved by activity (#785)', () => {
+  const list = (busy: string, at: (sid: string) => number) => [
+    a('impl2', { n: 4, parent: 'lead1', at: at('impl2') }),
+    a('lead2', { n: 3, role: 'lead', at: at('lead2') }),
+    a('ext', { outside: true, status: 'running', state: 'working', at: at('ext') }),
+    a('impl1', { n: 2, parent: 'lead1', at: at('impl1') }),
+    a('lead1', { n: 1, role: 'lead', at: at('lead1') }),
+    a('rev', { n: 5, parent: 'lead2', at: at('rev') }),
+    a('orphan', { n: 6, parent: 'gone', at: at('orphan') }),
+  ].map((x) => (x.sid === busy ? { ...x, status: 'running', state: 'working' } : x));
+  const want = ['lead1', 'impl1', 'impl2', 'lead2', 'rev', 'orphan', 'ext'];
+  assert.deepEqual(agentsIn(list('rev', () => 0), '').map((x) => x.sid), want);
+  // Other activity times and another busy session: same order.
+  assert.deepEqual(agentsIn(list('impl2', (sid) => sid.length * 1000), '').map((x) => x.sid), want);
+  assert.deepEqual(agentsIn(list('lead1', (sid) => -sid.charCodeAt(0)), '').map((x) => x.sid), want);
 });
 
 test('holdersByFile groups agents by the file they hold', () => {
@@ -42,6 +59,11 @@ test('state label and dots: the monitoring state wins, the hub status fills in w
   assert.equal(agentStateLabel(a('A', { status: 'odd', state: null })), 'odd');
   assert.equal(isBusy(a('A', { status: 'running', state: 'resting' })), false);
   assert.equal(isBusy(a('A', { status: 'starting', state: null })), true);
+  // #785: an idle or waiting session is listed but never busy, whatever a stale monitor state says.
+  assert.equal(isBusy(a('A', { status: 'idle', state: 'working' })), false);
+  assert.equal(isBusy(a('A', { status: 'waiting', state: null })), false);
+  assert.equal(isBusy(a('A', { status: 'running', state: 'working' })), true);
+  assert.equal(agentStateLabel(a('A', { status: 'idle', state: null })), '쉼');
   assert.equal(needsLook(a('A', { state: 'stuck' })), true);
   assert.equal(needsLook(a('A', { status: 'waiting', state: null })), true);
 });

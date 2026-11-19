@@ -34,6 +34,8 @@ export type HomeProps = {
   onBoard: (folder: string) => void;
   /** Narrow screen: the sidebar is a drawer, so the header carries its button. */
   narrow?: boolean;
+  /** The 알림함 bell, on the right of the header next to 파일 찾기 (#786). */
+  bell?: React.ReactNode;
 };
 
 
@@ -219,6 +221,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           <TabsTrigger value="recent">최근</TabsTrigger>
         </TabsList>
         {!p.narrow && <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" />}
+        <span className={p.narrow ? 'ml-auto' : undefined}>{p.bell}</span>
       </header>
       {p.narrow && (
         <div className="border-b px-3 py-2">
@@ -339,6 +342,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
         <Button size="sm" onClick={() => p.onCreate('doc', project.id)}>
           <Plus /> 새 문서
         </Button>
+        {p.bell}
       </header>
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">

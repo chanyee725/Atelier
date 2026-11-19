@@ -110,9 +110,8 @@ test("plan steps carry a mode: shared list matches the server's, write_plan chec
   assert.match(planProblem({ ...plan, steps: [{ id: "s1", node: "s1", role: "docs", mode: "party" }] }), /steps\[0\]\.mode must be one of/);
 });
 
-test("the lead's MCP tools and prompt list the six modes", async () => {
+// The mode list lives in the tool schema only; the lead prompt no longer repeats it (#766 prompt audit).
+test("the lead's MCP tools list the six modes", () => {
   const src = readFileSync(new URL("../../server/dispatch/mcp.js", import.meta.url), "utf8");
   for (const id of MODE_IDS) assert.match(src, new RegExp(`id: "${id}"`));
-  const { SPAWN_PROMPT } = await import("../../server/dispatch/roles.js");
-  for (const id of MODE_IDS) assert.ok(SPAWN_PROMPT.includes(id), id);
 });

@@ -51,8 +51,8 @@ const pts = (ps: Point[]): string => ps.map((p) => `${n(p.x)},${n(p.y)}`).join('
 const RADIUS: Record<SceneBox['role'], number | null> = {
   node: null,
   group: 6,
-  entity: 8,
-  'entity-header': 8,
+  entity: 5,
+  'entity-header': 5,
   column: null,
   activation: 2,
   frame: 6,
@@ -66,6 +66,8 @@ const DASH = ' stroke-dasharray="8 8.75"';
 const EDGE_W = 1.3;
 const BOX_W = 1.2;
 const SOFT_W = 1;
+/** ERD table borders (eraser-diagrams): a little heavier than node borders. */
+const ENTITY_W = 1.5;
 
 function shapeMarkup(b: SceneBox, attrs: string): string {
   const { x, y, w, h } = b;
@@ -145,7 +147,7 @@ function boxMarkup(b: SceneBox, ctx: Ctx): string {
     stroke = t.stroke;
   }
   if (b.role === 'activation') fill = b.paint.color ? p.fill : t.fill;
-  const width = soft ? SOFT_W : BOX_W;
+  const width = soft ? SOFT_W : b.role === 'entity' || b.role === 'entity-header' ? ENTITY_W : BOX_W;
   const dash = b.dashed ? DASH : '';
   const out: string[] = [];
   // A solid copy of the shape moved (+4, +4), no blur; the opaque body on top hides all but the outside rim.

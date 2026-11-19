@@ -34,7 +34,8 @@ export type AppEvent =
   | { type: 'settings-saved' }
   | { type: 'run-started'; file: string; runId: string }
   | { type: 'run-ended'; file: string; runId: string; failed: boolean }
-  | { type: 'pr'; file: string; number: number; state: string };
+  | { type: 'pr'; file: string; number: number; state: string }
+  | { type: 'plan-waiting'; file: string; text: string };
 
 export type ToastTone = 'info' | 'success' | 'error';
 /** Where 열기 goes: a document (by path) or a session (opens /dispatch). */
@@ -107,6 +108,8 @@ export function toastOf(e: AppEvent): AppToast | null {
       return e.failed
         ? error('runs', `run-ended:${e.runId}`, `${nameOf(e.file)} 파이프라인 실행이 실패했어요`, { file: e.file })
         : info('runs', `run-ended:${e.runId}`, `${nameOf(e.file)} 파이프라인 실행이 끝났어요`, { file: e.file });
+    case 'plan-waiting':
+      return info('runs', `plan-waiting:${e.file}`, e.text, { file: e.file });
     case 'pr': {
       const said = PR_STATE[e.state];
       return said ? info('runs', `pr:${e.number}:${e.state}`, `${subjectOf(`PR #${e.number}`)} ${said}`, { file: e.file }) : null;

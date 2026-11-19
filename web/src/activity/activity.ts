@@ -95,9 +95,12 @@ export function feedOf(log: ActivityLog, now: number): FeedItem[] {
 const GAP = 6;
 const EDGE = 8;
 
-/** Where the feed goes: under the bell, left-aligned, flipped above or shifted in when it would leave the viewport. */
-export function placeFeed(bell: { left: number; top: number; bottom: number }, feed: { width: number; height: number }, view: { width: number; height: number }) {
-  const left = Math.max(EDGE, Math.min(bell.left, view.width - feed.width - EDGE));
+/**
+ * Where the feed goes: under the bell with right edges lined up, so it opens down and to the left from the top bar's
+ * right end (#786); flipped above or shifted in when it would leave the viewport.
+ */
+export function placeFeed(bell: { right: number; top: number; bottom: number }, feed: { width: number; height: number }, view: { width: number; height: number }) {
+  const left = Math.max(EDGE, Math.min(bell.right - feed.width, view.width - feed.width - EDGE));
   const below = bell.bottom + GAP;
   const top = below + feed.height <= view.height - EDGE ? below : Math.max(EDGE, bell.top - GAP - feed.height);
   return { left, top };
