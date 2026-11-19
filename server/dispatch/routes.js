@@ -126,6 +126,9 @@ export function routeTable(d) {
       if (d.prStatus) await Promise.all(list.map(async b => { prs[b] = await d.prStatus(b); }));
       return { prs };
     }],
+    // Open GitHub issues with their PRs (#776): { ok, issues: [{ number, title, url?, prs: [{ number, state, url?, branch? }] }] }
+    // or { ok: false, reason }. Read-only.
+    ["GET", /^\/api\/issues$/, async () => (d.issues ? d.issues() : { ok: false, reason: "disabled" })],
     // Sessions, models and account labels that worked on one issue (#747), plus the PR-comment summary line.
     // ?pr=0 skips the PR lookup through gh.
     ["GET", /^\/api\/issues\/(\d{1,7})\/accounts$/, async ([n], __, url) => {

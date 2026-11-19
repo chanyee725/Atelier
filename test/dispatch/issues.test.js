@@ -1,0 +1,94 @@
+import { test, after } from "node:test";
+import assert from "node:assert/strict";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { closedIssues, createIssueList, joinIssues } from "../../server/dispatch/issues.js";
+import { setPrTracking } from "../../server/dispatch/pr-status.js";
+import { FAKE_MARKER } from "../../server/dispatch/cli.js";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const dirs = [];
+after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+const tmp = () => { const d = mkdtempSync(path.join(tmpdir(), "drawing-issues-")); dirs.push(d); return d; };
+
+function fakeGh(scenario) {
+  const bin = tmp(), ws = tmp();
+  const file = path.join(bin, "gh");
+  writeFileSync(file, `#!${process.execPath}\nimport(${JSON.stringify(pathToFileURL(path.join(HERE, "../fixtures/fake-cli/gh.mjs")).href)});\n`);
+  chmodSync(file, 0o755);
+  writeFileSync(path.join(bin, FAKE_MARKER), "");
+  const sc = path.join(bin, "scenario.json");
+  writeFileSync(sc, JSON.stringify(scenario));
+  const log = path.join(bin, "calls.jsonl");
+  const calls = () => (existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean).map(l => JSON.parse(l)) : []);
+  return { ws, env: { PATH: bin, FAKE_GH_SCENARIO: sc, FAKE_CLI_LOG: log }, calls };
+}
+
+const ISSUES = [
+  { number: 776, title: "E574: dashboard\u0007 shows issues", url: "https://github.com/o/r/issues/776", body: "secret body", author: { login: "x" } },
+  { number: 755, title: "agents panel", url: "javascript:alert(1)" },
+  { number: 0, title: "bad" },
+];
+const PRS = [
+  { number: 790, state: "MERGED", headRefName: "feat/776-dashboard-issues", url: "https://github.com/o/r/pull/790", body: "" },
+  { number: 801, state: "OPEN", headRefName: "dispatch/impl-1", url: "https://github.com/o/r/pull/801", body: "Closes #776 and fixes: #9", title: "t" },
+  { number: 700, state: "CLOSED", headRefName: "--bad", body: "Resolves #755" },
+];
+
+test("closedIssues reads GitHub's closing keywords only", () => {
+  assert.deepEqual(closedIssues("Closes #776\nfixes: #12, see #13, resolved #14, Fixes #12"), [776, 12, 14]);
+  assert.deepEqual(closedIssues(null), []);
+  assert.deepEqual(closedIssues("mentions #5"), []);
+});
+
+test("joinIssues matches PRs by branch name and Closes, keeps metadata only", () => {
+  const out = joinIssues(ISSUES, PRS);
+  assert.deepEqual(out, [
+    { number: 776, title: "E574: dashboard  shows issues", url: "https://github.com/o/r/issues/776", prs: [
+      { number: 801, state: "open", url: "https://github.com/o/r/pull/801", branch: "dispatch/impl-1" },
+      { number: 790, state: "merged", url: "https://github.com/o/r/pull/790", branch: "feat/776-dashboard-issues" },
+    ] },
+    { number: 755, title: "agents panel", prs: [{ number: 700, state: "closed" }] },
+  ]);
+  assert.ok(!JSON.stringify(out).includes("secret"));
+});
+
+test("listIssues runs gh read-only, caches, and follows the PR tracking switch", async () => {
+  const f = fakeGh({ "issue list": ISSUES, "pr list": PRS });
+  let t = 0;
+  const list = createIssueList({ workspaceDir: f.ws, cwd: f.ws, env: f.env, now: () => t });
+  const r = await list();
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.issues.map(i => i.number), [776, 755]);
+  const calls = f.calls();
+  assert.equal(calls.length, 2);
+  for (const c of calls) assert.equal(c.args[1], "list");
+  await list();
+  assert.equal(f.calls().length, 2, "second call within cacheMs uses the cache");
+  t = 61_000;
+  await list();
+  assert.equal(f.calls().length, 4);
+  await setPrTracking(f.ws, false);
+  assert.deepEqual(await list({ force: true }), { ok: false, reason: "disabled" });
+  assert.equal(f.calls().length, 4);
+});
+
+test("listIssues reports why gh failed", async () => {
+  const f = fakeGh({ "issue list": { error: "To get started with GitHub CLI, please run:  gh auth login" } });
+  assert.deepEqual(await createIssueList({ workspaceDir: f.ws, cwd: f.ws, env: f.env })(), { ok: false, reason: "not-logged-in" });
+  const enoent = () => Promise.reject(Object.assign(new Error("spawn gh ENOENT"), { code: "ENOENT" }));
+  assert.deepEqual(await createIssueList({ cwd: f.ws, run: enoent })(), { ok: false, reason: "gh-missing" });
+  assert.deepEqual(await createIssueList({ cwd: "" })(), { ok: false, reason: "error" });
+});
+
+test("GET /api/issues answers from d.issues and does not shadow /api/issues/:n/accounts", async () => {
+  const { routeTable } = await import("../../server/dispatch/routes.js");
+  const table = routeTable({ root: "/x", store: {}, hub: {}, models: [], broadcast: () => {}, issues: async () => ({ ok: true, issues: [] }) });
+  const hits = p => table.filter(([m, re]) => m === "GET" && re.test(p));
+  assert.equal(hits("/api/issues").length, 1);
+  assert.deepEqual(await hits("/api/issues")[0][2]([]), { ok: true, issues: [] });
+  assert.equal(hits("/api/issues/776/accounts").length, 1);
+  assert.notEqual(hits("/api/issues/776/accounts")[0], hits("/api/issues")[0]);
+});
