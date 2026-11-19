@@ -8,7 +8,7 @@ import type { BpmnDiagram, Diagnostic, Diagram, DiagramType, ErdDiagram, GraphDi
 
 export type * from './types.ts';
 export { tokenize } from './tokenizer.ts';
-export { bpmnAsGraph } from './bpmn.ts';
+export { bpmnAsGraph, diagramChildren } from './bpmn.ts';
 export type { Token, TokenKind } from './tokenizer.ts';
 
 /** First-line markers used by Eraser's `.eraserdiagram` files. */
@@ -36,7 +36,7 @@ function stripMarker(code: string): { code: string; type?: DiagramType } {
 
 /**
  * Guess the diagram type from the code: a first-line marker, sequence keywords, ERD keywords
- * (`notation`, `pk`/`fk`), BPMN (`type: activity|event|gateway`, `layout compact|sequential`), `shape:` for
+ * (`notation`, `pk`/`fk`), BPMN (a `type: activity|event|gateway` node inside a `{ }` group), `shape:` for
  * flowcharts, otherwise cloud architecture.
  */
 export function detectDiagramType(code: string): DiagramType {
@@ -52,12 +52,8 @@ export function detectDiagramType(code: string): DiagramType {
     return 'sequence';
   }
   if (/^[ \t]*notation[ \t]+(chen|crows-foot)\b/m.test(text) || /\{[^{}]*?[^{}\s][ \t]+(pk|fk)(?=[ \t]|\r?\n|\}|$)/m.test(text)) return 'erd';
-  if (
-    /\[[^\]\n]*\btype\s*:\s*(activity|event|gateway)\b/.test(text) ||
-    /^[ \t]*layout[ \t]*:?[ \t]*(compact|sequential)[ \t]*$/m.test(text)
-  ) {
-    return 'bpmn';
-  }
+  // BPMN needs a lane: a node with a BPMN `type:` inside a `{ }` group. A `type:` or `layout` alone fits other diagrams too.
+  if (/\{[^{}]*\[[^\]\n]*\btype\s*:\s*(activity|event|gateway)\b/.test(text)) return 'bpmn';
   if (/\bshape\s*:/.test(text)) return 'flowchart';
   return 'cloud-architecture';
 }

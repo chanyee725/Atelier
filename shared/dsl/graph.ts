@@ -19,6 +19,8 @@ export interface GraphParseOptions {
   keys?: ReadonlySet<string>;
   /** Extra statement keywords; returns true when it consumed the statement. */
   keyword?: (c: Cursor) => boolean;
+  /** A node first named by a connection inside a group joins that group (BPMN lanes) instead of the root. */
+  implicitInScope?: boolean;
 }
 
 /** Parser shared by cloud architecture and flowchart diagrams (and BPMN, which reshapes the result). */
@@ -74,7 +76,7 @@ export function parseGraph(c: Cursor, type: GraphDiagram['type'], opts: GraphPar
     const node: GraphNode = {
       kind: 'node', id: ep.name, name: ep.name, label: attrs.label ?? ep.name, attrs, implicit: !ep.attrs, span: ep.span,
     };
-    ast.children.push(node);
+    (opts.implicitInScope ? top().children : ast.children).push(node);
     registry.set(ep.name, node);
   };
 
