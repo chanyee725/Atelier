@@ -1,0 +1,22 @@
+title Order flow
+direction right
+
+Online store {
+  Customer {
+    Start [type: event]
+    Open website [type: activity]
+    Place order [type: activity, icon: flag]
+  }
+  Warehouse {
+    Approved? [type: gateway]
+    Pack items
+    Shipped [type: event]
+  }
+}
+
+Start > Open website
+Open website > Place order: Browse
+Place order > Approved?
+Approved? > Pack items: yes [color: green]
+Approved? > Open website: no
+Pack items > Shipped

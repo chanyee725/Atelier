@@ -1060,6 +1060,61 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
   return { nodes, groups, parent, rects, edges: baseEdges };
 }
 
+/** Box sizes a caller-made layout places: measured nodes (flowchart sizes) and each group's header height. */
+export interface PlacedSizes {
+  readonly nodes: ReadonlyMap<string, { readonly w: number; readonly h: number; readonly shape: ShapeKind }>;
+  readonly headers: ReadonlyMap<string, number>;
+}
+
+/**
+ * A graph base whose boxes the caller places instead of ELK (BPMN lanes, #841): the same measurements as
+ * `graphBase` (box nodes in one group share a size), the caller's rects, then elbow routes between them
+ * straightened by the corridor router. Deterministic: no ELK run.
+ */
+export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) => Map<string, Rect>): Promise<GraphBase> {
+  await prepareIcons(d);
+  const nodes = new Map<string, NodeGeom>();
+  const groups = new Map<string, GroupGeom>();
+  const parent = new Map<string, string | undefined>();
+  const measure = (child: GraphChild, parentId: string | undefined): void => {
+    parent.set(child.id, parentId);
+    if (child.kind === 'node') {
+      nodes.set(child.id, measureNode(d, child));
+      return;
+    }
+    groups.set(child.id, measureGroup(d, child));
+    for (const c of child.children) measure(c, child.id);
+  };
+  for (const c of d.children) measure(c, undefined);
+  unifySizes(nodes.values(), parent, new Map(), new Set());
+  const headers = new Map([...groups].map(([id, g]) => [id, g.header]));
+  const rects = place({ nodes, headers });
+
+  const edges = d.edges.filter((e) => rects.has(e.from) && rects.has(e.to));
+  const pairKey = (e: GraphEdge): string => [e.from, e.to].sort().join('\u0000');
+  const pairCount = new Map<string, number>();
+  for (const e of edges) pairCount.set(pairKey(e), (pairCount.get(pairKey(e)) ?? 0) + 1);
+  const pairSeen = new Map<string, number>();
+  const baseEdges: BaseEdge[] = edges.map((e) => {
+    const style = styleFor(d, e.attrs, e.span.line);
+    const key = pairKey(e);
+    const pairIndex = pairSeen.get(key) ?? 0;
+    pairSeen.set(key, pairIndex + 1);
+    const points = routeElbow(rects.get(e.from)!, rects.get(e.to)!, 0).map((p) => ({ x: round(p.x), y: round(p.y) }));
+    return {
+      edge: e,
+      style,
+      ...(e.label ? { label: measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140) } : {}),
+      points,
+      forcedElbow: e.from === e.to || (pairCount.get(key) ?? 0) > 1,
+      pairIndex,
+      pairSize: pairCount.get(key) ?? 1,
+    };
+  });
+  routeEdges(rects, parent, baseEdges.map((be) => ({ from: be.edge.from, to: be.edge.to, points: be.points, keep: be.forcedElbow })));
+  return { nodes, groups, parent, rects, edges: baseEdges };
+}
+
 /**
  * What a route around boxes must avoid among `ids`: other boxes are blocks; a divider that spans its row is
  * a band (cross it, never run along it) plus a block for its label.
