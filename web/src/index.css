@@ -475,6 +475,19 @@ body {
    Colour always comes with a glyph and a text label. Motion is opt-in (no-preference) and can be paused. */
 .run-layer { position: absolute; pointer-events: none; }
 .doc-diagram-stage .run-layer { z-index: 1; }
+/* Per-agent time left (#735): bottom-right corner of the picture, HTML in CSS px so it stays readable at any zoom. */
+.run-eta {
+  position: absolute; right: 4px; bottom: 4px; max-inline-size: min(320px, calc(100% - 8px)); padding: 4px 6px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground);
+  font: 400 12px/16px var(--font-sans); pointer-events: none;
+}
+.run-eta ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.run-eta li { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+.run-eta-badge { flex: none; inline-size: 16px; block-size: 16px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 600; }
+.run-eta-name { flex: none; font-weight: 500; }
+.run-eta-step { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
+.run-eta-time { flex: none; white-space: nowrap; }
+.run-eta-more { margin: 2px 0 0; color: var(--muted-foreground); }
 .run-layer svg { display: block; overflow: visible; }
 .run-ring { fill: none; stroke: currentColor; stroke-width: 2; }
 .run-ring[data-view='pending'] { stroke-dasharray: 4 3; }

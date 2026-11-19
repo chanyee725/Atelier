@@ -5,7 +5,7 @@
 import { resolvedStep, type Plan } from '../../../shared/dispatch/plan.ts';
 import type { Model, Role, SessionState } from '../../../shared/dispatch/types.ts';
 import { STEP_VIEWS, progressLabel, stepView, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
-import { roleLabel, runProgress, type RunAgent, type RunStep } from './overlayModel.ts';
+import { roleLabel, runProgress, type AgentEta, type RunAgent, type RunStep } from './overlayModel.ts';
 
 export type RunState = 'running' | 'paused' | 'done' | 'failed' | 'stopped';
 
@@ -200,12 +200,41 @@ function roleOf(plan: Plan, stepId: string, s: RecSession, live: Live): string {
   return st?.role ?? plan.defaults?.role ?? '';
 }
 
+/** Finished steps needed per role before a time left is shown. */
+export const ETA_MIN_SAMPLES = 2;
+
+/** Median in ms of the finished steps of each role in this run (carried, skipped and blocked steps do not count). */
+export function roleDurations(record: RunRecord): Map<string, number> {
+  const plan = record.plan.snapshot;
+  const by = new Map<string, number[]>();
+  for (const ps of plan.steps) {
+    const st = record.steps[ps.id];
+    if (!st || st.carried || st.state !== 'done' || st.startedAt === null || st.endedAt === null || st.endedAt < st.startedAt) continue;
+    const role = ps.role ?? plan.defaults?.role ?? '';
+    by.set(role, [...(by.get(role) ?? []), st.endedAt - st.startedAt]);
+  }
+  const out = new Map<string, number>();
+  for (const [role, list] of by) {
+    if (list.length < ETA_MIN_SAMPLES) continue;
+    const v = [...list].sort((a, b) => a - b);
+    out.set(role, v[Math.floor(v.length / 2)]!);
+  }
+  return out;
+}
+
+/** Time left of a running step from its elapsed time and the typical time of its role; never a made-up number. */
+export function etaOf(typical: number | undefined, elapsed: number): AgentEta {
+  if (typical === undefined) return { kind: 'unknown' };
+  return elapsed >= typical ? { kind: 'over' } : { kind: 'left', ms: typical - elapsed };
+}
+
 export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.now(), labels: ReadonlyMap<string, string> = new Map(), cat: ModelCatalog = {}): StepRow[] {
   const plan = record.plan.snapshot;
   const running = isLive(record.state);
   const pause = record.state === 'paused' ? (record.pause ?? { by: 'stop' as const, at: now }) : null;
   // A paused run's clock stops at the pause.
   const until = pause ? pause.at : now;
+  const typical = roleDurations(record);
   return plan.steps.map((ps, i) => {
     const step = record.steps[ps.id] ?? { state: 'pending', startedAt: null, endedAt: null, sessions: [] };
     const node = ps.node ?? ps.id;
@@ -232,12 +261,14 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     else if (view === 'done' || !running || step.endedAt !== null) time = fmtDur((step.endedAt ?? record.endedAt ?? until) - step.startedAt);
     else if (paused) time = fmtDur(until - step.startedAt);
     else time = `${fmtDur(now - step.startedAt)}째`;
+    const running_ = (view === 'active' || view === 'review') && running && step.startedAt !== null && step.endedAt === null && paused !== 'limit';
     const agents = step.sessions.map((s) => {
       const l = live.get(s.sid);
       // A finished session is gone from `live`: its record keeps only the id, so look the label up (PR #617 review).
       const id = s.model ?? l?.model;
       const model = l?.modelLabel ?? (id ? modelLabel(id, cat) : undefined);
-      return { name: l?.name ?? s.name ?? s.sid, role: roleOf(plan, ps.id, s, live), ...(model ? { model } : {}) };
+      const role = roleOf(plan, ps.id, s, live);
+      return { name: l?.name ?? s.name ?? s.sid, role, ...(model ? { model } : {}), ...(running_ ? { eta: etaOf(typical.get(role), until - step.startedAt!) } : {}) };
     });
     const label = skipped ? '건너뜀' : paused === 'limit' ? '한도로 멈춤' : paused ? '멈춤' : v.label;
     const row: StepRow = { id: ps.id, n: i + 1, title: labels.get(node) ?? node, view, glyph: paused ? '⏸' : v.glyph, label, time, agents, waiting, skipped, node };

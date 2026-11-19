@@ -82,8 +82,8 @@ test('stepRows: views, times and agents from the record', () => {
   );
   assert.deepEqual(rows[0]!.agents, [{ name: 'Mira', role: 'lead' }]);
   // The step's role comes from plan defaults when the step names none.
-  assert.deepEqual(rows[1]!.agents, [{ name: 'Juno', role: 'impl' }]);
-  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', agents: [{ name: 'Juno', role: 'impl' }] });
+  assert.deepEqual(rows[1]!.agents, [{ name: 'Juno', role: 'impl', eta: { kind: 'unknown' } }]);
+  assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', agents: [{ name: 'Juno', role: 'impl', eta: { kind: 'unknown' } }] });
 });
 
 test('stepRows: live Dispatch state wins while running; a done run closes its steps', () => {
@@ -307,4 +307,17 @@ test('stepRows: a finished session shows its model label, not the id; an unknown
   assert.equal(rows[0]!.agents[0]!.model, 'Opus 5.5');
   assert.equal(stepRows(r, new Map(), T0 + 40 * MIN, new Map(), {})[0]!.model, 'claude-opus-5-5');
   assert.equal(sessionRows(r, new Map(), T0 + 40 * MIN, cat)[0]!.model, 'Opus 5.5');
+});
+
+test('agent time left (#735): estimating until two steps of the role finished, then median minus elapsed', async () => {
+  const { etaOf, roleDurations } = await import('../../web/src/run/runModel.ts');
+  assert.deepEqual(etaOf(undefined, 5 * MIN), { kind: 'unknown' });
+  assert.deepEqual(etaOf(10 * MIN, 4 * MIN), { kind: 'left', ms: 6 * MIN });
+  assert.deepEqual(etaOf(10 * MIN, 12 * MIN), { kind: 'over' });
+  const r = record();
+  const one = { ...r, steps: { impl: { state: 'done', startedAt: T0, endedAt: T0 + 10 * MIN, sessions: [] } } } as RunRecord;
+  assert.equal(roleDurations(one).size, 0);
+  const two = { ...r, steps: { impl: one.steps.impl!, plan2: { state: 'done', startedAt: T0, endedAt: T0 + 20 * MIN, sessions: [] } } } as RunRecord;
+  two.plan.snapshot.steps.push({ id: 'plan2', node: 'plan2' });
+  assert.equal(roleDurations(two).get('impl'), 20 * MIN);
 });
