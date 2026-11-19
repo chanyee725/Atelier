@@ -163,6 +163,12 @@ test('설정 modal: sections, save team settings, a role model and limits, remem
   const roles = dialog.getByRole('form', { name: '모드별 모델' });
   await roles.getByRole('tablist', { name: '모드' }).waitFor();
   assert.equal(await roles.getByRole('tab', { name: '구현' }).getAttribute('aria-selected'), 'true');
+  // The six modes include 조사 (#856); its tab explains the mode.
+  assert.deepEqual(await roles.getByRole('tab').allInnerTexts().then((t) => t.map((x) => x.trim())), ['계획/설계', '구현', '리뷰·테스트', '문서', '빠른 수정', '조사']);
+  await roles.getByRole('tab', { name: '조사' }).click();
+  await roles.getByText('웹 서치와 자료 모으기에 맞춘 모드예요.').waitFor();
+  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'settings-research-1440.png') });
+  await roles.getByRole('tab', { name: '구현' }).click();
   const role = before.roles[0];
   const roleSelect = roles.getByRole('combobox', { name: role.name, exact: true });
   const was = await roleSelect.inputValue();
