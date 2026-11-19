@@ -1,5 +1,5 @@
 // App sidebar, layout B (design doc 6 §2.1, §3.1): the project's name with search and new-file icons, the views
-// (홈 A, 최근 R, 보관함 B) and the 세션 보드 link, then 문서: this one project's folders and documents with their nested
+// (대시보드 A, 최근 R, 보관함 B) and the 세션 보드 link, then 문서: this one project's folders and documents with their nested
 // sub-documents (#778), one row per model with its connection status (SidebarModels.tsx) and settings.
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';

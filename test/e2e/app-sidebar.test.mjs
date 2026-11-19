@@ -10,7 +10,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
@@ -79,10 +79,10 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   const nav = page.getByRole('navigation', { name: '사이드바' });
   const frame = () => page.locator('[data-slot="sidebar-inset"]').getAttribute('data-frame');
   await nav.getByRole('button', { name: '결제 시스템', exact: false }).first().waitFor();
-  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^대시보드/ }).getAttribute('aria-current'), 'page');
   assert.equal(await frame(), 'floating');
-  // Top-left: the project's name, no folder switch (#778). The scratch workspace folder is 'ws'.
-  assert.match(await nav.locator('[data-project-name]').innerText(), /ws$/);
+  // Top-left: the project's name, no folder switch (#778): the git project folder that holds the workspace (#782).
+  assert.ok((await nav.locator('[data-project-name]').innerText()).endsWith(basename(repo)));
   assert.equal(await nav.getByRole('button', { name: /폴더 바꾸기/ }).count(), 0);
   assert.equal(await nav.getByRole('button', { name: '새 프로젝트' }).count(), 0);
   // 문서: top folders sorted by name (the meta name wins over the folder name), then the loose documents.
@@ -91,39 +91,22 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   const topRows = group.locator(':scope > ul > li > [data-slot="sidebar-menu-button"] > span.truncate');
   assert.deepEqual(await topRows.allInnerTexts(), ['결제 시스템', '온보딩 개편', '인프라', '아이디어 메모']);
 
-  // Dashboard home (#778): the whole project's dashboard first, then 전체 파일 and 최근; no 프로젝트별.
+  // Dashboard home (#778): cards only, no tabs, 새로 만들기 chips or find box on the page (#793).
   const dash = page.locator('main[data-screen="dashboard"]');
-  const tabs = dash.getByRole('tablist', { name: '보기' });
-  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['대시보드', '전체 파일', '최근']);
-  assert.equal(await tabs.getByRole('tab', { name: '대시보드' }).getAttribute('aria-selected'), 'true');
-  for (const title of ['문서', '실행 중인 세션']) await dash.getByRole('heading', { name: title }).first().waitFor();
-  const chips = dash.getByRole('group', { name: '새로 만들기' }).getByRole('button');
-  // Chips show the kind only; a visually hidden "새 " keeps names like "새 파이프라인 계획" for assistive tech and e2e.
-  const shown = await chips.evaluateAll((els) => els.map((el) => [...el.childNodes].filter((n) => !(n instanceof Element && n.classList.contains('sr-only'))).map((n) => n.textContent).join('').replace(/\s+/g, ' ').trim()));
-  assert.deepEqual(shown, ['문서 D', '캔버스 C', '파이프라인 계획 P', '템플릿 준비 중']);
-  // The not-yet template chip stays focusable (aria-disabled, not disabled) and a click does nothing (#216 review).
-  const template = chips.filter({ hasText: '새 템플릿' });
-  assert.equal(await template.getAttribute('aria-disabled'), 'true');
-  assert.equal(await template.evaluate((el) => el.disabled), false);
-  await template.focus();
-  assert.equal(await template.evaluate((el) => el === document.activeElement), true);
-  await template.click({ force: true });
-  assert.equal(await page.locator('main[data-screen="dashboard"]').count(), 1);
-  for (const name of ['새 문서', '새 캔버스', '새 파이프라인 계획', '새 템플릿']) assert.equal(await chips.filter({ hasText: name }).count(), 1, name);
+  await dash.getByRole('heading', { level: 1, name: '대시보드' }).waitFor();
+  for (const title of ['실행 중인 세션', '최근 문서']) await dash.getByRole('heading', { name: title }).first().waitFor();
+  assert.equal(await dash.getByRole('tablist').count(), 0);
+  assert.equal(await dash.getByRole('group', { name: '새로 만들기' }).count(), 0);
+  assert.equal(await dash.locator('input[type="search"]').count(), 0);
+  // `/` opens the command menu on 문서 only; typing finds a nested document (#793).
   await page.keyboard.press('/');
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('type')), 'search');
+  const find = page.getByRole('combobox', { name: '명령 찾기' });
+  await find.waitFor();
+  await page.getByRole('button', { name: '문서만 찾기 풀기' }).waitFor();
   await page.keyboard.type('토큰');
-  // Searching from the dashboard shows the hits in 전체 파일 (#710).
-  assert.equal(await tabs.getByRole('tab', { name: '전체 파일' }).getAttribute('aria-selected'), 'true');
-  assert.deepEqual(await dash.locator('[data-doc-row]').evaluateAll((els) => els.map((e) => e.getAttribute('data-doc-row'))), ['결제 시스템/로그인 로직/토큰 갱신.dpx.json']);
-  await page.keyboard.press('Control+a');
-  await page.keyboard.press('Backspace');
-  await tabs.getByRole('tab', { name: '전체 파일' }).click();
-  assert.match(await dash.locator('[data-slot="column-head"]').first().innerText(), /위치/);
-  assert.equal(await dash.locator('[data-doc-row]').count(), 5);
-  // A file right in the workspace root has no group (no 미분류, #592) but stays here, placed at 최상위.
-  assert.match(await dash.locator('[data-doc-row="아이디어 메모.dpx.json"]').innerText(), /최상위/);
-  await tabs.getByRole('tab', { name: '대시보드' }).click();
+  await page.getByRole('option', { name: /토큰 갱신/ }).first().waitFor();
+  await page.keyboard.press('Escape');
+  await find.waitFor({ state: 'detached' });
   await shot(page, 'light-dash-1440');
   await page.evaluate(() => document.activeElement?.blur());
 
@@ -144,13 +127,13 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   await page.keyboard.press('r');
   assert.equal(await nav.getByRole('button', { name: /최근/ }).getAttribute('aria-current'), 'page');
   await page.keyboard.press('a');
-  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^대시보드/ }).getAttribute('aria-current'), 'page');
 
   // A folder in 문서 unfolds its documents in place (the dashboard stays); a document with sub-documents shows a count.
   const pay = row(nav, /결제 시스템/);
   await pay.click();
   assert.equal(await pay.getAttribute('aria-expanded'), 'true');
-  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^대시보드/ }).getAttribute('aria-current'), 'page');
   assert.equal(await frame(), 'floating');
   const login = row(nav, /^로그인 로직/);
   await login.waitFor();
@@ -224,7 +207,7 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
     await page.getByRole('button', { name: '메뉴 열기' }).click();
     const drawer = page.getByRole('dialog').getByRole('navigation', { name: '사이드바' });
     await drawer.waitFor();
-    const all = drawer.getByRole('button', { name: /^홈/ });
+    const all = drawer.getByRole('button', { name: /^대시보드/ });
     assert.ok((await all.boundingBox()).height >= 44, 'drawer rows are 44px');
     await row(drawer, /결제 시스템/).click();
     await page.waitForTimeout(400);
