@@ -100,7 +100,7 @@ export class Ledger {
 
   /**
    * The sessions that worked on an issue: entries naming it (by an explicit issue or a branch), plus their leads.
-   * A lead's numbers are its whole session (it may have led other issues too).
+   * A lead's numbers are its whole session (it may have led other issues too); issueAccounts marks it `shared`.
    */
   forIssue(n) {
     const all = this.entries;
@@ -111,13 +111,17 @@ export class Ledger {
   }
 }
 
-/** The public shape of one entry for GET /api/issues/:n/accounts. `pr` comes from the PR lookup (null if unknown). */
-export function issueSession(e, pr = null) {
+/**
+ * The public shape of one entry for GET /api/issues/:n/accounts. `pr` comes from the PR lookup (null if unknown).
+ * `shared`: the entry's tokens, cost and time are its whole session and also cover other issues (a lead pulled in
+ * for its teammates, or a session on more than one issue), so the issue's totals leave it out (#756).
+ */
+export function issueSession(e, pr = null, shared = false) {
   return {
     sid: e.sid, role: e.role ?? null, provider: e.provider ?? null, model: e.model ?? null, modelLabel: e.modelLabel ?? null,
     effort: e.effort ?? null, accountLabel: e.accountLabel ?? null, startedAt: e.startedAt ?? null, endedAt: e.endedAt ?? null,
     tokens: { ...Object.fromEntries(TOKEN_KEYS.map(k => [k, e.tokens?.[k] ?? 0])) }, cost: e.cost ?? null,
-    branch: e.branch ?? null, pr,
+    branch: e.branch ?? null, pr, shared: !!shared,
   };
 }
 
@@ -149,7 +153,7 @@ export async function issueAccounts(ledger, n, { prsOf = null, prOf = null, maxB
       } catch { /* unknown PR */ }
     }));
   }
-  const sessions = entries.map(e => issueSession(e, byBranch.get(e.branch) ?? null));
+  const sessions = entries.map(e => issueSession(e, byBranch.get(e.branch) ?? null, !e.issues.includes(n) || e.issues.length > 1));
   const prs = listed ? [...new Set(listed.map(p => p.number))] : [...new Set(sessions.map(s => s.pr).filter(Boolean))];
   return { issue: n, prs, sessions, summary: accountsSummary(sessions) };
 }

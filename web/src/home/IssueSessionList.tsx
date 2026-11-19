@@ -1,6 +1,7 @@
 // The sessions that worked on one PR or issue (#747), under its dashboard tile: a native <details> whose summary
 // line counts them with their provider marks and total cost, and opens to one entry per session (role, provider mark,
-// model and effort, account label, time, tokens, cost). Metadata only.
+// model and effort, account label, time, tokens, cost). A lead's whole-session numbers are marked 공유 and left out
+// of the totals, since they also count under the other issues it led (#756). Metadata only.
 import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { fmtK, fmtUsd, providerName } from '../dispatch/lib/format.ts';
@@ -48,7 +49,12 @@ export function IssueSessionList({ sessions, issue = null, onToggle, now = Date.
                   {s.accountLabel}
                 </span>
               )}
-              <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">{fmtUsd(s.cost)}</span>
+              {s.shared && (
+                <span data-issue-shared className="ml-auto shrink-0 rounded-sm border px-1 text-[10px] leading-4 text-muted-foreground" title="다른 이슈와 함께 쓴 세션이라 합계에서 빼요">
+                  공유
+                </span>
+              )}
+              <span className={`${s.shared ? '' : 'ml-auto '}shrink-0 text-muted-foreground tabular-nums`}>{fmtUsd(s.cost)}</span>
             </span>
             <span className="flex min-w-0 items-center gap-2 pl-[18px] text-muted-foreground tabular-nums">
               <span className="min-w-0 truncate" title={`${s.model}${s.effort ? ` ${s.effort}` : ''}`}>
@@ -68,6 +74,7 @@ export function IssueSessionList({ sessions, issue = null, onToggle, now = Date.
       </ul>
       <p className="m-0 border-t px-3 py-1.5 text-muted-foreground tabular-nums">
         합계 {fmtDuration(sum.ms)} · 토큰 {fmtK(sum.tokens)}
+        {sum.shared > 0 && ` · 공유 ${sum.shared}개 빼고`}
       </p>
     </details>
   );
