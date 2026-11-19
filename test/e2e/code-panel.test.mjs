@@ -50,8 +50,14 @@ async function openCanvas(t, file, seed) {
   let browser;
   t.after(async () => {
     await browser?.close();
-    server.kill();
-    rmSync(repo, { recursive: true, force: true });
+    // The server finishes app.close() (lock release, pending workspace writes) after SIGTERM; removing the repo
+    // before it exits races those writes and fails with ENOTEMPTY (#866).
+    if (server.exitCode === null && server.signalCode === null) {
+      const exited = new Promise((r) => server.once('exit', r));
+      server.kill();
+      await exited;
+    }
+    rmSync(repo, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
   // Wait for the listen line itself: a watcher warning ("workspace: watching for outside changes failed ..., retrying" from store.js, #531) also contains 'workspace' and can come first. With DRAW_WORKSPACE_WATCH=poll it should not appear, but the wait stays strict.
   for (let i = 0; i < 100 && !log.includes(`workspace ${ws}`); i++) await new Promise((r) => setTimeout(r, 100));
