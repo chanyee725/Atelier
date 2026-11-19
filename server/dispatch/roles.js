@@ -34,7 +34,8 @@ Dispatch MCP 도구로 다른 세션을 만들고 관리할 수 있다.
 - 코드 분석 다이어그램: 노드 라벨은 기능을 짧은 한국어로 쓰고(예: 로봇 데이터 녹화) 파일 이름은 라벨에 쓰지 않는다.
   코드 위치는 DSL 속성 code: "path:start-end#symbol" (여러 개는 ; 로 구분)로 붙인다. 블록 JSON에서는 codeRefs: {v:1, nodes:{"<노드 라벨>":{summary, refs:[{path,start,end?,symbol?,note?}]}}}.
   path는 저장소 상대 경로, start/end는 1부터. summary·note에는 코드 설명만 쓰고 비밀값·개인정보는 쓰지 않는다. 자세한 형식: Drawing 저장소 docs/agent-diagrams.md.
-- list_roles: 사용할 수 있는 역할과 모델
+- 모드: 팀이나 단계마다 작업 종류에 맞는 mode를 고른다(plan 계획/설계, impl 구현, review 리뷰·테스트, docs 문서, quickfix 빠른 수정, research 조사). create_sessions와 write_plan 단계에 mode를 넣으면 그 모드의 프로필(제공사·모델·강도·권한)로 만든다. 지시에 모드가 없으면 작업 내용으로 고른다. model·effort·perm을 적으면 그것이 우선한다. 프로필이 다른 모델로 바뀌면 세션의 profileNote에 이유가 온다.
+- list_roles: 사용할 수 있는 역할과 모델, 모드
 - create_sessions: 역할별 세션 생성 (각 세션에 줄 지시를 구체적으로 적는다)
 - list_sessions / get_session: 진행 상황과 마지막 응답 확인
 - send_message: 진행 중인 세션에 추가 지시

@@ -15,6 +15,8 @@ export const MAX_PLAN_NAME = 200;
 export const MAX_PLAN_N = 4;
 /** Permission modes a step may ask for. There is no looser mode on purpose. */
 export const PLAN_PERMS = ['manual', 'acceptEdits', 'auto', 'plan'] as const;
+/** Harness modes a step can run in (#748; same ids as server/dispatch/mode-profiles.js MODES). */
+export const PLAN_MODES = ['plan', 'impl', 'review', 'docs', 'quickfix', 'research'] as const;
 export const PLAN_GATES = ['auto', 'manual'] as const;
 
 export type PlanPerm = (typeof PLAN_PERMS)[number];
@@ -27,6 +29,8 @@ export interface PlanStepFields {
   model?: string;
   effort?: string;
   perm?: PlanPerm;
+  /** Harness mode (#748): the step's sessions use that mode's profile unless model/effort/perm say otherwise. */
+  mode?: string;
   /** Sessions for this step (1-4). */
   n?: number;
   task?: string;
@@ -52,13 +56,14 @@ export interface Plan {
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isName = (v: unknown): v is string => typeof v === 'string' && v.length >= 1 && v.length <= MAX_PLAN_NAME;
-const NAME_FIELDS = ['provider', 'role', 'model', 'effort'] as const;
+const NAME_FIELDS = ['provider', 'role', 'model', 'effort', 'mode'] as const;
 
 function fieldsProblem(f: Record<string, unknown>, at: string): string | null {
   for (const k of NAME_FIELDS) {
     if (f[k] !== undefined && !isName(f[k])) return `${at}.${k} must be a string of 1-${MAX_PLAN_NAME} characters`;
   }
   if (f.perm !== undefined && !(PLAN_PERMS as readonly unknown[]).includes(f.perm)) return `${at}.perm must be one of ${PLAN_PERMS.join(', ')}`;
+  if (f.mode !== undefined && !(PLAN_MODES as readonly unknown[]).includes(f.mode)) return `${at}.mode must be one of ${PLAN_MODES.join(', ')}`;
   if (f.gate !== undefined && !(PLAN_GATES as readonly unknown[]).includes(f.gate)) return `${at}.gate must be one of ${PLAN_GATES.join(', ')}`;
   if (f.n !== undefined && (!Number.isInteger(f.n) || (f.n as number) < 1 || (f.n as number) > MAX_PLAN_N)) return `${at}.n must be an integer 1-${MAX_PLAN_N}`;
   if (f.task !== undefined && (typeof f.task !== 'string' || f.task.length > MAX_PLAN_TASK)) return `${at}.task must be a string of at most ${MAX_PLAN_TASK} characters`;

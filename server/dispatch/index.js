@@ -11,6 +11,8 @@ import { cancelLogin, login, loginWithKey, logout, PROVIDER_IDS, providerStatus,
 import { Burn } from "./burn.js";
 import { Store } from "./dispatch-store.js";
 import { currentBranch } from "./git.js";
+import { Ledger } from "./ledger.js";
+import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
@@ -18,6 +20,7 @@ import { SharedLimits } from "./limits.js";
 import { codexModels, staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
+import { patchProfiles, profileGrid, readStored, resolveProfile } from "./mode-profiles.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
 import { readLegacyTheme, UserDefaults } from "../user-defaults.js";
 
@@ -98,6 +101,22 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
 
   for (const ev of HUB_EVENTS) hub.on(ev, data => broadcast(ev, data));
 
+  // Which sessions, models and accounts worked on which issue (#747), kept past session removal. A new session
+  // takes the account label its provider has now; after each turn the branch its folder is on is noted (the
+  // issue a branch like feat/747-x names).
+  hub.accountLabel = provider => accountLabelOf(userDefaults.values.accountLabels, provider);
+  const ledger = new Ledger(store);
+  for (const s of hub.sessions) ledger.sync(s);
+  const lastStatus = new Map();
+  hub.on("session", s => {
+    ledger.sync(s);
+    if (lastStatus.get(s.id) === s.status) return;
+    lastStatus.set(s.id, s.status);
+    if (!s.cwd || !["idle", "done", "error"].includes(s.status)) return;
+    currentBranch(s.cwd).then(b => { if (!closed && ledger.noteBranch(s.id, b)) store.save(); }, () => {});
+  });
+  hub.on("removed", ({ id }) => { lastStatus.delete(id); ledger.end(id); store.save(); });
+
   // UI preferences: ~/.dispatch/drawing.json first, then the project's state.json, then the standalone Dispatch's
   // ~/.dispatch/prefs.json (read only), then "system".
   const legacyTheme = dep.userDefaults ? await readLegacyTheme(userDefaults.file) : null;
@@ -157,8 +176,31 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   // Only this project: other servers are no longer found by registry files or port scans.
   const projects = async () => [{ port: hub.port, name: path.basename(root), path: tilde(root), current: true }];
 
+  // Harness profiles per mode (#748), stored in ~/.dispatch/drawing.json as `modeProfiles`.
+  const isConnected = provider => !!providers[provider]?.connected;
+  const storedProfiles = async () => readStored((await userDefaults.current()).modeProfiles);
+  const modeProfiles = {
+    async get() {
+      return { ...profileGrid({ stored: await storedProfiles(), models, isConnected, roleModels: teamSettings(store).roleModels }), error: userDefaults.status().error };
+    },
+    async put(body) {
+      const next = patchProfiles(await storedProfiles(), body, models);
+      await userDefaults.update({ modeProfiles: next });
+      const out = await modeProfiles.get();
+      broadcast("mode-profiles", out);
+      return out;
+    },
+    /** What team creation calls (PR2): the profile for `role` in `mode`, with a fallback note. */
+    async resolve(mode, role, { perm } = {}) {
+      return resolveProfile({ mode, role, stored: await storedProfiles(), models, isConnected, roleModel: teamSettings(store).roleModels[role], perm });
+    },
+  };
+
+  hub.resolveProfile = (mode, role, opts) => modeProfiles.resolve(mode, role, opts);
+
   const d = {
-    root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
+    modeProfiles,
+    root, store, hub, ledger, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.

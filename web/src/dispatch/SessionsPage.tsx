@@ -1,6 +1,6 @@
 // 세션 board: the needs-attention strip, a state filter and session cards grouped by role, most urgent first.
 import { useMemo, useState, type ReactNode } from 'react';
-import { GitBranch, Plus, TriangleAlert } from 'lucide-react';
+import { Activity, GitBranch, Plus, TriangleAlert } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { cn } from '../lib/utils';
@@ -12,7 +12,9 @@ import { byUrgency, stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
 import { Meter, ModelTag, StatusBadge } from './parts';
 import { useDispatch } from './store';
+import { openAgentLive, useAgentLiveTarget } from '../live/store';
 import { useScoped } from './scope';
+import { shownAccount, useAccountLabels } from '../accountLabels';
 import type { Session, SessionState } from './types';
 
 const FILTERS: { id: 'all' | SessionState; label: string }[] = [
@@ -39,26 +41,31 @@ function NowLine({ s, now }: { s: Session; now: number }) {
   );
 }
 
-function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session; now: number; onOpen: () => void }) {
+function SessionCard({ s, parent, now, onOpen, liveOpen }: { s: Session; parent?: Session; now: number; onOpen: () => void; liveOpen: boolean }) {
+  // The label the session started under when the server records one (#747), else the provider's current label.
+  const labels = useAccountLabels();
+  const account = shownAccount(s.provider, (s as Session & { accountLabel?: string | null }).accountLabel, labels);
   const ctx = s.ctxWindow ? s.ctx / s.ctxWindow : 0;
   const state = stateOf(s);
   const live = s.status === 'running' || s.status === 'starting';
   const since = elapsed(stateStart(s, state), now);
   const flag = state === 'waiting' || state === 'stuck' || !!s.stall;
+  // The live-view button is a sibling of the card button (no nested interactive elements), pinned to its top-right corner.
   return (
+    <div className="relative min-w-0">
     <button
       type="button"
       onClick={onOpen}
       title={parent ? `${parent.name}이(가) 만든 세션` : undefined}
       className={cn(
-        'flex min-w-0 flex-col gap-2 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'flex w-full min-w-0 flex-col gap-2 rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         flag && 'border-warn/60 bg-warn/5',
         state === 'failed' && 'border-destructive/50 bg-destructive/5',
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2 pr-7">
         <span className="shrink-0 text-sm font-semibold">{s.name}</span>
-        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} />
+        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} account={account} />
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground tabular-nums" title="이 상태가 된 뒤 지난 시간">{since ? `${since}째` : '방금'}</span>
           <StatusBadge state={state} />
@@ -92,6 +99,21 @@ function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session;
         </span>
       </div>
     </button>
+    <button
+      type="button"
+      aria-label="진행상황 보기"
+      title={`${s.name} 진행상황 보기`}
+      aria-expanded={liveOpen}
+      data-session-live={s.id}
+      onClick={(e) => openAgentLive(s.id, { trigger: e.currentTarget, from: 'board' })}
+      className={cn(
+        'absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        liveOpen && 'bg-accent text-foreground',
+      )}
+    >
+      <Activity aria-hidden className="size-3.5" />
+    </button>
+    </div>
   );
 }
 
@@ -105,6 +127,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
   const [filter, setFilter] = useState<'all' | SessionState>('all');
   const [showDone, setShowDone] = useState(false);
   const [creating, setCreating] = useState(false);
+  const liveSid = useAgentLiveTarget();
   const now = useNow(20_000);
 
   const byId = useMemo(() => new Map(sessions.map(s => [s.id, s])), [sessions]);
@@ -183,7 +206,7 @@ export function SessionsPage({ onOpen, onUsage, actions }: { onOpen: (id: string
                     {cost != null && <span className="text-sm text-muted-foreground tabular-nums">{fmtUsd(cost)}</span>}
                   </header>
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2.5">
-                    {ss.map(s => <SessionCard key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} now={now} onOpen={() => onOpen(s.id)} />)}
+                    {ss.map(s => <SessionCard key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} now={now} onOpen={() => onOpen(s.id)} liveOpen={liveSid === s.id} />)}
                   </div>
                 </section>
               );
