@@ -299,12 +299,17 @@ test('x-drawing-session over HTTP: cleaned label on the cursor and in GET /api/w
     // Writes with no x-drawing-session (#656): the same file within two minutes keeps the name; another file is
     // the generic agent.
     const plain = { 'x-drawing': '1', 'content-type': 'application/json' };
+    const cursorsOn = (file) => seen.filter((s) => s.ev === 'cursor' && s.data.file === file).map((s) => s.data);
+    const before = cursorsOn('Proj/a.dpx.json').length;
     f.canvas.elements[0].x = 40;
     res = await fetch(`${base}/api/file?path=${path}`, { method: 'PUT', headers: plain, body: JSON.stringify({ ...f, revision: rev }) });
     assert.equal(res.status, 200);
     rev = (await res.json()).revision;
     await sleep(50);
-    assert.equal(lastCursor()?.name, 'bNova/b');
+    // A fresh cursor for this header-less write (not the earlier one left over), still under the cleaned name.
+    const after = cursorsOn('Proj/a.dpx.json');
+    assert.equal(after.length, before + 1);
+    assert.equal(after.at(-1).name, 'bNova/b');
     const g = newFile();
     res = await fetch(`${base}/api/file`, { method: 'POST', headers: plain, body: JSON.stringify({ ...g, path: 'Proj/b.dpx.json' }) });
     assert.equal(res.status, 201);
