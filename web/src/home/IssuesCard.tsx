@@ -73,7 +73,7 @@ function liveOf(pr: IssueRow['prs'][number] | undefined, prs: Feed<ReadonlyMap<s
 function StateChip({ row }: { row: IssueRow }) {
   const st = ISSUE_STATE[row.state];
   return (
-    <span data-issue-state={row.state} className="inline-flex h-5 w-[4.5rem] shrink-0 items-center gap-1.5 rounded-full border px-2 text-[11px] text-muted-foreground">
+    <span data-issue-state={row.state} className="inline-flex h-6 w-[5.25rem] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs text-muted-foreground">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', TONE[st.tone], row.state === 'progress' && 'motion-safe:animate-pulse')} />
       <span className="truncate">{st.label}</span>
     </span>
