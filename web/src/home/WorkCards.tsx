@@ -76,7 +76,7 @@ export function BranchesCard({ branches, claimed, grow }: { branches: Feed<Branc
   const rows = branchRows(branches, claimed);
   const base = branches && branches !== 'failed' ? branches.base : null;
   return (
-    <Card id="branches" grow={grow} scroll title="이슈 없는 브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
+    <Card id="branches" grow={grow} scroll className={grow === undefined ? "max-h-80" : undefined} title="이슈 없는 브랜치" count={rows.length || undefined} hint={base ? `${base} 기준` : undefined} flush>
       {branches === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : branches === 'failed' ? (
