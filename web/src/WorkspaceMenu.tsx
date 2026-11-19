@@ -2,7 +2,7 @@
 // between (~/.dispatch/drawing.json `workspaces`) plus 폴더 열기 for the folder browser. Picking one switches the
 // server; App reloads the page. The list is fetched each time the menu opens.
 import { useState } from 'react';
-import { ChevronsUpDown, FolderOpen } from 'lucide-react';
+import { Check, ChevronsUpDown, FolderOpen } from 'lucide-react';
 import { api, type WorkspaceFolders } from './api';
 import {
   DropdownMenu,
@@ -55,6 +55,8 @@ export function WorkspaceMenu({ workspace, onSwitch, onOpenFolder }: Props) {
           <DropdownMenuRadioGroup aria-label="열 수 있는 폴더" value={current} onValueChange={(p) => p !== current && onSwitch(p)}>
             {list.folders.map((f) => (
               <DropdownMenuRadioItem key={f.path} value={f.path} disabled={f.missing || (!f.current && !list.switchable)} title={f.path}>
+                {/* Fixed leading slot so names line up; the check marks the open folder (aria-checked says it too). */}
+                <Check aria-hidden className={cn('size-4 shrink-0', !f.current && 'invisible')} />
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
                 {f.missing && <span className="text-xs text-muted-foreground">없음</span>}
               </DropdownMenuRadioItem>
