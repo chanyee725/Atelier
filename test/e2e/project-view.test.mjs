@@ -1,5 +1,5 @@
-// Project view (#592): only the project's own files, no 미분류 anywhere in the file list, and a 지금 작업 중 panel of
-// agent sessions with the file each holds, updated live from the `agents` event without a reload.
+// Project view (#592, #686, #793): no 미분류 anywhere, and the project page's 실행 중인 세션 card lists only this
+// project's agent sessions with the file each holds, updated live from the `agents` event without a reload.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // It starts its own server on a free port against a scratch workspace inside a scratch git repo (one commit) in a
 // temp dir, and refuses to go on unless the server's own log names that port and folder. No CLI is started: the agent
@@ -25,7 +25,7 @@ const freePort = () =>
     });
   });
 
-test('project view: own files only, no 미분류, live agents with held files', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
+test('project view: no 미분류, live agents with held files', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-pview-'));
   const git = (...a) => execFileSync('git', ['-C', repo, ...a], { env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
@@ -78,71 +78,62 @@ test('project view: own files only, no 미분류, live agents with held files', 
   });
   await page.goto(BASE);
 
-  // The file list has no 미분류 tab or group; the loose file is still in 전체.
+  // The dashboard is cards only since #793: no 보기 tabs, no search box, no file list; still no 미분류 anywhere.
   const dash = page.locator('main[data-screen="dashboard"]');
   await dash.waitFor();
-  assert.deepEqual(await dash.getByRole('tablist', { name: '보기' }).getByRole('tab').allInnerTexts(), ['개요', '전체 파일', '최근', '프로젝트별']);
+  await dash.locator('[data-card="sessions"]').waitFor();
+  assert.equal(await dash.getByRole('tablist', { name: '보기' }).count(), 0);
+  assert.equal(await dash.getByRole('searchbox').count(), 0);
   assert.equal(await dash.getByText('미분류').count(), 0);
-  // 프로젝트별 search with no hit in a project says so instead of a blank screen (#601).
-  const search = dash.getByRole('searchbox', { name: '파일 찾기' });
-  await search.fill('메모');
-  assert.match(await dash.locator('[data-no-project-match]').innerText(), /프로젝트 안에는 맞는 파일이 없어요. 전체 탭에서 찾아보세요./);
-  await search.fill('없는이름');
-  assert.equal((await dash.locator('[data-no-project-match]').innerText()).trim(), '맞는 파일이 없어요');
-  await search.fill('구성');
-  assert.equal(await dash.locator('[data-no-project-match]').count(), 0);
-  await search.fill('');
-  await dash.getByRole('tab', { name: '전체 파일' }).click();
-  await dash.locator('[data-doc-row="메모.dpx.json"]').waitFor();
 
-  // The project view lists only its own files and sub-documents.
-  await page.locator('[data-slot="sidebar-menu-button"]').filter({ hasText: 'Sim' }).first().click();
+  // A project page opens from the command menu's project group (the sidebar's folder rows only expand).
+  const openProject = async (pg, name) => {
+    await pg.keyboard.press('Control+k');
+    await pg.getByRole('combobox', { name: '명령 찾기' }).fill(name);
+    await pg.getByRole('option', { name: new RegExp(`^${name}$`) }).first().click();
+  };
+
+  // The project page (#686, #793) has no file list (the sidebar's 문서 tree has them); its 실행 중인 세션 card shows
+  // only this project's agents, each with the file it holds.
+  await openProject(page, 'Sim');
   const home = page.locator('main[data-screen="project"]');
   await home.waitFor();
-  const rows = home.locator('[data-doc-row]');
-  await rows.first().waitFor();
-  assert.deepEqual((await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-doc-row')))).sort(), ['Sim/01-구성.dpx.json', 'Sim/02-화면.dpx.json', 'Sim/02-화면/상세.dpx.json']);
-
-  // 지금 작업 중: only this project's agents, with the file each holds; the row it holds carries the same tag.
-  const panel = home.locator('[data-slot="agent-panel"]');
+  assert.equal(await home.locator('[data-doc-row]').count(), 0);
+  const panel = home.locator('[data-card="sessions"]');
   const names = () => panel.locator('li[data-agent]').evaluateAll((els) => els.map((e) => e.getAttribute('data-agent')));
   await panel.locator('li[data-agent="Otto"]').waitFor();
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'project-view-1440.png') });
   assert.deepEqual(await names(), ['Otto']);
-  assert.match(await panel.locator('li[data-agent="Otto"]').innerText(), /구현자 · Opus 5\.5[\s\S]*02\. 화면/);
-  assert.equal(await home.locator('[data-doc-row="Sim/02-화면.dpx.json"] > div [data-held-by]').getAttribute('data-held-by'), 'Otto');
+  assert.match(await panel.locator('li[data-agent="Otto"]').innerText(), /구현자[\s\S]*Opus 5\.5[\s\S]*02\. 화면/);
 
   // A new snapshot moves Otto to another file and brings Cal in, with no reload.
   release = true;
-  await page.waitForFunction(() => document.querySelector('[data-slot="agent-panel"] li[data-agent="Cal"]'), null, { timeout: 10_000 });
-  assert.deepEqual(await names(), ['Otto', 'Cal']);
+  await page.waitForFunction(() => document.querySelector('[data-card="sessions"] li[data-agent="Cal"]'), null, { timeout: 10_000 });
+  assert.deepEqual((await names()).sort(), ['Cal', 'Otto']);
   assert.match(await panel.locator('li[data-agent="Otto"]').innerText(), /화면 상세/);
-  assert.match(await panel.locator('li[data-agent="Cal"]').innerText(), /잡고 있는 파일 없음/);
-  assert.equal(await home.locator('[data-doc-row="Sim/02-화면.dpx.json"] > div [data-held-by]').count(), 0);
-  assert.equal(await home.locator('[data-doc-row="Sim/02-화면/상세.dpx.json"] [data-held-by]').getAttribute('data-held-by'), 'Otto');
+  // A card that holds no file has no file line (#793 dropped the 잡고 있는 파일 없음 filler).
+  assert.equal(await panel.locator('li[data-agent="Cal"]').getByRole('button', { name: /잡고 있는 파일/ }).count(), 0);
 
   // The held file is a link to it.
   await panel.locator('li[data-agent="Otto"]').getByRole('button', { name: /화면 상세/ }).click();
   await page.waitForFunction(() => !document.querySelector('main[data-screen="project"]'));
 
-  // A failed agents request says it could not load (not "no agents") and 다시 시도 asks again (#601).
+  // A failed agents request says it could not load (not "no sessions") and 다시 시도 asks again (#601).
   const page2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page2.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   let fail = true;
   await page2.route('**/api/workspace/agents*', (r) => (fail ? r.fulfill({ status: 500, json: { error: 'boom' } }) : r.fulfill({ json: { agents: first } })));
   await page2.route('**/api/events', (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/event-stream' }, body: 'retry: 60000\n\n' }));
   await page2.goto(BASE);
-  await page2.locator('[data-slot="sidebar-menu-button"]').filter({ hasText: 'Sim' }).first().click();
-  const panel2 = page2.locator('[data-slot="agent-panel"]');
-  const failed = panel2.locator('[data-agents-failed]');
-  await failed.waitFor();
-  assert.equal(await failed.getAttribute('role'), 'status');
-  assert.match(await failed.innerText(), /에이전트 목록을 불러오지 못했어요/);
-  assert.equal(await panel2.getByText('일하는 에이전트가 없어요', { exact: false }).count(), 0);
+  await page2.locator('main[data-screen="dashboard"] [data-card="sessions"]').waitFor();
+  await openProject(page2, 'Sim');
+  const panel2 = page2.locator('main[data-screen="project"] [data-card="sessions"]');
+  await panel2.getByText('세션 목록을 불러오지 못했어요').waitFor();
+  assert.equal(await panel2.getByText('실행 중인 세션이 없어요', { exact: false }).count(), 0);
   if (SHOTS) await page2.screenshot({ path: join(SHOTS, 'project-view-agents-failed.png') });
   fail = false;
   await panel2.getByRole('button', { name: '다시 시도' }).click();
   await panel2.locator('li[data-agent="Otto"]').waitFor();
-  assert.equal(await failed.count(), 0);
+  assert.equal(await panel2.getByText('세션 목록을 불러오지 못했어요').count(), 0);
   assert.deepEqual(errors, []);
 });
