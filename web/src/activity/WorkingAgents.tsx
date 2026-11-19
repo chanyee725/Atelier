@@ -44,10 +44,11 @@ export function WorkingAgents({ current, onOpen, titleOf }: { current: string | 
         <span className="truncate">작업 중인 에이전트</span>
         <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 motion-safe:transition-transform', open && 'rotate-90')} />
         {!open && (
-          <span className="ml-auto shrink-0 tabular-nums" data-working-agents-count="">
-            <span className="sr-only">, </span>
-            {agents.length}
-            <span className="sr-only">명</span>
+          <span className="ml-auto shrink-0 tabular-nums">
+            <span aria-hidden data-working-agents-count="">
+              {agents.length}
+            </span>
+            <span className="sr-only">, {agents.length}개</span>
           </span>
         )}
       </button>
