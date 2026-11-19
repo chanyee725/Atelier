@@ -308,7 +308,7 @@ export function Sidebar(p: Props) {
     sayTimer.current = setTimeout(() => setSaid(`${item.label}을(를) ${dest.label}(으)로 옮겼어요.`), 500);
   };
   const views = [
-    { id: 'all', label: '홈', icon: Files, key: 'A', run: () => p.onSection({ kind: 'all' }) },
+    { id: 'all', label: '대시보드', icon: Files, key: 'A', run: () => p.onSection({ kind: 'all' }) },
     { id: 'recent', label: '최근', icon: Clock, key: 'R', run: () => p.onSection({ kind: 'recent' }) },
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;

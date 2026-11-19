@@ -789,10 +789,10 @@ export function App() {
   const projectCommands = (): Command[] => [
     {
       id: 'project:all',
-      title: '홈',
+      title: '대시보드',
       group: 'project',
       icon: Layers,
-      keywords: ['dashboard', 'home', '대시보드', '프로젝트', '모든 파일'],
+      keywords: ['dashboard', 'home', '홈', '프로젝트', '모든 파일'],
       run: () => goProject(null),
     },
     ...tree

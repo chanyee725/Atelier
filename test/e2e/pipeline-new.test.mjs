@@ -65,7 +65,7 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   const row = (text) => nav.locator('[data-slot="sidebar-menu-button"]').filter({ hasText: text }).first();
   await row('ops').click(); // unfold the project
   await row('Plain').waitFor();
-  await page.getByRole('button', { name: '홈' }).first().click();
+  await page.getByRole('button', { name: '대시보드' }).first().click();
   assert.equal(await nav.getByRole('img', { name: '파이프라인: 계획' }).count(), 0, 'a plain file has no badge');
 
   await page.getByRole('button', { name: '새 파이프라인 계획' }).click();
