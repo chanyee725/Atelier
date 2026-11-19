@@ -29,8 +29,6 @@ export type IssueRow = ApiIssue & {
 /** The issue a branch works on: only `<type>/<n>-…` (`feat/747-x`, `fix/issue-12`); see shared/dispatch/issue-branch.js. */
 export { issueOfBranch };
 
-type WithIssue = Session & { issue?: number | null };
-
 /** The state of one issue from its PRs and whether a session is open on it. */
 export function issueState(prs: readonly IssuePr[], working: boolean): IssueState {
   if (prs.some((p) => p.state === 'open')) return 'pr';
@@ -48,7 +46,7 @@ const ORDER: Record<IssueState, number> = { pr: 0, progress: 1, merged: 2, open:
 export function issueRows(issues: readonly ApiIssue[], sessions: readonly Session[]): IssueRow[] {
   const rows = issues.map((i) => {
     const prBranches = new Set(i.prs.flatMap((p) => (p.branch ? [p.branch] : [])));
-    const mine = (sessions as readonly WithIssue[])
+    const mine = sessions
       .filter((s) => s.issue === i.number || issueOfBranch(s.branch) === i.number || (!!s.branch && prBranches.has(s.branch)))
       .sort((a, b) => Number(isOpen(b)) - Number(isOpen(a)) || (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
     const branches = [...new Set([...mine.flatMap((s) => (s.branch ? [s.branch] : [])), ...prBranches])];

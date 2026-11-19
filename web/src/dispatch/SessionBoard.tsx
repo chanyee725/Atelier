@@ -449,7 +449,7 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
   const failed = state === 'failed';
   // The label the session started under when the server records one (#747), else the provider's current label.
   const labels = useAccountLabels();
-  const account = shownAccount(s.provider, (s as Session & { accountLabel?: string | null }).accountLabel, labels);
+  const account = shownAccount(s.provider, s.accountLabel, labels);
   const wide = '@min-[560px]/list:col-auto @min-[560px]/list:row-auto';
   return (
     <button

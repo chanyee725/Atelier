@@ -25,17 +25,15 @@ export type IssueSession = {
   cost: number | null;
 };
 
-type WithIssue = Session & { accountLabel?: string | null; issue?: number | null };
-
 export { issueOfBranch } from './issueBoard.ts';
 
 /** The issue of a PR's branch: a session's own `issue` when the server set one, else the branch name. */
 export const issueOf = (sessions: readonly Session[], branch: string) =>
-  (sessions as readonly WithIssue[]).find((s) => s.branch === branch && s.issue)?.issue ?? issueOfBranch(branch);
+  sessions.find((s) => s.branch === branch && s.issue)?.issue ?? issueOfBranch(branch);
 
 /** The live sessions on one branch (the stand-in before the server's list arrives). */
 export function fromSessions(sessions: readonly Session[], branch: string, labels: AccountLabels): IssueSession[] {
-  return (sessions as readonly WithIssue[])
+  return sessions
     .filter((s) => s.branch === branch)
     .map((s) => ({
       key: s.id,
