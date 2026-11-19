@@ -136,3 +136,65 @@ test("without text_delta, step_update.text is the answer so far: replaced, not a
   hub.onGemini(kid, { event: "step_update", step_update: { step_type: "agent_response", text: "abc" } });
   assert.equal(kid.last, "abc");
 });
+
+// #846: a later turn (agy resumed with --conversation) replaces `last` and reaches the lead, also when it ends
+// with no answer. Shapes are agy 1.5's stream-json: the answer of a turn that ran a tool needing a permission
+// headless mode cannot ask for is an empty response plus denied_actions, with no text_delta at all.
+async function twoTurns(second) {
+  const t = setup([
+    { event: "init", conversation_id: "conv-1" },
+    delta("준비됐어요"),
+    { event: "result", result: { status: "SUCCESS", response: "준비됐어요" } },
+  ]);
+  t.hub.startGemini(t.kid, "준비되면 알려줘");
+  await until(() => t.sent.length === 1 && !t.hub.rt("K").proc);
+  writeFileSync(t.bin.env.FAKE_CLI_SCENARIO_AGY, second.map(l => JSON.stringify(l)).join("\n") + "\n");
+  t.hub.send("K", "작업 시작해");
+  await until(() => t.sent.length === 2 && !t.hub.rt("K").proc);
+  return t;
+}
+
+test("the second (resumed) agy turn's answer replaces last and reaches the lead", async () => {
+  const { kid, sent, bin } = await twoTurns([
+    { event: "init", conversation_id: "conv-1" },
+    { event: "step_update", step_update: { step_index: 2, state: "DONE", step_type: "user_input" } },
+    delta("디자인 "), delta("검토 끝났어요"),
+    { event: "result", result: { status: "SUCCESS", response: "디자인 검토 끝났어요\n" } },
+  ]);
+  const agy = bin.calls().filter(c => c.bin === "agy");
+  assert.equal(agy.length, 2);
+  assert.ok(agy[1].args.includes("--conversation") && agy[1].args.includes("conv-1"), "the second turn resumes");
+  assert.match(sent[0], /^\[Wes\(테스터\) 보고\]\n준비됐어요/);
+  assert.match(sent[1], /^\[Wes\(테스터\) 보고\]\n디자인 검토 끝났어요/);
+  assert.equal(kid.last, "디자인 검토 끝났어요\n");
+  assert.equal(kid.turns, 2);
+  assert.equal(kid.status, "idle");
+});
+
+test("a second turn that ends on a denied tool with an empty response still replaces last and reports", async () => {
+  const { kid, sent } = await twoTurns([
+    { event: "init", conversation_id: "conv-1" },
+    { event: "step_update", step_update: { step_type: "agent_response", state: "DONE", usage: { input_tokens: 5, output_tokens: 37 } } },
+    { event: "step_update", step_update: { step_type: "tool", state: "ACTIVE", tool_name: "run_command", tool_info: { parameters: { CommandLine: "npm test" } } } },
+    { event: "step_update", step_update: { step_type: "tool", state: "DONE", tool_name: "run_command" } },
+    { event: "result", result: { status: "SUCCESS", response: "", denied_actions: [{ action: "command", display_name: "Bash" }] } },
+  ]);
+  assert.notEqual(kid.last, "준비됐어요", "the first turn's answer is not kept");
+  assert.match(kid.last, /막은 도구: Bash command/);
+  assert.match(sent[1], /^\[Wes\(테스터\) 보고\]\n\[Dispatch\] agy가 headless에서 허락을 물을 수 없어 막은 도구: Bash command/);
+  assert.equal(kid.turns, 2);
+});
+
+test("a second turn with no answer and no result still replaces last and reports", async () => {
+  const { kid, sent } = await twoTurns([{ event: "init", conversation_id: "conv-1" }]);
+  assert.equal(kid.last, "[Dispatch] 답변 없이 턴이 끝났다.");
+  assert.match(sent[1], /보고\]\n\[Dispatch\] 답변 없이 턴이 끝났다\./);
+});
+
+test("text said before a denied tool is kept, with the note after it", async () => {
+  const { kid } = await twoTurns([
+    delta("확인해 볼게요\n"),
+    { event: "result", result: { status: "SUCCESS", response: "", denied_actions: [{ action: "command", display_name: "Bash" }] } },
+  ]);
+  assert.match(kid.last, /^확인해 볼게요\n\n\[Dispatch\] agy가/);
+});
