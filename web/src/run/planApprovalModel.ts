@@ -45,7 +45,8 @@ export function planApproval(status: Pick<PipelineStatus, 'state' | 'revision' |
   if (state !== 'plan') return null;
   const blockers = status.blockers;
   const previous = status.lastApprovedRevision ?? null;
-  if (previous !== null) {
+  // Right after 계획 다시 열기 the revision is still the one approved: nothing changed yet, so it is no revision.
+  if (previous !== null && previous !== status.revision) {
     return {
       kind: 'revised',
       label: '개정 대기',

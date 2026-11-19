@@ -37,6 +37,15 @@ test('a plan started before and revised waits as 개정 대기 for rev N', () =>
   assert.equal(a.canStart, true);
 });
 
+test('a reopened plan not changed yet (revision == lastApprovedRevision) is no 개정 대기', () => {
+  const a = planApproval({ ...base, revision: 3, lastApprovedRevision: 3 })!;
+  assert.equal(a.kind, 'waiting');
+  assert.equal(a.label, '승인 대기');
+  assert.equal(a.revision, 3);
+  assert.equal(a.previous, null);
+  assert.equal(a.canStart, true);
+});
+
 test('running, paused and done plans read 승인됨 with the approved revision and no 시작하기', () => {
   for (const state of ['running', 'paused', 'done'] as const) {
     const a = planApproval({ ...base, state, revision: 9, approvedRevision: 7, approvedAt: 1000, lastApprovedRevision: 7 })!;
