@@ -134,7 +134,7 @@ export class Hub extends EventEmitter {
     this.shared.on("change", () => { this.emit("limits", this.currentLimits()); this.checkTickets(); });
     this.live = new Map(); // id -> { proc, transcript, perms, seenMsgIds }
     // The live view per session (#728): metadata only, in memory, sent as throttled `live` events.
-    this.liveView = new LiveTracker({ workspaceDir, emit: ev => this.emit("live", ev) });
+    this.liveView = new LiveTracker({ workspaceDir, emit: ev => this.emit("live", ev), known: id => !!this.get(id) });
     this.isConnected = () => true; // replaced by the server with the Dispatch-level connection check
     // Pipeline hooks (server/pipeline, E20). createGate(parent) -> refusal text or null: a lead whose plan
     // waits for approval may not create teammates. taskStepCheck(lead, step) -> refusal text or null.
