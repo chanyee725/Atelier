@@ -90,9 +90,11 @@ export type UserDefaultsValues = {
   prStatus?: boolean;
   workspaces?: { path: string; name: string }[];
   lastWorkspace?: string;
+  /** User-set account label per provider id (#747), e.g. { claude: 'Max' }. A label only, never an email or account id. */
+  accountLabels?: Record<string, string>;
 };
 export type UserDefaultsStatus = { file: string | null; values: UserDefaultsValues; error: string | null; problems: string[] };
-export type UserDefaultsPatch = { theme?: 'system' | 'light' | 'dark' | null; workspace?: string | null; port?: number | null; prStatus?: boolean | null };
+export type UserDefaultsPatch = { theme?: 'system' | 'light' | 'dark' | null; workspace?: string | null; port?: number | null; prStatus?: boolean | null; accountLabels?: Record<string, string | null> };
 
 export class ApiError extends Error {
   status: number;

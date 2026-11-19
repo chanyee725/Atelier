@@ -13,6 +13,7 @@ import { nowLine } from './lib/turn.ts';
 import { Meter, ModelTag, StatusBadge } from './parts';
 import { useDispatch } from './store';
 import { useScoped } from './scope';
+import { useAccountLabels } from '../accountLabels';
 import type { Session, SessionState } from './types';
 
 const FILTERS: { id: 'all' | SessionState; label: string }[] = [
@@ -40,6 +41,9 @@ function NowLine({ s, now }: { s: Session; now: number }) {
 }
 
 function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session; now: number; onOpen: () => void }) {
+  // The label the session started under when the server records one (#747), else the provider's current label.
+  const labels = useAccountLabels();
+  const account = (s as Session & { accountLabel?: string | null }).accountLabel ?? labels[s.provider] ?? null;
   const ctx = s.ctxWindow ? s.ctx / s.ctxWindow : 0;
   const state = stateOf(s);
   const live = s.status === 'running' || s.status === 'starting';
@@ -58,7 +62,7 @@ function SessionCard({ s, parent, now, onOpen }: { s: Session; parent?: Session;
     >
       <div className="flex min-w-0 items-center gap-2">
         <span className="shrink-0 text-sm font-semibold">{s.name}</span>
-        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} />
+        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} account={account} />
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <span className="text-[11px] text-muted-foreground tabular-nums" title="이 상태가 된 뒤 지난 시간">{since ? `${since}째` : '방금'}</span>
           <StatusBadge state={state} />

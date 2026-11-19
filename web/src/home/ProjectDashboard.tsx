@@ -17,6 +17,9 @@ import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, 
 import { ColumnHead, DocList } from './DocList';
 import { allDocs, filterDocs, relativeTime } from './model';
 import { useAgents } from './useAgents';
+import { IssueSessionList } from './IssueSessionList';
+import { fromSessions } from './issueSessions';
+import { useAccountLabels } from '../accountLabels';
 import { usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches, type Branches, type Feed, type PrAnswer } from './projectFeeds';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
@@ -225,6 +228,7 @@ const REVIEW: Record<string, string> = { approved: '승인됨', changes: '수정
 
 function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; branches: string[]; prs: Feed<ReadonlyMap<string, PrAnswer>>; tracking: boolean | null }) {
   const owner = (b: string) => sessions.find((s) => s.branch === b);
+  const labels = useAccountLabels();
   const found = prs && prs !== 'failed' ? branches.flatMap((b) => {
     const a = prs.get(b);
     return a?.ok ? [{ branch: b, pr: a.pr }] : [];
@@ -256,6 +260,7 @@ function PrsCard({ sessions, branches, prs, tracking }: { sessions: Session[]; b
                 key={branch}
                 data={`pr-${pr.number}`}
                 href={pr.url}
+                footer={<IssueSessionList sessions={fromSessions(sessions, branch, labels, pr.number)} />}
                 icon={<GitPullRequest />}
                 title={
                   <span className="inline-flex items-center gap-2">

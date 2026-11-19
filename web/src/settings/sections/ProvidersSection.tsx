@@ -4,7 +4,8 @@
 // log in with an API key: the key lives only in the input until submit, is cleared before the request and goes once
 // to the server, which hands it to `codex login --with-api-key`; it is never stored or logged here. Provider state
 // comes from the shared model-connection subscription (useModels, #616/#625). With Dispatch off the rows show
-// read-only with the reason (#620). Status only: no account, email, token or key is kept.
+// read-only with the reason (#620). Status only: no account, email, token or key is kept; the one
+// account thing is the user's own label for the row (#747, AccountLabelField).
 import { ExternalLink, KeyRound, Loader2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api';
@@ -33,6 +34,7 @@ import { useModels, type Models } from '../../SidebarModels';
 import { MODELS_CHANGED, useDirtyMark, useSettingsLoad } from '../context';
 import { OffNote } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
+import { AccountLabelField } from './AccountLabelField';
 import { oneAtATime } from '../model';
 import '../../connect.css';
 
@@ -242,6 +244,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
           CLI에서도 로그아웃
         </button>
       )}
+      <AccountLabelField meta={meta} />
       {/* Always rendered, so its text changes are announced. */}
       <p role="status" className={cn('ml-11 text-xs', note?.bad ? 'text-destructive' : 'text-muted-foreground')}>
         {note?.text}
