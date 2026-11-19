@@ -1,20 +1,17 @@
-// Local folder projects (E554, docs/design/local-folder-projects.md): browse the server machine's folders by name
-// and link one to a new project. Browsing is read-only and lists folder names only: no file names, no file contents,
-// no hidden entries (".env", ".git", ...), and symlinks are never followed. Linking writes only inside the workspace
-// (a new project folder plus its .project.json); the linked folder itself is never written to.
-import { constants } from 'node:fs';
-import { open, readdir, realpath, stat } from 'node:fs/promises';
+// Local folder browser (E554, docs/design/local-folder-projects.md): the server machine's folders by name, for
+// picking a folder to open as a workspace. Read-only and folder names only: no file names, no file contents, no
+// hidden entries (".env", ".git", ...), and symlinks are never followed.
+import { readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, parse, resolve, sep } from 'node:path';
 import { StoreError } from './store.js';
-import { PROJECT_META, readProjectMeta } from './projects.js';
 
 // A folder with more sub-folders than this is cut off (the list says so); keeps one response small.
 export const MAX_FOLDERS = 2000;
 const MAX_PATH = 4096;
 
 // Never forward err.message: it holds absolute paths.
-function fsError(err) {
+export function fsError(err) {
   switch (err?.code) {
     case 'ENOENT':
       return new StoreError(404, 'folder not found');
@@ -72,74 +69,4 @@ export async function listLocalFolders(raw) {
     folders: names.slice(0, MAX_FOLDERS),
     truncated: names.length > MAX_FOLDERS,
   };
-}
-
-const inside = (child, parentDir) => {
-  const r = relative(parentDir, child);
-  return r === '' || !(r === '..' || r.startsWith('..' + sep) || isAbsolute(r));
-};
-
-// Same rules as the store's folder names (no hidden names, no slashes, no control chars), Windows-safe too.
-function projectFolderName(name) {
-  const clean = [...name.replace(/[\\/:*?"<>|\p{Cc}]/gu, ' ').replace(/\s+/g, ' ').trim().replace(/^\.+/, '').replace(/[. ]+$/, '')]
-    .slice(0, 80)
-    .join('')
-    .replace(/\.dpx\.json$/i, '');
-  return clean || '프로젝트';
-}
-
-// Links run one at a time per workspace, so two requests for the same folder cannot both pass the 409 check.
-const linkQueues = new Map();
-
-/**
- * POST /api/workspace/local-project { path }: link a local folder as a new project.
- * Creates <workspace>/<name>/ and its .project.json { name, linkedPath }. 409 when the folder is already linked.
- * Returns { path (workspace project path), name, linkedPath }.
- */
-export function linkLocalFolder(store, raw) {
-  const prev = linkQueues.get(store.root) ?? Promise.resolve();
-  const run = prev.then(() => linkOne(store, raw));
-  const tail = run.catch(() => {});
-  linkQueues.set(store.root, tail);
-  tail.then(() => linkQueues.get(store.root) === tail && linkQueues.delete(store.root));
-  return run;
-}
-
-async function linkOne(store, raw) {
-  if (typeof raw !== 'string' || raw === '') throw new StoreError(400, 'path is required');
-  const asked = parseFolderPath(raw);
-  let target;
-  try {
-    target = await realpath(asked);
-    if (!(await stat(target)).isDirectory()) throw new StoreError(400, 'not a folder');
-  } catch (err) {
-    throw fsError(err);
-  }
-  const ws = await realpath(store.root);
-  // The workspace (or a folder in it) is already where projects live; linking it would make a project of itself.
-  if (inside(target, ws)) throw new StoreError(400, 'folder is inside the workspace', { code: 'inside_workspace' });
-  if (parse(target).root === target) throw new StoreError(400, 'cannot link the filesystem root', { code: 'filesystem_root' });
-
-  const tree = await store.tree();
-  const taken = new Set();
-  for (const n of tree) {
-    // A root document's stem is taken too: a folder of that name would hold its sub-documents.
-    taken.add(n.name.replace(/\.dpx\.json$/, '').toLowerCase());
-    if (n.type !== 'folder') continue;
-    const meta = await readProjectMeta(join(store.root, n.name));
-    if (meta.linkedPath === target) throw new StoreError(409, 'folder is already a project', { code: 'already_linked', project: n.path });
-  }
-  const name = projectFolderName(basename(target));
-  let folder = name;
-  for (let i = 2; taken.has(folder.toLowerCase()); i++) folder = `${name} ${i}`;
-
-  await store.createFolder(folder);
-  // A fresh folder the store just made: O_EXCL so nothing there is overwritten, O_NOFOLLOW so a planted link is refused.
-  const fh = await open(join(store.root, folder, PROJECT_META), constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o644);
-  try {
-    await fh.writeFile(JSON.stringify({ name: basename(target) || folder, linkedPath: target }, null, 2) + '\n');
-  } finally {
-    await fh.close();
-  }
-  return { path: folder, name: basename(target) || folder, linkedPath: target };
 }
