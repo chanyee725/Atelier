@@ -24,7 +24,7 @@ export async function openPlanConfirm(
   return { kind: 'open', status: st };
 }
 
-export async function requestStart(path: string, shown: PlanSnapshot, fetchFn: typeof fetch = fetch) {
+export async function requestStart(path: string, shown: Pick<PlanSnapshot, 'revision'>, fetchFn: typeof fetch = fetch) {
   const res = await fetchFn('/api/pipeline/start', {
     method: 'POST',
     headers: { 'x-drawing': '1', 'content-type': 'application/json' },
