@@ -220,14 +220,13 @@ export interface ResolvedIcon {
   art?: { vb: string; body: string };
 }
 
-/** Resolve an icon name: bundled full sets, then tech logo, exact Lucide name, glyph keyword, placeholder. */
+/**
+ * Resolve an icon name. Curated names win over the bundled full sets so existing diagrams keep their icons:
+ * tech logo (`BRANDS`), exact Lucide name, then a glyph keyword when it is the whole name (`vm`, `chart`, `node`).
+ * Then the full sets (`aws-ec2`, any Simple Icons slug or alias), then a glyph keyword found among the words,
+ * then the placeholder.
+ */
 export function iconFor(name: string): ResolvedIcon {
-  const pack = packIcon(name);
-  if (pack) {
-    if (pack.kind === 'art') return { set: pack.set as IconSet, key: pack.key, d: '', fill: true, art: { vb: pack.vb, body: pack.body } };
-    if (pack.kind === 'fill') return { set: 'simple-icons', key: pack.key, d: pack.body, fill: true, hex: pack.hex };
-    return { set: 'lucide', key: pack.key, d: pack.body, fill: false };
-  }
   const n = name.trim().toLowerCase();
   const brand = BRANDS.get(n.replace(/[-_\s.]+/g, ''));
   const logo = brand === undefined ? undefined : SIMPLE_ICONS.get(brand);
@@ -237,10 +236,25 @@ export function iconFor(name: string): ResolvedIcon {
   const outline = LUCIDE_ICONS.get(lucideKey);
   if (outline !== undefined) return { set: 'lucide', key: lucideKey, d: outline, fill: false };
   const glyph = glyphFor(n);
-  if (glyph !== 'placeholder') {
+  const glyphIcon = (): ResolvedIcon | undefined => {
+    if (glyph === 'placeholder') return undefined;
     const key = LUCIDE_FOR_GLYPH[glyph];
     const d = LUCIDE_ICONS.get(key);
-    if (d !== undefined) return { set: 'lucide', key, d, fill: false };
+    return d === undefined ? undefined : { set: 'lucide', key, d, fill: false };
+  };
+  const words = n.split(/[-_\s.]+/).filter(Boolean);
+  const wholeName = words.length === 1 || PHRASES.some(([, keys]) => keys.includes(words.join('-')));
+  if (wholeName) {
+    const g = glyphIcon();
+    if (g) return g;
   }
+  const pack = packIcon(name);
+  if (pack) {
+    if (pack.kind === 'art') return { set: pack.set as IconSet, key: pack.key, d: '', fill: true, art: { vb: pack.vb, body: pack.body } };
+    if (pack.kind === 'fill') return { set: 'simple-icons', key: pack.key, d: pack.body, fill: true, hex: pack.hex };
+    return { set: 'lucide', key: pack.key, d: pack.body, fill: false };
+  }
+  const g = glyphIcon();
+  if (g) return g;
   return { set: 'own', key: 'placeholder', d: GLYPHS.placeholder, fill: false };
 }
