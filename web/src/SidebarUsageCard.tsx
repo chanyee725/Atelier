@@ -15,6 +15,7 @@ import { Meter } from './dispatch/parts';
 import { pct, until } from './dispatch/lib/format.ts';
 import { useUsage } from './home/homeDashboardData';
 import { events } from './lib/events';
+import { lastValue } from './lib/lastValue';
 import type { ProviderMeta } from './modelConnect';
 import { guardValue, type GuardField, type UsageGroup, type UsageWindow } from './settings/model';
 
@@ -43,16 +44,27 @@ export function cardRows(id: string, group: UsageGroup | undefined, settings: Di
   });
 }
 
-/** Saved guard settings, read while the card is open and followed through the `settings` event. */
+const keptSettings = lastValue<DispatchSettings>();
+const settingsOf = () => {
+  const s = keptSettings.get();
+  return s === 'failed' ? null : s;
+};
+
+/** Saved guard settings, read while the card is open and followed through the `settings` event; the card starts from
+ *  the last read (#705) so the thresholds do not pop in on every hover. */
 function useGuardSettings(): DispatchSettings | null {
-  const [settings, setSettings] = useState<DispatchSettings | null>(null);
+  const [settings, setSettings] = useState<DispatchSettings | null>(settingsOf);
   useEffect(() => {
     let live = true;
+    const keep = (s: DispatchSettings) => {
+      keptSettings.put(s);
+      if (live) setSettings(s);
+    };
     api.dispatchState().then(
-      (s) => live && s.settings && setSettings(s.settings),
+      (s) => s.settings && keep(s.settings),
       () => {},
     );
-    const off = events.subscribeJson<DispatchSettings>('settings', (s) => s?.guard && setSettings(s));
+    const off = events.subscribeJson<DispatchSettings>('settings', (s) => s?.guard && keep(s));
     return () => {
       live = false;
       off();
