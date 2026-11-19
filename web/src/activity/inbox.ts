@@ -4,7 +4,7 @@
 // Metadata only: the toast's one line (file, session and provider names, PR numbers), when, where it leads, and the
 // agent that raised it (session name, role and provider ids, #811).
 import { activitySentence, type ActivityEvent, type ActivityLog } from '../../../shared/dispatch/agent-activity.ts';
-import type { AppToast, ToastCategory, ToastTarget } from './appEvents';
+import { DEDUPE_MS, type AppToast, type ToastCategory, type ToastTarget } from './appEvents.ts';
 
 export const INBOX_MAX = 200;
 const TEXT_MAX = 200;
@@ -30,22 +30,41 @@ export interface InboxItem {
   read: boolean;
   target?: InboxTarget;
   agent?: InboxAgent;
+  /** An app toast's key: the same event seen by several tabs within DEDUPE_MS is kept once (#803). */
+  key?: string;
 }
 
-/** items newest first; agentSeen: the newest agent event already taken in, so a deleted one never comes back. */
+/**
+ * items newest first; agentSeen: the newest agent event already taken in, so a deleted one never comes back;
+ * agentSeenIds: the events taken in at exactly agentSeen, so another event of that same ms still comes in (#803).
+ */
 export interface Inbox {
   items: InboxItem[];
   agentSeen: number;
+  agentSeenIds?: string[];
 }
 
 export const EMPTY_INBOX: Inbox = { items: [], agentSeen: 0 };
 
 const byNewest = (a: InboxItem, b: InboxItem) => b.at - a.at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 
-/** The inbox with these items added (ids already there are skipped), newest first, capped. Same inbox when none is new. */
+/** True when an app item with this key is already there within DEDUPE_MS of `at` (another tab's copy). */
+const echoOf = (items: readonly InboxItem[], i: InboxItem) => i.key !== undefined && items.some((o) => o.key === i.key && Math.abs(o.at - i.at) < DEDUPE_MS);
+
+/**
+ * The inbox with these items added, newest first, capped. Skipped: ids already there, and an app event another tab
+ * already stored (same key within DEDUPE_MS, #803). Same inbox when none is new.
+ */
 export function addItems(box: Inbox, add: InboxItem[]): Inbox {
   const have = new Set(box.items.map((i) => i.id));
-  const fresh = add.filter((i) => !have.has(i.id) && have.add(i.id));
+  const kept: InboxItem[] = [...box.items];
+  const fresh: InboxItem[] = [];
+  for (const i of add) {
+    if (have.has(i.id) || echoOf(kept, i)) continue;
+    have.add(i.id);
+    kept.push(i);
+    fresh.push(i);
+  }
   if (!fresh.length) return box;
   return { ...box, items: [...fresh, ...box.items].sort(byNewest).slice(0, INBOX_MAX) };
 }
@@ -73,11 +92,12 @@ export function bellCount(box: Inbox, waiting: readonly string[]): number {
 
 const clip = (s: string) => (s.length > TEXT_MAX ? `${s.slice(0, TEXT_MAX - 1)}…` : s);
 
-/** The item for an app toast shown (or sent as a browser notification) at `at`. */
-export function itemOfToast(t: AppToast, at: number, seq: number): InboxItem {
+/** The item for an app toast shown (or sent as a browser notification) at `at`. Its id comes from the event, not the tab. */
+export function itemOfToast(t: AppToast, at: number): InboxItem {
   const plan = t.key.startsWith('plan-waiting:') && t.target && 'file' in t.target;
   return {
-    id: `app:${at}:${seq}`,
+    id: `app:${t.key}@${at}`,
+    key: t.key,
     kind: plan ? 'plan' : t.category,
     error: t.tone === 'error',
     text: clip(t.text),
@@ -93,7 +113,8 @@ export function itemOfToast(t: AppToast, at: number, seq: number): InboxItem {
  * The first time, the whole log comes in, so the history the bell showed before is still there.
  */
 export function takeActivity(box: Inbox, log: ActivityLog): Inbox {
-  const news = log.events.filter((e) => e.at > box.agentSeen);
+  const seenIds = new Set(box.agentSeenIds ?? []);
+  const news = log.events.filter((e) => e.at > box.agentSeen || (e.at === box.agentSeen && !seenIds.has(e.id)));
   if (!news.length) return box;
   const items = news.map(
     (e: ActivityEvent): InboxItem => ({
@@ -108,7 +129,9 @@ export function takeActivity(box: Inbox, log: ActivityLog): Inbox {
     }),
   );
   const agentSeen = Math.max(box.agentSeen, ...news.map((e) => e.at));
-  return { ...addItems(box, items), agentSeen };
+  const atSeen = news.filter((e) => e.at === agentSeen).map((e) => e.id);
+  const agentSeenIds = agentSeen === box.agentSeen ? [...seenIds, ...atSeen] : atSeen;
+  return { ...addItems(box, items), agentSeen, agentSeenIds };
 }
 
 function agentOf(x: unknown): InboxAgent | undefined {
@@ -132,17 +155,20 @@ function targetOf(x: unknown): InboxTarget | undefined {
 /** What this browser stored (anything malformed is dropped; nothing usable → empty). */
 export function parseInbox(raw: string | null): Inbox {
   try {
-    const v = JSON.parse(raw ?? 'null') as { items?: unknown; agentSeen?: unknown } | null;
+    const v = JSON.parse(raw ?? 'null') as { items?: unknown; agentSeen?: unknown; agentSeenIds?: unknown } | null;
     if (!v || typeof v !== 'object' || !Array.isArray(v.items)) return EMPTY_INBOX;
     const items: InboxItem[] = [];
     for (const x of v.items as Record<string, unknown>[]) {
       if (!x || !str(x.id) || !KINDS.has(x.kind as InboxKind) || !str(x.text) || typeof x.at !== 'number' || !Number.isFinite(x.at)) continue;
       const target = targetOf(x.target);
       const agent = agentOf(x.agent);
-      items.push({ id: x.id, kind: x.kind as InboxKind, error: x.error === true, text: clip(x.text), at: x.at, read: x.read === true, ...(target ? { target } : {}), ...(agent ? { agent } : {}) });
+      const key = str(x.key) ? x.key : undefined;
+      items.push({ id: x.id, kind: x.kind as InboxKind, error: x.error === true, text: clip(x.text), at: x.at, read: x.read === true, ...(target ? { target } : {}), ...(agent ? { agent } : {}), ...(key ? { key } : {}) });
     }
     const seen = typeof v.agentSeen === 'number' && Number.isFinite(v.agentSeen) ? v.agentSeen : 0;
-    return addItems({ items: [], agentSeen: seen }, items);
+    const seenIds = Array.isArray(v.agentSeenIds) ? v.agentSeenIds.filter(str).slice(0, INBOX_MAX) : [];
+    // Two tabs' copies of one event stored before either saw the other's collapse here (addItems skips echoes).
+    return addItems({ items: [], agentSeen: seen, ...(seenIds.length ? { agentSeenIds: seenIds } : {}) }, items);
   } catch {
     return EMPTY_INBOX;
   }
