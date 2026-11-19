@@ -39,6 +39,7 @@ import { CodePanel } from './CodePanel';
 import { CodeBadges } from './CodeBadges';
 import { codeInfoCache, shapeCode, shapeLabel, targetAfterNodes, targetAfterSelection, withoutOrphans, type CodeEl, type CodeTarget } from './codeLinks';
 import { hitHandle, imageReason, layoutFrame, layoutHandles, toLayout, type LayoutFrame } from './layoutEdit';
+import { askConfirm } from '../appDialog';
 
 export type CanvasData = { elements: unknown[]; appState: Record<string, unknown> };
 /** Show (scroll to and select) this block's image; a new `n` is a new request. */
@@ -977,8 +978,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         label: info.labels[codeTarget.node] ?? codeTarget.node,
         code: info.nodes[codeTarget.node]!,
         orphans: info.orphans.length,
-        clean: () => {
-          if (!window.confirm(`연결이 끊긴 코드 ${info.orphans.length}개를 지울까요?`)) return;
+        clean: async () => {
+          if (!(await askConfirm({ title: `연결이 끊긴 코드 ${info.orphans.length}개를 지울까요?`, ok: '지우기', danger: true }))) return;
           onChangeRef.current({
             blocks: blocksRef.current.map((x) => {
               if (x.id !== b.id) return x;
@@ -1110,9 +1111,9 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
                 variant="outline"
                 size="sm"
                 className="border-input"
-                onClick={() => {
+                onClick={async () => {
                   const t = TEMPLATES[block.type as DiagramType];
-                  if (!block.code.trim() || block.code === t || window.confirm('지금 코드를 예시로 바꿀까요?')) patchBlock({ code: t });
+                  if (!block.code.trim() || block.code === t || (await askConfirm({ title: '지금 코드를 예시로 바꿀까요?', body: '지금 코드는 예시 코드로 덮어써져요.', ok: '바꾸기', danger: true }))) patchBlock({ code: t });
                 }}
               >
                 예시 넣기
