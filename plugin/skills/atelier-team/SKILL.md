@@ -28,6 +28,8 @@ description: Start an Atelier team for normal or risky work — a lead (관리�
 
 - One more teammate: `DISPATCH_PORT=<port> <skill-dir>/scripts/add.sh "<lead name or id>" <role> "<task>" [model]`. Refused when the lead has 8 open children.
   Done when: it prints the new session line.
+- Next issue with a fresh team (the lead runs this after each merged issue; one team per issue keeps token use down): `<skill-dir>/scripts/relay.sh "<project-root>" "<old lead>" <preset> "<task with the remaining issues>"`. Starts the new team, then removes the old lead and its teammates; an empty task only removes them.
+  Done when: it prints the new team's session lines (or nothing for an empty task) and the old lead is gone from `GET /api/state`.
 - Same permission mode for everyone: `DISPATCH_PORT=<port> <skill-dir>/scripts/auto-all.sh [auto|acceptEdits|plan|manual]`.
   Done when: it prints one `name: old → new` line per changed session.
 
