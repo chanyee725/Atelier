@@ -2,6 +2,8 @@
 // Minimal MCP stdio server that lets a manager session drive Dispatch over its local HTTP API.
 // Spawned by Claude Code (--mcp-config), Codex (mcp_servers.dispatch) or agy with DISPATCH_URL / DISPATCH_PARENT.
 
+import { LANES, lanePlanArgs } from "./lanes.js";
+
 // Only this machine's loopback: a DISPATCH_URL pointing anywhere else is refused, and there is no
 // default port to fall back to (the server passes its own URL when it starts a session).
 const BASE = /^http:\/\/127\.0\.0\.1:\d+$/.test(process.env.DISPATCH_URL || "") ? process.env.DISPATCH_URL : null;
@@ -30,6 +32,7 @@ const MODE_HELP = [
   { id: "quickfix", name: "빠른 수정", use: "1-2개 파일의 작은 수정" },
   { id: "research", name: "조사", use: "서치·자료 조사" },
 ];
+const LANE_PROP = { type: "string", enum: LANES, description: "quickfix: 1-3개 파일, 계획 승인·리뷰어 없이 구현자 하나. normal: 기능 하나, 리뷰어 1명. risky: 인증·데이터·삭제·구조, 리뷰어 2명, 병합 전 메인 세션 확인" };
 const MODE_PROP = { type: "string", enum: MODE_HELP.map(m => m.id), description: "작업 종류(모드). 그 모드의 프로필(제공사·모델·강도·권한)을 쓴다. model을 적으면 model이 우선" };
 
 const brief = s => ({
@@ -94,11 +97,12 @@ const LEAD_TOOLS = [
         worktree: { type: "boolean", description: "세션마다 git worktree 분리 (기본 true)" },
         folder: { type: "string", description: "프로젝트 폴더(워크스페이스 최상위 폴더) 경로. 생략하면 이 관리자의 폴더" },
         mode: MODE_PROP,
+        lane: LANE_PROP,
       },
     },
-    run: async ({ sessions, worktree = true, folder, mode }) => {
+    run: async ({ sessions, worktree = true, folder, mode, lane }) => {
       const items = sessions.map(x => ({ role: x.role, task: x.task, model: x.model, effort: x.effort, perm: x.perm, n: x.count || 1, ...(x.issue && { issue: x.issue }), ...(x.mode && { mode: x.mode }) }));
-      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }), ...(mode && { mode }) });
+      const res = await api("POST", "/api/sessions", { items, worktree, parent: PARENT, ...(folder && { folder }), ...(mode && { mode }), ...(lane && { lane }) });
       return res.sessions.map(brief);
     },
   },
@@ -143,6 +147,7 @@ const LEAD_TOOLS = [
         note: { type: "string", description: "한 줄 상태" },
         commit: { type: "string", description: "병합한 브랜치 이름이나 커밋. done으로 닫을 때 통합 브랜치 포함 여부를 확인한다. 빈 문자열이면 지운다" },
         step: { type: "string", description: "승인된 계획의 단계 id. 이 작업이 어느 단계인지 묶는다(owner 세션의 진행이 그 단계에 기록된다)" },
+        lane: LANE_PROP,
       },
     },
     run: async args => {
@@ -151,6 +156,7 @@ const LEAD_TOOLS = [
         id: t.id, title: t.title, stage: t.stage,
         ...(args.stage === "done" && t.mergeCheck && { merge_check: t.mergeCheck }),
         ...(t.open?.length && { open: t.open }),
+        ...(t.etaHint && { past_runs: t.etaHint }),
       };
     },
   },
@@ -189,9 +195,10 @@ const LEAD_TOOLS = [
         risks: { type: "array", items: { type: "string" } },
         asks: { type: "array", items: { type: "string" }, description: "사용자에게 물어볼 것" },
         autostart: { type: "boolean", description: "단계가 하나일 때만: 승인 없이 바로 시작" },
+        lane: LANE_PROP,
       },
     },
-    run: async args => api("POST", "/api/pipeline/plan", { ...args, lead: PARENT }),
+    run: async args => api("POST", "/api/pipeline/plan", { ...lanePlanArgs(args), lead: PARENT }),
   },
   {
     name: "note_step",

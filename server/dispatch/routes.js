@@ -103,7 +103,7 @@ export function routeTable(d) {
     ["GET", /^\/api\/mode-profiles$/, async () => d.modeProfiles.get()],
     ["PUT", /^\/api\/mode-profiles$/, async (_, b) => d.modeProfiles.put(b)],
     ["POST", /^\/api\/sessions$/, async (_, b) => ({
-      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }) }),
+      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }), ...(typeof b.lane === "string" && { lane: b.lane }) }),
     })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
@@ -139,7 +139,8 @@ export function routeTable(d) {
       const isNew = !b?.id;
       const t = await hub.setTask(b?.lead || null, b || {});
       // Creating by title: show the lead what is already open so a renamed copy of the same work stands out.
-      return isNew && t.lead ? { ...t, open: hub.openTasks(t.lead, t.id) } : t;
+      // A new task also gets the ETA of past runs in its lane, so the lead's estimate starts from real numbers.
+      return isNew && t.lead ? { ...t, open: hub.openTasks(t.lead, t.id), etaHint: hub.etaHint(t.lane) } : t;
     }],
     ["POST", /^\/api\/tasks\/([\w-]+)\/remove$/, async ([id]) => { hub.removeTask(id); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/to-lead$/, async ([id], b) => { hub.messageLead(id, required(b?.text)); return { ok: true }; }],
