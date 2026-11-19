@@ -1,7 +1,7 @@
 // Code references on canvas nodes (docs/design/code-linked-nodes.md §3): which nodes carry code, what the "기능 코드"
 // panel shows, when it opens and closes, and where the `</>` badges sit. Pure (no React or Excalidraw import), so it
 // runs under `node --test`.
-import { parse } from '../../../shared/dsl/index.ts';
+import { diagramChildren, parse } from '../../../shared/dsl/index.ts';
 import type { GraphChild } from '../../../shared/dsl/types.ts';
 import { BLOCK_CODE_VERSION, blockCodeProblem, dslCodeRefs, mergeCodeRefs, type BlockCode, type CodeRef, type NodeCode } from '../../../shared/render/block-code.ts';
 import type { Scene } from '../../../shared/render/index.ts';
@@ -39,8 +39,8 @@ function walkNodes(list: readonly GraphChild[], out: Record<string, string>) {
 /** Code info of one block: what its nodes link to and which stored entries are orphaned. */
 export function blockCodeInfo(b: CodeBlock): BlockCodeInfo {
   const stored = b.codeRefs;
-  const parsed = parse(b.code).ast;
-  const children = 'children' in parsed ? (parsed.children as GraphChild[]) : null;
+  // A BPMN block is parsed as BPMN; other blocks keep detection, as before.
+  const children = diagramChildren(parse(b.code, b.type === 'bpmn' ? 'bpmn' : undefined).ast);
   if (!children && !stored) return EMPTY;
   const labels: Record<string, string> = Object.create(null);
   if (children) walkNodes(children, labels);

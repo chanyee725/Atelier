@@ -19,19 +19,20 @@ export type Diagnostic = {
 };
 
 export type Analysis = {
-  /** Parsed diagram; null for types the parser does not support (BPMN). */
+  /** Parsed diagram; null for block types the parser does not support. */
   ast: Diagram | null;
   diagnostics: Diagnostic[];
   /** true when a parser handled this type. */
   parsed: boolean;
 };
 
-/** Editor block type (templates.ts) to parser type. BPMN has no parser yet. */
+/** Editor block type (templates.ts) to parser type. */
 const PARSER_TABLE: Record<string, ParserType> = {
   architecture: 'cloud-architecture',
   flowchart: 'flowchart',
   sequence: 'sequence',
   erd: 'erd',
+  bpmn: 'bpmn',
 };
 
 const parserType = (type: string): ParserType | undefined => (Object.hasOwn(PARSER_TABLE, type) ? PARSER_TABLE[type] : undefined);
