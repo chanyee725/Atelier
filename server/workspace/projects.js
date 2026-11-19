@@ -98,6 +98,8 @@ async function docNode(f, children, created) {
   const modified = ms(f.mtime);
   return {
     ...(f.pipeline ? { pipeline: f.pipeline } : {}),
+    // Open in-document questions (#738): the sidebar's badge.
+    ...(f.questions ? { questions: f.questions } : {}),
     type: 'doc',
     path: f.path,
     name: stem(f.name),

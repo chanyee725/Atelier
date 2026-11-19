@@ -16,10 +16,10 @@ async function withApp(fn) {
   const app = await createApp({ workspaceDir: ws }, { publicDir: ws, moduleList: modules });
   await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${app.server.address().port}`;
-  const call = async (method, path, body) => {
+  const call = async (method, path, body, headers = {}) => {
     const res = await fetch(base + path, {
       method,
-      headers: { 'x-drawing': '1', ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      headers: { 'x-drawing': '1', ...headers, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     return { status: res.status, body: await res.json() };
@@ -331,4 +331,20 @@ test('readProjectMeta: a FIFO .project.json returns {} without waiting for a wri
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('projects: a document with open questions carries their count (#738 sidebar badge)', async () => {
+  await withApp(async ({ call }) => {
+    for (const p of ['P/asked', 'P/quiet']) assert.equal((await call('POST', '/api/file', { path: p, title: p })).status, 201);
+    // Asking needs a writer label (no session runs here, so it is stored as "outside").
+    const who = { 'x-drawing-session': 'tester' };
+    const ask = (question) => call('POST', '/api/file/discussions?path=P/asked', { anchor: { kind: 'block', block: 'doc' }, question }, who);
+    assert.equal((await ask('하나')).status, 201);
+    const second = await ask('둘');
+    assert.equal(second.status, 201);
+    const docs = async () => (await call('GET', '/api/workspace/projects')).body.projects[0].docs;
+    assert.deepEqual((await docs()).map((d) => [d.name, d.questions]), [['asked', 2], ['quiet', undefined]]);
+    assert.equal((await call('POST', '/api/file/discussions/answer?path=P/asked', { id: second.body.item.id, text: '네' })).status, 200);
+    assert.equal((await docs())[0].questions, 1);
+  });
 });

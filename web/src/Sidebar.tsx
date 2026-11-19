@@ -208,6 +208,7 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
       >
         {n.type === 'doc' ? <File className="size-[15px]! text-muted-foreground" aria-hidden /> : <FolderClosed className="size-[15px]! text-muted-foreground" aria-hidden />}
         <span className="truncate">{label}</span>
+        {n.type === 'doc' && n.questions ? <QuestionBadge count={n.questions} /> : null}
         {n.type === 'doc' && n.pipeline && <PipelineBadge state={n.pipeline.state} />}
         {has && !expanded && <SidebarMenuBadge className={COUNT} aria-label={`하위 ${n.count}개`}>{n.count}</SidebarMenuBadge>}
       </SidebarMenuButton>
@@ -244,6 +245,24 @@ function PipelineBadge({ state }: { state: PipelineMark['state'] }) {
         {m.glyph}
       </span>
       <span aria-hidden>{m.text}</span>
+    </span>
+  );
+}
+
+/** Open in-document questions waiting for the user (#738). The ? glyph and the count carry it, the blocked hue only marks it. */
+export function QuestionBadge({ count }: { count: number }) {
+  return (
+    <span
+      role="img"
+      data-question-badge=""
+      aria-label={`답을 기다리는 질문 ${count}개`}
+      title={`답을 기다리는 질문 ${count}개`}
+      className="ml-auto flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-[11px] leading-4 font-medium tabular-nums text-foreground"
+    >
+      <span aria-hidden className="text-[var(--step-blocked)]">
+        ?
+      </span>
+      <span aria-hidden>{count}</span>
     </span>
   );
 }
