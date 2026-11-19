@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { toastOf } from '../../web/src/activity/appEvents.ts';
 import {
   addItems,
+  bellCount,
   clearInbox,
   EMPTY_INBOX,
   INBOX_MAX,
@@ -64,4 +65,15 @@ test('the inbox keeps the newest INBOX_MAX and round-trips through storage, drop
   assert.deepEqual(back.items, box.items.slice(0, 2));
   assert.deepEqual(parseInbox('not json'), EMPTY_INBOX);
   assert.deepEqual(parseInbox(null), EMPTY_INBOX);
+});
+
+test('a waiting plan counts once on the bell, even with its plan-waiting toast unread (#802)', () => {
+  const plan = itemOfToast(toastOf({ type: 'plan-waiting', file: 'p.dpx.json', text: '계획이 기다려요' })!, 40, 1);
+  const saved = itemOfToast(toastOf({ type: 'created', kind: 'doc', path: 'a.dpx.json' })!, 10, 2);
+  const box = addItems(EMPTY_INBOX, [plan, saved]);
+  assert.equal(bellCount(box, ['p.dpx.json']), 2);
+  assert.equal(bellCount(addItems(EMPTY_INBOX, [plan]), ['p.dpx.json']), 1);
+  // Once started, the plan's item is an ordinary unread item again.
+  assert.equal(bellCount(box, []), 2);
+  assert.equal(bellCount(markAllRead(box), ['p.dpx.json']), 1);
 });

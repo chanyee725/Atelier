@@ -5,7 +5,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Bell, Bot, CheckCheck, CircleAlert, ClipboardList, FileText, Plug, Settings, Trash2, Users, Workflow, X, type LucideIcon } from 'lucide-react';
 import { badgeText, placeFeed, whenText } from './activity';
-import { inboxUnread, type InboxItem, type InboxKind, type InboxTarget } from './inbox';
+import { bellCount, inboxUnread, type InboxItem, type InboxKind, type InboxTarget } from './inbox';
 import { clearAllInbox, deleteInboxItem, readAllInbox, readInboxItem, useInbox } from './inboxStore';
 import { planFolder, planTitle, planWaitingText } from './plans';
 import { useWaitingPlans } from './waitingPlans';
@@ -33,7 +33,7 @@ export function ActivityBell({ className, onOpen, onSession }: { className: stri
   const [now, setNow] = useState(Date.now);
   const plans = useWaitingPlans();
   const unread = inboxUnread(inbox);
-  const badge = badgeText(unread + plans.length);
+  const badge = badgeText(bellCount(inbox, plans.map((p) => p.path)));
   const label = [unread ? `안 읽은 ${unread}개` : '', plans.length ? `시작을 기다리는 계획 ${plans.length}개` : ''].filter(Boolean).join(', ');
 
   useEffect(() => {

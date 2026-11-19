@@ -54,6 +54,14 @@ export const clearInbox = (box: Inbox): Inbox => (box.items.length ? { ...box, i
 
 export const inboxUnread = (box: Inbox) => box.items.reduce((n, i) => n + (i.read ? 0 : 1), 0);
 
+/** The bell's badge number: unread items plus waiting plans, a waiting plan counted once even when its
+ * 'plan-waiting' toast is also an unread item (#802). */
+export function bellCount(box: Inbox, waiting: readonly string[]): number {
+  const plans = new Set(waiting);
+  const unread = box.items.reduce((n, i) => n + (i.read || (i.target && 'plan' in i.target && plans.has(i.target.plan)) ? 0 : 1), 0);
+  return unread + plans.size;
+}
+
 const clip = (s: string) => (s.length > TEXT_MAX ? `${s.slice(0, TEXT_MAX - 1)}…` : s);
 
 /** The item for an app toast shown (or sent as a browser notification) at `at`. */
