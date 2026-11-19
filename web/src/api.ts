@@ -142,7 +142,7 @@ export type WorkspaceFolders = {
 export type LocalFolders = { path: string; parent: string | null; home: string; root: string; sep: string; folders: string[]; truncated: boolean };
 
 export const api = {
-  info: () => call<{ workspace: string; mode?: 'drawing' | 'project' }>('GET', '/api/info'),
+  info: () => call<{ workspace: string; mode?: 'drawing' | 'project'; project?: string | null }>('GET', '/api/info'),
   tree: () => call<{ tree: TreeNode[] }>('GET', '/api/tree').then((r) => r.tree),
   projects: () => call<ProjectsView>('GET', '/api/workspace/projects'),
   dispatch: () => call<DispatchStatus>('GET', '/api/dispatch'),

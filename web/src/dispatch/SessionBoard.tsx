@@ -1,6 +1,6 @@
 // 세션 보드 inside the Atelier shell (#731, docs/design/session-board-in-shell.md): header with scope, tabs, 새 세션 and
 // a ⋯ menu; sessions grouped by project beside a usage column; timeline and usage tabs reuse the old /dispatch screens.
-// Rendered by App.tsx for `section.kind === 'board'` and, without the sidebar, by dispatch/index.tsx in project mode.
+// Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';

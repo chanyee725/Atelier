@@ -19,13 +19,14 @@ test('parseArgs: --project-mode flag and DRAW_MODE', () => {
   assert.throws(() => parseArgs(['--nope', '/w'], {}), /Unknown option/);
 });
 
-test('/api/info reports the mode', async () => {
-  for (const [projectMode, mode] of [[false, 'drawing'], [true, 'project']]) {
-    const app = await createApp({ workspaceDir: '/tmp/x', projectMode }, { moduleList: [] });
+test('/api/info reports the mode and the project folder name', async () => {
+  for (const [projectMode, mode, project] of [[false, 'drawing', null], [true, 'project', 'proj']]) {
+    const app = await createApp({ workspaceDir: '/tmp/proj/atelier', projectMode }, { moduleList: [] });
     await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
     try {
       const info = await (await fetch(`http://127.0.0.1:${app.server.address().port}/api/info`)).json();
       assert.equal(info.mode, mode);
+      assert.equal(info.project, project);
     } finally {
       await app.close();
     }
@@ -56,7 +57,7 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
     const pid = Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8'));
     assert.doesNotThrow(() => process.kill(pid, 0), 'server.pid names the running server');
     const info = await (await fetch(`http://127.0.0.1:${port}/api/info`)).json();
-    assert.deepEqual(info, { workspace: 'pipelines', mode: 'project' });
+    assert.deepEqual(info, { workspace: 'pipelines', mode: 'project', project: 'proj' });
     // Second call reuses the running server: same port, no new process.
     const second = run();
     assert.equal(second.status, 0, second.stderr);
@@ -387,7 +388,7 @@ test('start.sh writes server.pid only after the server is ready; a failed start 
   }
 });
 
-test('project mode: editor URLs 302 to /dispatch, assets and /dispatch are served; drawing mode serves the editor', async () => {
+test('project mode serves the whole app: no redirect to /dispatch, same as drawing mode', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'drawing-e30-redir-'));
   writeFileSync(join(dir, 'index.html'), '<p>spa</p>');
   writeFileSync(join(dir, 'app.v2.js'), 'x');
@@ -397,20 +398,13 @@ test('project mode: editor URLs 302 to /dispatch, assets and /dispatch are serve
       await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
       const base = `http://127.0.0.1:${app.server.address().port}`;
       try {
-        // Dotted editor routes (/notes.v2) are not assets (#396); HEAD redirects like GET (#397).
         for (const method of ['GET', 'HEAD']) {
-          for (const p of ['/', '/index.html', '/some/editor/route', '/notes.v2', '/a/b.c.d']) {
+          for (const p of ['/', '/index.html', '/some/editor/route', '/notes.v2', '/dispatch']) {
             const r = await fetch(base + p, { method, redirect: 'manual' });
-            if (projectMode) {
-              assert.equal(r.status, 302, `${method} ${p}`);
-              assert.equal(r.headers.get('location'), '/dispatch');
-            } else assert.equal(r.status, 200, `${method} ${p}`);
+            assert.equal(r.status, 200, `${method} ${p} (projectMode ${projectMode})`);
           }
         }
-        assert.equal((await fetch(base + '/app.v2.js', { redirect: 'manual' })).status, 200); // real file
-        for (const p of ['/dispatch', '/dispatch/usage']) assert.equal((await fetch(base + p, { redirect: 'manual' })).status, 200, p);
-        assert.equal((await fetch(base + '/api/info')).status, 200);
-        assert.notEqual((await fetch(base + '/assets/missing.js', { redirect: 'manual' })).status, 302);
+        assert.equal((await fetch(base + '/app.v2.js', { redirect: 'manual' })).status, 200);
       } finally {
         await app.close();
       }
@@ -420,7 +414,7 @@ test('project mode: editor URLs 302 to /dispatch, assets and /dispatch are serve
   }
 });
 
-test('project mode: editor document writes answer 403; pipeline and plan routes stay open', async () => {
+test('project mode: documents are writable; only the workspace folder list stays closed', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'drawing-e30-block-'));
   const ok = { method: 'POST', handler: (_q, res) => res.end('{}') };
   const mods = [{ name: 't', setup: async () => ({ routes: [
@@ -436,17 +430,15 @@ test('project mode: editor document writes answer 403; pipeline and plan routes 
       const base = `http://127.0.0.1:${app.server.address().port}`;
       const call = async (method, path, headers = { 'x-drawing': '1' }) => (await fetch(base + path, { method, headers })).status;
       try {
-        for (const [m, p] of [['PUT', '/api/file'], ['POST', '/api/file'], ['DELETE', '/api/file'], ['POST', '/api/folder'], ['DELETE', '/api/folder'], ['POST', '/api/move'], ['POST', '/api/trash/restore'], ['POST', '/api/history']])
-          assert.equal(await call(m, p), projectMode ? 403 : 200, `${m} ${p}`);
-        // The PR/CI switch is a workspace setting, not a document: open in project mode (E30c).
-        assert.equal(await call('POST', '/api/workspace/pr-tracking'), 200);
-        assert.equal(await call('POST', '/api/pipeline/start'), 200);
-        assert.equal(await call('PATCH', '/api/file/plan'), 200);
-        // Header rule still applies, and it fires before the project-mode block: compare bodies (#397).
-        const body = async (path, headers) => (await fetch(base + path, { method: 'POST', headers })).json();
+        for (const [m, p] of [['PUT', '/api/file'], ['POST', '/api/file'], ['DELETE', '/api/file'], ['POST', '/api/folder'], ['DELETE', '/api/folder'], ['POST', '/api/move'], ['POST', '/api/trash/restore'], ['POST', '/api/history'], ['POST', '/api/pipeline/start'], ['PATCH', '/api/file/plan']])
+          assert.equal(await call(m, p), 200, `${m} ${p}`);
+        // The header rule still applies.
         assert.equal(await call('POST', '/api/move', {}), 403);
-        assert.deepEqual(await body('/api/move', {}), { error: 'forbidden' });
-        assert.deepEqual(await body('/api/move', { 'x-drawing': '1' }), projectMode ? { error: 'project mode: documents are read-only here' } : {});
+        for (const [m, p] of [['POST', '/api/workspaces'], ['POST', '/api/workspaces/open'], ['DELETE', '/api/workspaces']]) {
+          const r = await fetch(base + p, { method: m, headers: { 'x-drawing': '1' } });
+          if (projectMode) assert.equal(r.status, 403, `${m} ${p}`);
+          else assert.notEqual(r.status, 403, `${m} ${p}`);
+        }
       } finally {
         await app.close();
       }
