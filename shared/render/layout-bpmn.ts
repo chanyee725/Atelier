@@ -20,7 +20,7 @@ const BAND_GAP = 32;
 /** Header of a band that has no box (nodes outside every lane). */
 const BARE_HEAD = 16;
 
-/** Rank of every node along the flow. Back edges (closing a cycle, found depth-first in source order) are ignored. */
+/** Rank of every node along the flow. Back edges (closing a cycle, found depth-first from the start nodes) are ignored. */
 export function flowRanks(d: BpmnDiagram): Map<string, number> {
   const ids = d.nodes.map((n) => n.id);
   const out = new Map<string, string[]>(ids.map((id) => [id, []]));
@@ -37,7 +37,15 @@ export function flowRanks(d: BpmnDiagram): Map<string, number> {
     }
     state.set(id, 2);
   };
-  for (const id of ids) if (!state.has(id)) visit(id);
+  // Start from the starts (start events, then other nodes with no incoming edge), so a lane declared
+  // before the start's lane cannot turn a forward edge into a back edge; then the rest in source order.
+  const incoming = new Set(d.edges.filter((e) => e.from !== e.to).map((e) => e.to));
+  const roots = [
+    ...d.nodes.filter((n) => n.eventRole === 'start' && !incoming.has(n.id)).map((n) => n.id),
+    ...ids.filter((id) => !incoming.has(id)),
+    ...ids,
+  ];
+  for (const id of roots) if (!state.has(id)) visit(id);
 
   // Kahn's order over the forward edges, ties by source order.
   const indeg = new Map<string, number>(ids.map((id) => [id, 0]));

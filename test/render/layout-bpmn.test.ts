@@ -48,6 +48,25 @@ test('ranks: compact shares a slot after a fork, sequential gives every node its
   assert.deepEqual(Object.fromEntries(sequential), { A: 0, B: 1, C: 2, D: 3 });
 });
 
+test('lane order: the flow starts at the start event even when its lane is declared second', async () => {
+  // Warehouse above Customer: the gateway must not share the start's slot, the main flow must not turn back.
+  const src = fixture('bpmn-order-flow');
+  const customer = src.slice(src.indexOf('  Customer {'), src.indexOf('  Warehouse {'));
+  const warehouse = src.slice(src.indexOf('  Warehouse {'), src.indexOf('}\n}') + 2);
+  const swapped = src.replace(customer + warehouse, warehouse + '\n' + customer.trimEnd() + '\n');
+  assert.notEqual(swapped, src);
+  const ranks = flowRanks(parseBpmnDiagram(swapped).ast);
+  assert.deepEqual(Object.fromEntries(ranks), {
+    'Approved?': 3, 'Pack items': 4, Shipped: 5, Start: 0, 'Open website': 1, 'Place order': 2,
+  });
+  const { scene, diagnostics } = await renderDiagram(swapped);
+  assert.deepEqual(diagnostics, []);
+  const b = boxes(scene);
+  assert.ok(b.get('Warehouse')!.y < b.get('Customer')!.y);
+  const order = ['Start', 'Open website', 'Place order', 'Approved?', 'Pack items', 'Shipped'].map((id) => cx(b.get(id)!));
+  assert.deepEqual([...order].sort((x, y) => x - y), order);
+});
+
 test('compact: nodes of one lane in the same slot stack across the flow', async () => {
   const { scene } = await renderDiagram('L {\n  A [type: event]\n  B\n  C\n}\nA > B\nA > C', { type: 'bpmn' });
   const b = boxes(scene);
