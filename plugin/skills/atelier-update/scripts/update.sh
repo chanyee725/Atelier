@@ -99,21 +99,21 @@ if $restart; then
   [ ! -f "$port_file" ] || port="$(cat "$port_file")"
   if is_our_server "$pid" "$project/pipelines"; then
     if [[ "$port" =~ ^[0-9]+$ ]]; then
-      DRAWING_HOME="$base/$ver" DISPATCH_PORT="$port" DRAW_PORT="$port" "$base/current/plugin/skills/dispatch/scripts/restart.sh" "$project" | sed 's/^/    /'
+      DRAWING_HOME="$base/$ver" DISPATCH_PORT="$port" DRAW_PORT="$port" "$base/current/plugin/skills/atelier-setup/scripts/restart.sh" "$project" | sed 's/^/    /'
     else
-      DRAWING_HOME="$base/$ver" "$base/current/plugin/skills/dispatch/scripts/restart.sh" "$project" | sed 's/^/    /'
+      DRAWING_HOME="$base/$ver" "$base/current/plugin/skills/atelier-setup/scripts/restart.sh" "$project" | sed 's/^/    /'
     fi
     ok "restarted the server of $project; cut-off turns resume on their own"
   else
     ok "no running server for $project"
   fi
   echo "  Other projects keep running the old code: run restart.sh in each of them:"
-  echo "    $base/current/plugin/skills/dispatch/scripts/restart.sh <project>"
+  echo "    $base/current/plugin/skills/atelier-setup/scripts/restart.sh <project>"
 fi
 
 step "Done"
 echo "Plugin folder: $base/current/plugin"
 echo "If the plugin is not installed from this folder yet, in Claude Code run:"
 echo "  /plugin marketplace add $base/current/plugin"
-echo "  /plugin install dispatch@dispatch"
-echo "(already installed: /plugin marketplace update dispatch, then /plugin update dispatch@dispatch)"
+echo "  /plugin install atelier@atelier"
+echo "(already installed: /plugin marketplace update atelier, then /plugin update atelier@atelier)"

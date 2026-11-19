@@ -215,7 +215,7 @@ test('start.sh refuses a folder that is not a git project top', () => {
 
 // --- pid-file safety and write order (fake processes only) ---
 
-const STOP = new URL('../plugin/skills/dispatch/scripts/stop.sh', import.meta.url).pathname;
+const STOP = new URL('../plugin/skills/atelier-setup/scripts/stop.sh', import.meta.url).pathname;
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const waitDead = async (pid) => { for (let i = 0; i < 50 && alive(pid); i++) await new Promise((r) => setTimeout(r, 100)); };
 
@@ -281,7 +281,7 @@ test('update.sh and stop.sh share one is_our_server (no duplicate definition) th
   const root = new URL('../plugin/', import.meta.url).pathname;
   const lib = readFileSync(join(root, 'scripts/server-check.sh'), 'utf8');
   assert.match(lib, /ps -ww -o command=/);
-  for (const f of ['skills/dispatch/scripts/stop.sh', 'skills/dispatch-update/scripts/update.sh']) {
+  for (const f of ['skills/atelier-setup/scripts/stop.sh', 'skills/atelier-update/scripts/update.sh']) {
     const t = readFileSync(join(root, f), 'utf8');
     assert.ok(!/^is_our_server\(\)/m.test(t), f + ' must not define its own');
     assert.match(t, /server-check\.sh/);
@@ -292,9 +292,9 @@ test('restart.sh waits for the old server to exit before starting', async () => 
   const { dir, project } = scratchProject();
   const home = join(dir, 'home');
   mkdirSync(join(home, 'plugin/scripts'), { recursive: true });
-  mkdirSync(join(home, 'plugin/skills/dispatch/scripts'), { recursive: true });
+  mkdirSync(join(home, 'plugin/skills/atelier-setup/scripts'), { recursive: true });
   mkdirSync(join(dir, 'fake/server'), { recursive: true });
-  for (const f of ['skills/dispatch/scripts/restart.sh', 'skills/dispatch/scripts/stop.sh', 'scripts/server-check.sh']) {
+  for (const f of ['skills/atelier-setup/scripts/restart.sh', 'skills/atelier-setup/scripts/stop.sh', 'scripts/server-check.sh']) {
     copyFileSync(new URL('../plugin/' + f, import.meta.url), join(home, 'plugin', f));
   }
   // Old server ignores SIGTERM for ~2s, then exits. The fake start.sh records whether it was still alive.
@@ -306,7 +306,7 @@ test('restart.sh waits for the old server to exit before starting', async () => 
     await new Promise((r) => setTimeout(r, 300));
     writeFileSync(join(project, '.dispatch', 'server.pid'), String(ours.pid));
     const out = join(dir, 'out');
-    const r = spawnSync('bash', [join(home, 'plugin/skills/dispatch/scripts/restart.sh'), project], { env: { ...process.env, OLDPID: String(ours.pid), OUT: out }, encoding: 'utf8' });
+    const r = spawnSync('bash', [join(home, 'plugin/skills/atelier-setup/scripts/restart.sh'), project], { env: { ...process.env, OLDPID: String(ours.pid), OUT: out }, encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(readFileSync(out, 'utf8').trim(), 'dead');
   } finally {
@@ -318,13 +318,13 @@ test('restart.sh waits for the old server to exit before starting', async () => 
 function restartFixture(dir) {
   const home = join(dir, 'home');
   mkdirSync(join(home, 'plugin/scripts'), { recursive: true });
-  mkdirSync(join(home, 'plugin/skills/dispatch/scripts'), { recursive: true });
-  for (const f of ['skills/dispatch/scripts/restart.sh', 'skills/dispatch/scripts/stop.sh', 'scripts/server-check.sh']) {
+  mkdirSync(join(home, 'plugin/skills/atelier-setup/scripts'), { recursive: true });
+  for (const f of ['skills/atelier-setup/scripts/restart.sh', 'skills/atelier-setup/scripts/stop.sh', 'scripts/server-check.sh']) {
     copyFileSync(new URL('../plugin/' + f, import.meta.url), join(home, 'plugin', f));
   }
   writeFileSync(join(home, 'plugin/scripts/start.sh'), '#!/bin/sh\necho started > "$OUT"\n');
   execFileSync('chmod', ['+x', join(home, 'plugin/scripts/start.sh')]);
-  return join(home, 'plugin/skills/dispatch/scripts/restart.sh');
+  return join(home, 'plugin/skills/atelier-setup/scripts/restart.sh');
 }
 
 test('restart.sh starts at once when server.pid points at a live pid that is not our server', async () => {
