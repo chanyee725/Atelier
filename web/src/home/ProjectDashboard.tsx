@@ -51,11 +51,12 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
 
   return (
     <DashGrid ratio="3fr 2fr" fill={fill}>
-      <DashColumn label="진행 중인 작업" className="*:last:grow-0" fill={fill}>
+      {/* Filled, each card's own share sets its height; *:last:grow-0 would pin the last card to its minimum. */}
+      <DashColumn label="진행 중인 작업" className={fill ? undefined : '*:last:grow-0'} fill={fill}>
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} fill={fill ? 2 : undefined} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
-      <DashColumn label="현황" className="*:last:grow-0" fill={fill}>
+      <DashColumn label="현황" className={fill ? undefined : '*:last:grow-0'} fill={fill}>
         <UsageSettingsCard />
         {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>

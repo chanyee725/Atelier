@@ -32,7 +32,8 @@ export function DashGrid({ children, className, ratio = '1fr 1fr', fill }: { chi
 /** A column of cards inside one half. */
 export function DashColumn({ children, className, label, fill }: { children: ReactNode; className?: string; label?: string; fill?: boolean }) {
   return (
-    <div className={cn('flex min-w-0 flex-col gap-4 *:last:grow', fill && '@min-[880px]:min-h-0', className)} role={label ? 'region' : undefined} aria-label={label}>
+    // Filled (#819), the cards' own <Card fill> shares set the split, so the last card is not forced to flex-grow 1.
+    <div className={cn('flex min-w-0 flex-col gap-4', fill ? '@min-[880px]:min-h-0' : '*:last:grow', className)} role={label ? 'region' : undefined} aria-label={label}>
       {children}
     </div>
   );
