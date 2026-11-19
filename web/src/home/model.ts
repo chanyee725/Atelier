@@ -1,9 +1,6 @@
 // Pure data helpers for the dashboard and project home (no React).
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
 
-/** 개요 is the dashboard (#685); the other three are the full file list. */
-export type DashTab = 'home' | 'all' | 'recent';
-
 /** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
 export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
 

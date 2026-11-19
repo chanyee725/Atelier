@@ -1,22 +1,17 @@
-// Dashboard ("홈") and project home: data loading, tabs, quick-create chips. Layout B of
-// docs/design/dispatch-integration/6-app-shell-projects.md §3.1. Built from shadcn Tabs / Button / DropdownMenu.
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, FilePlus2, FileText, Folder, Layers, Menu, PenTool, Plus, Search, Workflow } from 'lucide-react';
+// 대시보드 and project home: data loading and the header. The page is a card dashboard only (#793): no view tabs, no
+// create bar and no search box. Files are found with `/` or Ctrl/⌘+K, which open the command menu over the page.
+// Layout B of docs/design/dispatch-integration/6-app-shell-projects.md §3.1.
+import { useEffect, useId, useMemo, useState } from 'react';
+import { ArrowLeft, FileText, Folder, Menu, Plus, Workflow } from 'lucide-react';
 import { projectsApi, type ProjectInfo, type ProjectsResponse } from '../api';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { SidebarTrigger } from '../components/ui/sidebar';
-import { Kbd } from '../components/ui/kbd';
-import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { ColumnHead, FileList } from './DocList';
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
-import { AgentPanel } from './AgentPanel';
 import { ProjectDashboard } from './ProjectDashboard';
-import { agentsIn, holdersByFile } from './agents';
-import { useAgents } from './useAgents';
-import { CHORD_MS, RECENT_LIMIT, chord, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, wholeProject, type DashTab } from './model';
+import { flatFiles, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
+import { isFindKey } from './dashboardRows';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -29,12 +24,13 @@ export type HomeProps = {
   onProject: (id: string | null) => void;
   onOpen: (path: string) => void;
   onCreate: (kind: CreateKind, project: string | null) => void;
-  onDelete: (path: string, title: string) => void;
-  /** Opens the 세션 보드 in the shell, scoped to a project folder (#731). */
-  onBoard: (folder: string) => void;
+  /** Opens the 세션 보드 in the shell, scoped to a project folder (#731), on its 세션 tab or `tab`. */
+  onBoard: (folder: string, tab?: 'usage') => void;
+  /** Opens the file finder (the command menu on its 문서 section) for `/` (#793). */
+  onFind: () => void;
   /** Narrow screen: the sidebar is a drawer, so the header carries its button. */
   narrow?: boolean;
-  /** The 알림함 bell, on the right of the header next to 파일 찾기 (#786). */
+  /** The 알림함 bell, alone on the right of the header (#786, #793). */
   bell?: React.ReactNode;
 };
 
@@ -82,53 +78,18 @@ function useRunning(version: unknown) {
   return files;
 }
 
-const CHIPS: { kind: CreateKind; label: string; key: string; icon: typeof FileText; soon?: boolean }[] = [
-  { kind: 'doc', label: '문서', key: 'D', icon: FileText },
-  { kind: 'canvas', label: '캔버스', key: 'C', icon: PenTool },
-  { kind: 'plan', label: '파이프라인 계획', key: 'P', icon: Workflow },
-  { kind: 'template', label: '템플릿', key: 'T', icon: Layers, soon: true },
-];
-
-/** Single-letter shortcuts, only while no input, dialog or menu has focus. */
-function useCreateKeys(on: boolean, run: (k: CreateKind) => void, focusSearch: () => void) {
+/** `/` opens the file finder while no text field, editor, menu or dialog has focus. */
+function useFindKey(onFind: () => void) {
   useEffect(() => {
-    if (!on) return;
     const h = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
-      // A native modal <dialog> (settings) has no role attribute but owns the keyboard: nothing is created behind it.
-      if (document.querySelector('dialog:modal')) return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.closest('input, textarea, select, [contenteditable], dialog, [role=dialog], [role=menu]') || t.isContentEditable)) return;
-      const key = e.key.toLowerCase();
-      if (key === 'p' && Date.now() - chord.g < CHORD_MS) return; // G P belongs to the project menu
-      if (key === '/') {
-        e.preventDefault();
-        focusSearch();
-        return;
-      }
-      const chip = CHIPS.find((c) => c.key.toLowerCase() === key && !c.soon);
-      if (chip) {
-        e.preventDefault();
-        run(chip.kind);
-      }
+      // A native modal <dialog> (settings) has no role attribute but owns the keyboard.
+      if (!isFindKey(e) || document.querySelector('dialog:modal')) return;
+      e.preventDefault();
+      onFind();
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [on, run, focusSearch]);
-}
-
-function useCollapse() {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const toggle = useCallback(
-    (p: string) =>
-      setCollapsed((s) => {
-        const n = new Set(s);
-        if (!n.delete(p)) n.add(p);
-        return n;
-      }),
-    [],
-  );
-  return { collapsed, toggle };
+  }, [onFind]);
 }
 
 const Empty = ({ children }: { children: React.ReactNode }) => <p className="px-2 py-10 text-center text-sm text-muted-foreground">{children}</p>;
@@ -136,139 +97,47 @@ const Empty = ({ children }: { children: React.ReactNode }) => <p className="px-
 export function Home(props: HomeProps) {
   const { data, failed } = useProjects(props.version);
   const running = useRunning(props.version);
-  const search = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
-  const focusSearch = useCallback(() => search.current?.focus(), []);
   const project = props.project ? data?.projects.find((p) => p.id === props.project) ?? null : null;
-  const { onCreate } = props;
-  useCreateKeys(true, useCallback((k) => onCreate(k, props.project), [onCreate, props.project]), focusSearch);
-  useEffect(() => setQuery(''), [props.project]);
+  useFindKey(props.onFind);
 
   if (failed) return <Empty>목록을 불러오지 못했어요. 잠시 뒤에 다시 열어 주세요.</Empty>;
   if (!data) return <Empty>불러오는 중이에요</Empty>;
   if (props.project && !project) return (
     <Empty>
       이 프로젝트를 찾지 못했어요.{' '}
-      <Button variant="link" className="h-auto p-0" onClick={() => props.onProject(null)}>홈으로 가기</Button>
+      <Button variant="link" className="h-auto p-0" onClick={() => props.onProject(null)}>대시보드로 가기</Button>
     </Empty>
   );
   return (
     <main className="flex min-h-0 flex-1 scroll-pt-[39px] flex-col overflow-auto" data-screen={project ? 'project' : 'dashboard'}>
       {project ? (
-        <ProjectHome {...props} data={data} info={project} running={running} query={query} onQuery={setQuery} search={search} />
+        <ProjectHome {...props} data={data} info={project} running={running} />
       ) : (
-        <Dashboard {...props} data={data} running={running} query={query} onQuery={setQuery} search={search} />
+        <Dashboard {...props} data={data} running={running} />
       )}
     </main>
   );
 }
 
-type Shared = Omit<HomeProps, "project"> & { data: ProjectsResponse; running: ReadonlySet<string>; query: string; onQuery: (q: string) => void; search: React.RefObject<HTMLInputElement | null> };
+type Shared = Omit<HomeProps, "project"> & { data: ProjectsResponse; running: ReadonlySet<string> };
 
-function SearchBox({ value, onChange, inputRef, placeholder, wide }: { value: string; onChange: (v: string) => void; inputRef: React.RefObject<HTMLInputElement | null>; placeholder: string; wide?: boolean }) {
-  return (
-    <div role="search" className={wide ? 'relative w-full' : 'relative ml-auto w-52 max-w-full'}>
-      <Search className="pointer-events-none absolute top-2 left-2 size-4 text-muted-foreground" aria-hidden />
-      <Input ref={inputRef} type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} aria-keyshortcuts="/" className="pr-8 pl-8" />
-      {!value && <Kbd className="pointer-events-none absolute top-1.5 right-1.5" aria-hidden>/</Kbd>}
-    </div>
-  );
-}
-
-function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
-  // 개요 (the dashboard, #685) opens first; the full list is one tab away.
-  const [tab, setTab] = useState<DashTab>('home');
-  // Searching from 개요 shows the hits in 전체 파일; clearing the search goes back to 개요 (#710),
-  // unless the user picked another tab meanwhile.
-  const [fromHome, setFromHome] = useState(false);
-  const onSearch = (q: string) => {
-    onQuery(q);
-    if (q.trim() && tab === 'home') {
-      setTab('all');
-      setFromHome(true);
-    } else if (!q.trim() && fromHome) {
-      if (tab === 'all') setTab('home');
-      setFromHome(false);
-    }
-  };
-  const onTab = (v: string) => {
-    setTab(v as DashTab);
-    setFromHome(false);
-  };
-  const { collapsed, toggle } = useCollapse();
-  const files = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
-  // Projects without documents still get the 프로젝트별 tab (their groups and + buttons); only a bare workspace is empty.
-  // Files right in the workspace root belong to no project: they have no group (no 미분류, #592) and stay reachable
-  // in 전체 파일 / 최근 and through search, with 최상위 as their 위치. Nothing on disk changes.
-  const empty = files.length === 0 && data.projects.length === 0;
+function Dashboard({ data, ...p }: Shared) {
   // The dashboard is the whole project's (#778): every document, session and agent of this server.
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
-  const found = files.filter((f) => matchesQuery(f.title, query));
-  const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
+  const recent = useMemo(() => flatFiles(data.projects, data.unfiled), [data]);
   return (
-    <Tabs value={tab} onValueChange={onTab} className="shrink-0 grow gap-0">
-      <header className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
+    <>
+      <header className="flex min-h-12 shrink-0 items-center gap-3 border-b px-4 py-2">
         {p.narrow && (
           <SidebarTrigger aria-label="메뉴 열기">
             <Menu className="size-[17px]" />
           </SidebarTrigger>
         )}
-        <h1 className="m-0 shrink-0 text-[15px] font-semibold">홈</h1>
-        {/* One row; on a narrow screen the pills scroll sideways instead of wrapping. */}
-        <TabsList aria-label="보기" className="min-w-0 shrink justify-start overflow-x-auto [scrollbar-width:none] [&>*]:flex-none">
-          <TabsTrigger value="home">대시보드</TabsTrigger>
-          <TabsTrigger value="all">전체 파일</TabsTrigger>
-          <TabsTrigger value="recent">최근</TabsTrigger>
-        </TabsList>
-        {!p.narrow && <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" />}
-        <span className={p.narrow ? 'ml-auto' : undefined}>{p.bell}</span>
+        <h1 className="m-0 shrink-0 text-[15px] font-semibold">대시보드</h1>
+        <span className="ml-auto">{p.bell}</span>
       </header>
-      {p.narrow && (
-        <div className="border-b px-3 py-2">
-          <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" wide />
-        </div>
-      )}
-      <div role="group" aria-label="새로 만들기" className="relative flex items-center gap-1.5 overflow-x-auto border-b px-4 py-2.5 [scrollbar-width:none]">
-        <span className="mr-1 hidden shrink-0 text-[13px] text-muted-foreground sm:inline">새로 만들기</span>
-        {CHIPS.map(({ kind, label, key, icon: Icon, soon }) => (
-          <Button
-            key={kind}
-            variant="outline"
-            size="sm"
-            // Not `disabled`: aria-disabled keeps the chip focusable so keyboard and screen reader users meet
-            // "준비 중" too; the click is ignored instead (#216 review).
-            aria-disabled={soon || undefined}
-            title={soon ? undefined : `새 ${label} (${key})`}
-            aria-keyshortcuts={soon ? undefined : key}
-            data-create={kind}
-            onClick={() => !soon && p.onCreate(kind, null)}
-            className={cn('shrink-0 border-dashed font-medium text-muted-foreground', soon ? 'cursor-default opacity-60' : 'hover:border-solid hover:text-foreground')}
-          >
-            {/* The row reads "새로 만들기", so the chip shows only the kind; the name keeps "새 …" (visible text stays inside it). */}
-            <Icon /> <span className="sr-only">새 </span>
-            {label} {soon ? <span className="text-xs">준비 중</span> : <Kbd>{key}</Kbd>}
-          </Button>
-        ))}
-      </div>
-      <TabsContent value="home" className="flex flex-col">
-        <ProjectDashboard project={whole} query="" running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
-      </TabsContent>
-      {tab === 'home' ? null : empty ? (
-        <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
-      ) : (
-        <>
-          <TabsContent value="all">
-            {found.length === 0 ? noMatch : <><ColumnHead location /><FileList files={found} label="전체 파일" onOpen={p.onOpen} onDelete={p.onDelete} /></>}
-          </TabsContent>
-          <TabsContent value="recent">
-            {(() => {
-              const shown = found.slice(0, RECENT_LIMIT);
-              return shown.length === 0 ? noMatch : <><ColumnHead location /><FileList files={shown} label="최근에 고친 파일" onOpen={p.onOpen} onDelete={p.onDelete} /></>;
-            })()}
-          </TabsContent>
-        </>
-      )}
-    </Tabs>
+      <ProjectDashboard project={whole} recent={recent} onOpen={p.onOpen} onBoard={p.onBoard} />
+    </>
   );
 }
 
@@ -313,9 +182,9 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
   );
 }
 
-function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & { info: ProjectInfo }) {
+function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
   const [tab, setTab] = useState<PTab>('docs');
-  const { collapsed, toggle } = useCollapse();
+  const recent = useMemo(() => flatFiles([project], []), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -324,7 +193,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
             <Menu className="size-[17px]" />
           </SidebarTrigger>
         )}
-        <Button variant="ghost" size="icon-sm" aria-label="홈으로 돌아가기" onClick={() => p.onProject(null)}>
+        <Button variant="ghost" size="icon-sm" aria-label="대시보드로 돌아가기" onClick={() => p.onProject(null)}>
           <ArrowLeft />
         </Button>
         <p className="m-0 flex min-w-0 items-center gap-1.5 text-sm">
@@ -338,8 +207,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
           <TabsTrigger value="sessions">세션</TabsTrigger>
           <TabsTrigger value="overview">개요</TabsTrigger>
         </TabsList>
-        <SearchBox value={query} onChange={onQuery} inputRef={search} placeholder="이 프로젝트에서 찾기" />
-        <Button size="sm" onClick={() => p.onCreate('doc', project.id)}>
+        <Button size="sm" className="ml-auto" onClick={() => p.onCreate('doc', project.id)}>
           <Plus /> 새 문서
         </Button>
         {p.bell}
@@ -347,7 +215,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">
         <TabsContent value="docs" className="flex flex-col">
-          <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
+          <ProjectDashboard project={project} recent={recent} onOpen={p.onOpen} onBoard={p.onBoard} />
         </TabsContent>
         <TabsContent value="pipelines">
           <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>

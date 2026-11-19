@@ -22,6 +22,13 @@ type Props = {
 
 /** Documents of the current project shown before the user types. */
 const SCOPE_DOCS = 6;
+/** Documents shown before the user types when the menu opened on 문서 only (`/`, #793). */
+const FILE_DOCS = 12;
+/** The chip of a menu opened on one section: its label, and what the empty list says. */
+const ONLY: Partial<Record<NonNullable<Cmd['group']>, { chip: string; placeholder: string; empty: string }>> = {
+  project: { chip: '프로젝트만', placeholder: '프로젝트 이름을 입력해요', empty: '맞는 프로젝트가 없어요. 프로젝트만을 풀면 모든 명령에서 찾아요.' },
+  file: { chip: '문서만', placeholder: '파일 이름을 입력해요', empty: '맞는 파일이 없어요. 문서만을 풀면 모든 명령에서 찾아요.' },
+};
 
 /** The Ctrl/Cmd+K menu: one search box over every registered command, in sections, keyboard first. */
 export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
@@ -30,7 +37,9 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
   const list = useMemo(() => {
     const inScope = (c: Cmd) => !!scope && !!c.hint?.startsWith(`${scope.path}/`);
     // With no search, the 문서 section lists the current project's documents (files are otherwise search-only).
-    const scoped = !query.trim() ? commands.filter((c) => c.searchOnly && inScope(c)).slice(0, SCOPE_DOCS) : [];
+    // Opened on 문서 only (`/`), it lists the first documents of the whole tree too, so the box is never blank.
+    const files = group === 'file';
+    const scoped = !query.trim() ? commands.filter((c) => c.searchOnly && (inScope(c) || (files && c.group === 'file'))).slice(0, files ? FILE_DOCS : SCOPE_DOCS) : [];
     const found = [...scoped, ...filterCommands(commands, query)].filter((c) => !group || c.group === group);
     // Files of the current project come first inside their section.
     return scope ? [...found.filter(inScope), ...found.filter((c) => !inScope(c))] : found;
@@ -42,6 +51,7 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
   // Only a new search resets the selection; the list itself is rebuilt on every app render.
   useEffect(() => setSelected(first), [query]);
   const input = useRef<HTMLInputElement>(null);
+  const only = group ? ONLY[group] : undefined;
 
   // Focus returns to where it was before the menu opened (unless a command moves it itself).
   const opener = useRef<Element | null>(document.activeElement);
@@ -104,15 +114,15 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
               onKeyDown={(e) => {
                 if (e.key === 'Backspace' && !query && group && !e.nativeEvent.isComposing) setGroup(undefined);
               }}
-              placeholder={group === 'project' ? '프로젝트 이름을 입력해요' : '명령이나 파일 이름을 입력해요'}
+              placeholder={only?.placeholder ?? '명령이나 파일 이름을 입력해요'}
               className="h-11"
             />
-            {group === 'project' && (
+            {only && (
               // A real button, so keyboard and screen reader users can widen the search too (#216 review).
               <button
                 type="button"
                 data-slot="group-chip"
-                aria-label="프로젝트만 찾기 풀기"
+                aria-label={`${only.chip} 찾기 풀기`}
                 title="눌러서 모든 명령을 찾아요"
                 onClick={() => {
                   setGroup(undefined);
@@ -120,7 +130,7 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
                 }}
                 className="mr-1.5 inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 forced-colors:focus-visible:outline-2 forced-colors:focus-visible:outline-solid forced-colors:focus-visible:outline-[Highlight]"
               >
-                프로젝트만
+                {only.chip}
                 <X aria-hidden className="size-3" />
               </button>
             )}
@@ -133,7 +143,7 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
             )}
           </div>
           <CommandList className="max-h-[min(400px,60vh)] max-sm:max-h-[min(480px,70dvh)]">
-            <CommandEmpty>{group === 'project' ? '맞는 프로젝트가 없어요. 프로젝트만을 풀면 모든 명령에서 찾아요.' : '맞는 명령이 없어요'}</CommandEmpty>
+            <CommandEmpty>{only?.empty ?? '맞는 명령이 없어요'}</CommandEmpty>
             {groups.map((g) => (
               <CommandPrimitive.Group
                 key={g.id}

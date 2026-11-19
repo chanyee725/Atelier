@@ -53,7 +53,7 @@ export function useProjectSessions(folder: string): Feed<Session[]> {
   return sessions;
 }
 
-export type BranchTip = { branch: string; ahead: number; behind: number; lastAt: number | null; state: 'open' | 'merged' | 'empty' | null; base: boolean };
+export type BranchTip = { branch: string; ahead: number; behind: number; lastAt: number | null; state: 'open' | 'merged' | 'empty' | null; base: boolean; active?: boolean };
 export type Branches = { base: string; tips: ReadonlyMap<string, BranchTip> };
 
 /** Ahead/behind of every live session branch against the integration branch; `key` reloads at once when it changes. */
