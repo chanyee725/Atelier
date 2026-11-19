@@ -1,6 +1,6 @@
 // 세션 보드 inside the Atelier shell (#731), as a card dashboard on the home's dash primitives (#879): no header or tab
-// row. Left: the 프로젝트 card (전체, each project, 미분류) that sets the scope, and 사용량. Right: the picked project's
-// 세션, 작업 보드 and 타임라인 cards. `#board=usage` and `#board=branches` open their full screen in one card;
+// row and no 프로젝트 card (one project per server, #778; the scope still comes from the address). Left: 세션 and
+// 타임라인; right: 사용량 and 작업 보드. `#board=usage` and `#board=branches` open their full screen in one card;
 // `#board=timeline` opens the dashboard at the 타임라인 card.
 // Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
@@ -23,7 +23,7 @@ import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
-import { knownFolders, pickerRows, scopePending, type Scope } from './lib/folder.ts';
+import { knownFolders, scopePending, type Scope } from './lib/folder.ts';
 import { fmtK, fmtUsd, isOpen, pct, STATE, stateOf, TONE_TEXT, totalTok, until } from './lib/format.ts';
 import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
@@ -150,13 +150,10 @@ export default function SessionBoard(p: BoardProps) {
           ) : detail ? (
             <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} />
           ) : (
-            <DashGrid ratio="minmax(14rem,18rem) minmax(0,1fr)">
-              {/* Stacked (under 880px of pane), this column dissolves so 사용량 goes after the 세션 cards, not before them. */}
-              <DashColumn className="contents @min-[880px]:flex">
-                <ProjectCard projects={projects} scope={scope} onPick={(f) => p.onRoute('sessions', f)} />
-                <UsageCard className="order-last @min-[880px]:order-none" onSettings={setSettings} onMore={() => p.onRoute('usage', scope)} />
-              </DashColumn>
-              <DashColumn label="선택한 프로젝트">
+            <DashGrid ratio="minmax(0,1fr) minmax(16rem,22rem)">
+              {/* No 프로젝트 card: this server holds one project (#778). Left: 세션 and 타임라인; right: 사용량 and 작업 보드,
+                  whose last card takes the spare height so neither column leaves an empty band (#879). */}
+              <DashColumn label="세션">
                 <SessionsCard
                   open={open}
                   onOpen={openSession}
@@ -171,8 +168,12 @@ export default function SessionBoard(p: BoardProps) {
                     </>
                   }
                 />
-                <TaskBoardCard />
                 <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
+              </DashColumn>
+              {/* Sticky on a wide pane: 사용량 and 작업 보드 stay in view while 세션 and 타임라인 scroll. */}
+              <DashColumn label="현황" className="@min-[880px]:sticky @min-[880px]:top-4 @min-[880px]:max-h-[calc(100dvh-2rem)] @min-[880px]:self-start">
+                <UsageCard onSettings={setSettings} onMore={() => p.onRoute('usage', scope)} />
+                <TaskBoardCard fill />
               </DashColumn>
             </DashGrid>
           )}
@@ -220,36 +221,6 @@ function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab
 const PICK =
   'flex min-h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground max-md:min-h-10';
 
-/** 프로젝트 card (#879): 전체, each project and 미분류 as links; the picked one sets the scope every other card reads. */
-function ProjectCard({ projects, scope, onPick }: { projects: ProjectInfo[]; scope: Scope; onPick: (folder: Scope) => void }) {
-  const sessions = useDispatch((s) => s.sessions);
-  const { known } = useScope();
-  const rows = useMemo(() => pickerRows(projects, sessions, known, scope), [projects, sessions, known, scope]);
-  const route: BoardProps['onRoute'] = (_tab, folder) => onPick(folder);
-  return (
-    <Card id="projects" title="프로젝트" hint="실행 중인 세션 수" flush>
-      <nav aria-label="프로젝트 고르기">
-        <ul className="m-0 flex list-none flex-col gap-px p-1.5">
-          {rows.map((r, i) => (
-            <li key={r.key} className={cn(i === 1 && 'mt-1 border-t pt-1', i === rows.length - 1 && 'mt-1 border-t pt-1')}>
-              <BoardLink tab="sessions" folder={r.folder} onRoute={route} aria-current={r.current ? 'page' : undefined} data-project-pick={r.folder === undefined ? '*' : (r.folder ?? '')} className={PICK}>
-                <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                {r.open > 0 && (
-                  <span className="shrink-0 text-xs tabular-nums">
-                    {r.open}
-                    <span className="sr-only">개 실행 중</span>
-                  </span>
-                )}
-              </BoardLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
-    </Card>
-  );
-}
-
-/** `#board=usage` / `#board=branches`: that screen in one full-width card, with the way back to the dashboard. */
 function DetailView({ tab, scope, onRoute, bell }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode }) {
   return (
     <DashGrid ratio="minmax(0,1fr)">

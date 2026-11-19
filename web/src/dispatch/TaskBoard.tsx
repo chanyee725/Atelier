@@ -101,17 +101,20 @@ const CARD_ROWS = 5;
  * 작업 보드 as a dashboard card (#879): open tasks per stage on one line, then the open tasks that need a look first
  * (stuck, then blocked, then the longest in their stage). 전체 보기 opens the full board in the sheet.
  */
-export function TaskBoardCard() {
+/** `fill`: the card takes the rest of its column and lists every open task, scrolling inside (세션 보드 right column). */
+export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const { tasks } = useScoped();
   const now = useNow(20_000);
   const groups = groupByStage(tasks);
   const live = tasks.filter(t => t.stage !== 'done');
   const rank = (t: BoardTask) => (t.stuck ? 0 : t.stage === 'blocked' ? 1 : 2);
-  const shown = [...live].sort((a, b) => rank(a) - rank(b) || a.stageAt - b.stageAt).slice(0, CARD_ROWS);
+  const shown = [...live].sort((a, b) => rank(a) - rank(b) || a.stageAt - b.stageAt).slice(0, fill ? undefined : CARD_ROWS);
   return (
     <Card
       id="tasks"
+      grow={fill ? 1 : undefined}
+      scroll={fill}
       title="작업 보드"
       count={live.length}
       flush
