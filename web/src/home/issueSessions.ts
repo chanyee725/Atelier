@@ -4,6 +4,7 @@
 // the PR's branch stand in.
 import { useEffect, useState } from 'react';
 import { isOpen, totalTok } from '../dispatch/lib/format.ts';
+import { issueOfBranch } from './issueBoard.ts';
 import { shownAccount, type AccountLabels } from '../accountLabels';
 import type { IssueSession as ApiIssueSession } from '../../../shared/dispatch/accounts.js';
 import type { Session } from '../../../shared/dispatch/types.ts';
@@ -26,16 +27,7 @@ export type IssueSession = {
 
 type WithIssue = Session & { accountLabel?: string | null; issue?: number | null };
 
-/**
- * The issue a branch works on: `feat/747-x`, `fix/issue-12`, `gh-9`; a lead's `dispatch/…` branch names none.
- * Mirrors issueOfBranch in server/dispatch/ledger.js.
- */
-export function issueOfBranch(branch: string | null | undefined): number | null {
-  if (!branch || branch.startsWith('dispatch/')) return null;
-  const m = branch.match(/(?:^|\/)(?:issue-|gh-)?(\d{1,7})(?:[-_]|$)/i);
-  const n = m ? Number(m[1]) : 0;
-  return n > 0 ? n : null;
-}
+export { issueOfBranch } from './issueBoard.ts';
 
 /** The issue of a PR's branch: a session's own `issue` when the server set one, else the branch name. */
 export const issueOf = (sessions: readonly Session[], branch: string) =>

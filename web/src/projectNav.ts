@@ -70,11 +70,11 @@ export function projectOf(view: ProjectsView | null, path: string | null): Proje
   return path.includes('/') ? (view.projects.find((p) => p.path === top) ?? null) : null;
 }
 
-/** Rows to open so `path` is visible: its project and every document or group above it. */
+/** Rows to open so `path` is visible: its top folder (if any) and every document or group above it. */
 export function openPathsFor(view: ProjectsView | null, path: string | null): string[] {
+  if (!view || !path) return [];
   const project = projectOf(view, path);
-  if (!project || !path) return [];
-  const out = [project.path];
+  const out = project ? [project.path] : [];
   const walk = (nodes: DocNode[]): boolean => {
     for (const n of nodes) {
       if (n.path === path) return true;
@@ -85,7 +85,7 @@ export function openPathsFor(view: ProjectsView | null, path: string | null): st
     }
     return false;
   };
-  walk(project.docs);
+  walk(project ? project.docs : view.loose);
   return out;
 }
 

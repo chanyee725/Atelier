@@ -15,6 +15,7 @@ import { Ledger } from "./ledger.js";
 import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
+import { createIssueList } from "./issues.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
 import { SharedLimits } from "./limits.js";
 import { codexModels, staticModels } from "./models.js";
@@ -205,6 +206,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.
     prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
+    // Open issues with the PRs on them through `gh` (issues.js, #776); same switch as PR tracking, cached 60s.
+    issues: dep.issues ?? createIssueList({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
   };
 
   const timers = [];

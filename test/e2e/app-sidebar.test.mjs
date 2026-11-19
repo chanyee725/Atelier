@@ -1,4 +1,4 @@
-// Headless browser check of the app shell (design doc 6 §2.1, §9 ①): views, nested projects, frames, shortcuts, drawer.
+// Headless browser check of the app shell (design doc 6 §2.1, §9 ①): views, the project's 문서 (#778), frames, shortcuts, drawer.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_SHOTS=<folder> also saves screenshots (light/dark × 1440/390, home and document).
 // It starts its own server on a free port against a scratch workspace inside a scratch git repo (one commit) in a
@@ -25,7 +25,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
+test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 390px drawer', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 180_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-shell-'));
   const git = (...a) => execFileSync('git', ['-C', repo, ...a], { env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
@@ -81,15 +81,22 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await nav.getByRole('button', { name: '결제 시스템', exact: false }).first().waitFor();
   assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
   assert.equal(await frame(), 'floating');
-  // Projects sorted by name; the meta name wins over the folder name.
-  const projectNames = nav.locator('[data-slot="sidebar-group"] > ul > li > [data-slot="sidebar-menu-button"] > span.truncate');
-  assert.deepEqual(await projectNames.allInnerTexts(), ['결제 시스템', '온보딩 개편', '인프라']);
+  // Top-left: the project's name, no folder switch (#778). The scratch workspace folder is 'ws'.
+  assert.match(await nav.locator('[data-project-name]').innerText(), /ws$/);
+  assert.equal(await nav.getByRole('button', { name: /폴더 바꾸기/ }).count(), 0);
+  assert.equal(await nav.getByRole('button', { name: '새 프로젝트' }).count(), 0);
+  // 문서: top folders sorted by name (the meta name wins over the folder name), then the loose documents.
+  const group = nav.locator('[data-slot="sidebar-group"]').filter({ hasText: '문서' });
+  assert.equal(await group.locator('[data-slot="sidebar-group-label"]').innerText(), '문서');
+  const topRows = group.locator(':scope > ul > li > [data-slot="sidebar-menu-button"] > span.truncate');
+  assert.deepEqual(await topRows.allInnerTexts(), ['결제 시스템', '온보딩 개편', '인프라', '아이디어 메모']);
 
-  // Dashboard (layout B, #190): pill tabs with 프로젝트별 first shown, quick-create chips, / finds, 39px group heads, 만든 때.
+  // Dashboard home (#778): the whole project's dashboard first, then 전체 파일 and 최근; no 프로젝트별.
   const dash = page.locator('main[data-screen="dashboard"]');
   const tabs = dash.getByRole('tablist', { name: '보기' });
-  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['개요', '전체 파일', '최근', '프로젝트별']);
-  assert.equal(await tabs.getByRole('tab', { name: '프로젝트별' }).getAttribute('aria-selected'), 'true');
+  assert.deepEqual(await tabs.getByRole('tab').allInnerTexts(), ['대시보드', '전체 파일', '최근']);
+  assert.equal(await tabs.getByRole('tab', { name: '대시보드' }).getAttribute('aria-selected'), 'true');
+  for (const title of ['문서', '실행 중인 세션']) await dash.getByRole('heading', { name: title }).first().waitFor();
   const chips = dash.getByRole('group', { name: '새로 만들기' }).getByRole('button');
   // Chips show the kind only; a visually hidden "새 " keeps names like "새 파이프라인 계획" for assistive tech and e2e.
   const shown = await chips.evaluateAll((els) => els.map((el) => [...el.childNodes].filter((n) => !(n instanceof Element && n.classList.contains('sr-only'))).map((n) => n.textContent).join('').replace(/\s+/g, ' ').trim()));
@@ -103,23 +110,12 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await template.click({ force: true });
   assert.equal(await page.locator('main[data-screen="dashboard"]').count(), 1);
   for (const name of ['새 문서', '새 캔버스', '새 파이프라인 계획', '새 템플릿']) assert.equal(await chips.filter({ hasText: name }).count(), 1, name);
-  const heads = dash.locator('[data-slot="group-head"]');
-  assert.deepEqual(
-    (await heads.allInnerTexts()).map((s) => s.replace(/\s+/g, ' ').trim()),
-    ['결 결제 시스템 문서 3 개', '온 온보딩 개편 문서 1 개', '인 인프라 문서 0 개'],
-  );
-  assert.equal(Math.round((await heads.first().boundingBox()).height), 39);
-  assert.match(await dash.locator('[data-slot="column-head"]').first().innerText(), /만든 때/);
   await page.keyboard.press('/');
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('type')), 'search');
   await page.keyboard.type('토큰');
-  assert.deepEqual(await dash.locator('[data-doc-row]').evaluateAll((els) => els.map((e) => e.getAttribute('data-doc-row'))), ['결제 시스템/로그인 로직.dpx.json', '결제 시스템/로그인 로직/토큰 갱신.dpx.json']);
-  // The sub-document list sits inside its parent's <li>, so screen readers keep the level (#212 review).
-  assert.equal(
-    await dash.locator('[data-doc-row="결제 시스템/로그인 로직/토큰 갱신.dpx.json"]').evaluate((li) => li.parentElement?.closest('li')?.getAttribute('data-doc-row')),
-    '결제 시스템/로그인 로직.dpx.json',
-  );
-  assert.equal(await dash.getByRole('button', { name: '로그인 로직 하위 문서' }).getAttribute('aria-expanded'), 'true');
+  // Searching from the dashboard shows the hits in 전체 파일 (#710).
+  assert.equal(await tabs.getByRole('tab', { name: '전체 파일' }).getAttribute('aria-selected'), 'true');
+  assert.deepEqual(await dash.locator('[data-doc-row]').evaluateAll((els) => els.map((e) => e.getAttribute('data-doc-row'))), ['결제 시스템/로그인 로직/토큰 갱신.dpx.json']);
   await page.keyboard.press('Control+a');
   await page.keyboard.press('Backspace');
   await tabs.getByRole('tab', { name: '전체 파일' }).click();
@@ -127,7 +123,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   assert.equal(await dash.locator('[data-doc-row]').count(), 5);
   // A file right in the workspace root has no group (no 미분류, #592) but stays here, placed at 최상위.
   assert.match(await dash.locator('[data-doc-row="아이디어 메모.dpx.json"]').innerText(), /최상위/);
-  await tabs.getByRole('tab', { name: '프로젝트별' }).click();
+  await tabs.getByRole('tab', { name: '대시보드' }).click();
   await shot(page, 'light-dash-1440');
   await page.evaluate(() => document.activeElement?.blur());
 
@@ -150,11 +146,11 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.keyboard.press('a');
   assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
 
-  // A project opens its home (still floating) and unfolds its documents; a document with sub-documents shows a count.
+  // A folder in 문서 unfolds its documents in place (the dashboard stays); a document with sub-documents shows a count.
   const pay = row(nav, /결제 시스템/);
   await pay.click();
   assert.equal(await pay.getAttribute('aria-expanded'), 'true');
-  assert.equal(await pay.getAttribute('aria-current'), 'page');
+  assert.equal(await nav.getByRole('button', { name: /^홈/ }).getAttribute('aria-current'), 'page');
   assert.equal(await frame(), 'floating');
   const login = row(nav, /^로그인 로직/);
   await login.waitFor();
@@ -210,7 +206,7 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
   await page.close();
 
   page = await open('dark', 1440);
-  await page.locator('[data-slot="group-head"]').first().waitFor();
+  await page.locator('main[data-screen="dashboard"]').waitFor();
   await shot(page, 'dark-dash-1440');
   await row(page.getByRole('navigation', { name: '사이드바' }), /결제 시스템/).click();
   await page.waitForTimeout(300);
@@ -231,7 +227,6 @@ test('app sidebar: views, nested projects, frames A/B, shortcuts, 390px drawer',
     const all = drawer.getByRole('button', { name: /^홈/ });
     assert.ok((await all.boundingBox()).height >= 44, 'drawer rows are 44px');
     await row(drawer, /결제 시스템/).click();
-    await page.getByRole('button', { name: '메뉴 열기' }).click();
     await page.waitForTimeout(400);
     await shot(page, `${theme}-nav-390`);
     await row(page.getByRole('dialog'), /^로그인 로직/).click();

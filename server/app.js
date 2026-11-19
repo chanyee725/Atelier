@@ -111,12 +111,23 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
     }
   }
 
+  // A plan blocks a switch only while its lead is alive (hub.alive: not a session left idle by a restart) and its
+  // document is still there (a trashed plan is paused and no longer runs anything).
+  async function planRunning() {
+    const d = ctx.modules.dispatch;
+    const docs = ctx.modules.workspace?.store;
+    for (const [path, p] of Object.entries(d?.store?.data?.pipelines ?? {})) {
+      if (p?.state !== 'running' || !d.hub?.alive?.(p.lead)) continue;
+      if (!docs || (await docs.fileExists(path))) return true;
+    }
+    return false;
+  }
+
   async function doSwitch(dir) {
     const sessions = ctx.modules.dispatch?.hub?.sessions ?? [];
     if (sessions.some((s) => BUSY.has(s.status))) throw new WorkspaceError(409, 'agent sessions are running', 'sessions_running');
     // A running plan's lead can sit idle between steps; stopping the modules would still kill it and lose the run.
-    const plans = Object.values(ctx.modules.dispatch?.store?.data?.pipelines ?? {});
-    if (plans.some((p) => p?.state === 'running')) throw new WorkspaceError(409, 'a pipeline plan is running', 'pipeline_running');
+    if (await planRunning()) throw new WorkspaceError(409, 'a pipeline plan is running', 'pipeline_running');
     let lock = null;
     if (claimWorkspace) {
       try {
