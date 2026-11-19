@@ -24,9 +24,9 @@ export interface PlanApproval {
 }
 
 const RUN_TEXT: Record<'running' | 'paused' | 'done', string> = {
-  running: '승인한 계획으로 실행 중이에요.',
-  paused: '승인한 계획이 멈춰 있어요.',
-  done: '승인한 계획이 끝났어요.',
+  running: '승인한 계획으로 실행 중이에요',
+  paused: '승인한 계획이 멈춰 있어요',
+  done: '승인한 계획이 끝났어요',
 };
 
 /**
