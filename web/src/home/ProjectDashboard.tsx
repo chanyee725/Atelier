@@ -10,11 +10,12 @@ import { ArrowRight, FileText, LoaderCircle, RotateCw } from 'lucide-react';
 import type { ProjectInfo, RecentFile } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
-import { Card, CardGrid, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
-import { AgentTag } from './AgentPanel';
+import { Card, CardGrid, DashColumn, DashGrid, EmptyState } from './dash';
+import { cn } from '../lib/utils';
+import { AgentTag, RoleBadge } from './AgentPanel';
 import { openAgentLive } from '../live/store';
-import { agentStateLabel, agentsIn, fileStem, isBusy, needsLook, type AgentPresence } from './agents';
-import { allDocs } from './model';
+import { agentStateLabel, agentsIn, fileStem, isBusy, isEditingDiagram, needsLook, type AgentPresence } from './agents';
+import { allDocs, relativeTime } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
 import { issueRows } from './issueBoard';
@@ -109,49 +110,58 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
 }
 
 /**
- * One live session per card (#785, cards again after the dense rows): name tag and role, model, the step it is on, then
- * the file it holds. A spinner shows only while it is working (running or starting); one that needs a person gets an
- * amber dot. The card's top part opens the session's live view; the file line opens the document.
+ * One live session per card (#785, #793): name and run state on top, role badge and model below, then the step it is on
+ * and the file it holds. Both lines are split left and right so the card's width is used evenly. The pointer tag (the
+ * live cursor's look) shows only while the session edits a diagram (isEditingDiagram); otherwise the name is plain.
+ * The card's top part opens the session's live view; the file line opens the document. In a narrow card (under 15rem)
+ * the state keeps its icon and the model moves under the role.
  */
 function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
   const look = !busy && needsLook(a);
+  const editing = isEditingDiagram(a);
   const model = a.modelLabel || a.model;
+  const state = editing && a.statusLabel ? a.statusLabel : agentStateLabel(a);
   return (
-    <li data-agent={a.sid} data-busy={busy || undefined} className="flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40">
+    <li
+      data-agent={a.sid}
+      data-busy={busy || undefined}
+      data-editing={editing || undefined}
+      className="@container/session flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40"
+    >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
       <button
         type="button"
         data-agent-live={a.sid}
         title={`${a.name} 진행상황 보기`}
         onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
-        className="grid min-w-0 content-start gap-1 rounded-md px-3 pt-2 pb-1.5 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-start items-center gap-x-3 gap-y-1.5 rounded-md px-3 pt-2.5 pb-2 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        <span className="flex min-w-0 items-center gap-2">
+        {editing ? (
           <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
-          <span className="min-w-0 shrink truncate text-muted-foreground">{a.outside ? '외부 API' : a.roleName || a.role}</span>
-          <span className="ml-auto inline-flex shrink-0 items-center" title={agentStateLabel(a)}>
-            {busy ? (
-              <LoaderCircle aria-hidden className="size-3.5 text-ok motion-safe:animate-spin" />
-            ) : look ? (
-              <StatusDot tone="warn" />
-            ) : null}
-            <span className="sr-only">{agentStateLabel(a)}</span>
-          </span>
+        ) : (
+          <span data-agent-name className="min-w-0 truncate text-[13px] leading-5 font-medium text-foreground">{a.name}</span>
+        )}
+        <span data-agent-state className={cn('inline-flex items-center gap-1.5 justify-self-end whitespace-nowrap', busy ? 'text-foreground' : 'text-muted-foreground')} title={state}>
+          {busy ? (
+            <LoaderCircle aria-hidden className="size-3.5 shrink-0 text-ok motion-safe:animate-spin" />
+          ) : (
+            <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', look ? 'bg-warn' : 'bg-idle')} />
+          )}
+          <span className="sr-only @min-[15rem]/session:not-sr-only">{state}</span>
         </span>
-        {model && (
-          <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground" title={model}>
+        <RoleBadge agent={a} className="justify-self-start" />
+        {model ? (
+          <span className="col-span-2 inline-flex min-w-0 items-center gap-1 justify-self-start text-muted-foreground @min-[15rem]/session:col-span-1 @min-[15rem]/session:justify-self-end" title={model}>
             <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
             <span className="truncate">{model}</span>
           </span>
-        )}
+        ) : null}
         {a.step ? (
-          <span className="min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>
-        ) : look ? (
-          <span className="text-muted-foreground">{agentStateLabel(a)}</span>
+          <span className="col-span-2 min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>
         ) : null}
       </button>
-      <span className="mt-auto flex min-w-0 px-3 pb-2">
+      <span className="mt-auto flex min-w-0 items-center gap-3 border-t border-border/60 px-3 py-1.5">
         {a.file && title ? (
           <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
@@ -161,6 +171,7 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
         ) : (
           <span className="text-muted-foreground">잡고 있는 파일 없음</span>
         )}
+        {a.at ? <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">{relativeTime(a.at)}</span> : null}
       </span>
     </li>
   );

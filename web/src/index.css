@@ -64,6 +64,7 @@
   --idle: oklch(0.62 0.08 250);
   /* Agent role lanes from Dispatch light (doc 5 §3.1): the run overlay's agent colours. */
   --role-lead: oklch(0.56 0.2 290);
+  --role-merge: oklch(0.55 0.11 205);
   --role-impl: oklch(0.56 0.18 255);
   --role-review: oklch(0.68 0.15 65);
   --role-test: oklch(0.6 0.14 160);
@@ -113,6 +114,7 @@
   --idle: oklch(0.68 0.04 250);
   /* Role lanes from Dispatch dark. */
   --role-lead: oklch(0.7 0.16 290);
+  --role-merge: oklch(0.76 0.11 205);
   --role-impl: oklch(0.7 0.14 255);
   --role-review: oklch(0.78 0.13 70);
   --role-test: oklch(0.74 0.13 160);
