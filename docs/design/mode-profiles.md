@@ -2,7 +2,7 @@
 
 Issue #748. Design spec for the settings UI (PR 3). Server side is PR 1 (#751, `server/dispatch/mode-profiles.js`, the source
 of truth for modes, defaults, hints and fallback); the last section restates its API for the UI. Mockup: `mode-profiles/mockup.html` (static, not app code); screenshots
-`mode-profiles/desktop-build.png` (800 px dialog, 구현 tab, Codex not connected) and
+`mode-profiles/desktop-build.png` (800 px dialog, 구현 tab, Codex not connected; the mockup URL says `?mode=build`, the real mode id is `impl`) and
 `mode-profiles/narrow-research.png` (390 px, 조사 tab).
 
 ## Where it goes
