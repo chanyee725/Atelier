@@ -9,7 +9,7 @@ import type { SceneBox, SceneEdge } from '../../shared/render/index.ts';
 import { fixture } from '../dsl/helpers.ts';
 import { FONT_FAMILY } from '../../shared/render/text.ts';
 
-const FIXTURES = ['architecture-web-service', 'flowchart-ticket-workflow', 'sequence-login', 'erd-billing'];
+const FIXTURES = ['architecture-web-service', 'flowchart-ticket-workflow', 'sequence-login', 'erd-billing', 'bpmn-order-flow'];
 
 /** Compare with `__snapshots__/<name>.svg`; write it when missing or with UPDATE_SNAPSHOTS=1. */
 function snapshot(name: string, svg: string): void {

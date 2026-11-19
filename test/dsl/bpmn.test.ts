@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bpmnAsGraph, detectDiagramType, parse, parseBpmnDiagram } from '../../shared/dsl/index.ts';
+import { bpmnAsGraph, detectDiagramType, diagramChildren, parse, parseBpmnDiagram } from '../../shared/dsl/index.ts';
 import { fmt } from './helpers.ts';
 
 const ORDER = `title Order flow
@@ -130,8 +130,11 @@ test('detection: marker line, type attribute, layout keyword; others unchanged',
   assert.equal(detectDiagramType('bpmn-diagram\nA > B'), 'bpmn');
   assert.equal(parse('bpmn-diagram\nA > B').ast.type, 'bpmn');
   assert.equal(detectDiagramType(ORDER), 'bpmn');
-  assert.equal(detectDiagramType('layout sequential\nA > B'), 'bpmn');
-  assert.equal(detectDiagramType('A [type: gateway]'), 'bpmn');
+  assert.equal(detectDiagramType('Lane {\n  A [type: gateway]\n}'), 'bpmn');
+  // A BPMN-looking attribute or keyword alone keeps other diagrams as they were (#859 review).
+  assert.equal(detectDiagramType('layout sequential\nA > B'), 'cloud-architecture');
+  assert.equal(detectDiagramType('A [type: gateway]'), 'cloud-architecture');
+  assert.equal(detectDiagramType('Lane {\n  A\n}\nB [type: event]'), 'cloud-architecture');
   assert.equal(detectDiagramType('A [shape: diamond]'), 'flowchart');
   assert.equal(detectDiagramType('A [icon: aws-ec2]\nA > B'), 'cloud-architecture');
   assert.equal(detectDiagramType('layout engine > B'), 'cloud-architecture');
@@ -149,6 +152,19 @@ test('bpmnAsGraph: pool > lane groups in source order, gateway diamond, event ci
   if (wh.kind !== 'group') assert.fail('lane is a group');
   assert.deepEqual(wh.children.map((n) => [n.id, n.attrs.shape]), [['Approved?', 'diamond'], ['Shipped', 'circle']]);
   assert.equal(g.edges.length, 4);
+});
+
+test('a node first named by a connection inside a lane joins that lane', () => {
+  const { ast, diagnostics } = parseBpmnDiagram('P {\n  L {\n    A\n    A > B\n  }\n}\nB > C');
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(ast.lanes.map((l) => [l.id, l.nodes]), [['L', ['A', 'B']]]);
+  assert.deepEqual(ast.nodes.map((n) => [n.id, n.lane ?? null]), [['A', 'L'], ['B', 'L'], ['C', null]]);
+});
+
+test('diagramChildren: BPMN as pool > lane groups, graphs as is, others null', () => {
+  assert.deepEqual(diagramChildren(parseBpmnDiagram(ORDER).ast)!.map((c) => c.id), ['Online store']);
+  assert.deepEqual(diagramChildren(parse('A > B').ast)!.map((c) => c.id), ['A', 'B']);
+  assert.equal(diagramChildren(parse('a { id pk }', 'erd').ast), null);
 });
 
 test('parse never throws on an empty bpmn block', () => {

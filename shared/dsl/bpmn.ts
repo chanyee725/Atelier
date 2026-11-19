@@ -1,7 +1,7 @@
 import { Cursor, endStatement, GRAPH_KEYS, parseKeywordValue } from './common.ts';
 import { parseGraph } from './graph.ts';
 import type {
-  BpmnDiagram, BpmnLane, BpmnNode, BpmnNodeType, BpmnPool, GraphChild, GraphDiagram, GraphGroup, GraphNode,
+  BpmnDiagram, BpmnLane, Diagram, BpmnNode, BpmnNodeType, BpmnPool, GraphChild, GraphDiagram, GraphGroup, GraphNode,
 } from './types.ts';
 
 export const BPMN_KEYS = new Set([...GRAPH_KEYS, 'type']);
@@ -17,6 +17,7 @@ export function parseBpmn(c: Cursor): BpmnDiagram {
   let layout: BpmnDiagram['layout'] = 'compact';
   const graph = parseGraph(c, 'cloud-architecture', {
     keys: BPMN_KEYS,
+    implicitInScope: true,
     keyword: (cur) => {
       const t = cur.peek();
       const nx = cur.peek(1);
@@ -153,4 +154,10 @@ export function bpmnAsGraph(d: BpmnDiagram): GraphDiagram {
   ];
   roots.sort((a, b) => a.at - b.at);
   return { ...base, type: 'flowchart', direction, children: roots.map((r) => r.make()), edges };
+}
+
+/** The node tree of a graph or BPMN diagram (BPMN as pool > lane > node groups); null for sequence and ERD. */
+export function diagramChildren(d: Diagram): GraphChild[] | null {
+  if (d.type === 'bpmn') return bpmnAsGraph(d).children;
+  return 'children' in d ? d.children : null;
 }
