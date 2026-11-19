@@ -220,7 +220,7 @@ export async function setup(ctx) {
     });
 
   /** Why this file cannot start now (empty when it can), and what it would start. */
-  function check(path, file, entry) {
+  async function check(path, file, entry) {
     const blockers = [];
     const d = dispatch();
     const plan = file?.plan ?? null;
@@ -247,10 +247,12 @@ export async function setup(ctx) {
           blockers.push(`단계 ${s.id}의 역할 "${s.role.slice(0, 40)}"을 몰라요`);
           continue;
         }
-        // A step with a mode and no model takes the mode's profile at create_sessions, which falls back to a
-        // connected provider by itself (#748): only the guard check needs to assume Claude may be used.
-        if (!s.model && s.mode) {
-          usesClaude = true;
+        // A step with a mode and no model runs on the mode's profile (#748), resolved now the way create_sessions
+        // will: it already falls back to a connected provider, so only "nothing usable" blocks.
+        if (!s.model && s.mode && d.modeProfiles) {
+          const p = await d.modeProfiles.resolve(s.mode, s.role, { perm: s.perm });
+          if (!p) blockers.push(`단계 ${s.id}의 ${s.mode} 모드에 쓸 수 있는 모델이 없어요`);
+          else if (p.provider === 'claude') usesClaude = true;
           continue;
         }
         const modelId = s.model || role.model;
@@ -276,7 +278,7 @@ export async function setup(ctx) {
     const entry = entries()?.[path] ?? null;
     const state = entry?.state ?? (file.plan ? 'plan' : null);
     const { blockers, sessions, legacyModels } =
-      state === 'running' || state === 'done' ? { blockers: [], sessions: 0, legacyModels: {} } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0, legacyModels: {} } : check(path, file, entry);
+      state === 'running' || state === 'done' ? { blockers: [], sessions: 0, legacyModels: {} } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0, legacyModels: {} } : await check(path, file, entry);
     const l = dispatch()?.hub.currentLimits() ?? null;
     return {
       path,
@@ -386,7 +388,7 @@ export async function setup(ctx) {
     const file = await readOrNull(path);
     if (!file) throw new StoreError(404, 'not found');
     if (file.revision !== body.revision) throw new StoreError(409, '계획이 바뀌었어요. 다시 확인해 주세요', { revision: file.revision });
-    const { blockers } = check(path, file, entry);
+    const { blockers } = await check(path, file, entry);
     if (blockers.length) throw new StoreError(409, blockers[0], { blockers });
     const changes = planChanges(drafts.get(path), file.plan);
     const carry = await carryOf(path, entry);

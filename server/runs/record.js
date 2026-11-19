@@ -24,6 +24,12 @@ const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 // Strings are kept only when they look like a short token and not like an email address (never stored, even in a branch name).
 const short = (v) => (typeof v === 'string' && SHORT.test(v) && !EMAIL.test(v) ? v : undefined);
+// A server-written one-line note (Korean allowed, unlike short()): control characters folded, capped at 200, never an email.
+const shortNote = (v) => {
+  if (typeof v !== 'string') return undefined;
+  const t = v.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return t && !EMAIL.test(t) ? t : undefined;
+};
 
 /**
  * Keep only whitelisted metadata from a session object (Dispatch session or a patch of one).
@@ -48,7 +54,8 @@ export function pickSession(s) {
   }
   if (Number.isInteger(s.issue) && s.issue > 0 && s.issue < 1e7) out.issue = s.issue;
   // Why the mode's profile fell back to another model (#748): a server-written line, no transcript text.
-  if (typeof s.profileNote === 'string' && s.profileNote.length <= 200 && !EMAIL.test(s.profileNote)) out.profileNote = s.profileNote;
+  const note = shortNote(s.profileNote);
+  if (note !== undefined) out.profileNote = note;
   for (const k of ['stateSince', 'startedAt', 'endedAt', 'cost', 'ctxPct']) {
     const v = num(s[k]);
     if (v !== undefined) out[k] = v;

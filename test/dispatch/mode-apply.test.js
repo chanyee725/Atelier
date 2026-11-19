@@ -29,7 +29,7 @@ async function makeHub(connected, stored = {}) {
   hub.isConnected = p => connected.includes(p);
   hub.refreshCodex = async () => {};
   hub.start = () => {};
-  hub.resolveProfile = async (mode, role) => resolveProfile({ mode, role, stored, models: MODELS, isConnected: hub.isConnected });
+  hub.resolveProfile = async (mode, role, o = {}) => resolveProfile({ mode, role, stored, models: MODELS, isConnected: hub.isConnected, perm: o.perm });
   return { root, store, hub };
 }
 
@@ -61,9 +61,12 @@ test("a plan step's own model, effort and perm win over the mode's profile", asy
   const [e] = await make(hub, [{ role: "impl", mode: "quickfix", effort: "high" }]);
   assert.equal(e.model, "claude-sonnet-5-5");
   assert.equal(e.effort, "high");
-  // A user cell on Codex with perm acceptEdits cannot exist (checkCell refuses it); an item perm that Codex
-  // cannot run is still refused by create, never run looser.
-  await assert.rejects(make(hub, [{ role: "impl", mode: "research", perm: "acceptEdits" }]), e2 => e2.status === 400);
+  // An item perm Codex cannot run skips Codex in the profile and falls back, with a note, instead of a 400.
+  const [ae] = await make(hub, [{ role: "impl", mode: "research", perm: "acceptEdits" }]);
+  assert.deepEqual([ae.provider, ae.model, ae.perm], ["claude", "claude-opus-5-5", "acceptEdits"]);
+  assert.match(ae.profileNote, /OpenAI Codex는 acceptEdits 모드를 쓸 수 없음/);
+  // An explicit Codex model with a perm it cannot run is still refused, never run looser.
+  await assert.rejects(make(hub, [{ role: "impl", model: "gpt-a", perm: "acceptEdits" }]), e2 => e2.status === 400);
 });
 
 test("an unconnected provider falls back with a note on the session, in its transcript and in the run record", async () => {
@@ -76,7 +79,10 @@ test("an unconnected provider falls back with a note on the session, in its tran
   assert.equal(rec.mode, "research");
   assert.equal(rec.profileNote, s.profileNote);
   assert.equal("prompt" in rec, false);
-  assert.equal(pickSession({ profileNote: "x".repeat(201) }).profileNote, undefined);
+  assert.equal(pickSession({ profileNote: "x".repeat(250) }).profileNote.length, 200);
+  assert.equal(pickSession({ profileNote: "a\nb\u0007c" }).profileNote, "a b c");
+  assert.equal(pickSession({ profileNote: "mail a@b.co" }).profileNote, undefined);
+  assert.equal(pickSession({ profileNote: " " }).profileNote, undefined);
 });
 
 test("a user cell from drawing.json is used; an unknown mode is ignored", async () => {
@@ -100,6 +106,8 @@ test("plan steps carry a mode: shared list matches the server's, write_plan chec
   const plan = { v: 1, block: "b", defaults: { mode: "docs" }, steps: [{ id: "s1", node: "s1", role: "docs" }] };
   assert.equal(planProblem(plan), null);
   assert.equal(resolvedStep(plan, plan.steps[0]).mode, "docs");
+  assert.match(planProblem({ ...plan, defaults: { mode: "party" } }), /defaults\.mode must be one of/);
+  assert.match(planProblem({ ...plan, steps: [{ id: "s1", node: "s1", role: "docs", mode: "party" }] }), /steps\[0\]\.mode must be one of/);
 });
 
 test("the lead's MCP tools and prompt list the six modes", async () => {
