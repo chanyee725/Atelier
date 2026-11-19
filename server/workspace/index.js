@@ -3,7 +3,9 @@ import { createStore, StoreError } from './store.js';
 import { RESERVED_PROJECT_NAMES } from './paths.js';
 import { listProjects } from './projects.js';
 import { listLocalFolders } from './local-folders.js';
-import { cleanSessionLabel, sessionIdOf } from '../cursor/presence.js';
+import { cleanSessionLabel, projectOf, sessionIdOf } from '../cursor/presence.js';
+import { addQuestion, answerQuestion } from './discussion-ops.js';
+import { USER } from '../../shared/dispatch/discussions.ts';
 // The PR/CI switch lives with the Dispatch PR tracker (it reads the same settings.json), so the route reuses it.
 import { readPrTracking, setPrTracking } from '../dispatch/pr-status.js';
 
@@ -90,6 +92,27 @@ export async function setup(ctx) {
     return v;
   };
 
+  // Agent sessions live in the dispatch module (set up after this one; off outside a git project).
+  const hub = () => ctx.modules.dispatch?.hub ?? null;
+  const sessionOf = (sid) => (sid && hub()?.get(sid)) || null;
+  // The answer goes to the asking session by name (only names are stored). False when it is gone or refuses a message now.
+  const deliverAnswer = (path, item) => {
+    const h = hub();
+    const s = h?.sessions?.find((x) => x.name === item.askedBy);
+    if (!s) return false;
+    const clip = (t, n) => (t.length > n ? `${t.slice(0, n)}…` : t);
+    try {
+      h.send(s.id, `[문서 질문 답변] ${path}의 질문 ${item.id} "${clip(item.question, 200)}"에 사용자가 답했어요: ${item.answer}`);
+      return true;
+    } catch {
+      return false; // e.g. a running Codex turn or the usage guard; the answer stays readable in the document
+    }
+  };
+  const announce = (r, from) => {
+    ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
+    changed(r.path, { sid: from.sid, writer: from.writer });
+  };
+
   return {
     store,
     /** fn(path, { catchUp, app, sid, writer }) on each content change of a file (catchUp: found after the watcher restarted); returns an unsubscribe function. */
@@ -147,6 +170,42 @@ export async function setup(ctx) {
         ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
         changed(r.path, { sid: from.sid, writer: from.writer });
         return r;
+      }),
+      // In-document questions (#738). An agent asks (its session name is stored, from x-drawing-session); the user
+      // answers (a choice or text) and the answer is sent to the asking session.
+      route('GET', '/api/file/discussions', async (p) => {
+        const f = await store.readFile(need(p, 'path'));
+        return { path: f.path, revision: f.revision, discussions: f.discussions ?? null };
+      }),
+      route('POST', '/api/file/discussions', async (p, b, _sp, from) => {
+        const askedBy = sessionOf(from.sid)?.name ?? (from.sid ? null : from.writer);
+        if (!askedBy) throw new StoreError(400, '질문한 세션을 알 수 없어요 (x-drawing-session 헤더가 필요해요)');
+        const r = await store.patchDiscussions(need(p, 'path'), (d) => addQuestion(d, b, askedBy));
+        announce(r, from);
+        return r;
+      }, 201),
+      route('POST', '/api/file/discussions/answer', async (p, b, _sp, from) => {
+        const answeredBy = sessionOf(from.sid)?.name ?? USER;
+        const r = await store.patchDiscussions(need(p, 'path'), (d) => answerQuestion(d, b, answeredBy));
+        announce(r, from);
+        return { ...r, delivered: deliverAnswer(r.path, r.item) };
+      }),
+      // Open question counts per document and per project (top folder) for the sidebar badges.
+      route('GET', '/api/discussions/open', async () => {
+        const files = [];
+        const visit = (rows) => {
+          for (const r of rows) {
+            if (r.type === 'folder') visit(r.children);
+            else if (r.questions) files.push({ path: r.path, title: r.title, open: r.questions });
+          }
+        };
+        visit(await store.tree());
+        const projects = {};
+        for (const f of files) {
+          const k = projectOf(f.path) ?? '';
+          projects[k] = (projects[k] ?? 0) + f.open;
+        }
+        return { total: files.reduce((n, f) => n + f.open, 0), files, projects };
       }),
       // withSubdocs=1: the document's sub-documents folder goes to the trash with it.
       route('DELETE', '/api/file', (p, _b, sp) => store.removeFile(need(p, 'path'), { withSubdocs: sp.get('withSubdocs') === '1' })),
