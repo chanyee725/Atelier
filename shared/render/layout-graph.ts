@@ -662,6 +662,8 @@ interface BaseEdge {
   points: Point[];
   /** Self loops, ancestor links and parallel edges always draw elbow. */
   forcedElbow: boolean;
+  /** Routed by the wrap or divider-row code (#733): the corridor router leaves it alone. */
+  ownRoute?: boolean;
   /** Position among the drawn edges joining the same two ends, and how many there are. */
   pairIndex: number;
   pairSize: number;
@@ -990,6 +992,7 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
       label: edgeLabels.get(e.id),
       points,
       forcedElbow: e.from === e.to || isAncestor(e.from, e.to) || isAncestor(e.to, e.from) || (pairCount.get(key) ?? 0) > 1 || rowCross.has(e.id),
+      ...(rowCross.has(e.id) ? { ownRoute: true } : {}),
       pairIndex,
       pairSize: 0,
     });
@@ -1035,7 +1038,10 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
     // A route between two rows is drawn as found, whatever the connector style: a straight line would cut through the rows.
     baseEdges.forEach((be, i) => {
       be.points = wrapEdges[i]!.points.map((p) => ({ x: round(p.x), y: round(p.y) }));
-      if (wrapped?.rerouted.has(i)) be.forcedElbow = true;
+      if (wrapped?.rerouted.has(i)) {
+        be.forcedElbow = true;
+        be.ownRoute = true;
+      }
     });
   }
   routeAcross(d, nodes, parent, rects, baseEdges.filter((be) => rowCross.has(be.edge.id)), baseEdges, rowCross, (g) => groups.get(g)!.header);
@@ -1576,7 +1582,7 @@ function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string
     if (r) boxes.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, parent: base.parent.get(id), shape: g.divider ? undefined : g.shape });
   }
   const edges = base.edges
-    .filter((be) => (be.forcedElbow || be.style.connectorStyle === 'elbow') && be.edge.from !== be.edge.to)
+    .filter((be) => !be.ownRoute && (be.forcedElbow || be.style.connectorStyle === 'elbow') && be.edge.from !== be.edge.to)
     .map((be) => ({
       id: be.edge.id,
       from: be.edge.from,
@@ -1585,14 +1591,60 @@ function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string
       endArrow: !!be.edge.endArrow,
       ...(be.label ? { label: { w: be.label.w + PLATE_PAD * 2, h: be.label.h + 4 } } : {}),
     }));
-  if (previous) {
+  const out = previous
     // An edge reroutes when one of its ends moved or was refitted (a group dragged as a whole moves
     // every child too); the others keep their routes and the rerouted ones keep off them.
-    return routeOrthogonal(boxes, edges, { previous, only: new Set(edges.filter((e) => moved.has(e.from) || moved.has(e.to)).map((e) => e.id)) });
+    ? routeOrthogonal(boxes, edges, { previous, only: new Set(edges.filter((e) => moved.has(e.from) || moved.has(e.to)).map((e) => e.id)) })
+    : routeOrthogonal(boxes, edges);
+  // A line between two members of one group stays inside it; one that left falls back to the old route.
+  for (const e of edges) {
+    const r = out.get(e.id);
+    if (r && (!insideCommonGroup(base, rects, e.from, e.to, r.points) || !cleanRoute(base, drawn, rects, e.from, e.to, r.points))) out.delete(e.id);
   }
-  const out = routeOrthogonal(boxes, edges);
-  if (moved.size === 0) baseRoutes.set(base, out);
+  if (!previous && moved.size === 0) baseRoutes.set(base, out);
   return out;
+}
+
+/**
+ * A router line that jogs by a few pixels (parallel lanes squeezed between two ports) or grazes a node it
+ * does not connect to reads as a glitch: such a line falls back to the old route.
+ */
+function cleanRoute(base: GraphBase, drawn: ReadonlyMap<string, Rect>, rects: ReadonlyMap<string, Rect>, from: string, to: string, points: readonly Point[]): boolean {
+  const JOG = 4;
+  const NEAR = 3;
+  for (let i = 1; i < points.length - 1; i++) {
+    const len = Math.abs(points[i]!.x - points[i - 1]!.x) + Math.abs(points[i]!.y - points[i - 1]!.y);
+    if (len > 0 && len <= JOG && i > 1 && i < points.length - 1) return false;
+  }
+  for (const id of base.nodes.keys()) {
+    if (id === from || id === to) continue;
+    const r = drawn.get(id) ?? rects.get(id);
+    if (!r) continue;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1]!;
+      const b = points[i]!;
+      if (Math.max(a.x, b.x) > r.x - NEAR && Math.min(a.x, b.x) < r.x + r.w + NEAR && Math.max(a.y, b.y) > r.y - NEAR && Math.min(a.y, b.y) < r.y + r.h + NEAR) return false;
+    }
+  }
+  return true;
+}
+
+/** Whether the router line is usable: strictly inside the innermost group that holds both ends (always true at the root), and not a group-to-member edge. */
+function insideCommonGroup(base: GraphBase, rects: ReadonlyMap<string, Rect>, from: string, to: string, points: readonly Point[]): boolean {
+  const chain = (id: string): string[] => {
+    const up: string[] = [];
+    for (let p = base.parent.get(id); p !== undefined && up.length < 64; p = base.parent.get(p)) up.push(p);
+    return up;
+  };
+  const toUp = chain(to);
+  const fromUp = chain(from);
+  // A group and one of its own members: the old route draws it inside the group.
+  if (toUp.includes(from) || fromUp.includes(to)) return false;
+  const shared = new Set(toUp);
+  const common = fromUp.find((g) => shared.has(g));
+  const r = common === undefined ? undefined : rects.get(common);
+  if (!r) return true;
+  return points.every((p) => p.x > r.x && p.x < r.x + r.w && p.y > r.y && p.y < r.y + r.h);
 }
 
 /** Connector width (svg.ts EDGE_W): dividers draw at the same 1.3px (spec §2.1). */
