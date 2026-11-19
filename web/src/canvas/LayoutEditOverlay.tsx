@@ -112,7 +112,8 @@ export function LayoutEditOverlay({ layout, session, frame, dark, wrap, start, s
     (next: BlockLayout, guides: Line[]) => {
       cancelAnimationFrame(frameReq.current);
       frameReq.current = requestAnimationFrame(() => {
-        const { scene, svg } = live.current.session.compose(next, paletteOf(live.current.dark));
+        // A drag frame: moved lines take the quick route; `commit` routes them properly on drop (#733).
+        const { scene, svg } = live.current.session.compose(next, paletteOf(live.current.dark), true);
         setPreview({ sig: layoutSig(next), scene, svg, guides });
       });
     },

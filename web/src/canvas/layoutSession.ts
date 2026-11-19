@@ -14,8 +14,9 @@ export type LayoutSession = {
   /**
    * Picture for `layout` in `theme` (default light), with its scene for hit boxes and origin. It is shown outside
    * the canvas filter, so the dark one is the plain dark palette, not the pre-filtered block image.
+   * `draft` for a drag frame: lines with a moved end take the quick route; the drop composes without it.
    */
-  compose(layout: BlockLayout | undefined, theme?: 'light' | 'dark'): { scene: Scene; svg: string };
+  compose(layout: BlockLayout | undefined, theme?: 'light' | 'dark', draft?: boolean): { scene: Scene; svg: string };
 };
 
 const keyOf = (type: string, code: string) => `${type}\n${code}`;
@@ -65,9 +66,9 @@ export async function openLayoutSession(b: { type: string; code: string; layout?
   return {
     key,
     basis: basisOf(ast),
-    compose(layout, theme = 'light') {
+    compose(layout, theme = 'light', draft = false) {
       // Same as drawing the block: overrides the code no longer fits are left out (design §4.3).
-      const scene = composeGraph(ast, base, reconcileLayout(ast, layout).layout);
+      const scene = composeGraph(ast, base, reconcileLayout(ast, layout).layout, { draft });
       return { scene, svg: sceneToSvg(scene, { theme }) };
     },
   };

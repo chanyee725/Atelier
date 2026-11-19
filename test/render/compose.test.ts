@@ -124,7 +124,57 @@ test('compose: moving a whole group shifts its box and inner edges unchanged in 
   }
 });
 
-test('compose: an elbow edge with a moved end is rerouted orthogonally with at most 4 bends', async () => {
+const sample = (name: string) => readFileSync(fileURLToPath(new URL(`../dsl/fixtures/${name}.eraser`, import.meta.url)), 'utf8');
+const P2P = sample('flowchart-procure-to-pay');
+
+test('compose: a drag leaves every line away from the moved node as it was, on the first frame and on the drop (#733)', async () => {
+  // The ticket workflow has lines the router has no clean route for (they keep the old route): those stay too.
+  for (const code of [P2P, sample('flowchart-ticket-workflow')]) await dragKeepsOthers(code);
+});
+
+async function dragKeepsOthers(code: string): Promise<void> {
+  const { d, base } = await setup(code, 'flowchart');
+  const plain = composeGraph(d, base);
+  const rel = (s: Scene, e: SceneEdge) => e.points.map((p) => [Math.round(p.x - s.origin!.x), Math.round(p.y - s.origin!.y)]);
+  const ids = [...base.nodes.keys()];
+  for (const id of ids) {
+    const r = base.rects.get(id)!;
+    const layout = layoutOf({ [id]: { cx: r.x + r.w / 2 + 6, cy: r.y + r.h / 2 + 4, parent: base.parent.get(id) ?? '' } });
+    const near = (e: SceneEdge, s: Scene): boolean => {
+      const h = handle(s, id);
+      return rel(s, e).some(([x, y]) => x! > h.x - s.origin!.x - 40 && x! < h.x - s.origin!.x + h.w + 40 && y! > h.y - s.origin!.y - 40 && y! < h.y - s.origin!.y + h.h + 40);
+    };
+    for (const draft of [true, false]) {
+      const scene = composeGraph(d, base, layout, { draft });
+      for (const e of edges(scene)) {
+        if (e.from === id || e.to === id) continue;
+        const before = edges(plain).find((x) => x.id === e.id)!;
+        if (near(before, plain) || near(e, scene)) continue;
+        assert.deepEqual(rel(scene, e), rel(plain, before), `${e.from}>${e.to} kept its line while ${id} moved (draft ${draft})`);
+      }
+    }
+  }
+}
+
+test('compose: routes for a layout do not depend on the layouts composed before it (#733)', async () => {
+  const { d, base } = await setup(P2P, 'flowchart');
+  const at = (id: string, dx: number, dy: number): BlockLayout => {
+    const r = base.rects.get(id)!;
+    return layoutOf({ [id]: { cx: r.x + r.w / 2 + dx, cy: r.y + r.h / 2 + dy, parent: base.parent.get(id) ?? '' } });
+  };
+  const ids = [...base.nodes.keys()];
+  const a = at(ids[1]!, 40, 120);
+  const b = at(ids[3]!, -90, 60);
+  const first = sceneToSvg(composeGraph(d, base, a));
+  composeGraph(d, base, b, { draft: true });
+  composeGraph(d, base, b);
+  composeGraph(d, base);
+  assert.equal(sceneToSvg(composeGraph(d, base, a)), first);
+  // A fresh base (no cache at all) draws the same picture.
+  assert.equal(sceneToSvg(composeGraph(d, await graphBase(d), a)), first);
+});
+
+test('compose: an elbow edge with a moved end is rerouted orthogonally with at most 3 bends', async () => {
   const code = ['A', 'B', 'C', 'A > B: x', 'B > C', 'A > C'].join('\n');
   const { d, base } = await setup(code, 'flowchart');
   for (const [dx, dy] of [[300, 0], [-200, 40], [30, 260], [0, -300], [-250, -250]] as const) {
@@ -133,7 +183,7 @@ test('compose: an elbow edge with a moved end is rerouted orthogonally with at m
     for (const [from, to] of [['A', 'B'], ['B', 'C']] as const) {
       const e = edgeBetween(d, scene, from, to);
       assert.ok(orthogonal(e.points), `${from}>${to} (${dx},${dy}) is orthogonal: ${JSON.stringify(e.points)}`);
-      assert.ok(e.points.length - 2 <= 4, `${from}>${to} has ${e.points.length - 2} bends`);
+      assert.ok(e.points.length - 2 <= 3, `${from}>${to} has ${e.points.length - 2} bends`);
       assert.ok(onBorder(e.points[0]!, handle(scene, from)), `${from}>${to} starts on ${from}`);
       assert.ok(onBorder(e.points[e.points.length - 1]!, handle(scene, to)), `${from}>${to} ends on ${to}`);
     }
@@ -281,12 +331,12 @@ const REF_REPS = 3;
 // Main-thread CPU-time ratio of one compose + SVG of the diagram below to the reference (Node 24, 32 cores):
 // 0.34-0.43 idle and with 48 busy loops; a 2x slower compose 0.62-0.84, a 3x slower one 0.87-1.13.
 // A round over budget is measured again (at most 3 rounds): a burst of load can spoil one round, not all three.
-// #733: elbows come from the eraser-diagrams corridor router (about 4.5x the old routes): ~40 ms CPU for a
-// 100-node drag with 20 rerouted edges. 7 catches a ~1.5x slowdown of that.
-const MAX_RATIO = 7;
+// #733: this is one drag frame (`draft`): lines with a moved end take the quick route, the rest keep their
+// cached corridor-router routes. The router itself (tens of ms here) runs once, on the drop.
+const MAX_RATIO = 0.6;
 const ROUNDS = 3;
 
-test(`performance: 100-node compose + SVG under ${MAX_RATIO}x a fixed reference workload`, async () => {
+test(`performance: 100-node drag-frame compose + SVG under ${MAX_RATIO}x a fixed reference workload`, async () => {
   const lines: string[] = [];
   for (let g = 0; g < 5; g++) {
     lines.push(`G${g} [icon: aws] {`);
@@ -301,7 +351,7 @@ test(`performance: 100-node compose + SVG under ${MAX_RATIO}x a fixed reference 
     items[`N2_${i}`] = { cx: c.x + 37, cy: c.y - 55, parent: 'G2' };
   }
   const layout = layoutOf(items);
-  const compose = () => sceneToSvg(composeGraph(d, base, layout));
+  const compose = () => sceneToSvg(composeGraph(d, base, layout, { draft: true }));
   for (let i = 0; i < 3; i++) {
     compose(); // warm-up (JIT)
     reference();
