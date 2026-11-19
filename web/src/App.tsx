@@ -18,6 +18,7 @@ import type { EntryKind } from './activity/appEvents';
 import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHash, shellKey, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
+import { Questions } from './doc/Questions';
 import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { isPipelineView, shownView, toCanvas } from './viewMode';
@@ -835,6 +836,8 @@ export function App() {
       <DocMargin file={path}>
         {(onEditor) => (
           <>
+            {/* Questions agents asked in this document (#738), answered in place. */}
+            <Questions session={session} />
             <DocSlot session={session} dark={dark} tree={tree} jump={jump} onOpenFile={openFile} onNotice={setStatus} onShow={showBlock} onShowFrame={showFrame} onExportBlock={blockExport} onFail={flushForReload} onEditor={onEditor} />
             <SubDocs node={place.node} onOpen={openFile} onAdd={() => void newFile(undefined, 'doc', true)} />
           </>

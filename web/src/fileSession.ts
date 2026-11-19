@@ -2,7 +2,7 @@
 // (useSession), so an edit that only moves a block re-renders the canvas and nothing else.
 // Saving: edits are debounced, saves run one at a time, retryable failures back off, 409 stops for a choice.
 // Outside changes (server SSE events) close or reload the open file through `external`.
-import { ApiError, FILE_FORMAT_VERSION, type DpxFile } from './api.ts';
+import { ApiError, FILE_FORMAT_VERSION, type Discussion, type DpxFile } from './api.ts';
 import { externalAction, type WorkspaceEvent } from './externalChange.ts';
 import { isRetryableSaveError, RELOAD_STOPPED, saveProblemText } from './saveRetry.ts';
 import { migrateDocument } from './doc/model.ts';
@@ -215,6 +215,20 @@ export function createFileSession(deps: Deps) {
       editSeq += 1;
       if (!conflicted && !reloadStopped) setStatus('');
       schedule(SAVE_DELAY);
+    },
+    /**
+     * The server answered a question of `p` (#738): show it at once. Not an edit (saves never send `discussions`), so
+     * nothing is marked unsaved; the change event that follows brings the file's new revision.
+     */
+    questionAnswered(p: string, item: Discussion) {
+      const f = state.file;
+      const d = f?.discussions;
+      if (state.path !== p || !f || !d || !Array.isArray(d.items)) return;
+      const i = d.items.findIndex((q) => q.id === item.id);
+      if (i < 0) return;
+      const items = [...d.items];
+      items[i] = item;
+      set({ file: { ...f, discussions: { ...d, items } } });
     },
     load(p: string, f: DpxFile) {
       clearTimer();
