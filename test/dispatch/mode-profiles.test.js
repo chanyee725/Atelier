@@ -47,6 +47,31 @@ test("defaults follow model strengths: research Codex, plan Fable, impl Opus, qu
   assert.equal(r("impl", "nobody"), null);
 });
 
+test("#856 grid: Fable falls back to Opus, the tester cross-checks on Gemini without Codex, the reviewer stays on Opus", () => {
+  // Plan/design and hard work: Fable first, Opus when Fable is not offered.
+  const noFable = models.filter(m => !m.id.startsWith("claude-fable"));
+  for (const role of ["lead", "impl", "design"]) {
+    const p = resolveProfile({ mode: "plan", role, models: noFable, isConnected: only("claude") });
+    assert.equal(p.model, "claude-opus-5-5", role);
+    assert.match(p.note, /claude-fable-5-2 모델 없음/);
+  }
+  // Research: Codex for the lead and implementer; without Codex the lead takes Sonnet, the implementer Opus.
+  assert.equal(r("research", "lead").model, "gpt-a");
+  assert.equal(r("research", "lead", { isConnected: only("claude") }).model, "claude-sonnet-5-5");
+  // Claude + Gemini, no Codex: the tester differs from the Opus implementer by provider; the reviewer is Opus.
+  const cg = only("claude", "gemini");
+  assert.equal(r("impl", "test", { isConnected: cg }).model, "gemini-3.8-flash-high");
+  assert.equal(r("impl", "review", { isConnected: cg }).model, "claude-opus-5-5");
+  // Docs mode: Sonnet writes; quickfix stays one Opus implementer (#768).
+  assert.equal(r("docs", "impl").model, "claude-sonnet-5-5");
+  assert.equal(r("docs", "docs").model, "claude-sonnet-5-5");
+  // Every default cell names its fallbacks, so the 설정 grid can show the chain.
+  const d = defaultCells();
+  assert.deepEqual(d.plan.impl.fallbacks.map(f => f.model), ["claude-opus-5-5"]);
+  assert.deepEqual(d.impl.test.fallbacks.map(f => f.model), ["gemini-3.8-flash-high", "claude-opus-5-5"]);
+  assert.equal(d.impl.review.cross, true);
+});
+
 test("an unconnected provider falls back to the next choice with a visible note; nothing connected → null", () => {
   const p = r("research", "impl", { isConnected: only("claude") });
   assert.equal(p.model, "claude-opus-5-5");
