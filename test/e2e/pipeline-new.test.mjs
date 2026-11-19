@@ -68,12 +68,16 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   await page.getByRole('button', { name: '대시보드' }).first().click();
   assert.equal(await nav.getByRole('img', { name: '파이프라인: 계획' }).count(), 0, 'a plain file has no badge');
 
-  await page.getByRole('button', { name: '새 파이프라인 계획' }).click();
+  // #793 dropped the dashboard's quick-create chips; the command menu's 새 파이프라인 starts a plan.
+  await page.keyboard.press('Control+k');
+  await page.getByRole('combobox', { name: '명령 찾기' }).fill('새 파이프라인');
+  await page.getByRole('option', { name: /^새 파이프라인/ }).first().click();
   await answerDialog(page, 'release');
 
   // The file opened with the template.
   await page.waitForFunction(() => decodeURIComponent(location.hash).includes('release'));
-  const res = await call('GET', '/api/file?path=release');
+  // #782: a new plan goes to <feature>/계획, titled with the typed name.
+  const res = await call('GET', `/api/file?path=${encodeURIComponent('release/계획')}`);
   assert.equal(res.status, 200);
   const f = await res.json();
   assert.equal(f.blocks.length, 1);
@@ -94,7 +98,10 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   const badge = row('Ship').getByRole('img', { name: '파이프라인: 계획' });
   await badge.waitFor();
   assert.equal(await badge.textContent(), '◐계획');
-  assert.equal(await nav.getByRole('img', { name: '파이프라인: 계획' }).count(), 1);
+  // Two plans carry it now (release/계획 from the menu, ops/ship); the plain file still has none.
+  const badges = await nav.getByRole('img', { name: '파이프라인: 계획' }).evaluateAll((els) => els.map((e) => e.closest('[data-slot="sidebar-menu-button"]')?.textContent ?? ''));
+  assert.equal(badges.length, 2, `badges: ${JSON.stringify(badges)}`);
+  assert.equal(await row('Plain').getByRole('img', { name: '파이프라인: 계획' }).count(), 0);
   if (process.env.DRAW_E2E_SHOT) await page.screenshot({ path: process.env.DRAW_E2E_SHOT });
   assert.deepEqual(errors, []);
 });
