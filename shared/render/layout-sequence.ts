@@ -17,7 +17,7 @@ const HEAD_MIN_H = 52;
 const HEAD_PAD_X = 32;
 const HEAD_PAD_Y = 12;
 const HEAD_MAX_LINES = 3;
-const HEAD_MAX_W = HEAD_WIDTHS[HEAD_WIDTHS.length - 1];
+const HEAD_MAX_W = HEAD_WIDTHS[2];
 
 interface Column {
   id: string;
