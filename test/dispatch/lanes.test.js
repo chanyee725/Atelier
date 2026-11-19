@@ -33,8 +33,18 @@ test("laneItems: quickfix refuses reviewer and tester, defaults to the quickfix 
   assert.deepEqual(laneItems([{ role: "impl" }], "quickfix"), [{ role: "impl", lane: "quickfix", mode: "quickfix" }]);
   assert.deepEqual(laneItems([{ role: "impl", mode: "impl" }], "quickfix"), [{ role: "impl", mode: "impl", lane: "quickfix" }]);
   assert.deepEqual(laneItems([{ role: "review" }], "normal"), [{ role: "review", lane: "normal" }]);
-  assert.throws(() => laneItems([{ role: "impl" }, { role: "review" }], "quickfix"), e => e.status === 400 && /리뷰어/.test(e.message));
+  assert.throws(() => laneItems([{ role: "impl" }, { role: "review" }], "quickfix"), e => e.status === 400);
   assert.throws(() => laneItems([{ role: "impl" }], "fast"), e => e.status === 400);
+});
+
+test("laneItems: quickfix is exactly one impl, design or docs session", () => {
+  for (const role of ["impl", "design", "docs"]) assert.equal(laneItems([{ role }], "quickfix")[0].lane, "quickfix");
+  assert.equal(laneItems([{ role: "impl", n: 1 }], "quickfix").length, 1);
+  for (const role of ["lead", "review", "test"]) assert.throws(() => laneItems([{ role }], "quickfix"), e => e.status === 400, role);
+  assert.throws(() => laneItems([{ role: "impl", n: 2 }], "quickfix"), e => e.status === 400 && /세션 하나/.test(e.message));
+  assert.throws(() => laneItems([{ role: "impl" }, { role: "docs" }], "quickfix"), e => e.status === 400 && /2개/.test(e.message));
+  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl", n: 2 }], lane: "quickfix" }), e => e.status === 400);
+  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "lead" }], lane: "quickfix" }), e => e.status === 400);
 });
 
 test("lanePlanArgs: quickfix is one step that autostarts in the quickfix mode; lane never reaches the plan", () => {
@@ -42,7 +52,7 @@ test("lanePlanArgs: quickfix is one step that autostarts in the quickfix mode; l
   assert.deepEqual(lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl" }], lane: "quickfix" }),
     { goal: "g", autostart: true, steps: [{ mode: "quickfix", title: "a", role: "impl" }] });
   assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl" }, { title: "b", role: "impl" }], lane: "quickfix" }), /단계 하나/);
-  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "review" }], lane: "quickfix" }), /구현자 하나/);
+  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "review" }], lane: "quickfix" }), /세션 하나/);
 });
 
 test("create: a quickfix passes a waiting plan gate and runs Opus 5.5; normal is still gated", async () => {

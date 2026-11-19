@@ -6,8 +6,8 @@
 
 export const LANES = ["quickfix", "normal", "risky"];
 export const DEFAULT_LANE = "normal";
-/** Roles a quickfix may not create: it has no reviewer or tester. */
-const QUICKFIX_NO_ROLES = new Set(["review", "test"]);
+/** The only roles a quickfix may create: one maker, no lead, reviewer or tester. */
+const QUICKFIX_ROLES = new Set(["impl", "design", "docs"]);
 
 const bad = msg => Object.assign(new Error(msg), { status: 400 });
 
@@ -19,15 +19,16 @@ export function checkLane(lane) {
 }
 
 /**
- * create_sessions items under a lane. Quickfix refuses reviewer and tester roles and defaults to the
+ * create_sessions items under a lane. Quickfix is exactly one session (impl, design or docs) and defaults to the
  * quickfix mode; the other lanes leave items as they are. Returns new items, each carrying its lane.
  */
 export function laneItems(items, lane, mode) {
   lane = checkLane(lane);
   if (!lane) return items;
   if (lane === "quickfix") {
-    const extra = items.find(it => QUICKFIX_NO_ROLES.has(it.role));
-    if (extra) throw bad(`quickfix에는 리뷰어·테스터가 없어요(${extra.role}). 리뷰가 필요하면 lane: normal로 만드세요`);
+    const total = items.reduce((a, it) => a + (it.n || 1), 0);
+    if (total !== 1) throw bad(`quickfix는 세션 하나예요(지금 ${total}개). 더 필요하면 lane: normal로 만드세요`);
+    if (!QUICKFIX_ROLES.has(items[0].role)) throw bad(`quickfix 세션은 구현자·디자이너·문서화 중 하나예요(${String(items[0].role).slice(0, 30)}). 리뷰가 필요하면 lane: normal로 만드세요`);
   }
   return items.map(it => ({ ...it, lane, ...(lane === "quickfix" && !it.mode && !mode && { mode: "quickfix" }) }));
 }
@@ -41,7 +42,7 @@ export function lanePlanArgs({ lane, ...args }) {
   if (lane !== "quickfix") return args;
   const steps = Array.isArray(args.steps) ? args.steps : [];
   if (steps.length !== 1) throw bad("quickfix 계획은 단계 하나예요. 더 크면 lane: normal로 쓰세요");
-  if (QUICKFIX_NO_ROLES.has(steps[0]?.role)) throw bad("quickfix 단계는 구현자 하나예요. 리뷰가 필요하면 lane: normal로 쓰세요");
+  if (!QUICKFIX_ROLES.has(steps[0]?.role) || (steps[0].n ?? 1) !== 1) throw bad("quickfix 단계는 구현자·디자이너·문서화 중 하나, 세션 하나예요. 리뷰가 필요하면 lane: normal로 쓰세요");
   return { ...args, autostart: true, steps: [{ mode: "quickfix", ...steps[0] }] };
 }
 
