@@ -2,7 +2,7 @@
 // and clear, and survives a round trip through this browser's storage.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toastOf } from '../../web/src/activity/appEvents.ts';
+import { sessionEvents, toastOf } from '../../web/src/activity/appEvents.ts';
 import {
   addItems,
   bellCount,
@@ -76,4 +76,21 @@ test('a waiting plan counts once on the bell, even with its plan-waiting toast u
   // Once started, the plan's item is an ordinary unread item again.
   assert.equal(bellCount(box, []), 2);
   assert.equal(bellCount(markAllRead(box), ['p.dpx.json']), 1);
+});
+
+test('items keep who raised them: name, role and provider ids, through storage (#811)', () => {
+  const agentEv = { ...ev('e1', 20), role: 'lead', provider: 'claude' };
+  let box = takeActivity(EMPTY_INBOX, { events: [agentEv, { ...ev('e0', 5), name: '' }], readAt: 0 });
+  assert.deepEqual(box.items[0].agent, { name: 'Jae', role: 'lead', provider: 'claude' });
+  assert.equal(box.items[1].agent, undefined);
+
+  const [started] = sessionEvents(undefined, { id: 's9', name: 'Chan', role: 'lead', provider: 'openai', startedAt: 100 }, 100);
+  const item = itemOfToast(toastOf(started)!, 30, 1);
+  assert.deepEqual(item.agent, { name: 'Chan', role: 'lead', provider: 'openai' });
+  // App events with no agent (a save) have none: the Atelier mark is shown.
+  assert.equal(itemOfToast(toastOf({ type: 'settings-saved' })!, 31, 2).agent, undefined);
+
+  box = addItems(box, [item]);
+  const back = parseInbox(JSON.stringify({ ...box, items: [...box.items, { id: 'b', kind: 'agents', text: 't', at: 1, agent: { role: 'x' } }] }));
+  assert.deepEqual(back.items.map((i) => i.agent), [item.agent, { name: 'Jae', role: 'lead', provider: 'claude' }, undefined, undefined]);
 });

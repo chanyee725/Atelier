@@ -1,7 +1,7 @@
 // E537 (#654): the app's activity feed — unread count, badge, which events pop up, feed order and words, feed placement.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addEvent, alertRoute, badgeText, feedOf, markRead, nextToasts, placeFeed, unreadCount, whenText, type ToastQueue } from '../../web/src/activity/activity.ts';
+import { addEvent, alertRoute, badgeText, feedOf, markRead, placeFeed, unreadCount, whenText } from '../../web/src/activity/activity.ts';
 import type { ActivityEvent, ActivityLog } from '../../shared/dispatch/agent-activity.ts';
 
 const ev = (id: string, at: number, kind: ActivityEvent['kind'] = 'start', extra: Partial<ActivityEvent> = {}): ActivityEvent => ({ id, at, kind, sid: 's1', name: 'Jude', role: 'impl', file: 'P/07 서버.dpx.json', ...extra });
@@ -28,8 +28,8 @@ test('badgeText: empty at 0, capped at 99+', () => {
   assert.deepEqual([badgeText(0), badgeText(3), badgeText(99), badgeText(120)], ['', '3', '99', '99+']);
 });
 
-test('alertRoute: toast in view, notification when hidden and on, progress never pops up', () => {
-  assert.equal(alertRoute({ kind: 'start' }, { visible: true, notify: true }), 'toast');
+test('alertRoute: no toast in view (#811), notification when hidden and on, progress never pops up', () => {
+  assert.equal(alertRoute({ kind: 'start' }, { visible: true, notify: true }), null);
   assert.equal(alertRoute({ kind: 'finish' }, { visible: false, notify: true }), 'notification');
   assert.equal(alertRoute({ kind: 'error' }, { visible: false, notify: false }), null);
   assert.equal(alertRoute({ kind: 'progress' }, { visible: true, notify: true }), null);
@@ -60,24 +60,4 @@ test('placeFeed: under the bell with right edges lined up (top-right bell, #786)
   assert.deepEqual(placeFeed({ right: 200, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 8, top: 46 }, 'shifted in at the left edge');
   assert.deepEqual(placeFeed({ right: 1198, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 832, top: 46 }, 'kept off the right edge');
   assert.deepEqual(placeFeed({ right: 110, top: 500, bottom: 530 }, { width: 100, height: 300 }, view), { left: 10, top: 194 });
-});
-
-test('nextToasts: toasts waiting behind a modal are all kept and shown in order, at most max at once (#666)', () => {
-  const t = (id: string) => ({ id });
-  const ids = (q: ToastQueue<{ id: string }>) => [q.shown.map((x) => x.id), q.waiting.map((x) => x.id)];
-  let q: ToastQueue<{ id: string }> = { shown: [], waiting: [] };
-  for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g']) q = nextToasts(q, { type: 'add', toast: t(id), blocked: true }, 3);
-  assert.deepEqual(ids(q), [[], ['a', 'b', 'c', 'd', 'e', 'f', 'g']], 'none dropped while a sheet is open');
-  assert.equal(nextToasts(q, { type: 'fill', blocked: true }, 3), q, 'still blocked: same queue');
-  q = nextToasts(q, { type: 'fill', blocked: false }, 3);
-  assert.deepEqual(ids(q), [['a', 'b', 'c'], ['d', 'e', 'f', 'g']], 'oldest first, three on screen');
-  assert.equal(nextToasts(q, { type: 'fill', blocked: false }, 3), q, 'full: same queue');
-  q = nextToasts(q, { type: 'close', id: 'b', blocked: false }, 3);
-  assert.deepEqual(ids(q), [['a', 'c', 'd'], ['e', 'f', 'g']], 'a closed toast makes room for the next');
-  q = nextToasts(q, { type: 'close', id: 'a', blocked: true }, 3);
-  assert.deepEqual(ids(q), [['c', 'd'], ['e', 'f', 'g']], 'nothing new appears while a modal is open again');
-  q = nextToasts(q, { type: 'add', toast: t('e'), blocked: false }, 3);
-  assert.deepEqual(ids(q), [['c', 'd', 'e'], ['f', 'g']], 'a duplicate is not queued twice');
-  q = nextToasts(q, { type: 'add', toast: t('h'), blocked: false }, 3);
-  assert.deepEqual(ids(q), [['c', 'd', 'e'], ['f', 'g', 'h']], 'with the screen full a new toast waits instead of pushing one out');
 });

@@ -141,14 +141,14 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   const side = await page.locator('[data-working-agents]').textContent();
   assert.ok(side.includes(a.name) && side.includes(b.name) && side.includes('plan'), side);
 
-  // 3. The bell: unread badge, a toast in view, the feed records the starts; opening it clears the badge.
+  // 3. The bell: unread badge and no toast (#811: the 알림함 only); the feed records the starts.
   await page.locator('[data-activity-badge]').waitFor({ timeout: 10_000 });
-  await page.locator('[data-activity-toast]').first().waitFor({ timeout: 10_000 });
+  assert.equal(await page.locator('[data-activity-toast]').count(), 0);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'activity-two-agents-1600.png') });
   await page.locator('[data-activity-bell]').click();
   const feed = page.locator('[data-activity-feed]');
   await feed.waitFor();
-  const items = await feed.locator('[data-activity-item]').allTextContents();
+  const items = await feed.locator('[data-inbox-row]').allTextContents();
   assert.ok(items.some((x) => x.includes(a.name) && x.includes('시작했어요')), JSON.stringify(items));
   assert.ok(items.some((x) => x.includes(b.name)), JSON.stringify(items));
   await page.waitForFunction(() => !document.querySelector('[data-activity-badge]'), null, { timeout: 5_000 });
@@ -162,7 +162,7 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   release(3);
   await page.locator('[data-activity-badge]').waitFor({ timeout: 20_000 });
   await page.locator('[data-activity-bell]').click();
-  await page.waitForFunction(() => [...document.querySelectorAll('[data-activity-item]')].some((e) => /끝냈어요/.test(e.textContent)), null, { timeout: 10_000 });
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-inbox-row]')].some((e) => /끝냈어요/.test(e.textContent)), null, { timeout: 10_000 });
   // The log is written a moment after a change.
   let stored = { events: [] };
   for (let i = 0; i < 30 && !stored.events.some((e) => e.kind === 'finish'); i++) {

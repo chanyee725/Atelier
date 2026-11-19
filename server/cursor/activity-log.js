@@ -1,6 +1,6 @@
 // Pure part of the agent activity log (E537, issue #654): turns the cursor module's "who holds which file" reports
 // and the hub's session states into start / progress / finish / error events. No I/O, so it runs under `node --test`.
-// Metadata only: who (session name, role, colour), which file and section, when, what kind.
+// Metadata only: who (session name, role, provider, colour), which file and section, when, what kind.
 //
 //   start    a session's first credited edit of a file (or of another file than the one it held)
 //   progress it moved on from one section of the document to another (once per section and stay)
@@ -12,7 +12,7 @@ const BAD = new Set(['failed', 'stuck']);
 
 /**
  * emit(event without id) is called for every new event, in order. `session(sid)` gives the hub's session (name,
- * role, colour, status, state) or null.
+ * role, provider, colour, status, state) or null.
  */
 export function createActivityLog({ emit, session = () => null, now = Date.now }) {
   const stays = new Map(); // sid -> { file, section, done: Set<section>, failed }
@@ -23,6 +23,8 @@ export function createActivityLog({ emit, session = () => null, now = Date.now }
       sid,
       name: typeof s?.name === 'string' ? s.name : '',
       role: typeof s?.role === 'string' ? s.role : '',
+      // Provider id (claude, openai, gemini) for the 알림함's model mark (#811).
+      ...(typeof s?.provider === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(s.provider) ? { provider: s.provider } : {}),
       ...(typeof s?.color === 'string' && /^#[0-9a-f]{6}$/i.test(s.color) ? { color: s.color } : {}),
     };
   };

@@ -1,6 +1,7 @@
 // App event toasts (E540, #671): the one place app events go through. notifyApp(event) drops it when its category is
-// off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS, keeps it in the 알림함 (inboxStore.ts, #797) and hands the toast to ActivityAlerts
-// (page in view) or to a browser notification (page hidden and notifications on). watchAppEvents() turns the server's
+// off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS and keeps it in the 알림함 (inboxStore.ts,
+// #797); nothing pops up on the page (#811). While the page is hidden and notifications are on it also goes out as a
+// browser notification. watchAppEvents() turns the server's
 // SSE `session`, `providers`, `settings` and `run` events into app events for the whole app. Metadata only.
 import { useSyncExternalStore } from 'react';
 import { alertsOn } from '../dispatch/lib/notify';
@@ -19,7 +20,6 @@ import {
 } from './appEvents';
 
 const KEY = 'drawing:toast-off';
-const listeners = new Set<(t: AppToast) => void>();
 const prefSubs = new Set<() => void>();
 const dedupe = createDedupe();
 
@@ -48,12 +48,6 @@ export const useToastOff = () =>
     readOff,
   );
 
-/** fn(toast) for each app toast to show on the page. */
-export function onAppToast(fn: (t: AppToast) => void) {
-  listeners.add(fn);
-  return () => void listeners.delete(fn);
-}
-
 /** Where a browser notification's click goes (set by ActivityAlerts). */
 let openTarget: (t: AppToast) => void = () => {};
 export const setToastOpener = (fn: (t: AppToast) => void) => void (openTarget = fn);
@@ -61,7 +55,7 @@ export const setToastOpener = (fn: (t: AppToast) => void) => void (openTarget = 
 export function notifyApp(e: AppEvent) {
   const t = toastOf(e);
   if (!t || !categoryOn(t.category) || !dedupe(t.key, Date.now())) return;
-  // Every toast is also kept in the 알림함 (#797), whether it pops up on the page or as a browser notification.
+  // The 알림함 is where every event shows (#797, #811); a hidden page may also get a browser notification.
   addToastToInbox(t);
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
     if (!alertsOn()) return;
@@ -75,9 +69,7 @@ export function notifyApp(e: AppEvent) {
     } catch {
       // Some browsers only allow notifications from a service worker.
     }
-    return;
   }
-  for (const f of listeners) f(t);
 }
 
 type SessionMsg = Parameters<typeof sessionEvents>[1];
