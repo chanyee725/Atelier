@@ -8,6 +8,7 @@ export type { BlockCode } from '../../shared/render/block-code.ts';
 export const FILE_FORMAT_VERSION = 5;
 // Pipeline steps (format v4). The web only carries it through saves for now; docs/workspace-api.md "Pipeline `plan`".
 export type { Plan, PlanStep } from '../../shared/dispatch/plan.ts';
+import type { UsageDay } from '../../shared/dispatch/types.ts';
 import type { Plan } from '../../shared/dispatch/plan.ts';
 export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; codeRefs?: BlockCode; frameId?: string };
 export type DpxFile = {
@@ -150,7 +151,9 @@ export const api = {
   providers: () => call<{ providers: Record<string, ProviderState> }>('GET', '/api/state').then((r) => r.providers ?? {}),
   limits: () => call<ProviderLimits>('GET', '/api/limits'),
   /** Settings dialog (E57): full provider status, Dispatch settings, connect/disconnect. Login runs the user's own CLI. */
-  dispatchState: () => call<{ providers?: Record<string, ProviderInfo>; settings?: DispatchSettings }>('GET', '/api/state'),
+  dispatchState: () => call<{ providers?: Record<string, ProviderInfo>; settings?: DispatchSettings; models?: { id: string; label?: string; provider?: string }[] }>('GET', '/api/state'),
+  /** Daily cost and tokens per model and role from the run records (14 days, numbers only; #819 사용량 tab). */
+  usage: () => call<{ days: UsageDay[] }>('GET', '/api/usage').then((r) => (Array.isArray(r.days) ? r.days : [])),
   providerLogin: (id: string) => call<{ ok: boolean; connected: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/login`, {}),
   providerCancel: (id: string) => call<{ ok: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/cancel`, {}),
   /** Disconnects from Atelier only; the CLI's own login stays. */

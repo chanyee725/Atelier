@@ -1,18 +1,20 @@
 // Card dashboard (#686, #793): one grid of compact cards for the project, no document list (the sidebar's 문서 tree
 // has the documents). Left: the work in progress, sessions running now and the open GitHub issues as the unit of work
-// (#776, #784, #785; issues page to the rows that fit, #800). The sessions card is as tall as its cards and the issues
-// card is a fixed 8 rows a page. Right: 사용량 설정 (limits per provider; usage itself is in the sidebar) and PR과 머지,
-// whose long list scrolls inside its card; no 최근 문서 card (the sidebar has the documents) and no branch card (branch
-// status is the sidebar's 브랜치 row, the board's 브랜치 tab). All live: agents by the event
-// stream, sessions by session events, branches, PRs and usage by polling while the page is visible.
-// At a narrow main pane (under 880px) the halves stack, work first. Live sessions show as small cards (#799).
-import { useMemo } from 'react';
+// (#776, #784, #785). Right: 사용량 설정 (limits per provider) and a tabbed card, PR과 머지 / 사용량 (#819); no 최근
+// 문서 card (the sidebar has the documents) and no branch card (branch status is the sidebar's 브랜치 row, the board's
+// 브랜치 tab). All live: agents by the event stream, sessions by session events, branches, PRs and usage by polling
+// while the page is visible.
+// `fill` (#819, the home 대시보드): side by side, both columns end at the pane's bottom edge. 실행 중인 세션 takes 2 parts
+// and 이슈 3 parts of the left column (each list scrolls inside; issues page to the rows that fit, the pager on the
+// card's bottom edge); the tabbed card takes what 사용량 설정 leaves. At a narrow main pane (under 880px) the halves
+// stack, work first, and the page scrolls as before. Live sessions show as small cards in even rows (#799, #819).
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { boardHash, plainClick } from '../projectNav';
 import { ArrowRight, FileText, LoaderCircle, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
-import { Card, CardGrid, DashColumn, DashGrid, EmptyState } from './dash';
+import { Card, DashColumn, DashGrid, EmptyState } from './dash';
 import { cn } from '../lib/utils';
 import { AgentTag, RoleBadge } from './AgentPanel';
 import { openAgentLive } from '../live/store';
@@ -21,6 +23,8 @@ import { allDocs, relativeTime } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
 import { PrsCard } from './WorkCards';
+import { WorkTabsCard } from './WorkTabsCard';
+import { colsThatFit, perCard, rowSizes } from './sessionGrid';
 import { UsageSettingsCard } from './UsageSettingsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches } from './projectFeeds';
 
@@ -29,9 +33,11 @@ type Props = {
   onOpen: (path: string) => void;
   /** '' = the whole board (the whole-project dashboard); `tab` picks a board tab (default 세션). */
   onBoard: (folder: string, tab?: 'usage') => void;
+  /** Fill the pane to its bottom edge (#819); the parent must be a flex column of fixed height (the home <main>). */
+  fill?: boolean;
 };
 
-export function ProjectDashboard({ project, onOpen, onBoard }: Props) {
+export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
@@ -44,14 +50,15 @@ export function ProjectDashboard({ project, onOpen, onBoard }: Props) {
   const prs = usePrs(prBranches, tracking);
 
   return (
-    <DashGrid ratio="3fr 2fr">
-      <DashColumn label="진행 중인 작업" className="*:last:grow-0">
-        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} />
+    <DashGrid ratio="3fr 2fr" fill={fill}>
+      {/* Filled, each card's own share sets its height; *:last:grow-0 would pin the last card to its minimum. */}
+      <DashColumn label="진행 중인 작업" className={fill ? undefined : '*:last:grow-0'} fill={fill}>
+        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} fill={fill ? 2 : undefined} />
+        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
-      <DashColumn label="현황" className="*:last:grow-0">
+      <DashColumn label="현황" className={fill ? undefined : '*:last:grow-0'} fill={fill}>
         <UsageSettingsCard />
-        <PrsCard issues={issues} prs={prs} />
+        {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>
     </DashGrid>
   );
@@ -68,12 +75,12 @@ function BoardLink({ folder, onBoard }: { folder: string; onBoard: (folder: stri
   );
 }
 
-function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void }) {
+function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard, fill }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void; fill?: number }) {
   const list = Array.isArray(agents) ? agents : [];
-  // As tall as its cards (no share of the column): the issues card below takes the spare height (#784, #793).
+  // Filled (#819): a fixed share of the column, its cards scroll inside. Otherwise as tall as its cards (#784, #793).
   const empty = Array.isArray(agents) && list.length === 0;
   return (
-    <Card id="sessions" title="실행 중인 세션" count={list.length} flush actions={<BoardLink folder={folder} onBoard={onBoard} />}>
+    <Card id="sessions" title="실행 중인 세션" count={list.length} flush fill={fill} actions={<BoardLink folder={folder} onBoard={onBoard} />}>
       {agents === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : agents === 'failed' ? (
@@ -88,14 +95,55 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
         </EmptyState>
       ) : agents === 'off' ? (
         <EmptyState>이 서버는 세션 목록을 보내지 않아요.</EmptyState>
-      ) : empty ? null : (
-        <CardGrid label="실행 중인 세션">
-          {list.map((a) => (
-            <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
-          ))}
-        </CardGrid>
+      ) : empty ? (
+        fill === undefined ? null : (
+          <EmptyState className="@min-[880px]:flex-1 @min-[880px]:items-center @min-[880px]:justify-center">지금 실행 중인 세션이 없어요.</EmptyState>
+        )
+      ) : (
+        <SessionGrid label="실행 중인 세션" count={list.length}>
+          {(widthOf) =>
+            list.map((a, i) => (
+              <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} width={widthOf(i)} />
+            ))
+          }
+        </SessionGrid>
       )}
     </Card>
+  );
+}
+
+/** Narrowest session card, px: name, state, role, model and step stay readable (#819). */
+const SESSION_MIN_PX = 224;
+const SESSION_GAP_PX = 8;
+
+/**
+ * Session cards in even rows (#819): as many a row as fit at SESSION_MIN_PX (at most 4), then spread over the fewest
+ * rows so none is left with an empty cell (4 → 2 + 2, 7 → 3 + 2 + 2). Each card's width is a share of its row.
+ */
+function SessionGrid({ label, count, children }: { label: string; count: number; children: (widthOf: (i: number) => string) => ReactNode }) {
+  const ref = useRef<HTMLUListElement | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => {
+      const cs = getComputedStyle(el);
+      setWidth(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    };
+    read();
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(read);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, []);
+  const each = perCard(rowSizes(count, colsThatFit(width, SESSION_MIN_PX, SESSION_GAP_PX, 4)));
+  const widthOf = (i: number) => {
+    const k = each[i] ?? 1;
+    return k === 1 ? '100%' : `calc((100% - ${(k - 1) * SESSION_GAP_PX}px) / ${k})`;
+  };
+  return (
+    <ul ref={ref} aria-label={label} className="m-0 flex list-none flex-wrap content-start gap-2 p-2">
+      {children(widthOf)}
+    </ul>
   );
 }
 
@@ -106,7 +154,7 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
  * The card's top part opens the session's live view; the file line opens the document. In a narrow card the state
  * keeps only its icon (under 11rem) and the model moves under the role (under 12rem).
  */
-function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
+function SessionCard({ agent: a, title, onOpen, width }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void; width?: string }) {
   const busy = isBusy(a);
   const look = !busy && needsLook(a);
   const editing = isEditingDiagram(a);
@@ -120,6 +168,7 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
       data-agent={a.sid}
       data-busy={busy || undefined}
       data-editing={editing || undefined}
+      style={width ? { width } : undefined}
       className="@container/session flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40"
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
