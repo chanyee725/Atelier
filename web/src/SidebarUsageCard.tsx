@@ -147,7 +147,8 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
     };
   }, []);
 
-  // Placed from the row's box, again whenever the content (and so the height) changes or the window resizes.
+  // Placed from the row's box, again whenever the content (and so the height) changes, the window resizes, or the
+  // sidebar (or any other scroller, caught in the capture phase) scrolls the row (#705).
   useLayoutEffect(() => {
     const measure = () => {
       const row = anchor.current?.getBoundingClientRect();
@@ -156,7 +157,11 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    window.addEventListener('scroll', measure, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
+    };
   }, [anchor, usage, settings]);
 
   const group = Array.isArray(usage) ? usage.find((g) => g.id === id) : undefined;
