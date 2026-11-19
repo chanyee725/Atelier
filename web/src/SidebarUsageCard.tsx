@@ -13,7 +13,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { api, type DispatchSettings } from './api';
 import { Meter } from './dispatch/parts';
 import { pct, until } from './dispatch/lib/format.ts';
-import { useUsage } from './home/homeDashboardData';
+import { useUsage } from './lib/usage';
 import { events } from './lib/events';
 import { lastValue } from './lib/lastValue';
 import type { ProviderMeta } from './modelConnect';

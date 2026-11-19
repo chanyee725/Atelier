@@ -5,10 +5,10 @@
 // result is kept for the page (#705): the sidebar card mounts on every hover and starts from it, with no loading jump.
 import { useEffect, useState } from 'react';
 import { api, type ProviderLimits, type ProviderState } from '../api';
-import { events } from '../lib/events';
-import { lastValue } from '../lib/lastValue';
+import { events } from './events';
+import { lastValue } from './lastValue';
 import { usageGroups, type UsageEntry, type UsageGroup } from '../settings/model';
-import { pollWhileVisible } from './model';
+import { pollWhileVisible } from '../home/model';
 
 const POLL_MS = 30_000;
 const kept = lastValue<UsageGroup[]>();
