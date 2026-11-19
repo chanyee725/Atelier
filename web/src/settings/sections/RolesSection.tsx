@@ -206,7 +206,7 @@ export default function RolesSection() {
                           <label htmlFor={`${base}-model`} className="col-span-2 text-sm font-medium md:col-span-1 md:col-start-1">
                             {r.name}
                           </label>
-                          <div className="col-span-2 md:col-span-1 md:col-start-2">
+                          <div className="col-span-2 grid min-w-0 md:col-span-1 md:col-start-2">
                             <NativeSelect
                               id={`${base}-model`}
                               start={<ProviderIcon provider={cell.provider} className="size-4" />}
@@ -321,7 +321,8 @@ export default function RolesSection() {
             </Tabs>
           </fieldset>
           {ready && (
-            <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background pt-3 pb-1">
+            // Sticky to the body's bottom edge, over its bottom padding, so rows never show below it.
+            <div className="sticky bottom-[calc(var(--overlay-end)*-1)] z-10 -mb-[var(--overlay-end)] flex items-center justify-end gap-2 border-t bg-background pt-3 pb-[var(--overlay-end)]">
               <p role="status" className={cn('mr-auto min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>
                 {status}
               </p>
