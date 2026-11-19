@@ -60,8 +60,14 @@ export function fromApi(list: readonly ApiIssueSession[]): IssueSession[] {
  */
 export function useIssueSessions(issue: number | null, refresh: unknown): IssueSession[] | null {
   const [list, setList] = useState<IssueSession[] | null>(null);
+  // A new issue drops the previous issue's list at once, so it never shows under the wrong tile while loading.
+  const [shownFor, setShownFor] = useState(issue);
+  if (shownFor !== issue) {
+    setShownFor(issue);
+    setList(null);
+  }
   useEffect(() => {
-    if (issue == null) return setList(null);
+    if (issue == null) return;
     const ctl = new AbortController();
     // pr=0: the tile already knows its PR, so the server skips the gh lookups.
     fetch(`/api/issues/${issue}/accounts?pr=0`, { signal: ctl.signal })
