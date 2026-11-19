@@ -130,6 +130,20 @@ test('projects: long meta values are capped', async () => {
   });
 });
 
+test('projects: area -> feature -> document, the layout write_plan uses (#782)', async () => {
+  await withApp(async ({ call }) => {
+    for (const p of ['Server/단일-폴더-저장/계획', 'Server/단일-폴더-저장/계획-2', 'Server/단일-폴더-저장/메모', 'Web/사이드바/계획']) {
+      assert.equal((await call('POST', '/api/file', { path: p, title: p.split('/').pop() })).status, 201);
+    }
+    const { projects, loose } = (await call('GET', '/api/workspace/projects')).body;
+    assert.deepEqual(loose, []);
+    assert.deepEqual(projects.map((a) => [a.path, a.count, shape(a.docs)]), [
+      ['Server', 3, [['group', '단일-폴더-저장', 3, [['doc', '계획', 0, []], ['doc', '계획-2', 0, []], ['doc', '메모', 0, []]]]]],
+      ['Web', 1, [['group', '사이드바', 1, [['doc', '계획', 0, []]]]]],
+    ]);
+  });
+});
+
 test('nestDocs: a folder without its document is a group; a document without a folder has no children', async () => {
   const f = (path, mtime) => ({ type: 'file', name: path.split('/').pop() + '.dpx.json', path: path + '.dpx.json', title: '', revision: 1, mtime, created: mtime });
   const nodes = [
