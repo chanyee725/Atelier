@@ -11,6 +11,8 @@ export type PipelineStatus = {
   draftRevision: number | null;
   approvedRevision: number | null;
   approvedAt: number | null;
+  /** The revision the person last started, kept through 계획 다시 열기 (#729); absent from an older server. */
+  lastApprovedRevision?: number | null;
   runId: string | null;
   /** When the run ended done (E28); a done plan is a record, run it again by 복제해서 새 계획. */
   doneAt?: number | null;
