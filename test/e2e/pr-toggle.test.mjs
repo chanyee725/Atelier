@@ -1,4 +1,5 @@
-// Headless check of the PR/CI tracking switch on the project screen (#402, E509): it flips and persists, and a broken
+// Headless check of the PR/CI tracking item in the session board's ⋯ menu (#402, E509; a menu checkbox since #731):
+// it flips and persists, and a broken
 // <workspace>/.drawing/settings.json (server 409) shows the real cause instead of "이 서버에선 바꿀 수 없어요".
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // Scratch git repo + scratch HOME; PATH holds the fake CLIs from test/fixtures/fake-cli/, so no real claude, codex or agy can start.
@@ -65,16 +66,19 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
   const errors = [];
   const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
-  const sw = page.getByRole('switch', { name: 'PR·CI 추적', exact: true });
-  const line = page.locator('p[aria-live="polite"]');
+  // #731: the switch became a checkbox item in the board's ⋯ menu; the menu stays open while it flips.
+  const sw = page.getByRole('menuitemcheckbox', { name: 'PR·CI 추적', exact: true });
+  // The cause and notices go to the board's status line (sr-only) and the item's title.
+  const line = page.locator('[data-session-board] span.sr-only[role="status"]');
   const open = async () => {
     await page.goto(`${BASE}/dispatch`);
+    const more = page.getByRole('button', { name: '더 보기' });
+    await page.waitForFunction(() => !document.querySelector('button[aria-label="더 보기"]')?.disabled, null, { timeout: 10_000 });
+    await more.click();
     await sw.waitFor({ timeout: 10_000 });
+    await page.waitForFunction(() => document.querySelector('[role="menuitemcheckbox"]')?.getAttribute('aria-disabled') !== 'true');
   };
-  const describedBy = async () => {
-    const ids = (await sw.getAttribute('aria-describedby')) ?? '';
-    return page.evaluate((list) => list.split(/\s+/).filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? '').join(' '), ids);
-  };
+  const checked = (on) => page.getByRole('menuitemcheckbox', { name: 'PR·CI 추적', exact: true, checked: on }).waitFor();
   const BROKEN = '설정 파일을 읽을 수 없어요. 파일을 확인해 주세요.';
   const STILL = '아직 읽을 수 없어요.';
 
@@ -88,47 +92,42 @@ test('project screen: PR/CI switch flips, persists, names a broken settings file
   await open();
   assert.equal(await sw.getAttribute('aria-checked'), 'true');
   await sw.click();
-  await page.getByRole('switch', { name: 'PR·CI 추적', exact: true, checked: false }).waitFor();
+  await checked(false);
   assert.equal(JSON.parse(readFileSync(settingsFile, 'utf8')).prStatus, false);
   await sw.click();
-  await page.getByRole('switch', { name: 'PR·CI 추적', exact: true, checked: true }).waitFor();
+  await checked(true);
   assert.equal(JSON.parse(readFileSync(settingsFile, 'utf8')).prStatus, true, 'default on is kept');
 
-  // 2. The file breaks while the page is open: the 409 shows the cause once, described on the switch, which stays
-  // enabled with keyboard focus on it; a retry that still fails says so; after fixing the file it recovers in place.
+  // 2. The file breaks while the page is open: the 409 shows the cause once (status line and the item's title); the
+  // item stays enabled with keyboard focus on it; a retry that still fails says so; after fixing the file it recovers in place.
   writeFileSync(settingsFile, '{ not json');
   await sw.focus();
   await page.keyboard.press('Space');
-  await page.getByText(BROKEN).waitFor();
+  await page.getByText(BROKEN).waitFor({ state: 'attached' });
   assert.equal(await page.getByText(BROKEN).count(), 1, 'the 409 cause shows once');
   assert.equal(await page.getByText('이 서버에선 바꿀 수 없어요').count(), 0);
-  assert.match(await describedBy(), /설정 파일을 읽을 수 없어요/);
-  // #431: the retry hint is only the switch's description, not also page text a screen reader meets in browse mode.
-  assert.match(await describedBy(), /고친 뒤 눌러서 다시 확인해요/);
-  assert.equal(await page.getByText('고친 뒤 눌러서 다시 확인해요').isVisible(), false, 'hint is hidden, not sr-only');
-  const snap = await page.locator('body').ariaSnapshot();
-  assert.equal((snap.match(/고친 뒤 눌러서 다시 확인해요/g) ?? []).length, 0, 'hint is not in the accessibility tree as text');
-  assert.equal(await sw.isDisabled(), false);
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'switch', 'focus stays on the switch');
+  assert.match((await sw.getAttribute('title')) ?? '', /설정 파일을 읽을 수 없어요/);
+  assert.notEqual(await sw.getAttribute('aria-disabled'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'menuitemcheckbox', 'focus stays on the item');
   assert.equal(await page.getByText(STILL).count(), 0, 'the first 409 shows no retry notice');
   await page.keyboard.press('Space');
-  await line.filter({ hasText: STILL }).waitFor();
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'switch');
+  await line.filter({ hasText: STILL }).waitFor({ state: 'attached' });
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'menuitemcheckbox');
   writeFileSync(settingsFile, JSON.stringify({ prStatus: true }));
   await page.keyboard.press('Space');
   await page.getByText(BROKEN).waitFor({ state: 'detached' });
-  assert.equal(await sw.getAttribute('aria-describedby'), null);
+  assert.doesNotMatch((await sw.getAttribute('title')) ?? '', /설정 파일을 읽을 수 없어요/);
   assert.equal(await line.evaluate((el) => el.textContent === '' && getComputedStyle(el).display !== 'none'), true, 'the live region stays rendered while empty');
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'switch');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('role')), 'menuitemcheckbox');
 
   // 3. Opened with the file already broken (GET 409): same cause shown once and linked; the switch stays usable.
   writeFileSync(settingsFile, '{ not json');
   await open();
-  await page.getByText(BROKEN).waitFor();
+  await page.getByText(BROKEN).waitFor({ state: 'attached' });
   assert.equal(await page.getByText(BROKEN).count(), 1);
   assert.equal(await page.getByText('이 서버에선 바꿀 수 없어요').count(), 0);
-  assert.match(await describedBy(), /설정 파일을 읽을 수 없어요/);
-  assert.equal(await sw.isDisabled(), false);
+  assert.match((await sw.getAttribute('title')) ?? '', /설정 파일을 읽을 수 없어요/);
+  assert.notEqual(await sw.getAttribute('aria-disabled'), 'true');
 
   // 4. Two toggles 120ms apart (#419): the first POST answers late ({on:false}), the second at once ({on:true}).
   // The late response must not overwrite the newer switch state.
