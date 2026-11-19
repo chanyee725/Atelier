@@ -3,14 +3,14 @@
 // 작업 중 first, then PR 리뷰, then 열림; closed issues are not listed. Nothing is shown for an empty bit (no "맡은 세션
 // 없음"). The row's chevron opens its details below: branches with ahead/behind, every PR (review, CI, conflicts) and
 // the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only; links open GitHub in a new tab.
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
 import { useAccountLabels } from '../accountLabels';
 import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { PrIssueSessions } from './IssueSessionList';
-import { Pager, usePaging } from './Pager';
+import { Pager, useBoxRows, usePaging } from './Pager';
 import { fromSessions } from './issueSessions';
 import { ISSUE_STATE, initials, issueRows, issuesBlankReason, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
@@ -33,21 +33,27 @@ type Props = {
   prs: Feed<ReadonlyMap<string, PrAnswer>>;
   /** The list's filter and sort; a change goes back to page 1 (#800). */
   filterKey?: string;
+  /** Share of a filled dashboard column (#819): the card takes the rest of the column and pages to the rows that fit. */
+  fill?: number;
 };
 
-/** Issues on one page (#793): a fixed eight, so the card keeps one height and the pager stays in one place. */
+/** Issues on one page (#793) when the card is as tall as its rows (stacked, or a dashboard that does not fill). */
 export const ISSUES_PER_PAGE = 8;
+/** One issue row with its divider, px (h-9 + 1px border). */
+const ISSUE_ROW_PX = 37;
 
 /** The head branches of open PRs, for the CI/review lookup (#686's /api/prs). */
 export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
   answer && answer !== 'failed' && answer.ok ? [...new Set(answer.issues.flatMap((i) => i.prs.flatMap((p) => (p.state === 'open' && p.branch ? [p.branch] : []))))] : [];
 
-export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: Props) {
+export function IssuesCard({ issues, sessions, branches, prs, filterKey = '', fill }: Props) {
   const list = Array.isArray(sessions) ? sessions : [];
   const rows = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
-  const paged = usePaging(rows, ISSUES_PER_PAGE, filterKey);
+  const box = useRef<HTMLDivElement | null>(null);
+  const size = useBoxRows(box, { rowHeight: ISSUE_ROW_PX, min: 3, max: 60, fallback: ISSUES_PER_PAGE });
+  const paged = usePaging(rows, size, filterKey);
   return (
-    <Card id="issues" title="이슈" count={rows.length || undefined} flush>
+    <Card id="issues" title="이슈" count={rows.length || undefined} flush fill={fill}>
       {issues === null ? (
         <EmptyState>GitHub에서 이슈를 찾는 중이에요</EmptyState>
       ) : issues === 'failed' ? (
@@ -58,12 +64,15 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: 
         <EmptyState>열린 이슈가 없어요.</EmptyState>
       ) : (
         <>
-          <ul aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
-            {paged.shown.map((r) => (
-              <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
-            ))}
-          </ul>
-          <Pager page={paged.page} count={paged.count} onPage={paged.setPage} label="이슈 페이지" />
+          {/* Filled: this box takes the card's spare height, so the pager below sits on the card's bottom edge. */}
+          <div ref={box} data-issues-box className={cn(fill !== undefined && '@min-[880px]:min-h-0 @min-[880px]:flex-1 @min-[880px]:overflow-y-auto')}>
+            <ul aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
+              {paged.shown.map((r) => (
+                <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
+              ))}
+            </ul>
+          </div>
+          <Pager page={paged.page} count={paged.count} onPage={paged.setPage} label="이슈 페이지" className="shrink-0" />
         </>
       )}
     </Card>

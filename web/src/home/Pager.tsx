@@ -48,6 +48,34 @@ export function useFitRows(ref: RefObject<HTMLElement | null>, { rowHeight, rese
   return size;
 }
 
+/**
+ * Rows a page that fit in `ref`'s own height (#819), for a list box that fills the rest of its card. Measured only while
+ * the box scrolls (overflow-y auto: the dashboard side by side); otherwise, e.g. stacked on a phone where the box is as
+ * tall as its rows, the page keeps `fallback` rows so opening a row's details never changes the page size.
+ */
+export function useBoxRows(ref: RefObject<HTMLElement | null>, { rowHeight, min, max, fallback }: { rowHeight: number; min: number; max: number; fallback: number }): number {
+  const [size, setSize] = useState(fallback);
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (getComputedStyle(el).overflowY !== 'auto') return setSize(fallback);
+    // The last row has no divider below it, so the box holds one pixel more than whole rows.
+    setSize(rowsThatFit(el.clientHeight + 1, rowHeight, min, max));
+  }, [ref, rowHeight, min, max, fallback]);
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const el = ref.current;
+    const ro = typeof ResizeObserver === 'undefined' || !el ? null : new ResizeObserver(() => measure());
+    if (el) ro?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [ref, measure]);
+  return size;
+}
+
 /** The current page of `rows`; back to page 1 whenever `resetKey` (the filter or sort) changes. */
 export function usePaging<T>(rows: readonly T[], size: number, resetKey: string) {
   const [state, setState] = useState({ page: 1, key: resetKey });

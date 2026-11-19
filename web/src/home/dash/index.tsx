@@ -10,10 +10,19 @@ import { cn } from '../../lib/utils';
  * It grows to the bottom of its flex parent and the last card of each column takes the spare height, so a short
  * dashboard has no empty band below the cards (#699); a long one scrolls with the page as before.
  */
-export function DashGrid({ children, className, ratio = '1fr 1fr' }: { children: ReactNode; className?: string; ratio?: string }) {
+export function DashGrid({ children, className, ratio = '1fr 1fr', fill }: { children: ReactNode; className?: string; ratio?: string; fill?: boolean }) {
+  // fill (#819): side by side, the grid is exactly as tall as its pane (a flex parent of fixed height, e.g. <main>) and
+  // the cards share it (<Card fill>); stacked, it keeps the page's own scroll.
   return (
-    <div className="@container flex grow flex-col">
-      <div className={cn('dash-grid flex grow flex-col gap-4 p-4 *:last:grow @min-[880px]:grid @min-[880px]:[grid-template-columns:var(--dash-cols)]', className)} style={{ '--dash-cols': ratio } as React.CSSProperties}>
+    <div className={cn('@container flex grow flex-col', fill && 'min-h-0')}>
+      <div
+        className={cn(
+          'dash-grid flex grow flex-col gap-4 p-4 *:last:grow @min-[880px]:grid @min-[880px]:[grid-template-columns:var(--dash-cols)]',
+          fill && '@min-[880px]:min-h-0 @min-[880px]:grid-rows-[minmax(0,1fr)]',
+          className,
+        )}
+        style={{ '--dash-cols': ratio } as React.CSSProperties}
+      >
         {children}
       </div>
     </div>
@@ -21,9 +30,9 @@ export function DashGrid({ children, className, ratio = '1fr 1fr' }: { children:
 }
 
 /** A column of cards inside one half. */
-export function DashColumn({ children, className, label }: { children: ReactNode; className?: string; label?: string }) {
+export function DashColumn({ children, className, label, fill }: { children: ReactNode; className?: string; label?: string; fill?: boolean }) {
   return (
-    <div className={cn('flex min-w-0 flex-col gap-4 *:last:grow', className)} role={label ? 'region' : undefined} aria-label={label}>
+    <div className={cn('flex min-w-0 flex-col gap-4 *:last:grow', fill && '@min-[880px]:min-h-0', className)} role={label ? 'region' : undefined} aria-label={label}>
       {children}
     </div>
   );
@@ -51,30 +60,56 @@ type CardProps = {
   grow?: number;
   /** The body scrolls inside the card instead of growing it (#793): the card keeps its share of the column. */
   scroll?: boolean;
+  /**
+   * Share of a filled column (#819, <DashGrid fill>), side by side only: the card takes `fill` parts of the column's
+   * height and its body (a flex column) scrolls inside. Stacked, the card is as tall as its content.
+   */
+  fill?: number;
+  /** Header content before the actions, e.g. a tab list (#819); the title then stays as a hidden heading. */
+  lead?: ReactNode;
 };
 
 /** A titled panel. The header is part of the card; rows inside use <CardRow>. */
-export function Card({ title, count, actions, hint, children, className, flush, id, grow, scroll }: CardProps) {
+export function Card({ title, count, actions, hint, children, className, flush, id, grow, scroll, fill, lead }: CardProps) {
   const headId = useId();
-  const share = grow === undefined ? undefined : { flex: `${grow} 1 0%`, minBlockSize: scroll ? '7.5rem' : 'fit-content' };
+  const share = grow === undefined ? (fill === undefined ? undefined : ({ '--card-fill': fill } as React.CSSProperties)) : { flex: `${grow} 1 0%`, minBlockSize: scroll ? '7.5rem' : 'fit-content' };
   return (
-    <section aria-labelledby={headId} data-card={id} style={share} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground', scroll && 'flex flex-col', className)}>
-      <CardHeader id={headId} title={title} count={count} actions={actions} hint={hint} />
-      <div className={cn(!flush && 'px-4 py-3', scroll && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>{children}</div>
+    <section
+      aria-labelledby={headId}
+      data-card={id}
+      style={share}
+      className={cn(
+        'min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground',
+        scroll && 'flex flex-col',
+        fill !== undefined && '@min-[880px]:flex @min-[880px]:min-h-30 @min-[880px]:flex-col @min-[880px]:[flex:var(--card-fill)_1_0%]',
+        className,
+      )}
+    >
+      <CardHeader id={headId} title={title} count={count} actions={actions} hint={hint} lead={lead} />
+      <div
+        className={cn(
+          !flush && 'px-4 py-3',
+          scroll && 'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+          fill !== undefined && '@min-[880px]:flex @min-[880px]:min-h-0 @min-[880px]:flex-1 @min-[880px]:flex-col @min-[880px]:overflow-y-auto @min-[880px]:overscroll-contain',
+        )}
+      >
+        {children}
+      </div>
     </section>
   );
 }
 
-export function CardHeader({ id, title, count, actions, hint }: { id?: string; title: ReactNode; count?: number; actions?: ReactNode; hint?: ReactNode }) {
+export function CardHeader({ id, title, count, actions, hint, lead }: { id?: string; title: ReactNode; count?: number; actions?: ReactNode; hint?: ReactNode; lead?: ReactNode }) {
   return (
     <header className="flex min-h-[39px] items-center gap-2 border-b px-4 py-1.5">
-      <div className="min-w-0">
+      <div className={cn('min-w-0', lead && 'sr-only')}>
         <h2 id={id} className="m-0 flex items-baseline gap-2 text-[13px] font-semibold">
           <span className="truncate">{title}</span>
           {count !== undefined && <span className="font-normal text-muted-foreground tabular-nums">{count}</span>}
         </h2>
         {hint && <p className="m-0 truncate text-xs text-muted-foreground">{hint}</p>}
       </div>
+      {lead && <div className="flex min-w-0 items-center">{lead}</div>}
       {actions && <div className="ml-auto flex shrink-0 items-center gap-1">{actions}</div>}
     </header>
   );
