@@ -104,6 +104,7 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
       }
     } catch (err) {
       await stopModules(next);
+      ctx.modules = {}; // none of them is usable once closed
       throw err;
     }
     active = next;
@@ -130,6 +131,9 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
   async function doSwitch(dir) {
     const sessions = ctx.modules.dispatch?.hub?.sessions ?? [];
     if (sessions.some((s) => BUSY.has(s.status))) throw new WorkspaceError(409, 'agent sessions are running', 'sessions_running');
+    // A running plan's lead can sit idle between steps; stopping the modules would still kill it and lose the run.
+    const plans = Object.values(ctx.modules.dispatch?.store?.data?.pipelines ?? {});
+    if (plans.some((p) => p?.state === 'running')) throw new WorkspaceError(409, 'a pipeline plan is running', 'pipeline_running');
     let lock = null;
     if (claimWorkspace) {
       try {
@@ -159,8 +163,13 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
       hub.clearAttachers();
       ctx.workspaceDir = from.dir;
       ctx.lock = from.lock;
-      await startModules();
-      await runListeners();
+      try {
+        await startModules();
+        await runListeners();
+      } catch (again) {
+        // The old folder could not be set up again either: no modules are active, but the answer stays open_failed.
+        console.error('workspace restore failed:', again?.code ?? again?.name);
+      }
       throw new WorkspaceError(500, 'could not open the folder', 'open_failed');
     }
     await from.lock?.release().catch(() => {});
