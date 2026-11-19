@@ -2,7 +2,7 @@
 # Starts the Atelier server for a git project, in project mode (the whole app for that one project).
 #   start.sh <project>
 # Workspace = <project>/atelier (created when missing; an older <project>/pipelines is moved there once, #773). The port is kept in
-# <project>/.dispatch/server.port (its pid in server.pid, which stop.sh reads; both written only once
+# <project>/.atelier/server.port (its pid in server.pid, which stop.sh reads; both written only once
 # the server is ready, a failed start leaves the old files alone; reusing a server rewrites server.pid
 # from the lock); a server that already answers there is reused only when <project>/atelier/.drawing/server.lock names it (live pid, same
 # port), so another project's server on a recycled port is never mistaken for ours. Port order: remembered live server, else $DRAW_PORT, else $DISPATCH_PORT (team.sh and
@@ -21,7 +21,9 @@ home=${DRAWING_HOME:-$(cd "$here/../.." && pwd -P)}
 [ -f "$home/server/index.js" ] || { echo "Drawing server not found in $home (DRAWING_HOME must be a Drawing checkout)" >&2; exit 1; }
 
 workspace=$project/atelier
-state=$project/.dispatch
+# State folder: <project>/.atelier, or an older <project>/.dispatch until the server moves it (#782).
+state_of() { if [ -d "$project/.dispatch" ] && [ ! -L "$project/.dispatch" ]; then echo "$project/.dispatch"; else echo "$project/.atelier"; fi; }
+state=$(state_of)
 portfile=$state/server.port
 old=$project/pipelines
 
@@ -84,7 +86,8 @@ DRAW_PORT=$port nohup node "$home/server/index.js" --project-mode "$workspace" >
 pid=$!
 
 for _ in $(seq 1 100); do
-  ours "$port" "$pid" && { echo "$pid" > "$state/server.pid"; echo "$port" > "$portfile"; echo "http://127.0.0.1:$port/"; exit 0; }
+  # The server may have moved .dispatch to .atelier while starting: write where the state is now.
+  ours "$port" "$pid" && { state=$(state_of); echo "$pid" > "$state/server.pid"; echo "$port" > "$state/server.port"; echo "http://127.0.0.1:$port/"; exit 0; }
   kill -0 "$pid" 2>/dev/null || break
   sleep 0.1
 done

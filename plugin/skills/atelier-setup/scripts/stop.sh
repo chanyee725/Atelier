@@ -8,7 +8,7 @@ source "$(dirname "$(dirname "$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE
 
 target="$(cd "${1:-$PWD}" && pwd -P)"
 project="$(git -C "$target" rev-parse --show-toplevel 2>/dev/null || echo "$target")"
-pid_file="$project/.dispatch/server.pid"
+pid_file="$(state_dir "$project")/server.pid"
 pid=""
 [ ! -f "$pid_file" ] || pid="$(tr -dc '0-9' < "$pid_file" 2>/dev/null || true)"
 
