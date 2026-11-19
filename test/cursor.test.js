@@ -488,6 +488,37 @@ test('cursor module: a saved script run later (bash save.sh) or a call that does
   m.close();
 });
 
+test('cursor module: only helper scripts (.sh .bash .py .mjs .cjs) count as saved scripts, not source files (#661)', async (t) => {
+  const later = clock(t);
+  const docCursors = (r) => r.sent.filter((s) => s.event === 'cursor' && s.data.doc).map((s) => s.data.name);
+  const run = async (file, cmd) => {
+    const r = rig();
+    const m = await setup(r.ctx);
+    const rel = 'analysis/robot.dpx.json';
+    r.files.set(rel, paras(1));
+    r.hub.sessions.s1 = { id: 's1', name: 'Jude', role: 'impl', status: 'running' };
+    const call = async (id, name, text, n) => {
+      r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name, callId: id, text } });
+      await r.tick();
+      if (n) await r.change(rel, paras(n));
+      r.hub.emit('message', { id: 's1', entry: { kind: 'tool_result', callId: id, text: 'ok' } });
+    };
+    await call('w', 'Write', JSON.stringify({ file_path: `/tmp/jude/${file}`, content: 'const u = "http://127.0.0.1:4001/api/file?path=analysis/robot";\n' }));
+    later(70_000); // past ATTRIBUTE_MS: only a remembered script still names the file
+    await call('b', 'Bash', JSON.stringify({ command: `${cmd} ${file}` }), 2);
+    const names = docCursors(r);
+    m.close();
+    return names;
+  };
+  for (const [file, cmd] of [['save.sh', 'bash'], ['save.bash', 'bash'], ['save.py', 'python3'], ['save.mjs', 'node'], ['save.cjs', 'node']]) {
+    assert.deepEqual(await run(file, cmd), ['Jude'], file);
+  }
+  // A Write of an ordinary source file that mentions the path is not a saved script: running it later names nothing.
+  for (const [file, cmd] of [['index.js', 'node'], ['app.ts', 'npx tsx'], ['save.rb', 'ruby'], ['save.pl', 'perl']]) {
+    assert.deepEqual(await run(file, cmd), ['에이전트'], file);
+  }
+});
+
 test('cursor module: a long unrelated call does not take an unnamed writer\'s save of a file the session edited (#656)', async (t) => {
   const later = clock(t);
   const r = rig();
