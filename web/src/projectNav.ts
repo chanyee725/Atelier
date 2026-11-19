@@ -6,14 +6,14 @@ import type { DocNode, Project, ProjectsView, TreeNode } from './api';
 export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' } | BoardSection;
 
 /** 세션 보드 tabs (#731, docs/design/session-board-in-shell.md §1). */
-export type BoardTab = 'sessions' | 'timeline' | 'usage';
+export type BoardTab = 'sessions' | 'branches' | 'timeline' | 'usage';
 /** The 세션 보드 in the shell. `folder`: undefined = 전체 프로젝트, null = 미분류, else a project folder path. */
 export type BoardSection = { kind: 'board'; tab: BoardTab; folder?: string | null };
 /** Something the board opens over itself once, from the address: the 상시 화면 or the 설정 dialog. */
 export type BoardExtra = 'tv' | 'settings';
 export type BoardRoute = BoardSection & { extra?: BoardExtra };
 
-const BOARD_TABS: readonly string[] = ['sessions', 'timeline', 'usage'];
+const BOARD_TABS: readonly string[] = ['sessions', 'branches', 'timeline', 'usage'];
 const BOARD_EXTRAS: readonly string[] = ['tv', 'settings'];
 
 /** Reads `#board`, `#board=usage`, `#board=timeline&folder=<path>` (`folder=` empty = 미분류); null for any other hash. */

@@ -36,7 +36,7 @@ async function sessionBranch(s) {
 
 /**
  * Makes `liveBranches()`, answering { base, pr: "on" | <reason>, rows: [...] }. Each row:
- *   { branch, sessions: [{ id, name, role, roleName, color, open }], issue, ahead, behind, lastAt, subject,
+ *   { branch, sessions: [{ id, name, role, roleName, color, folder, open }], issue, ahead, behind, lastAt, subject,
  *     dirty: true|false|null, merged, pr: { number, phase, url? } | null }
  * `sessions()` lists the hub's sessions; `prStatus` is pr-status.js's lookup (null when absent). Answers are kept
  * `cacheMs`, and calls that overlap share one run, so several open boards do not multiply git calls.
@@ -54,7 +54,7 @@ export function createLiveBranches({ root, sessions, prStatus = null, now = Date
       const branch = await sessionBranch(s);
       if (!branch || branch === base) continue;
       const row = byBranch.get(branch) ?? { sessions: [], cwds: [], issue: null };
-      row.sessions.push({ id: s.id, name: s.name, role: s.role, roleName: s.roleName, color: s.color ?? null, open: open(s) });
+      row.sessions.push({ id: s.id, name: s.name, role: s.role, roleName: s.roleName, color: s.color ?? null, folder: s.folder ?? null, open: open(s) });
       if (s.worktree && s.cwd && open(s)) row.cwds.push(s.cwd);
       row.issue ??= Number.isInteger(s.issue) && s.issue > 0 ? s.issue : null;
       byBranch.set(branch, row);
