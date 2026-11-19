@@ -21,7 +21,7 @@ import { adapt, routeTable } from "./routes.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
 
 /** Hub events forwarded to the shared SSE stream; none collides with Drawing's `workspace`. */
-export const HUB_EVENTS = ["session", "message", "limits", "removed", "tasks", "tickets"];
+export const HUB_EVENTS = ["session", "message", "live", "limits", "removed", "tasks", "tickets"];
 const THEMES = ["system", "light", "dark", "monitor"];
 
 
