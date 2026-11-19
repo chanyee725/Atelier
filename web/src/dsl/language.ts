@@ -3,7 +3,7 @@ import { StreamLanguage, HighlightStyle, syntaxHighlighting } from '@codemirror/
 import { tags as t } from '@lezer/highlight';
 
 const KEYWORDS = new Set([
-  'title', 'direction', 'legend', 'colorMode', 'styleMode', 'typeface', 'textSize', 'wrap', 'connectorStyle', 'nodeStyle',
+  'title', 'direction', 'legend', 'colorMode', 'styleMode', 'typeface', 'textSize', 'wrap', 'connectorStyle', 'nodeStyle', 'autoIcons',
   'notation', 'layout', 'autoNumber', 'order', 'activate', 'deactivate',
   'loop', 'alt', 'else', 'opt', 'par', 'and', 'break',
 ]);

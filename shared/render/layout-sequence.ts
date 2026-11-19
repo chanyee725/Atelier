@@ -6,6 +6,7 @@ import { finishScene, fontSize, measureLabel, styleFor, textItem } from './commo
 import type { ElementStyle, Label } from './common.ts';
 import type { Paint, Scene, SceneItem, Point } from './scene.ts';
 import { lineHeightOf, textWidth } from './text.ts';
+import { prepareIcons } from './auto-icon.ts';
 
 const MSG_SIZE = 12;
 const SELF_W = 36;
@@ -54,6 +55,7 @@ function allMessages(items: SequenceItem[], out: SequenceMessage[] = []): Sequen
 }
 
 export async function layoutSequence(d: SequenceDiagram): Promise<Scene> {
+  await prepareIcons(d);
   const idx = new Map(d.columns.map((c, i) => [c.id, i]));
   // Participant heads size like flowchart boxes (layout-graph sizeBox): the smallest width bucket whose label
   // wraps to at most HEAD_MAX_LINES lines, then every head takes the widest one so all columns match.

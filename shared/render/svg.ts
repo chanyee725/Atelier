@@ -5,6 +5,7 @@
 
 import { round } from './common.ts';
 import { iconFor } from './icons.ts';
+import type { ResolvedIcon } from './icons.ts';
 import { BADGE_FONT_SIZE, BADGE_FONT_WEIGHT } from './badge.ts';
 import type { Paint, Point, Scene, SceneBadge, SceneBox, SceneEdge, SceneIcon, SceneItem, SceneLine, SceneText } from './scene.ts';
 import { DRAWING_SANS_400_WOFF2_BASE64, DRAWING_SANS_600_WOFF2_BASE64 } from './font-clean.ts';
@@ -245,6 +246,7 @@ function iconMarkup(ic: SceneIcon, { theme, t, c }: Ctx): string {
   // Logos keep their brand colour unless a colour was asked for, they sit on a bold fill, or the
   // brand colour would vanish into the background (black logos on the dark theme).
   else if (icon.hex && !ic.paint.color && contrast(icon.hex, t.background) >= 3) color = icon.hex;
+  if (icon.art) return artMarkup(ic, icon, c);
   const s = ic.size / 24;
   const open = `<g data-icon="${esc(ic.name)}" data-icon-set="${icon.set}" transform="translate(${n(ic.x)} ${n(ic.y)}) scale(${n(s)})">`;
   color = c(color);
@@ -254,6 +256,19 @@ function iconMarkup(ic: SceneIcon, { theme, t, c }: Ctx): string {
     open +
     `<path d="${icon.d}" fill="none" stroke="${color}" stroke-width="${n(1.6 / Math.max(s, 0.5))}" stroke-linecap="round" stroke-linejoin="round"${dash}/></g>`
   );
+}
+
+/**
+ * Vendor artwork keeps its own colours (their terms ask not to alter the icons); only the colour mapping of the
+ * target surface (dark canvas) applies. Fitted into the icon box, centred, without stretching.
+ */
+function artMarkup(ic: SceneIcon, icon: ResolvedIcon, c: Ctx['c']): string {
+  const [vx, vy, vw, vh] = icon.art!.vb.split(' ').map(Number) as [number, number, number, number];
+  const s = ic.size / Math.max(vw, vh, 1e-6);
+  const x = ic.x + (ic.size - vw * s) / 2 - vx * s;
+  const y = ic.y + (ic.size - vh * s) / 2 - vy * s;
+  const body = icon.art!.body.replace(/#[0-9a-f]{6}\b/g, (hex) => c(hex));
+  return `<g data-icon="${esc(ic.name)}" data-icon-set="${icon.set}" transform="translate(${n(x)} ${n(y)}) scale(${n(s)})">${body}</g>`;
 }
 
 /** Corner radius of elbow connectors (spec §1.7). */

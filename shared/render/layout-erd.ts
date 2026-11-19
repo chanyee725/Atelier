@@ -9,6 +9,7 @@ import { absolutePositions, edgeOffset, runElk } from './elk.ts';
 import type { ElkExtendedEdge, ElkNode, ElkPort } from './elk.ts';
 import type { Marker, Paint, Point, Scene, SceneItem, Typeface } from './scene.ts';
 import { FONT_SIZE, lineHeightOf, textWidth } from './text.ts';
+import { prepareIcons } from './auto-icon.ts';
 
 /** Relationship label size. */
 const TYPE_SIZE = 12;
@@ -100,6 +101,7 @@ function chenLabels(r: ErdRelationship): [string, string] {
 }
 
 export async function layoutErd(d: ErdDiagram): Promise<Scene> {
+  await prepareIcons(d);
   const geoms = new Map<string, EntityGeom>();
   for (const e of d.entities) geoms.set(e.id, measureEntity(d, e));
 
