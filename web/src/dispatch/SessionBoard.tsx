@@ -31,7 +31,7 @@ import { Meter, ModelTag, STATE_ICON } from './parts';
 import { ScopeProvider, useScope, useScoped } from './scope';
 import { openAgentLive, useAgentLiveTarget } from '../live/store';
 import { shownAccount, useAccountLabels } from '../accountLabels';
-import { SessionTimeline } from './SessionTimeline';
+import { TimelineCard } from './TimelineCard';
 import { TaskBoardCard } from './TaskBoard';
 import { UsagePage } from './UsagePage';
 import { api, connect, useDispatch } from './store';
@@ -172,7 +172,7 @@ export default function SessionBoard(p: BoardProps) {
                   }
                 />
                 <TaskBoardCard />
-                <TimelineSlot projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
+                <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
             </DashGrid>
           )}
@@ -246,23 +246,6 @@ function ProjectCard({ projects, scope, onPick }: { projects: ProjectInfo[]; sco
         </ul>
       </nav>
     </Card>
-  );
-}
-
-/** 타임라인 card slot (#879). Until TimelineCard lands it shows the old timeline in a card; the scope reaches it through
- *  ScopeProvider, and `projectId` is the same scope for the card that replaces it. `focus`: #board=timeline. */
-function TimelineSlot({ projectId, onOpen, focus }: { projectId?: string | null; onOpen: (id: string) => void; focus: boolean }) {
-  void projectId;
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (focus) ref.current?.scrollIntoView({ block: 'start' });
-  }, [focus]);
-  return (
-    <div ref={ref} className="scroll-mt-4">
-      <Card id="timeline" title="타임라인" flush>
-        <SessionTimeline onOpen={onOpen} />
-      </Card>
-    </div>
   );
 }
 
