@@ -1,8 +1,8 @@
 // Pure data helpers for the dashboard and project home (no React).
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
 
-/** 개요 is the dashboard (#685); the other three are the full file list. */
-export type DashTab = 'home' | 'all' | 'recent';
+/** 개요 is the dashboard (#685); 전체 파일 and 최근 are the full file list; plans is every plan by area (#782). */
+export type DashTab = 'home' | 'all' | 'recent' | 'plans';
 
 /** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
 export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
@@ -32,6 +32,36 @@ export function wholeProject(data: { projects: ProjectInfo[]; unfiled: ProjectDo
     modifiedAt: Math.max(0, ...docs.map((d) => d.modifiedAt)),
     docs,
   };
+}
+
+/** One plan document in the 파이프라인 tab: its feature folder (the folders between the area and the file) and state. */
+export type PlanRow = { path: string; title: string; feature: string | null; state: NonNullable<ProjectDoc['plan']>; modifiedAt: number };
+/** Plans of one area (a top folder; null = the workspace root). */
+export type PlanArea = { area: string | null; name: string; plans: PlanRow[] };
+
+/**
+ * Every plan document grouped by area (#782): areas in the order given (the view sorts them by name), root plans
+ * last as 최상위; inside an area, newest edit first. Areas without plans are left out.
+ */
+export function plansByArea(projects: ProjectInfo[], unfiled: ProjectDoc[]): PlanArea[] {
+  const rows = (docs: ProjectDoc[], area: string | null): PlanRow[] => {
+    const out: PlanRow[] = [];
+    const walk = (list: ProjectDoc[]) => {
+      for (const d of list) {
+        if (d.plan && !d.bundle) {
+          const dir = d.path.includes('/') ? d.path.slice(0, d.path.lastIndexOf('/')) : '';
+          const feature = area === null ? dir : dir === area ? '' : dir.slice(area.length + 1);
+          out.push({ path: d.path, title: d.title, feature: feature || null, state: d.plan, modifiedAt: d.modifiedAt });
+        }
+        walk(d.children);
+      }
+    };
+    walk(docs);
+    return out.sort((a, b) => b.modifiedAt - a.modifiedAt);
+  };
+  const areas: PlanArea[] = projects.map((p) => ({ area: p.path, name: p.name, plans: rows(p.docs, p.path) }));
+  areas.push({ area: null, name: '최상위', plans: rows(unfiled, null) });
+  return areas.filter((a) => a.plans.length > 0);
 }
 
 /** Where a file sits, for the 위치 column: "프로젝트 / 상위 문서", or 최상위 for a file right in the workspace root. */

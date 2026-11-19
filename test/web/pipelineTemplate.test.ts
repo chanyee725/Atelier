@@ -1,15 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pipelinePath, pipelineTemplate, PIPELINE_STEPS } from '../../web/src/pipelineTemplate.ts';
+import { planPath, pipelineTemplate, PIPELINE_STEPS, PLAN_FILE_STEM } from '../../web/src/pipelineTemplate.ts';
 import { planProblem } from '../../shared/dispatch/plan.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
 
-test('pipelinePath puts a bare name under pipelines/ and keeps a given folder', () => {
-  assert.equal(pipelinePath('release'), 'pipelines/release');
-  assert.equal(pipelinePath(' release.dpx '), 'pipelines/release');
-  assert.equal(pipelinePath('ops/release'), 'ops/release');
-  assert.equal(pipelinePath('/release/'), 'pipelines/release');
-  assert.equal(pipelinePath('  '), '');
+test('planPath puts a plan at <area>/<feature>/계획, never under pipelines/ (#782)', () => {
+  assert.equal(planPath('Web', 'release'), 'Web/release/계획');
+  assert.equal(planPath('Web', ' release.dpx '), 'Web/release/계획');
+  assert.equal(planPath('Web', 'Server/release'), 'Server/release/계획');
+  assert.equal(planPath('', 'release'), 'release/계획');
+  assert.equal(planPath('/Web/', '/release/'), 'Web/release/계획');
+  assert.equal(planPath('Web', '  '), '');
+  assert.equal(PLAN_FILE_STEM, '계획');
 });
 
 test('pipelineTemplate: document sections, one flowchart block, a plan that runs in edge order', () => {

@@ -16,7 +16,8 @@ import { AgentPanel } from './AgentPanel';
 import { ProjectDashboard } from './ProjectDashboard';
 import { agentsIn, holdersByFile } from './agents';
 import { useAgents } from './useAgents';
-import { CHORD_MS, RECENT_LIMIT, chord, flatFiles, matchesQuery, pollWhileVisible, relativeTime, runningIn, wholeProject, type DashTab } from './model';
+import { CHORD_MS, RECENT_LIMIT, chord, flatFiles, matchesQuery, plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject, type DashTab } from './model';
+import { PlanAreas } from './PlanList';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -202,6 +203,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   // The dashboard is the whole project's (#778): every document, session and agent of this server.
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
   const found = files.filter((f) => matchesQuery(f.title, query));
+  const plans = useMemo(() => plansByArea(data.projects, data.unfiled), [data]);
   const noMatch = <Empty>{query.trim() || files.length > 0 ? '맞는 파일이 없어요' : '아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.'}</Empty>;
   return (
     <Tabs value={tab} onValueChange={onTab} className="shrink-0 grow gap-0">
@@ -217,6 +219,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
           <TabsTrigger value="home">대시보드</TabsTrigger>
           <TabsTrigger value="all">전체 파일</TabsTrigger>
           <TabsTrigger value="recent">최근</TabsTrigger>
+          <TabsTrigger value="plans">파이프라인</TabsTrigger>
         </TabsList>
         {!p.narrow && <SearchBox value={query} onChange={onSearch} inputRef={search} placeholder="파일 찾기" />}
       </header>
@@ -250,7 +253,12 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
       <TabsContent value="home" className="flex flex-col">
         <ProjectDashboard project={whole} query="" running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
       </TabsContent>
-      {tab === 'home' ? null : empty ? (
+      <TabsContent value="plans">
+        <div className="px-2 pt-3">
+          <PlanAreas areas={plans} query={query} onOpen={p.onOpen} empty="아직 계획이 없어요. 관리자가 계획을 쓰거나 위에서 파이프라인 계획을 만들면 영역별로 보여요." />
+        </div>
+      </TabsContent>
+      {tab === 'home' || tab === 'plans' ? null : empty ? (
         <Empty>아직 파일이 없어요. 위에서 새 문서를 만들어 보세요.</Empty>
       ) : (
         <>
@@ -269,7 +277,7 @@ function Dashboard({ data, query, onQuery, search, ...p }: Shared) {
   );
 }
 
-type PTab = 'docs' | 'pipelines' | 'sessions' | 'overview';
+type PTab = 'docs' | 'plans' | 'sessions' | 'overview';
 
 /** Project head (layout B): icon badge, title, description, then 문서 수 · 실행 중 · 폴더. */
 function ProjectHeader({ project, running }: { project: ProjectInfo; running: number }) {
@@ -313,6 +321,7 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
 function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & { info: ProjectInfo }) {
   const [tab, setTab] = useState<PTab>('docs');
   const { collapsed, toggle } = useCollapse();
+  const plans = useMemo(() => plansByArea([project], []), [project]);
   return (
     <Tabs value={tab} onValueChange={(v) => setTab(v as PTab)} className="shrink-0 grow gap-0">
       <header className="flex min-h-12 flex-wrap items-center gap-3 border-b px-4 py-2">
@@ -331,7 +340,7 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
         </p>
         <TabsList aria-label="프로젝트 보기">
           <TabsTrigger value="docs">대시보드</TabsTrigger>
-          <TabsTrigger value="pipelines">파이프라인</TabsTrigger>
+          <TabsTrigger value="plans">파이프라인</TabsTrigger>
           <TabsTrigger value="sessions">세션</TabsTrigger>
           <TabsTrigger value="overview">개요</TabsTrigger>
         </TabsList>
@@ -345,8 +354,11 @@ function ProjectHome({ info: project, query, onQuery, search, ...p }: Shared & {
         <TabsContent value="docs" className="flex flex-col">
           <ProjectDashboard project={project} query={query} running={p.running} collapsed={collapsed} onToggle={toggle} onOpen={p.onOpen} onCreate={p.onCreate} onDelete={p.onDelete} onBoard={p.onBoard} />
         </TabsContent>
-        <TabsContent value="pipelines">
-          <div className="px-2 pt-3"><RunsBlock folder={project.path} onOpen={p.onOpen} /></div>
+        <TabsContent value="plans">
+          <div className="flex flex-col gap-3 px-2 pt-3">
+            <PlanAreas areas={plans} query={query} onOpen={p.onOpen} empty="이 영역에는 아직 계획이 없어요." />
+            <RunsBlock folder={project.path} onOpen={p.onOpen} />
+          </div>
         </TabsContent>
         <TabsContent value="sessions">
           <ProjectSessions folder={project.path} onOpen={p.onOpen} onBoard={p.onBoard} />
