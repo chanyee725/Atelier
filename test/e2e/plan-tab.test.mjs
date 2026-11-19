@@ -124,5 +124,42 @@ test('플랜 tab: steps as nodes, arrows for order, live state colours and badge
   const [p, i, r, te] = [await box('plan'), await box('impl'), await box('review'), await box('test')];
   assert.ok(i.x > p.x + p.width && r.x > i.x + i.width && te.x === r.x && te.y > r.y, JSON.stringify({ p, i, r, te }));
   if (process.env.DRAW_E2E_SHOT) await page.screenshot({ path: process.env.DRAW_E2E_SHOT });
+
+  // Review and approve in the tab (#729): the plan strip sits on top of the tab (not above it as well), with the
+  // approval state. Without Dispatch the real server says the plan waits and why it cannot start.
+  const strip = page.getByTestId('plan-strip');
+  const chip = page.getByTestId('plan-approval');
+  await chip.waitFor();
+  assert.equal(await strip.count(), 1);
+  assert.equal(await chip.getAttribute('data-kind'), 'waiting');
+  assert.match(await chip.innerText(), /승인 대기/);
+
+  // The other states come from a stubbed GET /api/pipeline, the same shape the server sends.
+  let fake = null;
+  await page.route('**/api/pipeline?*', (r) => (fake ? r.fulfill({ json: fake }) : r.fallback()));
+  const status = (o) => ({ path: 'run.dpx.json', revision: 7, state: 'plan', lead: 's0', draftRevision: 7, approvedRevision: null, approvedAt: null, lastApprovedRevision: null, runId: null, blockers: [], changes: [], sessions: 4, limits: null, ...o });
+  const shows = async (o, kind, text) => {
+    fake = status(o);
+    await page.reload();
+    await page.getByRole('button', { name: '플랜', exact: true }).click();
+    await page.locator(`[data-testid="plan-approval"][data-kind="${kind}"]`).waitFor({ timeout: 30000 });
+    assert.match(await strip.innerText(), text);
+    if (process.env.DRAW_E2E_SHOT) await page.screenshot({ path: process.env.DRAW_E2E_SHOT.replace(/\.png$/, `-${kind}.png`) });
+  };
+  await shows({}, 'waiting', /승인 대기[^]*rev 7[^]*검토하고 시작해 주세요/);
+  // 시작하기 in the tab opens the one confirm dialog (the same as the strip's); cancelled here.
+  await strip.getByRole('button', { name: '시작하기' }).click();
+  const dialog = page.getByRole('dialog', { name: '이 계획으로 시작할까요?' });
+  await dialog.waitFor();
+  assert.match(await dialog.innerText(), /세션 4개/);
+  await dialog.getByRole('button', { name: '취소' }).click();
+  await shows({ lastApprovedRevision: 3 }, 'revised', /개정 대기[^]*rev 7[^]*rev 3 실행 뒤 계획이 바뀌었어요/);
+  await shows({ state: 'running', approvedRevision: 7, approvedAt: Date.now(), lastApprovedRevision: 7 }, 'approved', /승인됨[^]*rev 7[^]*실행 중이에요/);
+  assert.equal(await strip.getByRole('button', { name: '시작하기' }).count(), 0);
+  // Other views keep the strip above the document as before.
+  fake = status({});
+  await page.getByRole('button', { name: '문서', exact: true }).click();
+  await strip.waitFor();
+  assert.equal(await chip.count(), 0);
   assert.deepEqual(errors, []);
 });
