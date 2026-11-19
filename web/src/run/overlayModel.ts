@@ -15,6 +15,8 @@ export type RoleId = keyof typeof ROLES;
 
 /** One agent session working on a step. `name` is Dispatch's random short name, never a person. */
 export interface RunAgent {
+  /** Dispatch session id (opaque hub id), to open its live view from the node (#736). */
+  sid?: string;
   name: string;
   role: string;
   /** Model label for the legend (metadata only). */
@@ -48,6 +50,8 @@ export interface RunStep {
   before?: StepView;
   /** Closed as abandoned (건너뜀/그만둠): left out of the progress. */
   skipped?: boolean;
+  /** Elapsed time text of the step ("8분째"), for the node's hover card (#736). */
+  time?: string;
 }
 
 export interface OverlayNode {
@@ -68,6 +72,22 @@ export interface OverlayNode {
   waiting: boolean;
   /** Round initial badges above the node, one per agent, overlapping (#687). */
   badges: NodeBadges;
+  /** In progress only: the agents whose live view the node opens (hover card, click, Enter; #736). */
+  open: LiveTarget[];
+  /** Step elapsed time text, when known. */
+  time?: string;
+}
+
+/** An agent a node can open the live view of (#736). */
+export interface LiveTarget {
+  sid: string;
+  name: string;
+}
+
+/** The agents of an in-progress step that have a session id, in step order; empty for any other step. */
+export function liveTargets(s: Pick<RunStep, 'view' | 'agents'>): LiveTarget[] {
+  if (s.view !== 'active' && s.view !== 'review') return [];
+  return (s.agents ?? []).flatMap((a) => (a.sid ? [{ sid: a.sid, name: a.name }] : []));
 }
 
 export interface NodeBadge {
@@ -242,7 +262,7 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     const waiting = !!s.waiting && live;
     const text = [st.label, ...(who.length > 2 ? [`${who[0]} 외 ${who.length - 1}`] : who)].join(' · ');
     const label = [s.title ?? stepNode(s), st.label, ...(s.agents ?? []).map((a) => `${a.name}(${roleLabel(a.role)})`), ...(waiting ? ['사람 기다림'] : [])].join(' · ');
-    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors) };
+    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors), open: liveTargets(s), ...(s.time ? { time: s.time } : {}) };
     byNode.set(node, n);
     nodes.push(n);
   }
