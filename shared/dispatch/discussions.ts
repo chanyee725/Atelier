@@ -1,8 +1,8 @@
 // In-document questions between agents and the user (`discussions` in `.dpx.json`, format v6; issue #738).
 // Shared like `plan` (shared/dispatch/plan.ts): the server checks every change with `discussionsProblem` /
 // `cleanDiscussions`, and both sides count open questions with `openQuestions`.
-// Stored: the question, its choices and the answer (document content), who asked / answered as a session name or
-// "user" only, and times. Never a transcript, an email or a real name.
+// Stored: the question, its choices and the answer (document content), who asked / answered as a session name,
+// "user" or "outside" only, the asking session's id, and times. Never a transcript, an email or a real name.
 
 /** Sub-format version this code understands. A higher `v` is kept verbatim and not changed. */
 export const DISCUSSIONS_VERSION = 1;
@@ -15,6 +15,8 @@ export const MAX_CHOICE = 200;
 export const MAX_DISCUSSION_NAME = 200;
 /** `answeredBy` when the person using the app answered. */
 export const USER = 'user';
+/** `askedBy` / `answeredBy` for an outside writer (a non-session `x-drawing-session` label is never stored). */
+export const OUTSIDE = 'outside';
 
 export type DiscussionAnchor =
   /** A block in the document or a diagram block, by id. */
@@ -34,11 +36,13 @@ export interface Discussion {
   choice?: number;
   /** Typed answer, or the picked choice's text. */
   answer?: string;
-  /** Session name of the asking agent. */
+  /** Session name of the asking agent, or "outside". */
   askedBy: string;
+  /** Session id of the asking agent: the answer goes to this session only (a later session may reuse the name). */
+  askedById?: string;
   /** Plan step id the asking session works on; its step shows as blocked while the question is open. */
   step?: string;
-  /** "user", or a session name. */
+  /** "user", "outside", or a session name. */
   answeredBy?: string;
   /** Epoch ms. */
   askedAt: number;
@@ -105,6 +109,7 @@ export function discussionsProblem(d: unknown, at = 'discussions'): string | nul
     const bad = questionProblem(q, qat);
     if (bad) return bad;
     if (!isName(q.askedBy)) return `${qat}.askedBy must be a string of 1-${MAX_DISCUSSION_NAME} characters`;
+    if (q.askedById !== undefined && !isName(q.askedById)) return `${qat}.askedById must be a string of 1-${MAX_DISCUSSION_NAME} characters`;
     if (!isTime(q.askedAt)) return `${qat}.askedAt must be a time in ms`;
     if (q.status === 'open') continue;
     if (q.status !== 'answered') return `${qat}.status must be open or answered`;
@@ -129,6 +134,7 @@ export function cleanDiscussions(d: Discussions): Discussions {
       const out: Discussion = { id: q.id, anchor, question: q.question, status: q.status, askedBy: q.askedBy, askedAt: q.askedAt };
       if (q.choices !== undefined) out.choices = [...q.choices];
       if (q.step !== undefined) out.step = q.step;
+      if (q.askedById !== undefined) out.askedById = q.askedById;
       if (q.status === 'answered') {
         if (q.choice !== undefined) out.choice = q.choice;
         out.answer = q.answer;

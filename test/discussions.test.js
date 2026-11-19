@@ -50,7 +50,7 @@ test('an agent asks with choices, the user picks one, the asking session gets th
     assert.equal(r.status, 201);
     const q = r.body.item;
     assert.match(q.id, /^q_/);
-    assert.deepEqual({ ...q, id: 0, askedAt: 0 }, { id: 0, askedAt: 0, anchor: { kind: 'node', block: 'b1', node: 'api' }, question: '인증은 어느 쪽으로 할까요?', choices: ['세션', '토큰'], step: 'api', status: 'open', askedBy: 'Mina' });
+    assert.deepEqual({ ...q, id: 0, askedAt: 0 }, { id: 0, askedAt: 0, anchor: { kind: 'node', block: 'b1', node: 'api' }, question: '인증은 어느 쪽으로 할까요?', choices: ['세션', '토큰'], step: 'api', status: 'open', askedBy: 'Mina', askedById: SID });
 
     // Counts per document and per project; the tree row carries the badge.
     r = await call('GET', '/api/discussions/open');
@@ -66,27 +66,30 @@ test('an agent asks with choices, the user picks one, the asking session gets th
     assert.equal(r.body.item.answeredBy, 'user');
     assert.equal(sent.length, 1);
     assert.equal(sent[0].id, SID);
-    assert.match(sent[0].text, new RegExp(`${q.id}.*토큰`));
+    assert.match(sent[0].text, new RegExp(`${q.id}.*사용자가 답했어요: 토큰`));
 
     // Answered once only; the file keeps metadata names only.
     assert.equal((await call('POST', URL_('App/spec', '/answer'), { id: q.id, text: '세션' })).status, 400);
     const disk = JSON.parse(await readFile(join(ws, 'App/spec.dpx.json'), 'utf8'));
     assert.equal(disk.version, 6);
     assert.equal(disk.discussions.items[0].askedBy, 'Mina');
+    assert.equal(disk.discussions.items[0].askedById, SID);
     assert.deepEqual((await call('GET', '/api/discussions/open')).body, { total: 0, files: [], projects: {} });
   });
 });
 
 test('typed answers, bad input and who may ask', async () => {
-  await withApp(async ({ base, call, hub, sent }) => {
+  await withApp(async ({ ws, base, call, hub, sent }) => {
     await call('POST', '/api/file', { path: 'd' });
-    // No session header: refused. An outside writer's own label is accepted as the asker.
+    // No session header or an id that is not a live session: refused. An outside writer's own label is never stored
+    // (it may be an email or a real name): it asks as "outside".
     assert.equal((await call('POST', URL_('d'), { anchor: { kind: 'block', block: 'p1' }, question: 'q' })).status, 400);
     const unknownSid = await call('POST', URL_('d'), { anchor: { kind: 'block', block: 'p1' }, question: 'q' }, { 'x-drawing-session': '11111111-2222-4333-8444-555555555555' });
     assert.equal(unknownSid.status, 400);
-    let r = await call('POST', URL_('d'), { anchor: { kind: 'text', from: 3, to: 9 }, question: '이 문장 맞나요?' }, { 'x-drawing-session': 'outside-bot' });
+    let r = await call('POST', URL_('d'), { anchor: { kind: 'text', from: 3, to: 9 }, question: '이 문장 맞나요?' }, { 'x-drawing-session': 'kim@example.com' });
     assert.equal(r.status, 201);
-    assert.equal(r.body.item.askedBy, 'outside-bot');
+    assert.equal(r.body.item.askedBy, 'outside');
+    assert.equal(r.body.item.askedById, undefined);
     for (const bad of [
       { anchor: { kind: 'text', from: 5, to: 5 }, question: 'q' },
       { anchor: { kind: 'block', block: 'p1' }, question: '   ' },
@@ -98,7 +101,9 @@ test('typed answers, bad input and who may ask', async () => {
     // A typed answer; the asker is not a hub session, so nothing is delivered.
     r = await call('POST', URL_('d', '/answer'), { id: r.body.item.id, text: '  네, 맞아요 ' });
     assert.equal(r.body.item.answer, '네, 맞아요');
+    assert.equal(r.body.item.answeredBy, 'user');
     assert.equal(r.body.delivered, false);
+    assert.doesNotMatch(await readFile(join(ws, 'd.dpx.json'), 'utf8'), /example\.com/);
     assert.equal((await call('POST', URL_('d', '/answer'), { id: 'q_none', text: 'x' })).status, 400);
     // A session that refuses a message now (e.g. a running Codex turn): the answer is stored, delivered is false.
     const q2 = (await call('POST', URL_('d'), { anchor: { kind: 'block', block: 'p1' }, question: '계속할까요?', choices: ['예', '아니요'] }, AS_AGENT)).body.item;
@@ -114,6 +119,34 @@ test('typed answers, bad input and who may ask', async () => {
     // Writes need x-drawing like every other API write.
     const res = await fetch(base + URL_('d', '/answer'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     assert.equal(res.status, 403);
+  });
+});
+
+test('outside labels: a live session name is kept but never gets answers; answers go by session id', async () => {
+  await withApp(async ({ ws, call, hub, sent }) => {
+    await call('POST', '/api/file', { path: 'o' });
+    // An outside writer claiming a live session's name: the name is stored without an id, so no answer goes to Mina.
+    const claimed = (await call('POST', URL_('o'), { anchor: { kind: 'block', block: 'p1' }, question: '누구?' }, { 'x-drawing-session': 'Mina' })).body.item;
+    assert.equal(claimed.askedBy, 'Mina');
+    assert.equal(claimed.askedById, undefined);
+    let r = await call('POST', URL_('o', '/answer'), { id: claimed.id, text: '아무도' });
+    assert.equal(r.body.delivered, false);
+    assert.equal(sent.length, 0);
+
+    // A real question from Mina; Mina is removed and a new session takes the name: the answer is not delivered to it.
+    const q = (await call('POST', URL_('o'), { anchor: { kind: 'block', block: 'p1' }, question: '진행할까요?' }, AS_AGENT)).body.item;
+    hub.sessions = [{ id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee', name: 'Mina' }];
+    // Answerers: an outside label is "outside" (or a live session's name), an unknown id is "outside" too.
+    r = await call('POST', URL_('o', '/answer'), { id: q.id, text: '네' }, { 'x-drawing-session': 'Jane Roe' });
+    assert.equal(r.body.item.answeredBy, 'outside');
+    assert.equal(r.body.delivered, false);
+    assert.equal(sent.length, 0);
+    const q2 = (await call('POST', URL_('o'), { anchor: { kind: 'block', block: 'p1' }, question: 'q2' }, { 'x-drawing-session': 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' })).body.item;
+    r = await call('POST', URL_('o', '/answer'), { id: q2.id, text: 'a' }, { 'x-drawing-session': '11111111-2222-4333-8444-555555555555' });
+    assert.equal(r.body.item.answeredBy, 'outside');
+    assert.equal(r.body.delivered, true);
+    assert.match(sent[0].text, /바깥 작성자가 답했어요: a$/);
+    assert.doesNotMatch(await readFile(join(ws, 'o.dpx.json'), 'utf8'), /Jane Roe/);
   });
 });
 
@@ -144,4 +177,7 @@ test('storage rules: broken sections drop on read only, newer versions stay verb
   assert.deepEqual([...askingSteps(d)], ['api']);
   assert.deepEqual(openQuestions(newer), []);
   assert.throws(() => normalizeContent({ discussions: { v: 1, items: [{ ...done, answeredBy: undefined }] } }), /answeredBy/);
+  // The asking session's id is kept; a non-string one is refused.
+  assert.equal(normalizeContent({ discussions: { v: 1, items: [{ ...open, askedById: 'sid-1' }] } }).discussions.items[0].askedById, 'sid-1');
+  assert.throws(() => normalizeContent({ discussions: { v: 1, items: [{ ...open, askedById: 7 }] } }), /askedById/);
 });

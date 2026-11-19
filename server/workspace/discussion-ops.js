@@ -6,8 +6,11 @@ import { DISCUSSIONS_VERSION, MAX_ANSWER, USER, questionProblem } from '../../sh
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
-/** `discussions` with a new open question from `askedBy` (a session name). Returns { discussions, item }. */
-export function addQuestion(discussions, body, askedBy, now = Date.now()) {
+/**
+ * `discussions` with a new open question from `askedBy` (a session name or "outside"); `askedById` is the asking
+ * session's id when known. Returns { discussions, item }.
+ */
+export function addQuestion(discussions, body, askedBy, now = Date.now(), askedById = null) {
   if (!isObj(body)) throw new ValidationError('body must be a JSON object');
   const q = { anchor: body.anchor, question: typeof body.question === 'string' ? body.question.trim() : body.question, choices: body.choices, step: body.step };
   if (q.choices === undefined || q.choices === null) delete q.choices;
@@ -16,12 +19,13 @@ export function addQuestion(discussions, body, askedBy, now = Date.now()) {
   const bad = questionProblem(q, 'body');
   if (bad) throw new ValidationError(bad);
   const item = { id: `q_${randomUUID().slice(0, 8)}`, ...q, status: 'open', askedBy, askedAt: now };
+  if (askedById) item.askedById = askedById;
   const d = discussions ?? { v: DISCUSSIONS_VERSION, items: [] };
   return { discussions: { ...d, items: [...d.items, item] }, item };
 }
 
 /**
- * `discussions` with question `body.id` answered by `answeredBy` ("user" or a session name): `body.choice` picks a
+ * `discussions` with question `body.id` answered by `answeredBy` ("user", "outside" or a session name): `body.choice` picks a
  * choice (its text is the answer), `body.text` types one. Returns { discussions, item }.
  */
 export function answerQuestion(discussions, body, answeredBy = USER, now = Date.now()) {
