@@ -1,7 +1,7 @@
 # 설정 > 모드별 모델 (mode × role profiles)
 
-Issue #748. Design spec for the settings UI (PR 3). Server storage and team creation (PR 1, PR 2) only need the
-data shape in the last section. Mockup: `mode-profiles/mockup.html` (static, not app code); screenshots
+Issue #748. Design spec for the settings UI (PR 3). Server side is PR 1 (#751, `server/dispatch/mode-profiles.js`, the source
+of truth for modes, defaults, hints and fallback); the last section restates its API for the UI. Mockup: `mode-profiles/mockup.html` (static, not app code); screenshots
 `mode-profiles/desktop-build.png` (800 px dialog, 구현 tab, Codex not connected) and
 `mode-profiles/narrow-research.png` (390 px, 조사 tab).
 
@@ -19,7 +19,7 @@ data shape in the last section. Mockup: `mode-profiles/mockup.html` (static, not
 ```
 모드별 모델                                    (h3, SectionFrame)
 팀이나 플랜 단계를 시작할 때 고른 모드의 설정을 써요. …   (hint)
-[계획·설계 •][구현][리뷰·테스트][문서][빠른 수정][조사]   (tablist, one row)
+[계획/설계 •][구현][리뷰·테스트][문서][빠른 수정][조사]   (tablist, one row)
 기능을 만들고 고치는 기본 모드예요.                       (mode description)
         모델                       생각 수준   권한        (column heads, md+ only)
 관리자  [◆ Sonnet 5.5          ▾] [기본   ▾] [자동      ▾]
@@ -45,15 +45,18 @@ data shape in the last section. Mockup: `mode-profiles/mockup.html` (static, not
 
 ## Cell controls
 
+What a cell shows: the user's `cell` when set, else `defaults[mode][role]` (built-in first choice), from
+GET /api/mode-profiles. `resolved` is what a team started now would really get.
+
 | Control | Content | Notes |
 | --- | --- | --- |
-| 모델 | Native `<select>` with `<optgroup>` per provider, the same picker as today (#621/#672): an unconnected provider's group is disabled with `· 연결 안 됨` in its label; a saved model no longer listed stays as its own first option. `ProviderIcon` before the select. | Changing the model resets 생각 수준 to 기본 and fits 권한 with `fitPerm` (Codex: plan/auto only), like 새 세션. |
-| 생각 수준 | `기본` + the model's `efforts`. | Value `default` = provider default. |
+| 모델 | Native `<select>` with `<optgroup>` per provider, the same picker as today (#621/#672): an unconnected provider's group is disabled with `· 연결 안 됨` in its label; a saved model no longer listed stays as its own first option (not sendable until changed: the server only accepts listed models). `ProviderIcon` before the select. | Changing the model resets 생각 수준 to 기본 and fits 권한 with `fitPerm` (Codex: plan/auto only), like 새 세션. Sent with the model's provider id (`claude`/`openai`/`gemini`). |
+| 생각 수준 | `기본` + the model's `efforts`. | 기본 = `effort: null`. |
 | 권한 | `permsFor(provider)` with `permLabel`. Never offers anything looser than the provider allows; no bypass. | |
-| 잘하는 것 | `<input type="text" maxlength="40">`, visible label 잘하는 것. | Starts as the model's built-in strength. If the user never typed in it, it follows a new model's strength; once typed, it stays and shows a small `직접 씀` tag. Clearing it brings the built-in text back. |
+| 잘하는 것 | `<input type="text" maxlength="40">`, visible label 잘하는 것. | **Per model, not per cell** (server `hints`, keyed by model id; Codex and Gemini by provider). Editing it in one cell changes it in every cell with that model. One line under the mode description says so for the whole panel (`잘하는 것은 모델마다 하나예요. 고치면 그 모델의 모든 칸에 같이 바뀌어요.`), and every hint input points at it with `aria-describedby`. A user-set hint shows a small `직접 씀` tag; clearing it (or `null`) brings the built-in text back. |
 
-Built-in strengths (copy, editable defaults): Fable `복잡한 작업·설계`, Opus `구현·꼼꼼한 검토`,
-Sonnet `빠른 수정·문서`, Haiku `가벼운 일`, Codex models (GPT) `서치·자료 모으기`, Gemini `빠른 확인·긴 문맥`.
+Built-in hints (`DEFAULT_HINTS`): Fable `복잡한 작업`, Opus `구현`, Sonnet `빠른 수정·문서`, Haiku `짧은 일`,
+OpenAI Codex `서치·자료 수집`, Gemini `긴 문맥`.
 
 ## States
 
@@ -61,23 +64,25 @@ Sonnet `빠른 수정·문서`, Haiku `가벼운 일`, Codex models (GPT) `서�
 | --- | --- |
 | Loading / stream dropped | `LoadNote`; picks stay on screen (#644). |
 | Dispatch off | `OffNote`, whole fieldset `disabled` + `opacity-60`, as today. |
-| Model's provider not connected | Select gets `aria-invalid` + warn border; note under it with ⚠ (not colour alone): `OpenAI Codex가 연결되지 않았어요. 지금은 Opus 5.5로 대신 써요.` (the fallback the server will really use). Saving is still allowed: the cell keeps the user's choice. |
-| Model not in list | Same pattern, `목록에 없는 모델이에요. 지금은 Opus 5.5로 대신 써요.` |
-| 리뷰어/테스터 same model as 구현자 in that mode | Muted note (no warn colour): `구현자와 같은 모델이에요. 다른 제공사를 고르면 서로 다른 눈으로 봐요.` Informational only. |
-| Unsaved edits | Tab dot; status `계획·설계 모드에 저장하지 않은 변경이 있어요.` (names the first other dirty mode, or nothing when only the open mode is dirty). Close asks first (existing `useDirtyMark`). |
-| Saved | `저장했어요.`; save error → `text-destructive` with the server message. Nothing changed → `바뀐 게 없어요.` |
+| Fallback in use (`resolved.note` not null) | Select gets `aria-invalid` + warn border; note under it with ⚠ (not colour alone) showing `resolved.note` as the server writes it: `대신 <모델>: <사유>` (e.g. `대신 claude-opus-5-5: OpenAI Codex 연결 안 됨`). The UI may swap the model id for its label when listed; it never rewrites the reason. Saving is still allowed. |
+| Cross-check fallback (`note` starts with `구현자와 다른 모델이 없어`) | Same note pattern, muted colour (no warn border): it is informational, the team still works. |
+| Unsaved edits | Tab dot; status `계획/설계 모드에 저장하지 않은 변경이 있어요.` (names the first other dirty mode, or nothing when only the open mode is dirty). Close asks first (existing `useDirtyMark`). |
+| Saved | Re-read GET and show `저장했어요.`; a 400 → `text-destructive` with the server message (already 해요체). Nothing changed → `바뀐 게 없어요.` |
 
 ## Reset
 
-- `이 모드 기본값으로` (secondary button): sets every cell of the open mode to the built-in default, hints back to
-  built-in. Not saved until 저장, so no confirm dialog; status says `계획·설계 모드를 기본값으로 돌렸어요. 저장하면 적용돼요.`
-  Disabled when the mode already equals its defaults.
-- No "reset all" button in v1 (six clicks is fine; keeps the footer to two buttons).
+- `이 모드 기본값으로` (secondary button): shows every cell of the open mode as its built-in default. Not saved until
+  저장, so no confirm dialog; status says `계획/설계 모드를 기본값으로 돌렸어요. 저장하면 적용돼요.` Disabled when the mode
+  has no stored cells and no local edits. Hints are per model, so a mode reset leaves them alone.
+- On 저장: a reset mode with no later edits sends `{ reset: "<mode>" }`; otherwise its changed cells go in `cells`
+  (`null` for a cell back to default).
+- No "reset all" button in v1 (the API's `{ reset: true }` also clears hints; keep it for a later issue).
+- Fallback order is built-in and fixed (decided): the UI shows it nowhere except through `resolved.note`.
 
 ## Copy (해요체)
 
 - Section hint: `팀이나 플랜 단계를 시작할 때 고른 모드의 설정을 써요. 연결한 제공사의 모델이면 어느 것이든 고를 수 있어요.`
-- Mode descriptions: 계획·설계 `큰 그림과 설계를 잡는 모드예요.` · 구현 `기능을 만들고 고치는 기본 모드예요.` ·
+- Mode descriptions: 계획/설계 `큰 그림과 설계를 잡는 모드예요.` · 구현 `기능을 만들고 고치는 기본 모드예요.` ·
   리뷰·테스트 `만든 것을 다른 눈으로 확인하는 모드예요.` · 문서 `문서를 쓰고 다듬는 모드예요.` ·
   빠른 수정 `작은 수정을 빨리 끝내는 모드예요.` · 조사 `웹 서치와 자료 모으기에 맞춘 모드예요.`
 - Role names come from the server's roles (관리자, 구현자, 리뷰어, 테스터, 디자이너, 문서화).
@@ -97,31 +102,30 @@ Sonnet `빠른 수정·문서`, Haiku `가벼운 일`, Codex models (GPT) `서�
 - Contrast: only existing tokens (`muted-foreground` on `background` ≥ 4.5:1, `warn` for warnings, `ring` ≥ 3:1).
 - Targets ≥ 44 px on narrow (`max-md:h-11`).
 
-## Defaults grid (built-in, before any edit)
+## Defaults grid (built-in, from `DEFAULT_GRID`)
 
-Cells are `model / effort`; 권한 defaults to `auto` (Codex `auto`, a 리뷰어 on Codex `plan`). `GPT` = the first
-model `codex debug models` lists. Each cell carries an ordered fallback list; the first connected, listed model
-wins, else the role's built-in Claude model.
+First choice → fallback. `GPT` = the first model OpenAI Codex lists. `cross` = 리뷰어/테스터 skip the implementer's
+model of the same mode while another choice works. 권한 is the role preset's (`auto`).
 
 | Mode | 관리자 | 구현자 | 리뷰어 | 테스터 | 디자이너 | 문서화 |
 | --- | --- | --- | --- | --- | --- | --- |
-| 계획·설계 | Fable 5.2 → Opus | Fable 5.2 → Opus | Opus | Sonnet | Fable 5.2 → Opus | Sonnet |
-| 구현 | Sonnet | Opus | GPT → Opus (cross-check) | Sonnet | Sonnet | Sonnet |
-| 리뷰·테스트 | Sonnet | Opus | GPT → Opus (cross-check) | GPT → Sonnet | Sonnet | Sonnet |
-| 문서 | Sonnet | Sonnet | Sonnet | Sonnet | Sonnet | Sonnet (adhd style, #737) |
-| 빠른 수정 | Sonnet | Sonnet | Sonnet | Sonnet | Sonnet | Haiku → Sonnet |
-| 조사 | GPT → Opus | GPT → Opus | Opus | Sonnet | Sonnet | Sonnet |
+| plan 계획/설계 | Fable 5.2 → Opus | Fable 5.2 → Opus | GPT → Opus (cross) | GPT → Opus (cross) | Fable 5.2 → Opus | Sonnet |
+| impl 구현 | Sonnet | Opus | GPT → Opus (cross) | GPT → Opus (cross) | Sonnet | Sonnet |
+| review 리뷰·테스트 | Sonnet | Opus | GPT → Opus (cross) | GPT → Opus (cross) | Sonnet | Sonnet |
+| docs 문서 | Sonnet | Sonnet | GPT → Opus (cross) | GPT → Opus (cross) | Sonnet | Sonnet |
+| quickfix 빠른 수정 | Sonnet | Sonnet (low) | GPT → Opus (cross) | GPT → Sonnet (cross) | Sonnet | Sonnet |
+| research 조사 | GPT → Sonnet | GPT → Opus | GPT → Opus (cross) | GPT → Opus (cross) | Sonnet | Sonnet |
 
-## Data shape (for PR 1 / PR 2)
+## API and storage (PR 1, #751)
 
-`~/.dispatch/drawing.json` → `team.modeProfiles` (only cells the user changed; missing = built-in default):
-
-```json
-{ "team": { "modeProfiles": {
-  "build": { "review": { "model": "claude-opus-5-5", "effort": "medium", "perm": "plan", "hint": "꼼꼼한 검토" } }
-} } }
-```
-
-Mode ids: `plan`, `build`, `review`, `docs`, `quick`, `research`. Role ids as in `server/dispatch/roles.js`.
-`hint` is plain text ≤ 40 chars (no personal data). The existing `team.roleModels` reads as the `build` mode's
-`model` for old files. Saves send only changed cells, like `roleModelsPatch` today.
+- Stored in `~/.dispatch/drawing.json` top-level `modeProfiles`, only what the user changed:
+  `{ "cells": { "<mode>": { "<role>": { "provider", "model", "effort", "perm" } } }, "hints": { "<model id or provider>": "text" } }`.
+  `provider` is the stored id `claude` | `openai` | `gemini` (the server also accepts `codex` / `agy` on input).
+- Mode ids: `plan`, `impl`, `review`, `docs`, `quickfix`, `research` (default `impl`). Role ids as in
+  `server/dispatch/roles.js`. Hints ≤ 40 chars, plain text, no personal data.
+- `GET /api/mode-profiles` → `{ modes, roles, defaults, hints, stored, grid[mode][role]: { cell, resolved, hint } }`.
+- `PUT /api/mode-profiles` (header `x-drawing: 1`), one of: `{ cells: { <mode>: { <role>: cell | null } } }`,
+  `{ hints: { <key>: text | null } }`, `{ reset: true | "<mode>" }`. 400 with a 해요체 message on a bad value.
+- Resolver order per cell: the user's cell → the built-in chain → 설정's `team.roleModels[role]` → the role preset's
+  model. The first choice whose provider is connected and whose model is listed wins; skipped choices become
+  `note` = `대신 <model>: <reasons>`.
