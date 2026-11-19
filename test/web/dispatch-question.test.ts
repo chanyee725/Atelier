@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { questionOf } from '../../web/src/dispatch/lib/question.ts';
+import { NO_QUESTION, answerQuestion, questionOf } from '../../web/src/dispatch/lib/question.ts';
 
 test('no question in an answer that asks nothing', () => {
   assert.equal(questionOf(''), null);
@@ -31,4 +31,16 @@ test('a list right before the question is used too', () => {
 test('options are capped at five and deduplicated', () => {
   const q = questionOf(['골라 주세요', ...['a', 'b', 'a', 'c', 'd', 'e', 'f'].map(x => `- ${x}`)].join('\n'));
   assert.deepEqual(q?.options, ['a', 'b', 'c', 'd', 'e']);
+});
+
+test('answerQuestion: the transcript first, then the server ask, never empty (#886)', () => {
+  const long = `${'보고 '.repeat(300)}\n머지할까요?`;
+  assert.equal(answerQuestion({ ask: null }, [{ kind: 'user', text: 'x' }, { kind: 'assistant', text: long }]).summary, '머지할까요?');
+  // Transcript not loaded in this tab: the server's ask still shows the question.
+  assert.equal(answerQuestion({ ask: 'PR을 열까요?' }, undefined).summary, 'PR을 열까요?');
+  // This turn has no assistant text yet (only the user's message): the ask, not an older turn.
+  assert.equal(answerQuestion({ ask: '어느 쪽으로 할까요?' }, [{ kind: 'assistant', text: '예전 질문일까요?' }, { kind: 'user', text: 'y' }]).summary, '어느 쪽으로 할까요?');
+  // An ask the client reads differently is shown as it is.
+  assert.equal(answerQuestion({ ask: '두 가지가 있어요:' }, []).summary, '두 가지가 있어요:');
+  assert.deepEqual(answerQuestion({}, []), NO_QUESTION);
 });
