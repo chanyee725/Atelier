@@ -12,6 +12,15 @@ import { parseArgs } from '../server/cli.js';
 
 const START = new URL('../plugin/scripts/start.sh', import.meta.url).pathname;
 
+// A free loopback port. Tests always pass one: start.sh's default (4000) may be a real server on this machine.
+async function freePort() {
+  const s = createServer();
+  await new Promise((r) => s.listen(0, '127.0.0.1', r));
+  const p = s.address().port;
+  await new Promise((r) => s.close(r));
+  return p;
+}
+
 test('parseArgs: --project-mode flag and DRAW_MODE', () => {
   assert.equal(parseArgs(['/w'], {}).projectMode, false);
   assert.equal(parseArgs(['--project-mode', '/w'], {}).projectMode, true);
@@ -32,7 +41,7 @@ test('/api/info reports the mode', async () => {
   }
 });
 
-test('start.sh starts project mode on <project>/pipelines, remembers the port and reuses the server', async () => {
+test('start.sh starts project mode on <project>/atelier, remembers the port and reuses the server', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'drawing-e30a-'));
   const project = join(dir, 'proj');
   const home = join(dir, 'home');
@@ -44,7 +53,7 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
   writeFileSync(join(project, 'README.md'), 'scratch\n');
   git('add', '.');
   git('commit', '-qm', 'init');
-  const env = { ...process.env, HOME: home, DISPATCH_PORT: '', DRAW_PORT: '' };
+  const env = { ...process.env, HOME: home, ATELIER_PORT: String(await freePort()), DISPATCH_PORT: '', DRAW_PORT: '' };
   const run = () => spawnSync('bash', [START, project], { env, encoding: 'utf8' });
   let port = null;
   try {
@@ -52,11 +61,12 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
     assert.equal(first.status, 0, first.stderr);
     port = readFileSync(join(project, '.dispatch', 'server.port'), 'utf8').trim();
     assert.equal(first.stdout.trim(), `http://127.0.0.1:${port}/dispatch`);
-    assert.ok(existsSync(join(project, 'pipelines')));
+    assert.equal(port, env.ATELIER_PORT);
+    assert.ok(existsSync(join(project, 'atelier')));
     const pid = Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8'));
     assert.doesNotThrow(() => process.kill(pid, 0), 'server.pid names the running server');
     const info = await (await fetch(`http://127.0.0.1:${port}/api/info`)).json();
-    assert.deepEqual(info, { workspace: 'pipelines', mode: 'project' });
+    assert.deepEqual(info, { workspace: 'atelier', mode: 'project' });
     // Second call reuses the running server: same port, no new process.
     const second = run();
     assert.equal(second.status, 0, second.stderr);
@@ -73,7 +83,7 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
   } finally {
     if (port) {
       try {
-        const lock = JSON.parse(readFileSync(join(project, 'pipelines', '.drawing', 'server.lock'), 'utf8'));
+        const lock = JSON.parse(readFileSync(join(project, 'atelier', '.drawing', 'server.lock'), 'utf8'));
         process.kill(lock.pid, 'SIGTERM');
       } catch {}
     }
@@ -108,10 +118,11 @@ test('start.sh honors DISPATCH_PORT when it is free and stop.sh-style kill by se
   }
 });
 
-test('start.sh: DRAW_PORT wins over DISPATCH_PORT', async () => {
+test('start.sh: ATELIER_PORT wins over DRAW_PORT and DISPATCH_PORT, DRAW_PORT over DISPATCH_PORT, then the saved port', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'drawing-e30a-'));
   const project = join(dir, 'proj');
-  execFileSync('mkdir', ['-p', project, join(dir, 'home')]);
+  const home = join(dir, 'home');
+  execFileSync('mkdir', ['-p', project, join(home, '.dispatch')]);
   const git = (...a) => execFileSync('git', ['-C', project, ...a], { encoding: 'utf8' });
   git('init', '-q', '-b', 'develop');
   git('config', 'user.name', 'test');
@@ -119,22 +130,80 @@ test('start.sh: DRAW_PORT wins over DISPATCH_PORT', async () => {
   writeFileSync(join(project, 'README.md'), 'scratch\n');
   git('add', '.');
   git('commit', '-qm', 'init');
-  const free = async () => {
-    const s = createServer();
-    await new Promise((r) => s.listen(0, '127.0.0.1', r));
-    const p = s.address().port;
-    await new Promise((r) => s.close(r));
-    return p;
+  const [a, b, c, saved] = [await freePort(), await freePort(), await freePort(), await freePort()];
+  writeFileSync(join(home, '.dispatch', 'drawing.json'), JSON.stringify({ port: saved }));
+  const stop = async () => {
+    try { process.kill(Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8')), 'SIGTERM'); } catch {}
+    await new Promise((res) => setTimeout(res, 400));
+    rmSync(join(project, '.dispatch', 'server.port'), { force: true });
   };
-  const [a, b] = [await free(), await free()];
-  const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: join(dir, 'home'), DRAW_PORT: String(a), DISPATCH_PORT: String(b) }, encoding: 'utf8' });
   try {
+    for (const [env, want] of [
+      [{ ATELIER_PORT: String(a), DRAW_PORT: String(b), DISPATCH_PORT: String(c) }, a],
+      [{ ATELIER_PORT: '', DRAW_PORT: String(b), DISPATCH_PORT: String(c) }, b],
+      [{ ATELIER_PORT: '', DRAW_PORT: '', DISPATCH_PORT: '' }, saved],
+    ]) {
+      const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: home, ...env }, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), `http://127.0.0.1:${want}/dispatch`);
+      await stop();
+    }
+    assert.equal(existsSync(join(home, '.dispatch', 'servers')), false, 'no registry written');
+  } finally {
+    await stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('start.sh moves an old <project>/pipelines to <project>/atelier once', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e30a-'));
+  const project = join(dir, 'proj');
+  execFileSync('mkdir', ['-p', join(project, 'pipelines'), join(dir, 'home')]);
+  const git = (...a) => execFileSync('git', ['-C', project, ...a], { encoding: 'utf8' });
+  git('init', '-q', '-b', 'develop');
+  git('config', 'user.name', 'test');
+  git('config', 'user.email', 'test@example.invalid');
+  writeFileSync(join(project, 'README.md'), 'scratch\n');
+  git('add', '.');
+  git('commit', '-qm', 'init');
+  writeFileSync(join(project, 'pipelines', 'plan.dpx.json'), '{}');
+  const env = { ...process.env, HOME: join(dir, 'home'), ATELIER_PORT: String(await freePort()), DRAW_PORT: '', DISPATCH_PORT: '' };
+  try {
+    const r = spawnSync('bash', [START, project], { env, encoding: 'utf8' });
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout.trim(), `http://127.0.0.1:${a}/dispatch`);
-    assert.equal(existsSync(join(dir, 'home', '.dispatch', 'servers')), false, 'no registry written');
+    assert.match(r.stderr, /^Moved .*\/pipelines to .*\/atelier$/m);
+    assert.equal(r.stderr.trim().split('\n').length, 1, 'one log line');
+    assert.ok(existsSync(join(project, 'atelier', 'plan.dpx.json')));
+    assert.ok(!existsSync(join(project, 'pipelines')));
+    // Once: a later pipelines/ next to atelier/ is left alone.
+    mkdirSync(join(project, 'pipelines'));
+    const again = spawnSync('bash', [START, project], { env, encoding: 'utf8' });
+    assert.equal(again.status, 0, again.stderr);
+    assert.equal(again.stderr, '');
+    assert.ok(existsSync(join(project, 'pipelines')));
   } finally {
     try { process.kill(Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8')), 'SIGTERM'); } catch {}
     await new Promise((res) => setTimeout(res, 300));
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('start.sh fails clearly when the port is taken by another app, and never moves to another port', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e30a-'));
+  const project = join(dir, 'proj');
+  execFileSync('mkdir', ['-p', project, join(dir, 'home')]);
+  execFileSync('git', ['init', '-q', project]);
+  const busy = createServer();
+  await new Promise((r) => busy.listen(0, '127.0.0.1', r));
+  const port = busy.address().port;
+  try {
+    const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: join(dir, 'home'), ATELIER_PORT: String(port), DRAW_PORT: '', DISPATCH_PORT: '' }, encoding: 'utf8' });
+    assert.equal(r.status, 1);
+    assert.equal(r.stdout, '');
+    assert.match(r.stderr, new RegExp(`Port ${port} is already in use by another app.*ATELIER_PORT=<port>`));
+    assert.ok(!existsSync(join(project, '.dispatch', 'server.port')));
+  } finally {
+    await new Promise((r) => busy.close(r));
     rmSync(dir, { recursive: true, force: true });
   }
 });
@@ -158,14 +227,15 @@ test("start.sh does not reuse another project's server that took the remembered 
   const a = makeProject('a');
   const b = makeProject('b');
   const fakeCli = new URL('./fixtures/fake-cli', import.meta.url).pathname;
-  const env = (port = '') => ({ ...process.env, HOME: home, PATH: `${fakeCli}:${process.env.PATH}`, DISPATCH_PORT: '', DRAW_PORT: port });
+  const env = (port) => ({ ...process.env, HOME: home, PATH: `${fakeCli}:${process.env.PATH}`, DISPATCH_PORT: '', DRAW_PORT: '', ATELIER_PORT: String(port) });
   const start = (project, port) => spawnSync('bash', [START, project], { env: env(port), encoding: 'utf8' });
-  const lockPid = (project) => JSON.parse(readFileSync(join(project, 'pipelines', '.drawing', 'server.lock'), 'utf8')).pid;
+  const lockPid = (project) => JSON.parse(readFileSync(join(project, 'atelier', '.drawing', 'server.lock'), 'utf8')).pid;
   const pids = new Set();
   try {
-    const first = start(a);
+    const port = String(await freePort());
+    const first = start(a, port);
     assert.equal(first.status, 0, first.stderr);
-    const port = readFileSync(join(a, '.dispatch', 'server.port'), 'utf8').trim();
+    assert.equal(readFileSync(join(a, '.dispatch', 'server.port'), 'utf8').trim(), port);
     // Kill A hard: its lock stays behind, naming the port with a dead pid.
     const pidA = Number(readFileSync(join(a, '.dispatch', 'server.pid'), 'utf8'));
     process.kill(pidA, 'SIGKILL');
@@ -178,21 +248,22 @@ test("start.sh does not reuse another project's server that took the remembered 
     assert.equal(other.status, 0, other.stderr);
     assert.equal(other.stdout.trim(), `http://127.0.0.1:${port}/dispatch`);
     pids.add(lockPid(b));
-    // A again: B answers on the remembered port as project mode on "pipelines", but it is not ours.
-    const again = start(a);
-    assert.equal(again.status, 0, again.stderr);
+    // A again on the same port: B answers as project mode on "atelier", but it is not ours. A fails clearly.
+    const again = start(a, port);
+    assert.equal(again.status, 1);
+    assert.equal(again.stdout, '');
+    assert.match(again.stderr, new RegExp(`Port ${port} is already in use`));
+    // On another port A starts, and its own live server is then reused.
+    const free = String(await freePort());
+    const moved = start(a, free);
+    assert.equal(moved.status, 0, moved.stderr);
     pids.add(lockPid(a));
-    assert.notEqual(again.stdout.trim(), `http://127.0.0.1:${port}/dispatch`, "reused another project's server");
-    const newPort = readFileSync(join(a, '.dispatch', 'server.port'), 'utf8').trim();
-    assert.notEqual(newPort, port);
-    assert.equal(again.stdout.trim(), `http://127.0.0.1:${newPort}/dispatch`);
-    const lockA = JSON.parse(readFileSync(join(a, 'pipelines', '.drawing', 'server.lock'), 'utf8'));
-    assert.equal(String(lockA.port), newPort);
-    assert.equal(lockA.pid, Number(readFileSync(join(a, '.dispatch', 'server.pid'), 'utf8')));
-    // And A's own live server is still reused.
-    const reuse = start(a);
+    assert.equal(moved.stdout.trim(), `http://127.0.0.1:${free}/dispatch`);
+    const lockA = JSON.parse(readFileSync(join(a, 'atelier', '.drawing', 'server.lock'), 'utf8'));
+    assert.equal(String(lockA.port), free);
+    const reuse = start(a, free);
     assert.equal(reuse.status, 0, reuse.stderr);
-    assert.equal(reuse.stdout.trim(), again.stdout.trim());
+    assert.equal(reuse.stdout.trim(), moved.stdout.trim());
   } finally {
     for (const pid of pids) {
       try { process.kill(pid, 'SIGTERM'); } catch {}
@@ -367,17 +438,17 @@ test('restart.sh aborts without starting when our server ignores SIGTERM', async
   }
 });
 
-test('start.sh writes server.pid only after the server is ready; a failed start keeps the old file', () => {
+test('start.sh writes server.pid only after the server is ready; a failed start keeps the old file', async () => {
   const { dir, project } = scratchProject();
   const fakeHome = join(dir, 'home');
   mkdirSync(join(fakeHome, 'server'), { recursive: true });
-  mkdirSync(join(project, 'pipelines'), { recursive: true });
+  mkdirSync(join(project, 'atelier'), { recursive: true });
   // A "server" that exits at once: readiness never succeeds.
   writeFileSync(join(fakeHome, 'server/index.js'), 'process.exit(1);\n');
   const pidFile = join(project, '.dispatch', 'server.pid');
   writeFileSync(pidFile, '424242\n');
   try {
-    const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: dir, DRAWING_HOME: fakeHome, DRAW_PORT: '', DISPATCH_PORT: '' }, encoding: 'utf8' });
+    const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: dir, DRAWING_HOME: fakeHome, ATELIER_PORT: String(await freePort()), DRAW_PORT: '', DISPATCH_PORT: '' }, encoding: 'utf8' });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /did not start/);
     assert.equal(readFileSync(pidFile, 'utf8'), '424242\n', 'old pid file untouched');
