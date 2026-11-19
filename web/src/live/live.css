@@ -66,6 +66,21 @@
   color: var(--foreground);
   font-size: 12px;
 }
+.agent-live-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.agent-live-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .agent-live-body {
   flex: 1;
   min-height: 0;

@@ -99,6 +99,13 @@ function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidd
         </button>
       </header>
       {!online && <p className="agent-live-offline">연결이 끊겼어요. 다시 연결하는 중…</p>}
+      {/* Reloading after a reconnect failed while older data is still shown: say it is old, offer a retry. */}
+      {online && error === 'failed' && live && (
+        <p className="agent-live-offline agent-live-stale" role="status" data-live-stale>
+          <span>최신 내용을 불러오지 못했어요. 이전 내용이에요.</span>
+          <button type="button" onClick={reload} className={cn('agent-live-link', FOCUS_RING)}>다시 시도</button>
+        </p>
+      )}
       <div className="agent-live-body">
         {error === 'missing' ? (
           <Gone />
