@@ -102,14 +102,16 @@ function EtaCorner({ panel }: { panel: EtaPanel }) {
 
 function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
   const { x, y, w, h } = n.rect;
-  const text = n.waiting ? `${n.glyph} ${n.text} · 사람 기다림` : `${n.glyph} ${n.text}`;
+  // "결정 필요" already says the step waits on a person.
+  const text = `${n.glyph} ${n.text}`;
   const tw = textWidth(text) + 12;
   const cx = x + w / 2;
   const ly = y + h + PAD + 4;
   // The same chip as a diagram node's `badge:` (shared/render/badge.ts), drawn as an outline in the step colour.
   const chip = badgeRect(x + w + PAD, y - PAD, textWidth(n.glyph));
   return (
-    <g role="img" aria-label={n.label} data-step={n.step} data-view={n.view} style={{ color: n.color }}>
+    <g role="img" aria-label={n.label} data-step={n.step} data-view={n.view} data-tone={n.tone} style={{ color: n.color }}>
+      <rect className="run-fill" x={x} y={y} width={w} height={h} rx={6} />
       <rect className={`run-ring${n.live ? ' is-live' : ''}`} data-view={n.view} x={x - PAD} y={y - PAD} width={w + PAD * 2} height={h + PAD * 2} rx={10} />
       <g className="run-corner" aria-hidden="true">
         <rect x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx={chip.h / 2} />
@@ -117,6 +119,7 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
           {n.glyph}
         </text>
       </g>
+      <Badges n={n} />
       {labels && (
         <g className="run-label" aria-hidden="true">
           <rect x={cx - tw / 2} y={ly} width={tw} height={18} rx={9} />
@@ -125,6 +128,46 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
           </text>
         </g>
       )}
+    </g>
+  );
+}
+
+/** Badge radius and the step between overlapping badges (scene units). */
+const BADGE_R = 9;
+const BADGE_STEP = 13;
+
+/**
+ * Agents on the step as round initial badges above the node's top-left, overlapping, in their role colour (#687).
+ * Hover shows the full name, role, model and state (native SVG tooltip); the step's accessible name already lists them.
+ * The first agent is drawn last so it sits on top.
+ */
+function Badges({ n }: { n: OverlayNode }) {
+  const { shown, more } = n.badges;
+  if (!shown.length) return null;
+  const cy = n.rect.y - PAD - 4 - BADGE_R;
+  const cx = (i: number) => n.rect.x + BADGE_R + i * BADGE_STEP;
+  return (
+    <g className="run-badges" aria-hidden="true">
+      {more > 0 && (
+        <g className="run-badge run-badge-more">
+          <title>{`${more}명 더`}</title>
+          <circle cx={cx(shown.length)} cy={cy} r={BADGE_R} />
+          <text x={cx(shown.length)} y={cy} textAnchor="middle" dominantBaseline="central">
+            +{more}
+          </text>
+        </g>
+      )}
+      {shown
+        .map((b, i) => (
+          <g key={b.name} className="run-badge" data-agent={b.name} style={{ color: b.color }}>
+            <title>{b.title}</title>
+            <circle cx={cx(i)} cy={cy} r={BADGE_R} />
+            <text x={cx(i)} y={cy} textAnchor="middle" dominantBaseline="central">
+              {b.initial}
+            </text>
+          </g>
+        ))
+        .reverse()}
     </g>
   );
 }
@@ -183,7 +226,7 @@ export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunSt
         </ul>
         <ul aria-label="상태">
           {legend.states.map((s) => (
-            <li key={s.view}>
+            <li key={s.key}>
               <span className="run-legend-glyph" aria-hidden="true" style={{ color: s.color }}>
                 {s.glyph}
               </span>

@@ -69,6 +69,12 @@
   --role-test: oklch(0.6 0.14 160);
   --role-design: oklch(0.62 0.19 0);
   --role-docs: oklch(0.55 0.04 250);
+  /* Step states painted on diagram nodes (#687, web/src/run/nodeStatus.ts). */
+  --step-pending: oklch(0.6 0 0);
+  --step-active: oklch(0.56 0.17 255);
+  --step-done: var(--ok);
+  --step-failed: var(--bad);
+  --step-blocked: oklch(0.54 0.2 300);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -112,6 +118,11 @@
   --role-test: oklch(0.74 0.13 160);
   --role-design: oklch(0.72 0.16 0);
   --role-docs: oklch(0.7 0.03 250);
+  --step-pending: oklch(0.66 0 0);
+  --step-active: oklch(0.7 0.15 255);
+  --step-done: var(--ok);
+  --step-failed: var(--bad);
+  --step-blocked: oklch(0.7 0.17 300);
 }
 /* 모니터링 (ported from Dispatch's monitor theme): dark-first, so it sits on top of the dark tokens above. */
 :root[data-theme="dark"].monitor {
@@ -494,6 +505,9 @@ body {
 .run-eta-time { flex: none; white-space: nowrap; }
 .run-eta-more { margin: 2px 0 0; color: var(--muted-foreground); }
 .run-layer svg { display: block; overflow: visible; }
+/* The node itself is tinted in its state colour (#687); glyph and text say the state too, never colour alone. */
+.run-fill { fill: currentColor; fill-opacity: 0.16; stroke: none; }
+.run-layer g[data-tone='failed'] .run-fill, .run-layer g[data-tone='blocked'] .run-fill { fill-opacity: 0.22; }
 .run-ring { fill: none; stroke: currentColor; stroke-width: 2; }
 .run-ring[data-view='pending'] { stroke-dasharray: 4 3; }
 .run-ring[data-view='done'] { stroke-width: 1.5; }
@@ -501,6 +515,12 @@ body {
 .run-corner text { fill: currentColor; font: 600 11px var(--font-sans); }
 .run-label rect { fill: var(--background); stroke: currentColor; stroke-width: 1; }
 .run-label text { fill: var(--foreground); font: 500 11px var(--font-sans); }
+/* Agent badges over a node (#687): role colour fill, a ring in the page colour so overlapping badges stay apart. */
+.run-badge { pointer-events: auto; cursor: default; }
+.run-badge circle { fill: currentColor; stroke: var(--background); stroke-width: 2; }
+.run-badge text { fill: var(--background); font: 600 10px var(--font-sans); }
+.run-badge-more circle { fill: var(--muted); }
+.run-badge-more text { fill: var(--foreground); font-size: 9px; }
 .run-edge { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .run-edge[data-edge-kind='flow'] { stroke-dasharray: 6 6; }
 /* Static form (reduced motion, or paused): a thicker ring and a still dashed edge in the same colour. */
@@ -512,6 +532,17 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .run-layer:not([data-still]) .run-ring.is-live { animation: run-pulse 0.8s ease-in-out infinite alternate; }
   .run-layer:not([data-still]) .run-edge[data-edge-kind='flow'] { animation: run-flow 0.9s linear infinite; }
+}
+@media (forced-colors: active) {
+  /* System colours only: no tint, rings and chips in text colour, the glyph and text carry the state. */
+  .run-fill { fill: none; }
+  .run-ring, .run-edge { stroke: CanvasText; }
+  .run-ring.is-live { stroke: Highlight; }
+  .run-layer g:is([data-tone='failed'], [data-tone='blocked']) .run-ring { stroke-width: 3; stroke-dasharray: 8 3; }
+  .run-corner rect, .run-label rect { fill: Canvas; stroke: CanvasText; }
+  .run-corner text, .run-label text { fill: CanvasText; }
+  .run-badge circle { fill: Canvas; stroke: CanvasText; stroke-width: 1.5; }
+  .run-badge text { fill: CanvasText; }
 }
 @keyframes run-pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @keyframes run-flow { to { stroke-dashoffset: -12; } }

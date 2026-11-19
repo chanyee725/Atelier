@@ -1,11 +1,13 @@
 // Progress board overlay model (design: docs/design/dispatch-integration/2-file-format-and-live-overlay.md §5.1).
 // Pure: from a laid-out scene and the run's step views, what to draw (rings, badges, edges) in scene coordinates.
-// No DOM, so it runs under `node --test`. Colours are CSS expressions on the app tokens (--ok, --bad, --idle,
-// --role-*), so the same model draws in light and dark.
+// No DOM, so it runs under `node --test`. Colours are CSS expressions on the app tokens (--step-* for the node's state,
+// --role-* for the agents), so the same model draws in light and dark.
 
 import type { Point, Scene } from '../../../shared/render/scene.ts';
 import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.ts';
-import { STEP_VIEWS, edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
+import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
+import type { SessionState } from '../../../shared/dispatch/types.ts';
+import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -17,6 +19,8 @@ export interface RunAgent {
   role: string;
   /** Model label for the legend (metadata only). */
   model?: string;
+  /** Its Dispatch state now, for the badge's hover text (#687). */
+  state?: SessionState;
   /** Estimated time left while its step runs (#735); absent once the step is not running. */
   eta?: AgentEta;
   /** Title of the step it works on. */
@@ -34,6 +38,8 @@ export interface RunStep {
   view: StepView;
   /** A session waits on a person ("사람 기다림"). */
   waiting?: boolean;
+  /** A session on the step failed: painted red, not purple (#687). */
+  failed?: boolean;
   /** Short title for the label (defaults to the node id). */
   title?: string;
   /** Sessions on the step; the first one owns the step's colour. */
@@ -49,6 +55,8 @@ export interface OverlayNode {
   node: string;
   rect: Rect;
   view: StepView;
+  /** Painted state (#687): gray pending, blue active, green done, red failed, purple blocked or needs a decision. */
+  tone: NodeTone;
   glyph: string;
   /** Visible label text: `진행 · Juno`. */
   text: string;
@@ -58,6 +66,40 @@ export interface OverlayNode {
   /** Pulsing ring (active/review). */
   live: boolean;
   waiting: boolean;
+  /** Round initial badges above the node, one per agent, overlapping (#687). */
+  badges: NodeBadges;
+}
+
+export interface NodeBadge {
+  name: string;
+  initial: string;
+  /** The agent's role colour (--role-*, a lightness step per agent of the same role). */
+  color: string;
+  /** Hover text: `Juno · 구현자 · Opus 5.5 · 일하는 중`. */
+  title: string;
+}
+
+/** `shown` badges drawn, `more` folded into a "+N" badge. */
+export interface NodeBadges {
+  shown: NodeBadge[];
+  more: number;
+}
+
+/** Badges drawn on one node before the rest fold into "+N". */
+export const BADGE_MAX = 3;
+
+const AGENT_STATE: Record<SessionState, string> = { working: '일하는 중', waiting: '답 기다림', stuck: '멈춤', failed: '실패', resting: '쉬는 중', done: '끝남' };
+
+export function nodeBadges(agents: readonly RunAgent[], colors: ReadonlyMap<string, string>, max = BADGE_MAX): NodeBadges {
+  const all = agents.map((a) => ({
+    name: a.name,
+    initial: ([...a.name][0] ?? '?').toUpperCase(),
+    color: colors.get(a.name) ?? roleColor(a.role),
+    title: [a.name, roleLabel(a.role), ...(a.model ? [a.model] : []), ...(a.state ? [AGENT_STATE[a.state] ?? a.state] : [])].join(' · '),
+  }));
+  // With one over the limit, drawing it beats a "+1" badge of the same size.
+  const n = all.length > max + 1 ? max : all.length;
+  return { shown: all.slice(0, n), more: all.length - n };
 }
 
 export interface OverlayEdge {
@@ -128,16 +170,11 @@ export interface LegendAgent {
 /** Only the agents and states present in the run (§5.1 "Colour rules"). */
 export interface Legend {
   agents: LegendAgent[];
-  states: { view: StepView; glyph: string; label: string; color: string }[];
+  states: { key: string; tone: NodeTone; glyph: string; label: string; color: string }[];
 }
 
-const STATE_COLOR: Record<StepView, string> = {
-  pending: 'var(--idle)',
-  active: 'var(--ok)',
-  review: 'var(--ok)',
-  done: 'var(--ok)',
-  blocked: 'var(--bad)',
-};
+/** Legend order of the painted states. */
+const TONE_ORDER = Object.keys(NODE_TONES) as NodeTone[];
 
 /** Up to 3 lightness steps per role; later sessions of the same role reuse the last step (their name tells them apart). */
 const SHADES = 3;
@@ -177,8 +214,13 @@ export function legendOf(steps: readonly RunStep[], colors: ReadonlyMap<string, 
       seen.add(a.name);
       agents.push({ name: a.name, roleName: roleLabel(a.role), model: a.model ?? '', color: colors.get(a.name)! });
     }
-  const present = new Set(steps.filter((s) => !s.skipped).map((s) => s.view));
-  const states = (Object.keys(STEP_VIEWS) as StepView[]).filter((v) => present.has(v)).map((v) => ({ view: v, ...STEP_VIEWS[v], color: STATE_COLOR[v] }));
+  const present = new Map<string, Legend['states'][number]>();
+  for (const s of steps) {
+    if (s.skipped) continue;
+    const st = nodeStatus(s);
+    if (!present.has(st.label)) present.set(st.label, { key: st.label, ...st });
+  }
+  const states = [...present.values()].sort((a, b) => TONE_ORDER.indexOf(a.tone) - TONE_ORDER.indexOf(b.tone));
   return { agents, states };
 }
 
@@ -194,15 +236,13 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     const node = linked.get(s.id);
     // Two steps on one node: the first wins (the plan validator rejects that; the overlay must not draw twice).
     if (node === undefined || byNode.has(node)) continue;
-    const owner = s.agents?.[0];
     const live = s.view === 'active' || s.view === 'review';
-    const color = live && owner ? colors.get(owner.name)! : STATE_COLOR[s.view];
-    const v = STEP_VIEWS[s.view];
+    const st = nodeStatus(s);
     const who = (s.agents ?? []).map((a) => a.name);
     const waiting = !!s.waiting && live;
-    const text = [v.label, ...(who.length > 2 ? [`${who[0]} 외 ${who.length - 1}`] : who)].join(' · ');
-    const label = [s.title ?? stepNode(s), v.label, ...(s.agents ?? []).map((a) => `${a.name}(${roleLabel(a.role)})`), ...(waiting ? ['사람 기다림'] : [])].join(' · ');
-    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, glyph: v.glyph, text, label, color, live, waiting };
+    const text = [st.label, ...(who.length > 2 ? [`${who[0]} 외 ${who.length - 1}`] : who)].join(' · ');
+    const label = [s.title ?? stepNode(s), st.label, ...(s.agents ?? []).map((a) => `${a.name}(${roleLabel(a.role)})`), ...(waiting ? ['사람 기다림'] : [])].join(' · ');
+    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors) };
     byNode.set(node, n);
     nodes.push(n);
   }
@@ -212,7 +252,7 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     const b = byNode.get(list[0]!.to)!;
     const kind = edgeView(a.view, b.view);
     if (kind === 'none') continue;
-    list.forEach((p, i) => edges.push({ key: i ? `${key}#${i}` : key, points: p.points, kind, color: kind === 'done' ? 'var(--ok)' : b.color }));
+    list.forEach((p, i) => edges.push({ key: i ? `${key}#${i}` : key, points: p.points, kind, color: kind === 'done' ? NODE_TONES.done.color : b.color }));
   }
   return { nodes, edges, missing, progress: runProgress(steps), legend: legendOf(steps, colors), etas: etaPanel(steps, colors) };
 }

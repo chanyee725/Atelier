@@ -147,6 +147,8 @@ export interface StepRow {
   time: string;
   agents: RunAgent[];
   waiting: boolean;
+  /** A session on it failed (or the record says so): painted red, not purple (#687). */
+  failed: boolean;
   skipped: boolean;
   node: string;
   /** Blocked step: its view before blocking, from the timeline (keeps its progress weight). */
@@ -262,16 +264,18 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     else if (paused) time = fmtDur(until - step.startedAt);
     else time = `${fmtDur(now - step.startedAt)}째`;
     const running_ = (view === 'active' || view === 'review') && running && step.startedAt !== null && step.endedAt === null && paused !== 'limit';
+    const failed = !skipped && view !== 'done' && (states.includes('failed') || step.state === 'failed');
     const agents = step.sessions.map((s) => {
       const l = live.get(s.sid);
+      const state = stateNow(s, live, running);
       // A finished session is gone from `live`: its record keeps only the id, so look the label up (PR #617 review).
       const id = s.model ?? l?.model;
       const model = l?.modelLabel ?? (id ? modelLabel(id, cat) : undefined);
       const role = roleOf(plan, ps.id, s, live);
-      return { name: l?.name ?? s.name ?? s.sid, role, ...(model ? { model } : {}), ...(running_ ? { eta: etaOf(typical.get(role), until - step.startedAt!) } : {}) };
+      return { name: l?.name ?? s.name ?? s.sid, role, ...(model ? { model } : {}), ...(state ? { state } : {}), ...(running_ ? { eta: etaOf(typical.get(role), until - step.startedAt!) } : {}) };
     });
     const label = skipped ? '건너뜀' : paused === 'limit' ? '한도로 멈춤' : paused ? '멈춤' : v.label;
-    const row: StepRow = { id: ps.id, n: i + 1, title: labels.get(node) ?? node, view, glyph: paused ? '⏸' : v.glyph, label, time, agents, waiting, skipped, node };
+    const row: StepRow = { id: ps.id, n: i + 1, title: labels.get(node) ?? node, view, glyph: paused ? '⏸' : v.glyph, label, time, agents, waiting, failed, skipped, node };
     if (paused) row.paused = paused;
     const ran = [...new Set(agents.map((a) => a.model).filter((x): x is string => !!x))];
     const model = ran.length ? ran.join(', ') : plannedModel(plan, ps.id, cat);
@@ -287,7 +291,7 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
 
 /** What the canvas overlay draws (runStore.setRunSteps). */
 export const overlaySteps = (rows: readonly StepRow[]): RunStep[] =>
-  rows.map((r) => ({ id: r.id, node: r.node, view: r.view, waiting: r.waiting, title: r.title, agents: r.agents, ...(r.before ? { before: r.before } : {}), ...(r.skipped ? { skipped: true } : {}) }));
+  rows.map((r) => ({ id: r.id, node: r.node, view: r.view, waiting: r.waiting, title: r.title, agents: r.agents, ...(r.failed ? { failed: true } : {}), ...(r.before ? { before: r.before } : {}), ...(r.skipped ? { skipped: true } : {}) }));
 
 // ---- sessions ----
 
