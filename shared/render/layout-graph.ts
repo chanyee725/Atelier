@@ -14,6 +14,8 @@ import { alignLayout, orthogonalize } from './layout-align.ts';
 import { routeEdges, straightPorts } from './layout-routes.ts';
 import { ROUTE_GAP, alongLine, routeAround } from './route-around.ts';
 import { wrapTopLevel } from './layout-wrap.ts';
+import { routeOrthogonal } from './route-eraser.ts';
+import type { RoutedEdge, RouterBox } from './route-eraser.ts';
 import type { Point, Scene, SceneBadge, SceneEdge, SceneHandle, SceneItem, ShapeKind } from './scene.ts';
 
 const SHAPES: readonly ShapeKind[] = [
@@ -1467,6 +1469,10 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
   // Labels are placed once every route is known, so none lands on a line that is not its own.
   const pendingLabels: { edge: SceneEdge; label: Label; style: ElementStyle }[] = [];
 
+  // #733: elbow lines and their labels come from the eraser-diagrams corridor router, on the boxes as
+  // drawn (moved ones included). Self loops, and edges it cannot solve, keep the routes below.
+  const routed = routeElbows(d, base, rects, drawn, deltaOf);
+
   for (const be of base.edges) {
     const { edge: e, style } = be;
     const route = be.forcedElbow ? 'elbow' : style.connectorStyle;
@@ -1484,6 +1490,8 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
       const p0 = clipToShape(nodes.get(e.from)?.shape, a, bc);
       const p1 = clipToShape(nodes.get(e.to)?.shape, b, ac);
       points = [p0, p1].map((p) => ({ x: round(p.x), y: round(p.y) }));
+    } else if (routed.has(e.id)) {
+      points = routed.get(e.id)!.points.map((p) => ({ x: round(p.x), y: round(p.y) }));
     } else {
       const da = deltaOf(e.from);
       const db = deltaOf(e.to);
@@ -1525,7 +1533,12 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
     };
     if (port) edge.soft = true;
     edgeItems.push(edge);
-    if (be.label) pendingLabels.push({ edge, label: be.label, style });
+    const at = be.label ? routed.get(e.id)?.label : undefined;
+    if (be.label && at) {
+      const c = { x: round(at.x), y: round(at.y) };
+      placedLabels.push(labelRect(c, be.label));
+      labelItems.push(textItem(be.label.lines, c.x, c.y - be.label.h / 2, { size: be.label.size, font: style.typeface, plate: true, color: style.paint.color, tone: 'muted' }));
+    } else if (be.label) pendingLabels.push({ edge, label: be.label, style });
   }
 
   for (const { edge, label, style } of pendingLabels) {
@@ -1538,6 +1551,48 @@ export function composeGraph(d: GraphDiagram, base: GraphBase, layout?: BlockLay
   const o = scene.origin ?? { x: 0, y: 0 };
   scene.handles = handles.map((h) => ({ ...h, x: round(h.x + o.x), y: round(h.y + o.y), w: round(h.w), h: round(h.h) }));
   return scene;
+}
+
+/**
+ * Elbow routes and label centres from the eraser-diagrams router (#733) for every elbow edge but self
+ * loops. Groups are containers (their header blocks lines); nodes are obstacles at their drawn box.
+ */
+/** Full routes per base on the unmoved boxes, so a drag reroutes only the edges whose boxes moved. */
+const baseRoutes = new WeakMap<GraphBase, Map<string, RoutedEdge>>();
+
+function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap<string, Rect>, drawn: ReadonlyMap<string, Rect>, deltaOf: (id: string) => Delta): Map<string, RoutedEdge> {
+  const moved = new Set([...base.nodes.keys(), ...base.groups.keys()].filter((id) => !isZero(deltaOf(id))));
+  const cached = baseRoutes.get(base);
+  if (moved.size === 0 && cached) return cached;
+  if (moved.size > 0 && !cached) routeElbows(d, base, base.rects, dividerSpans(d, base.nodes, base.parent, base.rects), () => ZERO);
+  const previous = moved.size > 0 ? baseRoutes.get(base) : undefined;
+  const boxes: RouterBox[] = [];
+  for (const [id, g] of base.groups) {
+    const r = rects.get(id);
+    if (r) boxes.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, parent: base.parent.get(id), container: { header: g.header } });
+  }
+  for (const [id, g] of base.nodes) {
+    const r = drawn.get(id) ?? rects.get(id);
+    if (r) boxes.push({ id, x: r.x, y: r.y, w: r.w, h: r.h, parent: base.parent.get(id), shape: g.divider ? undefined : g.shape });
+  }
+  const edges = base.edges
+    .filter((be) => (be.forcedElbow || be.style.connectorStyle === 'elbow') && be.edge.from !== be.edge.to)
+    .map((be) => ({
+      id: be.edge.id,
+      from: be.edge.from,
+      to: be.edge.to,
+      startArrow: !!be.edge.startArrow,
+      endArrow: !!be.edge.endArrow,
+      ...(be.label ? { label: { w: be.label.w + PLATE_PAD * 2, h: be.label.h + 4 } } : {}),
+    }));
+  if (previous) {
+    // An edge reroutes when one of its ends moved or was refitted (a group dragged as a whole moves
+    // every child too); the others keep their routes and the rerouted ones keep off them.
+    return routeOrthogonal(boxes, edges, { previous, only: new Set(edges.filter((e) => moved.has(e.from) || moved.has(e.to)).map((e) => e.id)) });
+  }
+  const out = routeOrthogonal(boxes, edges);
+  if (moved.size === 0) baseRoutes.set(base, out);
+  return out;
 }
 
 /** Connector width (svg.ts EDGE_W): dividers draw at the same 1.3px (spec §2.1). */
