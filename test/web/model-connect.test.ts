@@ -17,7 +17,7 @@ test('connectKey follows the contract table: off, missing, busy, connected, idle
   assert.equal(connectKey(P({ error: 'x' }), true), 'idle');
 });
 
-test('actionFor: one button per state; nothing when pipelines are off', () => {
+test('actionFor: one button per state; nothing when agent sessions are off', () => {
   assert.equal(actionFor('off'), null);
   assert.equal(actionFor('missing'), 'recheck');
   assert.equal(actionFor('busy'), 'cancel');

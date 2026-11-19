@@ -234,7 +234,7 @@ test('stop.sh signals only node running a Drawing server for this project; anyth
   mkdirSync(join(dir, 'fake/server'), { recursive: true });
   writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
   const ours = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, '.atelier')], { stdio: 'ignore' });
-  const elsewhere = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(dir, 'other/pipelines')], { stdio: 'ignore' });
+  const elsewhere = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(dir, 'other/.atelier')], { stdio: 'ignore' });
   const unrelated = spawn('sleep', ['60'], { stdio: 'ignore' });
   const stop = () => spawnSync('bash', [STOP, project], { encoding: 'utf8' });
   try {

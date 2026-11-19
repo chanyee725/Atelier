@@ -199,11 +199,11 @@ cp "${bundle}" "$dir/"
   return { work, home, project, env, run, cleanup };
 }
 
-// A stand-in for the Drawing server: node running <dir>/server/index.js --project-mode <project>/pipelines.
+// A stand-in for the Drawing server: node running <dir>/server/index.js --project-mode <project>/.atelier.
 function fakeServer(dir, project) {
   mkdirSync(join(dir, 'fake/server'), { recursive: true });
   writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
-  return spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(realpathSync(project), 'pipelines')], { stdio: 'ignore' });
+  return spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(realpathSync(project), '.atelier')], { stdio: 'ignore' });
 }
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
