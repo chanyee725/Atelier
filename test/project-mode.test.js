@@ -54,6 +54,11 @@ test('start.sh starts project mode on <project>/.atelier, remembers the port and
     port = readFileSync(join(project, '.atelier', 'server.port'), 'utf8').trim();
     assert.equal(first.stdout.trim(), `http://127.0.0.1:${port}/`);
     assert.ok(existsSync(join(project, '.atelier')));
+    // First start: no "server.port: No such file" noise, and .atelier/ is kept out of git locally.
+    assert.equal(first.stderr, '');
+    const exclude = () => readFileSync(join(project, '.git', 'info', 'exclude'), 'utf8');
+    assert.equal(exclude().split('\n').filter((l) => l === '.atelier/').length, 1);
+    assert.equal(git('status', '--porcelain'), '');
     const pid = Number(readFileSync(join(project, '.atelier', 'server.pid'), 'utf8'));
     assert.doesNotThrow(() => process.kill(pid, 0), 'server.pid names the running server');
     const info = await (await fetch(`http://127.0.0.1:${port}/api/info`)).json();
@@ -64,6 +69,7 @@ test('start.sh starts project mode on <project>/.atelier, remembers the port and
     assert.equal(second.stdout.trim(), first.stdout.trim());
     assert.equal(readFileSync(join(project, '.atelier', 'server.port'), 'utf8').trim(), port);
     assert.equal(Number(readFileSync(join(project, '.atelier', 'server.pid'), 'utf8')), pid);
+    assert.equal(exclude().split('\n').filter((l) => l === '.atelier/').length, 1, 'exclude entry is not repeated');
     // Reuse rewrites a dropped or stale server.pid (#378), so stop.sh/update.sh still find the server.
     rmSync(join(project, '.atelier', 'server.pid'));
     assert.equal(run().status, 0);
