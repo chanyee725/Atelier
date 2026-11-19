@@ -12,7 +12,7 @@
 //   `login status|login|logout` (codex; `login --with-api-key` reads the key from stdin, keeps only
 //   that it got one, and fails on an empty key; `agy install` is agy's login): status reads the file,
 //   login prints a fake URL, waits $FAKE_CLI_LOGIN_MS (default 300) and writes the file, or exits with
-//   $FAKE_CLI_LOGIN_EXIT without logging in; logout removes the file. Without it, status says logged in.
+//   $FAKE_CLI_LOGIN_EXIT without logging in; logout removes the file. Without it, status says logged in and `codex login --with-api-key` succeeds.
 //   With $FAKE_CLI_LOGIN_IGNORE_TERM the login ignores SIGTERM (only SIGKILL stops it).
 // - codex exec / agy -p take the prompt as an argument (no stdin): one turn, then exit.
 // It never talks to the network and never reads credentials.
@@ -108,6 +108,9 @@ export function run(bin) {
   if (auth && bin === "codex" && args[0] === "login") return fakeAuth(auth, args[1] === "status" ? "status" : "login", "codex", args.slice(1));
   if (auth && bin === "codex" && args[0] === "logout") return fakeAuth(auth, "logout", "codex");
   if (auth && bin === "agy" && args[0] === "install") return fakeAuth(auth, "login", "agy");
+  // Without $FAKE_CLI_AUTH an API-key login just succeeds (reads the key, keeps nothing) instead of playing the
+  // exec scenario, whose $waitFor gates would hold the login for minutes.
+  if (bin === "codex" && cmd === "login --with-api-key") { process.stdin.resume(); process.stdin.on("end", finish); return; }
   const status = STATUS[bin]?.[cmd];
   if (status !== undefined) { process.stdout.write(status + "\n"); return finish(); }
 
