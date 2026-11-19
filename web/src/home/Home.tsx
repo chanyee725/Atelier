@@ -136,7 +136,7 @@ function Dashboard({ data, ...p }: Shared) {
         <h1 className="m-0 shrink-0 text-[15px] font-semibold">대시보드</h1>
         <span className="ml-auto">{p.bell}</span>
       </header>
-      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} />
+      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} fill />
     </>
   );
 }
