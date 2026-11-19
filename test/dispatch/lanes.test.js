@@ -97,6 +97,7 @@ test("agent prompts call the tool Atelier, carry the lanes and the lead merge, a
   assert.match(SPAWN_PROMPT, /git merge --ff-only origin\/develop/);
   assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
   assert.doesNotMatch(SPAWN_PROMPT, /20분/);
+  assert.match(SPAWN_PROMPT, /리뷰어는 늘 새 세션이고 작성자가 아니다/);
   for (const p of [SPAWN_PROMPT, CHILD_PROMPT]) {
     assert.match(p, /전체 e2e는 돌리지 않는다/);
     assert.match(p, /실제 실행 출력/);
