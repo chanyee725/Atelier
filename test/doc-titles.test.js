@@ -14,6 +14,16 @@ import { newFile } from '../server/workspace/model.js';
 import { displayName, titlesOf } from '../web/src/docTitles.ts';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Polls `get` until `done(value)` holds (or the time runs out) and returns the last value, so a slow machine waits
+// longer instead of failing on a fixed sleep.
+async function waitFor(get, done, { timeout = 5000, every = 20 } = {}) {
+  const end = Date.now() + timeout;
+  for (;;) {
+    const v = await get();
+    if (done(v) || Date.now() > end) return v;
+    await sleep(every);
+  }
+}
 
 test('displayName: the title, else the file name without .dpx.json', () => {
   assert.equal(displayName({ name: 'a.dpx.json', title: '계획' }), '계획');
@@ -59,8 +69,9 @@ test('titlesOf keys match the working agents file paths (project doc, sub-docume
       const res = await fetch(`${base}/api/file?path=${encodeURIComponent(path)}`, { method: 'PUT', headers: { ...h, 'x-drawing-session': `Writer${i++}` }, body: JSON.stringify({ ...f, revision }) });
       assert.equal(res.status, 200);
     }
-    await sleep(100);
-    const listed = (await (await fetch(`${base}/api/workspace/agents`)).json()).agents.map((a) => a.file).sort();
+    const want = Object.keys(files).length;
+    const agentFiles = async () => (await (await fetch(`${base}/api/workspace/agents`)).json()).agents.map((a) => a.file).sort();
+    const listed = await waitFor(agentFiles, (l) => l.length >= want);
     assert.deepEqual(listed, Object.keys(files).sort());
     const titles = titlesOf(await (await fetch(`${base}/api/workspace/projects`)).json());
     for (const file of listed) assert.equal(titles.get(file), files[file], file);
