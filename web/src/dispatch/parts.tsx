@@ -8,12 +8,19 @@ import { STATE, TONE_TEXT, level, levelTone, providerName, type Tone } from './l
 import type { SessionState } from './types';
 
 /** Provider and model as one neutral tag: the provider's mark (currentColor, no provider colours) and its name. */
-export function ModelTag({ provider, label, className }: { provider: string; label: string; className?: string }) {
+/** Provider mark and name, the model label, and the user's account label for that provider when set (#747). */
+export function ModelTag({ provider, label, account, className }: { provider: string; label: string; account?: string | null; className?: string }) {
   return (
-    <Badge variant="secondary" title={label} className={cn('max-w-full min-w-0 shrink gap-1 rounded-md px-1.5 font-normal', className)}>
+    <Badge variant="secondary" title={account ? `${label} · 계정 ${account}` : label} className={cn('max-w-full min-w-0 shrink gap-1 rounded-md px-1.5 font-normal', className)}>
       <ProviderIcon provider={provider} className="size-3" />
       <span data-provider={provider} className="shrink-0 font-semibold">{providerName(provider)}</span>
       <span className="truncate text-muted-foreground">{label}</span>
+      {account && (
+        <span data-account className="max-w-24 shrink truncate border-l border-foreground/15 pl-1 text-muted-foreground">
+          <span className="sr-only">계정 </span>
+          {account}
+        </span>
+      )}
     </Badge>
   );
 }

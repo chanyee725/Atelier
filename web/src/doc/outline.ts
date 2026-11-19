@@ -41,9 +41,9 @@ export function buildHash(path: string, heading?: string | null): string {
   return `#file=${encodeURIComponent(path)}${heading ? `&h=${encodeURIComponent(heading)}` : ''}`;
 }
 
-/** Reads `#file=<path>[&h=<heading id>]`; null when the hash is not a file link. */
+/** Reads `#file=<path>[&h=<heading id>][&agent=<sid>]`; null when the hash is not a file link. The `agent=` part (the open live view, web/src/live/store.ts) is allowed but not returned. */
 export function parseHash(hash: string): { path: string; heading: string | null } | null {
-  const m = /^#file=([^&]+)(?:&h=([^&]+))?$/.exec(hash);
+  const m = /^#file=([^&]+)(?:&h=([^&]+))?(?:&agent=[^&]*)?$/.exec(hash);
   if (!m) return null;
   try {
     return { path: decodeURIComponent(m[1]), heading: m[2] ? decodeURIComponent(m[2]) : null };

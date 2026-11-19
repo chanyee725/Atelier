@@ -26,7 +26,8 @@ import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
 import { Meter, ModelTag, STATE_ICON } from './parts';
 import { ScopeProvider, useScope, useScoped } from './scope';
-import { SessionSheet } from './SessionSheet';
+import { openAgentLive, useAgentLiveTarget } from '../live/store';
+import { shownAccount, useAccountLabels } from '../accountLabels';
 import { SessionTimeline } from './SessionTimeline';
 import { TaskBoardButton } from './TaskBoard';
 import { UsagePage } from './UsagePage';
@@ -94,24 +95,15 @@ export default function SessionBoard(p: BoardProps) {
   const ctx = useMemo(() => ({ scope, known, names }), [scope, known, names]);
   useEffect(() => connect(), []);
 
-  // The one place a session opens (design §4). Until the agent live view (#728, PR #749) lands this is the session
-  // sheet; then this line becomes `openAgentLive(id, { trigger })`.
-  const [open, setOpen] = useState<string | null>(null);
-  const trigger = useRef<HTMLElement | null>(null);
-  const openSession = (id: string, from?: HTMLElement | null) => {
-    trigger.current = from ?? (document.activeElement as HTMLElement | null);
-    setOpen(id);
-  };
-  const closeSession = () => {
-    setOpen(null);
-    const t = trigger.current;
-    trigger.current = null;
-    if (t?.isConnected) requestAnimationFrame(() => t.focus());
-  };
+  // The one place a session opens (design §4): its live progress view (#728). The sheet (chat, stop) is reached from there.
+  const openSession = (id: string, from?: HTMLElement | null) => openAgentLive(id, { trigger: from ?? undefined, from: 'board' });
+  const open = useAgentLiveTarget();
+  const liveRef = useRef(open);
+  liveRef.current = open;
   const openRef = useRef(openSession);
   openRef.current = openSession;
   useEffect(() => {
-    if (p.openRequest) openRef.current(p.openRequest.id, null);
+    if (p.openRequest && liveRef.current !== p.openRequest.id) openRef.current(p.openRequest.id, null);
   }, [p.openRequest]);
 
   const [tv, setTv] = useState(false);
@@ -126,13 +118,11 @@ export default function SessionBoard(p: BoardProps) {
     done.current?.();
   }, [p.extra]);
 
-  const sheet = <SessionSheet id={open} onClose={closeSession} />;
   if (tv && ready && !unavailable) {
     return (
       <div className="fixed inset-0 z-40 overflow-auto bg-background">
         {/* Opening a tile leaves the always-on screen, so Esc in the sheet never also closes the wall view. */}
         <AlwaysOnView onExit={() => setTv(false)} onOpen={(id) => { setTv(false); openSession(id, null); }} />
-        {sheet}
       </div>
     );
   }
@@ -177,7 +167,6 @@ export default function SessionBoard(p: BoardProps) {
             />
           )}
         </main>
-        {sheet}
         {creating && <CreateSessionDialog folder={typeof scope === 'string' ? scope : undefined} onClose={() => setCreating(false)} />}
         {settings && (
           <Suspense fallback={null}>
@@ -457,6 +446,9 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
   const since = elapsed(stateStart(s, state), now);
   const flag = state === 'waiting' || state === 'stuck' || !!s.stall;
   const failed = state === 'failed';
+  // The label the session started under when the server records one (#747), else the provider's current label.
+  const labels = useAccountLabels();
+  const account = shownAccount(s.provider, (s as Session & { accountLabel?: string | null }).accountLabel, labels);
   const wide = '@min-[560px]/list:col-auto @min-[560px]/list:row-auto';
   return (
     <button
@@ -483,7 +475,7 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
         <span className="truncate">{s.roleName || s.role}</span>
       </span>
       <span className="col-span-3 col-start-2 row-start-2 flex min-w-0 items-center gap-2 @min-[560px]/list:contents">
-        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} className="max-w-56 shrink-0" />
+        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} account={account} className="max-w-56 shrink-0" />
         <span className={cn('min-w-0 truncate text-muted-foreground', (flag || failed) && 'text-foreground')}>{stepText(s, now)}</span>
       </span>
       <span className={cn('col-start-4 row-start-1 text-xs whitespace-nowrap text-muted-foreground tabular-nums', wide)} title="이 상태가 된 뒤 지난 시간">

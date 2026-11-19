@@ -1,7 +1,7 @@
 // One session in a side sheet: 대화 / 변경사항 / 정보 tabs, permission and answer cards, message box.
 // Transcripts come from the in-memory store (never stored). Errors show inline as a destructive Alert.
 import { useEffect, useRef, useState, type Ref } from 'react';
-import { ChevronRight, GitBranch, MessageCircleQuestion, Power, SendHorizontal, ShieldAlert, Square, Trash2 } from 'lucide-react';
+import { Activity, ChevronRight, GitBranch, MessageCircleQuestion, Power, SendHorizontal, ShieldAlert, Square, Trash2 } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
@@ -16,6 +16,7 @@ import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
 import { canRun, READ_ONLY_NOTICE } from './lib/runnable.ts';
+import { holdForSheet, openAgentLive } from '../live/store';
 
 type Report = (p: Promise<unknown>) => Promise<boolean>;
 
@@ -349,6 +350,10 @@ export function SessionSheet({ id, onClose }: { id: string | null; onClose: () =
     void report(loadTranscript(id));
   }, [id]);
 
+  // The agent live panel (a top-layer popover) hides while this modal sheet is open (#728).
+  const shown = !!id && !!s;
+  useEffect(() => (shown ? holdForSheet() : undefined), [shown]);
+
   const sid = s ? encodeURIComponent(s.id) : '';
   return (
     <Sheet open={!!id && !!s} onOpenChange={o => { if (!o) onClose(); }}>
@@ -369,6 +374,9 @@ export function SessionSheet({ id, onClose }: { id: string | null; onClose: () =
                 <Button size="sm" variant="outline" disabled={s.status !== 'running' && s.status !== 'waiting'}
                   onClick={() => void report(api('POST', `/api/sessions/${sid}/interrupt`))}>
                   <Square />중단
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { const at = s.id; onClose(); openAgentLive(at, { from: 'sheet', trigger: null }); }}>
+                  <Activity />진행상황 보기
                 </Button>
                 {s.status === 'done' ? (
                   <Button size="sm" variant="outline" onClick={() => void report(api('POST', `/api/sessions/${sid}/remove`).then(onClose))}>

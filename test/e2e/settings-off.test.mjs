@@ -97,8 +97,8 @@ test('설정 with Dispatch off: the modal renders, theme works, session sections
   assert.equal(await maxChildren.isDisabled(), true);
   assert.equal(await maxChildren.inputValue(), '8', 'defaults show');
   await team.getByTestId('settings-off-note').waitFor();
-  await section('역할별 모델');
-  await dialog.getByRole('region', { name: '역할별 모델' }).getByTestId('settings-off-note').waitFor();
+  await section('모드별 모델');
+  await dialog.getByRole('region', { name: '모드별 모델' }).getByTestId('settings-off-note').waitFor();
   assert.equal(await dialog.getByRole('button', { name: '저장' }).count(), 0, 'nothing to save');
   const notes = await dialog.getByTestId('settings-off-note').allTextContents();
   assert.ok(notes.length >= 5, `each session section says why: ${notes.length}`);

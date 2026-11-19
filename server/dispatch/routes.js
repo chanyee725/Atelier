@@ -1,6 +1,7 @@
 // Dispatch HTTP API as Drawing module routes. Paths are the ones the standalone Dispatch server had
 // (so mcp.js, the skills and the hook keep working); only /api/events is shared, see index.js.
 import { branchGraph, diff } from "./git.js";
+import { issueAccounts } from "./ledger.js";
 import { ROLES } from "./roles.js";
 import { patchGuard, patchTeam, teamSettings } from "./settings.js";
 
@@ -102,7 +103,7 @@ export function routeTable(d) {
     ["GET", /^\/api\/mode-profiles$/, async () => d.modeProfiles.get()],
     ["PUT", /^\/api\/mode-profiles$/, async (_, b) => d.modeProfiles.put(b)],
     ["POST", /^\/api\/sessions$/, async (_, b) => ({
-      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder }),
+      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }) }),
     })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
@@ -124,6 +125,12 @@ export function routeTable(d) {
       const prs = {};
       if (d.prStatus) await Promise.all(list.map(async b => { prs[b] = await d.prStatus(b); }));
       return { prs };
+    }],
+    // Sessions, models and account labels that worked on one issue (#747), plus the PR-comment summary line.
+    // ?pr=0 skips the PR lookup through gh.
+    ["GET", /^\/api\/issues\/(\d{1,7})\/accounts$/, async ([n], __, url) => {
+      const prOf = url?.searchParams.get("pr") === "0" ? null : d.prStatus;
+      return issueAccounts(d.ledger, Number(n), { prOf });
     }],
     ["GET", /^\/api\/tickets$/, async () => ({ tickets: hub.tickets })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/resume$/, async ([id]) => ({ ok: hub.resumeTicket(id) })],

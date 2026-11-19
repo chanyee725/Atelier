@@ -63,6 +63,11 @@ test("an unconnected provider falls back to the next choice with a visible note;
   const last = r("research", "lead", { isConnected: only("claude"), stored: {}, roleModel: "claude-haiku-5-5" });
   assert.equal(last.model, "claude-sonnet-5-5");
   assert.equal(r("impl", "impl", { isConnected: () => false }), null);
+  // A perm the caller chose wins and skips providers that cannot run it.
+  const ae = r("research", "impl", { perm: "acceptEdits" });
+  assert.deepEqual([ae.model, ae.perm], ["claude-opus-5-5", "acceptEdits"]);
+  assert.match(ae.note, /OpenAI Codex는 acceptEdits 모드를 쓸 수 없음/);
+  assert.equal(r("research", "impl", { perm: "plan" }).model, "gpt-a");
 });
 
 test("checkCell: provider aliases, model in the list and of that provider, perm rules (Codex plan/auto, agy acceptEdits/auto/plan)", () => {
