@@ -6,7 +6,7 @@ import { Meter } from '../dispatch/parts';
 import { pct, until } from '../dispatch/lib/format.ts';
 import { boardHash, plainClick } from '../projectNav';
 import { Card, EmptyState, StatusDot } from './dash';
-import { useUsage } from './homeDashboardData';
+import { useUsage } from '../lib/usage';
 import { relativeTime } from './model';
 import { BRANCH_STATE, branchRows, prRows } from './dashboardRows';
 import { issuesBlankReason, type IssuesAnswer } from './issueBoard';

@@ -13,8 +13,9 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { api, type DispatchSettings } from './api';
 import { Meter } from './dispatch/parts';
 import { pct, until } from './dispatch/lib/format.ts';
-import { useUsage } from './home/homeDashboardData';
+import { useUsage } from './lib/usage';
 import { events } from './lib/events';
+import { lastValue } from './lib/lastValue';
 import type { ProviderMeta } from './modelConnect';
 import { guardValue, type GuardField, type UsageGroup, type UsageWindow } from './settings/model';
 
@@ -43,16 +44,27 @@ export function cardRows(id: string, group: UsageGroup | undefined, settings: Di
   });
 }
 
-/** Saved guard settings, read while the card is open and followed through the `settings` event. */
+const keptSettings = lastValue<DispatchSettings>();
+const settingsOf = () => {
+  const s = keptSettings.get();
+  return s === 'failed' ? null : s;
+};
+
+/** Saved guard settings, read while the card is open and followed through the `settings` event; the card starts from
+ *  the last read (#705) so the thresholds do not pop in on every hover. */
 function useGuardSettings(): DispatchSettings | null {
-  const [settings, setSettings] = useState<DispatchSettings | null>(null);
+  const [settings, setSettings] = useState<DispatchSettings | null>(settingsOf);
   useEffect(() => {
     let live = true;
+    const keep = (s: DispatchSettings) => {
+      keptSettings.put(s);
+      if (live) setSettings(s);
+    };
     api.dispatchState().then(
-      (s) => live && s.settings && setSettings(s.settings),
+      (s) => s.settings && keep(s.settings),
       () => {},
     );
-    const off = events.subscribeJson<DispatchSettings>('settings', (s) => s?.guard && setSettings(s));
+    const off = events.subscribeJson<DispatchSettings>('settings', (s) => s?.guard && keep(s));
     return () => {
       live = false;
       off();
@@ -111,7 +123,11 @@ function place(row: DOMRect, card: { width: number; height: number }, vw: number
   return { left: Math.max(GAP, Math.min(row.left, vw - card.width - GAP)), top: below ? row.bottom + GAP : Math.max(GAP, row.top - GAP - card.height) };
 }
 
-export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: string; meta: ProviderMeta; anchor: RefObject<HTMLElement | null>; hover: { onPointerEnter: (e: React.PointerEvent) => void; onPointerLeave: (e: React.PointerEvent) => void }; statusText: string }) {
+/**
+ * The card for one provider row. It is rendered inside the row's SidebarMenuItem (the top layer moves it on screen,
+ * not in the DOM), so the item's pointer handlers already cover hovering the card; it has none of its own (#705).
+ */
+export function SidebarUsageCard({ id, meta, anchor, statusText }: { id: string; meta: ProviderMeta; anchor: RefObject<HTMLElement | null>; statusText: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const usage = useUsage();
   const settings = useGuardSettings();
@@ -135,7 +151,8 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
     };
   }, []);
 
-  // Placed from the row's box, again whenever the content (and so the height) changes or the window resizes.
+  // Placed from the row's box, again whenever the content (and so the height) changes, the window resizes, or the
+  // sidebar (or any other scroller, caught in the capture phase) scrolls the row (#705).
   useLayoutEffect(() => {
     const measure = () => {
       const row = anchor.current?.getBoundingClientRect();
@@ -144,7 +161,11 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
     };
     measure();
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    window.addEventListener('scroll', measure, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, { capture: true });
+    };
   }, [anchor, usage, settings]);
 
   const group = Array.isArray(usage) ? usage.find((g) => g.id === id) : undefined;
@@ -157,7 +178,6 @@ export function SidebarUsageCard({ id, meta, anchor, hover, statusText }: { id: 
       role="tooltip"
       data-testid="usage-card"
       data-provider={id}
-      {...hover}
       style={{ position: 'fixed', inset: 'auto', margin: 0, left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
       className="z-50 popover-box w-64 rounded-md border bg-popover text-popover-foreground shadow-md"
     >

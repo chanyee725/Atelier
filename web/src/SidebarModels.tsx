@@ -133,7 +133,7 @@ function ModelRow({ meta, models }: { meta: ProviderMeta; models: Models }) {
           {s.text}
         </span>
       </SidebarMenuButton>
-      {card.open && !open && <SidebarUsageCard id={meta.id} meta={meta} anchor={trigger} hover={card.hover} statusText={s.text} />}
+      {card.open && !open && <SidebarUsageCard id={meta.id} meta={meta} anchor={trigger} statusText={s.text} />}
       {open &&
         createPortal(
           <SettingsModal
