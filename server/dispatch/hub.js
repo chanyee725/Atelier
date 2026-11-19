@@ -540,7 +540,7 @@ export class Hub extends EventEmitter {
     if (!total) throw new Error("만들 세션이 없어요");
     const gate = parent && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
-    if (this.resolveProfile) items = await Promise.all(items.map(it => this.applyProfile(it, it.mode ?? mode)));
+    items = await Promise.all(items.map(it => this.applyProfile(it, it.mode ?? mode)));
     const roles = effectiveRoles(this.roles, this.store, this.models);
     // The model of an item: its own, else its role's. Unknown models and roles are refused before anything starts.
     const modelOf = it => {
@@ -614,9 +614,9 @@ export class Hub extends EventEmitter {
    * An item with its mode's profile filled in (#748): only when a known mode is named and the item names no model.
    * The item's own effort and perm win; `profileNote` keeps the fallback reason (metadata only).
    */
-  async applyProfile(it, mode) {
+  async applyProfile({ mode: _m, profileNote: _n, ...it }, mode) {
     if (!MODE_IDS.includes(mode)) return it;
-    if (it.model) return { ...it, mode };
+    if (it.model || !this.resolveProfile) return { ...it, mode };
     const p = await this.resolveProfile(mode, it.role);
     if (!p) return { ...it, mode };
     return { ...it, mode, model: p.model, effort: it.effort || p.effort || undefined, perm: it.perm || p.perm, ...(p.note && { profileNote: p.note }) };
