@@ -128,14 +128,14 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
     }
   }
 
-  // A plan blocks a switch only while its lead has a process (a restart leaves none) and its document is still there
-  // (a trashed plan is paused and no longer runs anything).
+  // A plan blocks a switch only while its lead is alive (hub.alive: not a session left idle by a restart) and its
+  // document is still there (a trashed plan is paused and no longer runs anything).
   async function planRunning() {
     const d = ctx.modules.dispatch;
     const docs = ctx.modules.workspace?.store;
     for (const [path, p] of Object.entries(d?.store?.data?.pipelines ?? {})) {
       if (p?.state !== 'running' || !d.hub?.alive?.(p.lead)) continue;
-      if (!docs || (await docs.readFile(path).then(() => true, () => false))) return true;
+      if (!docs || (await docs.fileExists(path))) return true;
     }
     return false;
   }

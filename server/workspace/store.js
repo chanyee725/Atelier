@@ -709,6 +709,15 @@ export function createStore(
     });
   }
 
+  // Cheap check that a document is still in the workspace (not trashed or deleted), without reading it.
+  async function fileExists(rel) {
+    try {
+      return !!(await statOrNull(await wrapPath(checkedFileRel(rel))))?.isFile();
+    } catch {
+      return false;
+    }
+  }
+
   // If the file was edited outside without raising its revision, raise it here so a client that
   // loaded the old content cannot overwrite the outside edit with a "current" revision.
   async function syncExternal(rel, loaded, abs) {
@@ -1190,5 +1199,5 @@ export function createStore(
     return queue;
   }
 
-  return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, writeFile: writeFileAt, patchPlan: patchPlanAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
+  return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
