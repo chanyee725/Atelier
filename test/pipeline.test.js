@@ -760,8 +760,9 @@ test('완료: closing every step ends the run done, writes the summary block onc
     const dup = await call('POST', '/api/pipeline/duplicate', { path });
     assert.equal(dup.status, 200, JSON.stringify(dup.body));
     assert.notEqual(dup.body.path, path);
-    // Follow-up (#782): the copy should land next to the original under App/; it goes to the top level for now.
-    assert.match(dup.body.path, /복사.*\.dpx\.json$/);
+    // The copy stays in the original's area and feature folder (#782).
+    assert.equal(dup.body.path, `${path.slice(0, path.lastIndexOf('/'))}/계획-2.dpx.json`);
+    assert.match(path, /^App\/[^/]+\/계획\.dpx\.json$/);
     assert.equal(dup.body.lead, lead.id);
     const copy = JSON.parse(readFileSync(join(ws, dup.body.path), 'utf8'));
     assert.deepEqual(copy.plan, file.plan);

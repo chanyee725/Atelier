@@ -309,10 +309,10 @@ export async function setup(ctx) {
   }
 
   // ---- write_plan ----
-  // <area>/<feature>/계획.dpx.json, or 계획-2… when that name is taken.
+  // <area>/<feature>/계획.dpx.json, or 계획-2… when that name is taken. An empty dir is the top level.
   async function freePath(dir) {
     for (let i = 1; i < 100; i++) {
-      const p = `${dir}/${PLAN_FILE_STEM}${i === 1 ? '' : `-${i}`}${FILE_EXT}`;
+      const p = `${dir ? `${dir}/` : ''}${PLAN_FILE_STEM}${i === 1 ? '' : `-${i}`}${FILE_EXT}`;
       if (!(await readOrNull(p))) return p;
     }
     throw new StoreError(409, '같은 이름의 계획이 너무 많아요');
@@ -728,7 +728,8 @@ export async function setup(ctx) {
   }
 
   /**
-   * 복제해서 새 계획: a new draft next to `path` with the same plan, diagram and notes, without the summary block.
+   * 복제해서 새 계획: a new draft next to `path` (same area and feature folder, 계획-2… there, #782) with the same
+   * plan, diagram and notes, without the summary block.
    * The lead that wrote the original owns the copy when it is still there and has no other plan going.
    */
   async function duplicate(body) {
@@ -739,7 +740,7 @@ export async function setup(ctx) {
     if (!file.plan) throw new StoreError(400, '계획이 있는 파일이 아니에요');
     const title = `${file.title || '계획'} 복사`;
     const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
-    const to = await freePath(title, dir);
+    const to = await freePath(dir);
     const r = await ws.createFile(to, { title, document: withoutSummary(file.document), canvas: file.canvas, blocks: file.blocks, plan: file.plan });
     const all = entries();
     const lead = all?.[path]?.lead;
