@@ -201,6 +201,12 @@ const LEAD_TOOLS = [
     run: async args => api("POST", "/api/pipeline/plan", { ...lanePlanArgs(args), lead: PARENT }),
   },
   {
+    name: "post_accounts",
+    description: "이슈의 PR에 세션·모델·계정 요약(roles: …) 댓글 하나를 올린다. 다시 부르면 같은 댓글을 고친다. pr을 빼면 그 이슈의 PR을 찾아 쓴다.",
+    inputSchema: { type: "object", required: ["issue"], properties: { issue: { type: "integer", description: "GitHub 이슈 번호" }, pr: { type: "integer", description: "PR 번호 (선택)" } } },
+    run: async ({ issue, pr }) => api("POST", `/api/issues/${Number(issue)}/accounts/comment`, pr == null ? {} : { pr }),
+  },
+  {
     name: "note_step",
     description: "실행 중인 계획의 한 단계에 한 줄 메모(200자, 대화 내용 없이). 예: 리뷰 must-fix 1건 고쳐서 다시 올림",
     inputSchema: { type: "object", required: ["step", "text"], properties: { step: { type: "string", description: "단계 id" }, text: { type: "string" } } },

@@ -135,6 +135,19 @@ export function routeTable(d) {
       if (url?.searchParams.get("pr") === "0") return issueAccounts(d.ledger, Number(n));
       return issueAccounts(d.ledger, Number(n), { prsOf: d.issues?.prsOf, prOf: d.prStatus });
     }],
+    // Posts the summary line on the issue's PR as one comment, updated in place on later calls (#756). Body { pr? }:
+    // without pr, the issue's first PR (open first). { ok, pr, comment: "created"|"updated", summary } or
+    // { ok: false, reason } ("no-sessions", "no-pr", or pr-comment.js's reasons).
+    ["POST", /^\/api\/issues\/(\d{1,7})\/accounts\/comment$/, async ([n], b) => {
+      if (b?.pr != null && !(Number.isInteger(b.pr) && b.pr > 0 && b.pr < 1e7)) throw fail(400, "pr이 올바르지 않아요");
+      const issue = Number(n);
+      const a = await issueAccounts(d.ledger, issue, { prsOf: d.issues?.prsOf, prOf: d.prStatus });
+      if (!a.sessions.length) return { ok: false, reason: "no-sessions", summary: a.summary };
+      const pr = b?.pr ?? a.prs[0];
+      if (!pr) return { ok: false, reason: "no-pr", summary: a.summary };
+      if (!d.postAccounts) return { ok: false, reason: "disabled", summary: a.summary };
+      return { ...(await d.postAccounts({ pr, issue, summary: a.summary })), summary: a.summary };
+    }],
     ["GET", /^\/api\/tickets$/, async () => ({ tickets: hub.tickets })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/resume$/, async ([id]) => ({ ok: hub.resumeTicket(id) })],
     ["POST", /^\/api\/tickets\/([\w-]+)\/close$/, async ([id]) => { hub.closeTicket(id); return { ok: true }; }],

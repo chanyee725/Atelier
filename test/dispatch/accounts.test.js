@@ -118,6 +118,8 @@ test('pickSession keeps role, accountLabel, issue and times; refuses email-shape
   for (const bad of ['a@b.co', 'me﹫corp', '010-1234-5678']) assert.equal(pickSession({ sid: 's', accountLabel: bad }).accountLabel, undefined, bad);
 });
 
+const posted = [];
+
 async function start() {
   const root = mkdtempSync(join(tmpdir(), 'drawing-747-'));
   dirs.push(root);
@@ -139,6 +141,7 @@ async function start() {
     providerStatus: async () => ({ claude: { ...p }, openai: { ...p, connected: false }, gemini: { ...p, connected: false } }),
     codexModels: async () => [], login: () => {}, logout: async () => {}, cancelLogin: () => {},
     spawnCli: fakeSpawner(bin),
+    postAccounts: async (x) => (posted.push(x), { ok: true, pr: x.pr, comment: posted.length > 1 ? 'updated' : 'created' }),
     prStatus: async (b) => (b === 'feat/747-x' ? { ok: true, pr: { number: 12, state: 'open', ci: 'none' } } : { ok: false, reason: 'none' }),
   };
   const moduleList = [
@@ -198,6 +201,16 @@ test('API: accountLabels in /api/user-defaults; a session snapshots its label; G
     assert.equal(r.body.sessions[1].pr, 12);
     assert.equal(r.body.summary, 'roles: lead Claude Sonnet 5.5 (Claude · Max), impl Claude Haiku 5.5 (Claude · Max)');
     assert.equal((await call('GET', '/api/issues/747/accounts?pr=0')).body.sessions[1].pr, null);
+    // POST …/comment posts the summary line on the issue's PR (#756): found PR first, an explicit pr wins.
+    r = await call('POST', '/api/issues/747/accounts/comment', {});
+    assert.deepEqual(r.body, { ok: true, pr: 12, comment: 'created', summary: r.body.summary });
+    assert.deepEqual(posted.at(-1), { pr: 12, issue: 747, summary: r.body.summary });
+    r = await call('POST', '/api/issues/747/accounts/comment', { pr: 30 });
+    assert.equal(r.body.comment, 'updated');
+    assert.equal(posted.at(-1).pr, 30);
+    assert.equal((await call('POST', '/api/issues/747/accounts/comment', { pr: 'x' })).status, 400);
+    assert.deepEqual((await call('POST', '/api/issues/1/accounts/comment', {})).body, { ok: false, reason: 'no-sessions', summary: 'roles: -' });
+    assert.equal(posted.length, 2);
     // Removal keeps the record, with an end time.
     assert.equal((await call('POST', `/api/sessions/${kid.id}/remove`)).status, 200);
     r = await call('GET', '/api/issues/747/accounts?pr=0');
