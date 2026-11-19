@@ -21,7 +21,7 @@ import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
-import { knownFolders, UNFILED, type Scope } from './lib/folder.ts';
+import { knownFolders, scopePending, UNFILED, type Scope } from './lib/folder.ts';
 import { fmtK, fmtUsd, isOpen, pct, STATE, stateOf, TONE_TEXT, totalTok, until } from './lib/format.ts';
 import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
@@ -97,7 +97,8 @@ export default function SessionBoard(p: BoardProps) {
   const scope: Scope = p.folder;
   const known = useMemo(() => knownFolders(projects.map((x) => x.path), scope, listState === 'ready'), [projects, scope, listState]);
   const names = useMemo(() => new Map(projects.map((x) => [x.path, x.name])), [projects]);
-  const ctx = useMemo(() => ({ scope, known, names }), [scope, known, names]);
+  const pending = scopePending(scope, listState);
+  const ctx = useMemo(() => ({ scope, known, names, pending }), [scope, known, names, pending]);
   useEffect(() => connect(), []);
 
   // The one place a session opens (design §4): its live progress view (#728). The sheet (chat, stop) is reached from there.
@@ -334,7 +335,7 @@ function SessionsBody({
   onSettings: (s: SectionId) => void;
   byCwd: boolean;
 }) {
-  const { sessions, scope } = useScoped();
+  const { sessions, scope, pending } = useScoped();
   const { known, names } = useScope();
   const all = useDispatch((s) => s.sessions);
   const byId = useMemo(() => new Map(all.map((s) => [s.id, s])), [all]);
@@ -350,7 +351,7 @@ function SessionsBody({
             <UsageStrip onJump={() => usageRef.current?.scrollIntoView({ block: 'start' })} />
             <AttentionStrip onOpen={(id) => onOpen(id)} onUsage={onUsage} />
           </div>
-          {sessions.length === 0 ? (
+          {pending ? null : sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-6 py-16 text-center">
               <p className="m-0 font-medium">실행 중인 세션이 없어요</p>
               <p className="m-0 text-sm text-muted-foreground">새 세션을 만들면 여기에 보여요.</p>
