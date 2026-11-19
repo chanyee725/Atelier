@@ -17,6 +17,7 @@ const HEAD_MIN_H = 52;
 const HEAD_PAD_X = 32;
 const HEAD_PAD_Y = 12;
 const HEAD_MAX_LINES = 3;
+const HEAD_MAX_W = HEAD_WIDTHS[HEAD_WIDTHS.length - 1];
 
 interface Column {
   id: string;
@@ -56,9 +57,12 @@ export async function layoutSequence(d: SequenceDiagram): Promise<Scene> {
   const idx = new Map(d.columns.map((c, i) => [c.id, i]));
   // Participant heads size like flowchart boxes (layout-graph sizeBox): the smallest width bucket whose label
   // wraps to at most HEAD_MAX_LINES lines, then every head takes the widest one so all columns match.
+  // At the widest bucket a line that still does not fit breaks even with `wrap: off` (a long single word breaks
+  // between grapheme clusters), so no head grows past HEAD_MAX_W (#796).
   const sizeHead = (c: Column, width: number): void => {
     const iconW = c.iconSize ? c.iconSize + 8 : 0;
-    c.label = measureLabel(d.columns[idx.get(c.id)!]!.label, c.label.size, c.style.typeface, c.style.wrap, width - HEAD_PAD_X - iconW);
+    const wrap = c.style.wrap || width >= HEAD_MAX_W;
+    c.label = measureLabel(d.columns[idx.get(c.id)!]!.label, c.label.size, c.style.typeface, wrap, width - HEAD_PAD_X - iconW);
     c.w = Math.max(width, Math.ceil(c.label.w + iconW + HEAD_PAD_X));
     c.h = Math.max(HEAD_MIN_H, Math.ceil(Math.max(c.label.h, c.iconSize) + HEAD_PAD_Y));
   };
@@ -75,6 +79,9 @@ export async function layoutSequence(d: SequenceDiagram): Promise<Scene> {
   });
   const headW = Math.max(0, ...cols.map((c) => c.w));
   for (const c of cols) sizeHead(c, headW);
+  // One height for every head too, so the tops and bottoms line up across columns (#796).
+  const headH = Math.max(0, ...cols.map((c) => c.h));
+  for (const c of cols) c.h = headH;
 
   // Gaps between neighbouring column centres: room for the boxes, then for every message label.
   const gaps = cols.slice(1).map((c, i) => cols[i]!.w / 2 + c.w / 2 + 40);
@@ -117,7 +124,7 @@ export async function layoutSequence(d: SequenceDiagram): Promise<Scene> {
     c.x = i === 0 ? c.w / 2 : cols[i - 1]!.x + gaps[i - 1]!;
   });
 
-  const headerH = Math.max(0, ...cols.map((c) => c.h));
+  const headerH = headH;
   const back: SceneItem[] = [];
   const mid: SceneItem[] = [];
   const front: SceneItem[] = [];
