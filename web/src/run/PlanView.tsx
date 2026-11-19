@@ -10,6 +10,7 @@ import { cn } from '../lib/utils';
 import { nodeLabels, overlaySteps } from './runModel.ts';
 import { NODE_H, NODE_W, planGraph, type PlanGraphNode } from './planGraphModel.ts';
 import { useRunModel } from './useRunModel.ts';
+import { useAskingSteps } from './useAskingSteps';
 import { PlanStrip } from './PlanStrip';
 
 function Node({ n }: { n: PlanGraphNode }) {
@@ -50,7 +51,8 @@ export default function PlanView({ session }: { session: FileSession }) {
   const plan = useSession(session, (s) => s.file?.plan ?? null);
   const blocks = useSession(session, (s) => s.file?.blocks);
   const code = blocks?.find((b) => b.id === plan?.block)?.code;
-  const m = useRunModel(code);
+  const asking = useAskingSteps(session);
+  const m = useRunModel(code, asking);
   // Live session states come from the Dispatch store; load it while this view is open, like the 실행 view.
   useEffect(() => connect(), []);
   const labels = useMemo(() => nodeLabels(code), [code]);

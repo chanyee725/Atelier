@@ -72,8 +72,8 @@ function Limits({ now }: { now: number }) {
   );
 }
 
-export default function RunView({ code }: { code: string | undefined }) {
-  const m = useRunModel(code);
+export default function RunView({ code, asking }: { code: string | undefined; asking?: ReadonlySet<string> }) {
+  const m = useRunModel(code, asking);
   const [sheet, setSheet] = useState<string | null>(null);
   // Roles, models and the guard come from the Dispatch store: load it while this view is open, not only during a run,
   // so a finished run's waiting steps still show their role's model (PR #617 review).

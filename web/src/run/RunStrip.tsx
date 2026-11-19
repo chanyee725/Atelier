@@ -25,10 +25,12 @@ type Props = {
   onRunView: () => void;
   /** Open a file (the new draft after 복제해서 새 계획). */
   onOpenFile: (path: string) => void;
+  /** Steps with an open question in the plan document (#738): blocked. */
+  asking?: ReadonlySet<string>;
 };
 
-export function RunStrip({ code, inRunView, onRunView, onOpenFile }: Props) {
-  const m = useRunModel(code);
+export function RunStrip({ code, inRunView, onRunView, onOpenFile, asking }: Props) {
+  const m = useRunModel(code, asking);
   const [sheet, setSheet] = useState<string | null>(null);
   const [busy, setBusy] = useState<RunAction | 'duplicate' | null>(null);
   const [error, setError] = useState<string | null>(null);

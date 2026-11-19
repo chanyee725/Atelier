@@ -16,8 +16,8 @@ function useNow(on: boolean): number {
   return now;
 }
 
-/** `code`: the plan block's diagram code, for step titles. */
-export function useRunModel(code: string | undefined) {
+/** `code`: the plan block's diagram code, for step titles. `asking`: steps with an open question (#738), shown blocked. */
+export function useRunModel(code: string | undefined, asking?: ReadonlySet<string>) {
   const data = useRunData();
   const record = data.record;
   // Running or paused: the sessions are still there (live states, overlay, the stream stays open).
@@ -31,8 +31,8 @@ export function useRunModel(code: string | undefined) {
   const live = useMemo(() => new Map<string, LiveSession>(sessions.map((s) => [s.id, s])), [sessions]);
   return useMemo(() => {
     if (!record) return { data, record: null, running: false, rows: [], sessions: [], strip: null, labels, now };
-    const rows = stepRows(record, live, now, labels, { roles, models });
+    const rows = stepRows(record, live, now, labels, { roles, models }, asking);
     const srows = sessionRows(record, live, now, { models });
     return { data, record, running, rows, sessions: srows, strip: stripModel(record, rows, srows, five, now), labels, now };
-  }, [data, record, running, live, now, labels, five, roles, models]);
+  }, [data, record, running, live, now, labels, five, roles, models, asking]);
 }

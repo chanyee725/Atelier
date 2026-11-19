@@ -19,6 +19,7 @@ import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHa
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
 import { Questions, QUESTIONS_ID } from './doc/Questions';
+import { useAskingSteps } from './run/useAskingSteps';
 import { openQuestions } from '../../shared/dispatch/discussions.ts';
 import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
@@ -289,6 +290,7 @@ export function App() {
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
   // Open in-document questions (#738): the agent area's badge, and the blocked steps of the plan.
   const openCount = useSession(session, (s) => openQuestions(s.file?.discussions).length);
+  const asking = useAskingSteps(session);
   const toQuestions = useCallback(() => document.getElementById(QUESTIONS_ID)?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }), []);
   const planCode = useSession(session, (s) => s.file?.blocks.find((b) => b.id === s.file?.plan?.block)?.code);
   const view: View = !hasPlan && isPipelineView(baseView) ? 'doc' : baseView;
@@ -1055,11 +1057,11 @@ export function App() {
           />
           {/* The 플랜 tab holds its own strip (#729), so the plan is reviewed and approved in one place. */}
           {view !== 'plan' && <PlanStrip session={session} />}
-          {hasPlan && <RunStrip code={planCode} inRunView={view === 'run'} onRunView={() => setView('run')} onOpenFile={openFile} />}
+          {hasPlan && <RunStrip code={planCode} asking={asking} inRunView={view === 'run'} onRunView={() => setView('run')} onOpenFile={openFile} />}
               {view === 'run' ? (
             <LazyBoundary onFail={flushForReload}>
               <Suspense fallback={null}>
-                <RunView code={planCode} />
+                <RunView code={planCode} asking={asking} />
               </Suspense>
             </LazyBoundary>
           ) : view === 'plan' ? (
