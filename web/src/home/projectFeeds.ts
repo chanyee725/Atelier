@@ -12,7 +12,9 @@ import type { IssuesAnswer } from './issueBoard.ts';
 
 export type Feed<T> = T | 'failed' | null;
 
-const get = <T,>(url: string, signal: AbortSignal): Promise<T | null> => fetch(url, { signal }).then((r) => (r.ok ? (r.json() as Promise<T>) : null), () => null);
+const get = <T,>(url: string, signal: AbortSignal): Promise<T | null> => fetch(url, { signal })
+    .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
+    .catch(() => null); // an abort can land while the body is read, not only in fetch()
 
 const SESSIONS_POLL_MS = 15_000;
 const SESSION_EVENT_GAP_MS = 1_500;

@@ -11,7 +11,9 @@ const RUN_STATE: Record<string, string> = { running: '실행 중', paused: '멈�
 
 /** Fetches JSON; null when the server has no such route or answers an error. */
 export const getJson = <T,>(url: string, signal: AbortSignal) =>
-  fetch(url, { signal }).then((r) => (r.ok ? (r.json() as Promise<T>) : null), () => null);
+  fetch(url, { signal })
+    .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
+    .catch(() => null); // an abort can land while the body is read, not only in fetch()
 
 export const Block = ({ title, note, children }: { title: string; note?: React.ReactNode; children: React.ReactNode }) => (
   <section aria-label={title} className="min-w-0 rounded-lg border bg-card">
