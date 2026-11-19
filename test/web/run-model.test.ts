@@ -87,6 +87,20 @@ test('stepRows: views, times and agents from the record', () => {
   assert.deepEqual(overlaySteps(rows)[1], { id: 'impl', node: 'impl', view: 'active', waiting: false, title: 'Implement', time: '8분째', agents: [{ sid: 's2', name: 'Juno', role: 'impl', state: 'working', eta: { kind: 'unknown' } }] });
 });
 
+test('stepRows: a step waiting on an open question in the document is blocked while the run is live (#738)', () => {
+  const asking = new Set(['impl', 'plan', 'review']);
+  const rows = stepRows(record(), new Map(), T0 + 20 * MIN, new Map(), {}, asking);
+  assert.deepEqual([rows[1]!.view, rows[1]!.label, rows[1]!.time], ['blocked', '막힘', '답을 기다려요']);
+  assert.equal(rows[1]!.before, 'active', 'it keeps its progress weight');
+  assert.equal(rows[0]!.view, 'review', 'a finished step is not held up');
+  assert.equal(rows[2]!.view, 'pending', 'a step nobody works on yet stays pending');
+  assert.equal(overlaySteps(rows)[1]!.view, 'blocked', 'the canvas overlay shows it too');
+  // Answered (not asking any more) or the run is over: back to its own view.
+  assert.equal(stepRows(record(), new Map(), T0 + 20 * MIN)[1]!.view, 'active');
+  const done = stepRows(record({ state: 'done', endedAt: T0 + 30 * MIN }), new Map(), T0 + 40 * MIN, new Map(), {}, asking);
+  assert.equal(done[1]!.view, 'done');
+});
+
 test('stepRows: live Dispatch state wins while running; a done run closes its steps', () => {
   const live = new Map<string, LiveSession>([['s2', { id: 's2', name: 'Juno', role: 'impl', state: 'waiting' }]]);
   const rows = stepRows(record(), live, T0 + 20 * MIN);

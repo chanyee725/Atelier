@@ -202,6 +202,8 @@ function roleOf(plan: Plan, stepId: string, s: RecSession, live: Live): string {
   return st?.role ?? plan.defaults?.role ?? '';
 }
 
+const NO_STEPS: ReadonlySet<string> = new Set();
+
 /** Finished steps needed per role before a time left is shown. */
 export const ETA_MIN_SAMPLES = 2;
 
@@ -230,7 +232,11 @@ export function etaOf(typical: number | undefined, elapsed: number): AgentEta {
   return elapsed >= typical ? { kind: 'over' } : { kind: 'left', ms: typical - elapsed };
 }
 
-export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.now(), labels: ReadonlyMap<string, string> = new Map(), cat: ModelCatalog = {}): StepRow[] {
+/**
+ * `asking`: plan step ids with an open in-document question (#738, `askingSteps` of the plan file's `discussions`). While
+ * the run is live such a step shows as blocked until the question is answered.
+ */
+export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.now(), labels: ReadonlyMap<string, string> = new Map(), cat: ModelCatalog = {}, asking: ReadonlySet<string> = NO_STEPS): StepRow[] {
   const plan = record.plan.snapshot;
   const running = isLive(record.state);
   const pause = record.state === 'paused' ? (record.pause ?? { by: 'stop' as const, at: now }) : null;
@@ -241,13 +247,15 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     const step = record.steps[ps.id] ?? { state: 'pending', startedAt: null, endedAt: null, sessions: [] };
     const node = ps.node ?? ps.id;
     const states = step.sessions.map((s) => stateNow(s, live, running)).filter((x): x is SessionState => !!x);
+    // Waits on an open question in the document; only a live run's unfinished step can be held up by it.
+    const asksNow = running && !step.carried && step.state !== 'done' && asking.has(ps.id);
     // A carried step is done for good, like the server's stepStateOf (an old record may still say skipped).
     const skipped = step.state === 'skipped' && !step.carried;
     let view: StepView;
     if (skipped) view = 'pending';
     else if (step.state === 'blocked') view = 'blocked';
     else if (states.length === 0) view = 'pending';
-    else view = stepView({ sessions: states.map((state) => ({ state })) });
+    else view = stepView({ sessions: states.map((state) => ({ state })), asking: asksNow });
     // A finished run closed its steps: what ran and was not blocked is done.
     if (record.state === 'done' && !skipped && view !== 'blocked' && states.length > 0) view = 'done';
     // Finished in an earlier run (계획 다시 열기 carried it over).
@@ -257,7 +265,7 @@ export function stepRows(record: RunRecord, live: Live = new Map(), now = Date.n
     const v = STEP_VIEWS[view];
     let time: string;
     if (skipped) time = '건너뜀';
-    else if (view === 'blocked') time = '막힘';
+    else if (view === 'blocked') time = asksNow && step.state !== 'blocked' ? '답을 기다려요' : '막힘';
     else if (step.startedAt === null) time = '기다려요';
     else if (paused === 'limit') time = `한도로 멈춤 · ${resumeAt(pause!)}`;
     else if (view === 'done' || !running || step.endedAt !== null) time = fmtDur((step.endedAt ?? record.endedAt ?? until) - step.startedAt);

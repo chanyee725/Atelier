@@ -623,3 +623,17 @@ test('a change event without a revision always asks again after the running read
   assert.equal(reads, 2);
   assert.equal(s.getState().file?.revision, 9);
 });
+
+test('an answered question shows at once without marking the file unsaved (#738)', async (t) => {
+  const { s, server } = setup(t);
+  const q = { id: 'q1', anchor: { kind: 'block' as const, block: 'doc' }, question: '어느 쪽이에요?', status: 'open' as const, askedBy: 'impl', askedAt: 1 };
+  s.load('a.dpx', file({ version: 6, discussions: { v: 1, items: [q] } }));
+  s.questionAnswered('b.dpx', { ...q, status: 'answered', answer: 'x', answeredBy: 'user', answeredAt: 2 });
+  assert.equal(s.getState().file?.discussions?.items[0]?.status, 'open', 'another file is left alone');
+  s.questionAnswered('a.dpx', { ...q, status: 'answered', answer: '왼쪽', answeredBy: 'user', answeredAt: 2 });
+  assert.equal(s.getState().file?.discussions?.items[0]?.answer, '왼쪽');
+  assert.equal(s.isDirty(), false);
+  t.mock.timers.tick(SAVE_DELAY);
+  await settle();
+  assert.equal(server.calls.length, 0);
+});

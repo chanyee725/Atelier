@@ -10,6 +10,8 @@ export const FILE_FORMAT_VERSION = 6;
 export type { Plan, PlanStep } from '../../shared/dispatch/plan.ts';
 import type { UsageDay } from '../../shared/dispatch/types.ts';
 import type { Plan } from '../../shared/dispatch/plan.ts';
+import type { Discussion, Discussions } from '../../shared/dispatch/discussions.ts';
+export type { Discussion, Discussions } from '../../shared/dispatch/discussions.ts';
 export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; codeRefs?: BlockCode; frameId?: string };
 export type DpxFile = {
   version: number;
@@ -19,11 +21,13 @@ export type DpxFile = {
   blocks: Block[];
   /** Present only in pipeline files. Saves send it back unchanged. */
   plan?: Plan;
+  /** In-document questions (format v6, #738). Saves never send it: it changes only through the discussions API. */
+  discussions?: Discussions;
   revision: number;
 };
 export type TreeNode =
   | { type: 'folder'; name: string; path: string; children: TreeNode[] }
-  | { type: 'file'; name: string; path: string; title: string; revision: number | null; mtime?: string; created?: string; pipeline?: PipelineMark };
+  | { type: 'file'; name: string; path: string; title: string; revision: number | null; mtime?: string; created?: string; pipeline?: PipelineMark; questions?: number };
 /** Tree mark of a pipeline file: draft (`plan`), a run in progress, the newest run stopped or failed (`paused`), or done. */
 export type PipelineMark = { state: 'plan' | 'running' | 'paused' | 'done' };
 
@@ -36,6 +40,8 @@ export type DocNode = {
   revision?: number | null;
   /** Set on a pipeline file (E18). */
   pipeline?: PipelineMark;
+  /** Open in-document questions (#738); absent when none. */
+  questions?: number;
   created: string | null;
   modified: string | null;
   /** Documents below this one. */
@@ -201,6 +207,9 @@ export const api = {
   history: (path: string) => call<{ versions: HistoryEntry[] }>('GET', `/api/history${q(path)}`).then((r) => r.versions),
   historyVersion: (path: string, id: string) => call<HistoryVersion>('GET', `/api/history/version${q(path)}&id=${encodeURIComponent(id)}`),
   /** Keep the file as it is on disk now as a version (before a restore). */
+  /** Answer an open question (#738): a picked choice or typed text. `delivered`: the asking session got it now. */
+  answerQuestion: (path: string, id: string, answer: { choice: number } | { text: string }) =>
+    call<{ path: string; revision: number; item: Discussion; delivered: boolean }>('POST', `/api/file/discussions/answer${q(path)}`, { id, ...answer }),
   historySnapshot: (path: string) => call<{ id: string | null }>('POST', `/api/history${q(path)}`, {}),
   trash: () => call<{ items: TrashItem[] }>('GET', '/api/trash').then((r) => r.items),
   restoreTrash: (id: string) => call<{ path: string }>('POST', '/api/trash/restore', { id }),

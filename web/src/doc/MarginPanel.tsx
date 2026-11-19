@@ -29,7 +29,24 @@ type Props = {
   onToggle: () => void;
   /** A recent change was clicked: scroll to its block and flash it (marginStore.jumpTo). */
   onJump?: (spot: DocSpot) => void;
+  /** Open questions in this document (#738) and where they are (the question cards at the top). */
+  questions?: number;
+  onQuestions?: () => void;
 };
+
+/** "? N": the document's open questions; a click scrolls to their cards. Quiet text, the ? in the blocked hue. */
+function QuestionsChip({ count, onClick }: { count: number; onClick?: () => void }) {
+  if (!count) return null;
+  return (
+    <button type="button" className="margin-questions" data-margin-questions="" onMouseDown={keepFocus} onClick={onClick} title="답을 기다리는 질문으로 가기">
+      <span className="margin-questions-mark" aria-hidden="true">
+        ?
+      </span>
+      <span aria-hidden="true">{count}</span>
+      <span className="sr-only">답을 기다리는 질문 {count}개</span>
+    </button>
+  );
+}
 
 /** How long the agent's cursor is outlined after a jump (the block's own flash is .doc-margin-flash). */
 const FLASH_MS = 1600;
@@ -179,7 +196,7 @@ function Row({ card, open, onOpen, showRole, onJump }: RowProps) {
   );
 }
 
-export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props) {
+export function MarginPanel({ agents, form, collapsed, onToggle, onJump, questions = 0, onQuestions }: Props) {
   const listId = useId();
   const count = agents.length;
   const title = count > 1 ? `에이전트 ${count}명이 작업 중이에요` : '에이전트가 작업 중이에요';
@@ -206,6 +223,7 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
           <AgentDots agents={agents} />
           <span className="sr-only">{title}, 펼치기</span>
         </button>
+        <QuestionsChip count={questions} onClick={onQuestions} />
       </div>
     );
   }
@@ -217,19 +235,23 @@ export function MarginPanel({ agents, form, collapsed, onToggle, onJump }: Props
     <div className="margin-panel" data-margin-panel="" data-form={form} data-collapsed={collapsed ? '' : undefined}>
       <header className="margin-head">
         {form === 'sheet' && collapsed ? (
-          <button type="button" className="margin-sheet-bar" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} aria-controls={listId}>
-            <span className="margin-sheet-dots" aria-hidden="true">
-              <AgentDots agents={agents} />
-            </span>
-            <span className="margin-title">{title}</span>
-            <span className="margin-sheet-doing">{agents[0]?.status}</span>
-            <ChevronUp className="margin-toggle-icon" aria-hidden="true" />
-          </button>
+          <>
+            <button type="button" className="margin-sheet-bar" onMouseDown={keepFocus} onClick={onToggle} aria-expanded={false} aria-controls={listId}>
+              <span className="margin-sheet-dots" aria-hidden="true">
+                <AgentDots agents={agents} />
+              </span>
+              <span className="margin-title">{title}</span>
+              <span className="margin-sheet-doing">{agents[0]?.status}</span>
+              <ChevronUp className="margin-toggle-icon" aria-hidden="true" />
+            </button>
+            <QuestionsChip count={questions} onClick={onQuestions} />
+          </>
         ) : (
           <>
             <h2 className="margin-title" aria-live="polite">
               {title}
             </h2>
+            <QuestionsChip count={questions} onClick={onQuestions} />
             {/* In the head, so it stays in view however far the long list scrolls. */}
             {!collapsed && expanded && layout.overflows && (
               <button type="button" className="margin-less" data-margin-less="" onMouseDown={keepFocus} onClick={() => setExpanded(false)} aria-controls={listId}>

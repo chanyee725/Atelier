@@ -266,3 +266,27 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   .margin-swatch, .margin-rail-dot, .margin-changes::before, .margin-changes li::before { forced-color-adjust: none; }
   .margin-status { color: CanvasText; }
 }
+
+/* ---- open questions in this document (#738): quiet count, the ? in the blocked hue ---- */
+.margin-questions {
+  font: inherit;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-block-size: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.margin-questions:hover { background: var(--accent); }
+.margin-questions:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.margin-questions-mark { color: var(--step-blocked); }
+.margin-panel[data-collapsed][data-form='side'] .margin-questions { margin: 6px auto 0; }
