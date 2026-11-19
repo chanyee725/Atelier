@@ -60,6 +60,14 @@ const read = () => log;
 
 export const useActivityLog = () => useSyncExternalStore(subscribe, read, read);
 
+/** fn(log) now and on every change of the log (the 알림함 takes new events in, inboxStore.ts). */
+export function onActivityLog(fn: (log: ActivityLog) => void) {
+  const f = () => fn(log);
+  const off = subscribe(f);
+  f();
+  return () => void off();
+}
+
 /** fn(event) for each event that comes in after the first load. */
 export function onNewActivity(fn: (e: ActivityEvent) => void) {
   start();
