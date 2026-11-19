@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Starts the Drawing server for another git project, in project mode (Dispatch run screen only).
+# Starts the Atelier server for a git project, in project mode (the whole app for that one project).
 #   start.sh <project>
-# Workspace = <project>/pipelines (created when missing). The port is kept in
+# Workspace = <project>/atelier (created when missing; an older <project>/pipelines is moved there once, #773). The port is kept in
 # <project>/.dispatch/server.port (its pid in server.pid, which stop.sh reads; both written only once
 # the server is ready, a failed start leaves the old files alone; reusing a server rewrites server.pid
-# from the lock); a server that already answers there is reused only when <project>/pipelines/.drawing/server.lock names it (live pid, same
+# from the lock); a server that already answers there is reused only when <project>/atelier/.drawing/server.lock names it (live pid, same
 # port), so another project's server on a recycled port is never mistaken for ours. Port order: remembered live server, else $DRAW_PORT, else $DISPATCH_PORT (team.sh and
 # restart.sh pass it; handed to the server as DRAW_PORT). No ~/.dispatch/servers registry is written, else a free port. Prints nothing but the URL on success.
 # The server binds 127.0.0.1 only. Prints the URL on stdout; nothing else is written outside the project.
@@ -20,14 +20,26 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 home=${DRAWING_HOME:-$(cd "$here/../.." && pwd -P)}
 [ -f "$home/server/index.js" ] || { echo "Drawing server not found in $home (DRAWING_HOME must be a Drawing checkout)" >&2; exit 1; }
 
-workspace=$project/pipelines
+workspace=$project/atelier
 state=$project/.dispatch
 portfile=$state/server.port
+old=$project/pipelines
+
+# One-time move of the pre-#773 folder. Refused while a server still runs on it (stop.sh first).
+if [ -d "$old" ] && [ ! -L "$old" ] && [ ! -e "$workspace" ]; then
+  oldpid=$(node -e 'try { const l = JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")); process.kill(l.pid, 0); console.log(l.pid); } catch (e) { if (e && e.code === "EPERM") console.log("eperm"); }' "$old/.drawing/server.lock" 2>/dev/null || true)
+  if [ -n "$oldpid" ]; then
+    echo "An Atelier server still runs on $old (pid $oldpid). Stop it first (stop.sh $project), then start again to move it to atelier/." >&2
+    exit 1
+  fi
+  mv "$old" "$workspace"
+  echo "Moved $old to $workspace" >&2
+fi
 mkdir -p "$workspace" "$state"
 
 lockfile=$workspace/.drawing/server.lock
 
-# Succeeds only when OUR server answers on $1: /api/info says project mode on "pipelines" (every
+# Succeeds only when OUR server answers on $1: /api/info says project mode on "atelier" (every
 # project-mode server says that), and our workspace lock names a live pid listening on that same port.
 # With $2, the lock's pid must also be that pid (the server we just started).
 ours() {
@@ -42,7 +54,7 @@ ours() {
     try { process.kill(lock.pid, 0); } catch (e) { if (e.code !== "EPERM") process.exit(1); }
     const req = http.get({ host: "127.0.0.1", port: Number(port), path: "/api/info", timeout: 1500 }, (res) => {
       let b = ""; res.on("data", (c) => (b += c));
-      res.on("end", () => { try { const i = JSON.parse(b); if (i.mode === "project" && i.workspace === "pipelines") { if (!want) { process.stdout.write(lock.pid + "\n", () => process.exit(0)); return; } process.exit(0); } process.exit(1); } catch { process.exit(1); } });
+      res.on("end", () => { try { const i = JSON.parse(b); if (i.mode === "project" && i.workspace === "atelier") { if (!want) { process.stdout.write(lock.pid + "\n", () => process.exit(0)); return; } process.exit(0); } process.exit(1); } catch { process.exit(1); } });
     });
     req.on("error", () => process.exit(1)); req.on("timeout", () => req.destroy());
   ' "$1" "$lockfile" "${2:-}"
@@ -52,7 +64,7 @@ port=$(tr -dc '0-9' < "$portfile" 2>/dev/null || true)
 if [ -n "$port" ] && reused=$(ours "$port"); then
   # Reusing: rewrite server.pid with the lock's pid so stop.sh/update.sh still find it.
   [ -n "$reused" ] && echo "$reused" > "$state/server.pid"
-  echo "http://127.0.0.1:$port/dispatch"
+  echo "http://127.0.0.1:$port/"
   exit 0
 fi
 
@@ -72,7 +84,7 @@ DRAW_PORT=$port nohup node "$home/server/index.js" --project-mode "$workspace" >
 pid=$!
 
 for _ in $(seq 1 100); do
-  ours "$port" "$pid" && { echo "$pid" > "$state/server.pid"; echo "$port" > "$portfile"; echo "http://127.0.0.1:$port/dispatch"; exit 0; }
+  ours "$port" "$pid" && { echo "$pid" > "$state/server.pid"; echo "$port" > "$portfile"; echo "http://127.0.0.1:$port/"; exit 0; }
   kill -0 "$pid" 2>/dev/null || break
   sleep 0.1
 done

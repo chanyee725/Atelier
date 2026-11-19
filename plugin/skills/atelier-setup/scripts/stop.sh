@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop the Dispatch server started by start.sh for a project. server.pid is trusted only when that
-# process is node running a Drawing server/index.js for <project>/pipelines; otherwise it is stale.
+# process is node running a Drawing server/index.js for <project>/atelier (or the older <project>/pipelines); otherwise it is stale.
 set -euo pipefail
 
 # shellcheck source=../../../scripts/server-check.sh
@@ -12,7 +12,7 @@ pid_file="$project/.dispatch/server.pid"
 pid=""
 [ ! -f "$pid_file" ] || pid="$(tr -dc '0-9' < "$pid_file" 2>/dev/null || true)"
 
-if [ -n "$pid" ] && is_our_server "$pid" "$project/pipelines"; then
+if [ -n "$pid" ] && is_our_project_server "$pid" "$project"; then
   kill "$pid"
   rm -f "$pid_file"
   echo "Dispatch stopped for $project"

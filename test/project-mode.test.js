@@ -33,7 +33,7 @@ test('/api/info reports the mode and the project folder name', async () => {
   }
 });
 
-test('start.sh starts project mode on <project>/pipelines, remembers the port and reuses the server', async () => {
+test('start.sh starts project mode on <project>/atelier, remembers the port and reuses the server', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'drawing-e30a-'));
   const project = join(dir, 'proj');
   const home = join(dir, 'home');
@@ -52,12 +52,12 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
     const first = run();
     assert.equal(first.status, 0, first.stderr);
     port = readFileSync(join(project, '.dispatch', 'server.port'), 'utf8').trim();
-    assert.equal(first.stdout.trim(), `http://127.0.0.1:${port}/dispatch`);
-    assert.ok(existsSync(join(project, 'pipelines')));
+    assert.equal(first.stdout.trim(), `http://127.0.0.1:${port}/`);
+    assert.ok(existsSync(join(project, 'atelier')));
     const pid = Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8'));
     assert.doesNotThrow(() => process.kill(pid, 0), 'server.pid names the running server');
     const info = await (await fetch(`http://127.0.0.1:${port}/api/info`)).json();
-    assert.deepEqual(info, { workspace: 'pipelines', mode: 'project', project: 'proj' });
+    assert.deepEqual(info, { workspace: 'atelier', mode: 'project', project: 'proj' });
     // Second call reuses the running server: same port, no new process.
     const second = run();
     assert.equal(second.status, 0, second.stderr);
@@ -74,7 +74,7 @@ test('start.sh starts project mode on <project>/pipelines, remembers the port an
   } finally {
     if (port) {
       try {
-        const lock = JSON.parse(readFileSync(join(project, 'pipelines', '.drawing', 'server.lock'), 'utf8'));
+        const lock = JSON.parse(readFileSync(join(project, 'atelier', '.drawing', 'server.lock'), 'utf8'));
         process.kill(lock.pid, 'SIGTERM');
       } catch {}
     }
@@ -101,7 +101,7 @@ test('start.sh honors DISPATCH_PORT when it is free and stop.sh-style kill by se
   const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: join(dir, 'home'), DRAW_PORT: '', DISPATCH_PORT: String(want) }, encoding: 'utf8' });
   try {
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout.trim(), `http://127.0.0.1:${want}/dispatch`);
+    assert.equal(r.stdout.trim(), `http://127.0.0.1:${want}/`);
   } finally {
     try { process.kill(Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8')), 'SIGTERM'); } catch {}
     await new Promise((res) => setTimeout(res, 300));
@@ -131,7 +131,7 @@ test('start.sh: DRAW_PORT wins over DISPATCH_PORT', async () => {
   const r = spawnSync('bash', [START, project], { env: { ...process.env, HOME: join(dir, 'home'), DRAW_PORT: String(a), DISPATCH_PORT: String(b) }, encoding: 'utf8' });
   try {
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout.trim(), `http://127.0.0.1:${a}/dispatch`);
+    assert.equal(r.stdout.trim(), `http://127.0.0.1:${a}/`);
     assert.equal(existsSync(join(dir, 'home', '.dispatch', 'servers')), false, 'no registry written');
   } finally {
     try { process.kill(Number(readFileSync(join(project, '.dispatch', 'server.pid'), 'utf8')), 'SIGTERM'); } catch {}
@@ -161,7 +161,7 @@ test("start.sh does not reuse another project's server that took the remembered 
   const fakeCli = new URL('./fixtures/fake-cli', import.meta.url).pathname;
   const env = (port = '') => ({ ...process.env, HOME: home, PATH: `${fakeCli}:${process.env.PATH}`, DISPATCH_PORT: '', DRAW_PORT: port });
   const start = (project, port) => spawnSync('bash', [START, project], { env: env(port), encoding: 'utf8' });
-  const lockPid = (project) => JSON.parse(readFileSync(join(project, 'pipelines', '.drawing', 'server.lock'), 'utf8')).pid;
+  const lockPid = (project) => JSON.parse(readFileSync(join(project, 'atelier', '.drawing', 'server.lock'), 'utf8')).pid;
   const pids = new Set();
   try {
     const first = start(a);
@@ -177,17 +177,17 @@ test("start.sh does not reuse another project's server that took the remembered 
     // B takes A's old port.
     const other = start(b, port);
     assert.equal(other.status, 0, other.stderr);
-    assert.equal(other.stdout.trim(), `http://127.0.0.1:${port}/dispatch`);
+    assert.equal(other.stdout.trim(), `http://127.0.0.1:${port}/`);
     pids.add(lockPid(b));
-    // A again: B answers on the remembered port as project mode on "pipelines", but it is not ours.
+    // A again: B answers on the remembered port as project mode on "atelier", but it is not ours.
     const again = start(a);
     assert.equal(again.status, 0, again.stderr);
     pids.add(lockPid(a));
-    assert.notEqual(again.stdout.trim(), `http://127.0.0.1:${port}/dispatch`, "reused another project's server");
+    assert.notEqual(again.stdout.trim(), `http://127.0.0.1:${port}/`, "reused another project's server");
     const newPort = readFileSync(join(a, '.dispatch', 'server.port'), 'utf8').trim();
     assert.notEqual(newPort, port);
-    assert.equal(again.stdout.trim(), `http://127.0.0.1:${newPort}/dispatch`);
-    const lockA = JSON.parse(readFileSync(join(a, 'pipelines', '.drawing', 'server.lock'), 'utf8'));
+    assert.equal(again.stdout.trim(), `http://127.0.0.1:${newPort}/`);
+    const lockA = JSON.parse(readFileSync(join(a, 'atelier', '.drawing', 'server.lock'), 'utf8'));
     assert.equal(String(lockA.port), newPort);
     assert.equal(lockA.pid, Number(readFileSync(join(a, '.dispatch', 'server.pid'), 'utf8')));
     // And A's own live server is still reused.
@@ -233,7 +233,7 @@ test('stop.sh signals only node running a Drawing server for this project; anyth
   const pidFile = join(project, '.dispatch', 'server.pid');
   mkdirSync(join(dir, 'fake/server'), { recursive: true });
   writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
-  const ours = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'pipelines')], { stdio: 'ignore' });
+  const ours = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'atelier')], { stdio: 'ignore' });
   const elsewhere = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(dir, 'other/pipelines')], { stdio: 'ignore' });
   const unrelated = spawn('sleep', ['60'], { stdio: 'ignore' });
   const stop = () => spawnSync('bash', [STOP, project], { encoding: 'utf8' });
@@ -264,7 +264,7 @@ test('stop.sh recognizes a server whose node path and workspace path contain spa
   mkdirSync(join(dir, 'bin with space'), { recursive: true });
   symlinkSync(process.execPath, join(dir, 'bin with space', 'node'));
   writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
-  const ours = spawn(join(dir, 'bin with space', 'node'), [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'pipelines')], { stdio: 'ignore' });
+  const ours = spawn(join(dir, 'bin with space', 'node'), [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'atelier')], { stdio: 'ignore' });
   try {
     await new Promise((r) => setTimeout(r, 200));
     writeFileSync(pidFile, String(ours.pid));
@@ -302,7 +302,7 @@ test('restart.sh waits for the old server to exit before starting', async () => 
   writeFileSync(join(dir, 'fake/server/index.js'), "process.on('SIGTERM', () => setTimeout(() => process.exit(0), 2000)); setInterval(() => {}, 1000);\n");
   writeFileSync(join(home, 'plugin/scripts/start.sh'), '#!/bin/sh\ns=$(ps -o stat= -p "$OLDPID" 2>/dev/null)\ncase "$s" in ""|Z*) echo dead > "$OUT" ;; *) echo alive > "$OUT" ;; esac\n');
   execFileSync('chmod', ['+x', join(home, 'plugin/scripts/start.sh')]);
-  const ours = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'pipelines')], { stdio: 'ignore' });
+  const ours = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'atelier')], { stdio: 'ignore' });
   try {
     await new Promise((r) => setTimeout(r, 300));
     writeFileSync(join(project, '.dispatch', 'server.pid'), String(ours.pid));
@@ -353,7 +353,7 @@ test('restart.sh aborts without starting when our server ignores SIGTERM', async
   const restart = restartFixture(dir);
   mkdirSync(join(dir, 'fake dir/server'), { recursive: true });
   writeFileSync(join(dir, 'fake dir/server/index.js'), "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\n");
-  const ours = spawn(process.execPath, [join(dir, 'fake dir/server/index.js'), '--project-mode', join(project, 'pipelines')], { stdio: 'ignore' });
+  const ours = spawn(process.execPath, [join(dir, 'fake dir/server/index.js'), '--project-mode', join(project, 'atelier')], { stdio: 'ignore' });
   try {
     await new Promise((r) => setTimeout(r, 300));
     writeFileSync(join(project, '.dispatch', 'server.pid'), String(ours.pid));
@@ -372,7 +372,7 @@ test('start.sh writes server.pid only after the server is ready; a failed start 
   const { dir, project } = scratchProject();
   const fakeHome = join(dir, 'home');
   mkdirSync(join(fakeHome, 'server'), { recursive: true });
-  mkdirSync(join(project, 'pipelines'), { recursive: true });
+  mkdirSync(join(project, 'atelier'), { recursive: true });
   // A "server" that exits at once: readiness never succeeds.
   writeFileSync(join(fakeHome, 'server/index.js'), 'process.exit(1);\n');
   const pidFile = join(project, '.dispatch', 'server.pid');
@@ -444,6 +444,55 @@ test('project mode: documents are writable; only the workspace folder list stays
       }
     }
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('start.sh moves an older <project>/pipelines to atelier/ once, and refuses while a server still runs on it', async () => {
+  const { dir, project } = scratchProject();
+  const fakeHome = join(dir, 'home');
+  mkdirSync(join(fakeHome, 'server'), { recursive: true });
+  writeFileSync(join(fakeHome, 'server/index.js'), 'process.exit(1);\n');
+  mkdirSync(join(project, 'pipelines', '.drawing'), { recursive: true });
+  writeFileSync(join(project, 'pipelines', 'plan.dpx.json'), '{}');
+  const env = { ...process.env, HOME: dir, DRAWING_HOME: fakeHome, DRAW_PORT: '', DISPATCH_PORT: '' };
+  const live = spawn('sleep', ['30'], { stdio: 'ignore' });
+  try {
+    // A live server still holds the old folder: nothing moves.
+    writeFileSync(join(project, 'pipelines', '.drawing', 'server.lock'), JSON.stringify({ pid: live.pid, port: 1 }));
+    const refused = spawnSync('bash', [START, project], { env, encoding: 'utf8' });
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /still runs on .*pipelines/);
+    assert.ok(existsSync(join(project, 'pipelines', 'plan.dpx.json')));
+    assert.ok(!existsSync(join(project, 'atelier')));
+    live.kill('SIGKILL');
+    await waitDead(live.pid);
+    // Stale lock: the folder moves (the fake server then fails to start, which is fine here).
+    const moved = spawnSync('bash', [START, project], { env, encoding: 'utf8' });
+    assert.match(moved.stderr, /Moved .*pipelines to .*atelier/);
+    assert.equal((moved.stderr.match(/Moved /g) || []).length, 1);
+    assert.ok(existsSync(join(project, 'atelier', 'plan.dpx.json')));
+    assert.ok(!existsSync(join(project, 'pipelines')));
+  } finally {
+    live.kill('SIGKILL');
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('stop.sh still recognizes a server started on the older <project>/pipelines', async () => {
+  const { dir, project } = scratchProject();
+  mkdirSync(join(dir, 'fake/server'), { recursive: true });
+  writeFileSync(join(dir, 'fake/server/index.js'), 'setInterval(() => {}, 1000);\n');
+  const old = spawn(process.execPath, [join(dir, 'fake/server/index.js'), '--project-mode', join(project, 'pipelines')], { stdio: 'ignore' });
+  try {
+    await new Promise((r) => setTimeout(r, 200));
+    writeFileSync(join(project, '.dispatch', 'server.pid'), String(old.pid));
+    const r = spawnSync('bash', [STOP, project], { encoding: 'utf8' });
+    assert.match(r.stdout, /Dispatch stopped/);
+    await waitDead(old.pid);
+    assert.ok(!alive(old.pid));
+  } finally {
+    old.kill();
     rmSync(dir, { recursive: true, force: true });
   }
 });
