@@ -55,7 +55,7 @@ import { CommandPalette } from './CommandPalette';
 import { CommandRegistry, CommandRegistryContext, useCommandSource, type Command } from './commands';
 import { displayName } from './docTitles';
 import {
-  ArrowUpRight, Circle, Clock, Columns2, Copy, CopyPlus, Delete, Diamond, Eraser, File, FilePlus, FileText, Hand, ImageDown, Layers, FolderClosed,
+  ArrowUpRight, Circle, Clock, Columns2, Copy, CopyPlus, Delete, Diamond, Eraser, File, FilePlus, FileText, Hand, ImageDown, House, FolderClosed,
   Maximize, Minus, Moon, MousePointer2, Move, PanelLeft, PanelRight, Pencil, Redo2, RotateCcw, Scan, Shapes, Square,
   SquareDashedMousePointer, Sun, Trash, Type, Undo2, Workflow, ZoomIn, ZoomOut,
 } from 'lucide-react';
@@ -791,7 +791,7 @@ export function App() {
       id: 'project:all',
       title: '대시보드',
       group: 'project',
-      icon: Layers,
+      icon: House,
       keywords: ['dashboard', 'home', '홈', '프로젝트', '모든 파일'],
       run: () => goProject(null),
     },
