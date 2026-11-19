@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claimState } from '../../server/dispatch/state-migrate.js';
+import { claimState, copyUserStateSync } from '../../server/dispatch/state-migrate.js';
 
 function scratchRepo() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'atelier-782-')));
@@ -164,5 +164,61 @@ test('claimState: a project with no .dispatch never gets one', async () => {
     await c.lock.release();
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ~/.dispatch → ~/.atelier: HOME is a temp folder passed in env, never the real one.
+function scratchHome() {
+  const home = mkdtempSync(join(tmpdir(), 'atelier-782-home-'));
+  mkdirSync(join(home, '.dispatch'));
+  writeFileSync(join(home, '.dispatch', 'drawing.json'), '{"theme":"dark"}\n', { mode: 0o600 });
+  writeFileSync(join(home, '.dispatch', 'limits.json'), '{"claude":{}}\n');
+  writeFileSync(join(home, '.dispatch', 'other.txt'), 'not ours\n');
+  return home;
+}
+
+test('copyUserStateSync: copies the known files once, leaves ~/.dispatch alone, never brings a deleted file back', () => {
+  const home = scratchHome();
+  try {
+    const env = { HOME: home };
+    assert.equal(copyUserStateSync(env), 'copied');
+    assert.equal(readFileSync(join(home, '.atelier', 'drawing.json'), 'utf8'), '{"theme":"dark"}\n');
+    assert.equal(lstatSync(join(home, '.atelier', 'drawing.json')).mode & 0o777, 0o600);
+    assert.deepEqual(tree(join(home, '.atelier')), ['.copied-from-dispatch', 'drawing.json', 'limits.json']);
+    assert.deepEqual(tree(join(home, '.dispatch')), ['drawing.json', 'limits.json', 'other.txt']);
+    rmSync(join(home, '.atelier', 'drawing.json'));
+    assert.equal(copyUserStateSync(env), 'done');
+    assert.equal(existsSync(join(home, '.atelier', 'drawing.json')), false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('copyUserStateSync: a file already in ~/.atelier is never overwritten; a symlink is never copied', () => {
+  const home = scratchHome();
+  try {
+    mkdirSync(join(home, '.atelier'));
+    writeFileSync(join(home, '.atelier', 'drawing.json'), '{"theme":"light"}\n');
+    rmSync(join(home, '.dispatch', 'limits.json'));
+    symlinkSync('/etc/hostname', join(home, '.dispatch', 'limits.json'));
+    assert.equal(copyUserStateSync({ HOME: home }), 'done');
+    assert.equal(readFileSync(join(home, '.atelier', 'drawing.json'), 'utf8'), '{"theme":"light"}\n');
+    assert.equal(existsSync(join(home, '.atelier', 'limits.json')), false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('copyUserStateSync: nothing to copy makes no ~/.atelier; DRAWING_USER_DEFAULTS=off does nothing', () => {
+  const home = mkdtempSync(join(tmpdir(), 'atelier-782-home-'));
+  try {
+    assert.equal(copyUserStateSync({ HOME: home }), 'nothing');
+    assert.equal(existsSync(join(home, '.atelier')), false);
+    mkdirSync(join(home, '.dispatch'));
+    writeFileSync(join(home, '.dispatch', 'drawing.json'), '{}');
+    assert.equal(copyUserStateSync({ HOME: home, DRAWING_USER_DEFAULTS: 'off' }), 'off');
+    assert.equal(existsSync(join(home, '.atelier')), false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
   }
 });

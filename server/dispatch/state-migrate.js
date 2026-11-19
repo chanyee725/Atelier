@@ -10,11 +10,13 @@
 // moved worktrees are fixed with `git worktree repair`. A `.dispatch` that is a symlink is never
 // followed or moved.
 import { lstat, readdir, readFile, rename, rmdir } from "node:fs/promises";
+import { constants, copyFileSync, linkSync, lstatSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { ownGitEnv, runCli } from "./cli.js";
 import { ensureExcluded } from "./git.js";
 import { claimProject } from "./project.js";
-import { LEGACY_WORKTREES_DIR, stateLayout, WORKTREES_DIR } from "./paths.js";
+import { LEGACY_WORKTREES_DIR, legacyUserDir, stateLayout, userDir, WORKTREES_DIR } from "./paths.js";
 
 const exists = (p) => lstat(p).then(() => true, (e) => (e.code === "ENOENT" ? false : Promise.reject(e)));
 /** The lock file and the files lock.js makes beside it stay behind: they belong to the lock, not the state. */
@@ -106,4 +108,52 @@ export async function claimState(root, opts = {}) {
   if (!hadFresh) await rmdir(fresh.dir).catch(() => {});
   console.log(`Dispatch state: kept .dispatch (${res.why}); it moves to .atelier on a start with no saved session`);
   return { ok: true, lock: old.lock, layout: legacy, kept: res.why };
+}
+
+/** The files of ~/.dispatch that Atelier reads: user defaults, shared limits, the standalone theme. */
+export const USER_FILES = ["drawing.json", "limits.json", "prefs.json"];
+
+/** Marks ~/.atelier as already filled from ~/.dispatch, so the copy runs once. */
+export const COPIED_MARK = ".copied-from-dispatch";
+
+/**
+ * Copies USER_FILES from ~/.dispatch to ~/.atelier once (until COPIED_MARK is there), so a file
+ * deleted later never comes back. Never overwrites: each file is copied to a temp name and
+ * hard-linked into place, which fails when the name exists (another server's copy, or a file
+ * Atelier already wrote). Regular files only, no symlinks; ~/.dispatch is left as it is.
+ * Off with DRAWING_USER_DEFAULTS=off (tests). Returns what it did.
+ */
+export function copyUserStateSync(env = process.env) {
+  if (env.DRAWING_USER_DEFAULTS === "off") return "off";
+  const to = userDir(env);
+  const from = legacyUserDir(env);
+  const has = (p) => { try { return lstatSync(p); } catch { return null; } };
+  const mark = path.join(to, COPIED_MARK);
+  if (has(mark)) return "done";
+  if (!has(from)?.isDirectory()) return "nothing";
+  const files = USER_FILES.filter((f) => has(path.join(from, f))?.isFile());
+  if (!files.length) return "nothing";
+  try {
+    if (has(to) && !has(to).isDirectory()) return "failed";
+    mkdirSync(to, { recursive: true, mode: 0o700 });
+    let copied = 0;
+    for (const f of files) {
+      const dst = path.join(to, f);
+      const tmp = `${dst}.${process.pid}-${randomUUID()}.tmp`;
+      try {
+        copyFileSync(path.join(from, f), tmp, constants.COPYFILE_EXCL);
+        linkSync(tmp, dst);
+        copied++;
+      } catch (e) {
+        if (e.code !== "EEXIST") throw e;
+      } finally {
+        rmSync(tmp, { force: true });
+      }
+    }
+    writeFileSync(mark, "");
+    return copied ? "copied" : "done";
+  } catch (e) {
+    console.error("Atelier: could not copy ~/.dispatch to ~/.atelier:", e.code ?? e.name);
+    return "failed";
+  }
 }
