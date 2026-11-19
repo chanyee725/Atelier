@@ -28,6 +28,8 @@ export type HomeProps = {
   onCreate: (kind: CreateKind, project: string | null) => void;
   /** Opens the 세션 보드 in the shell, scoped to a project folder (#731), on its 세션 tab or `tab`. */
   onBoard: (folder: string, tab?: 'usage') => void;
+  /** Opens a session on the 세션 보드 (the dashboard's 세션 요청 rows, #880). */
+  onSession?: (id: string) => void;
   /** Opens the file finder (the command menu on its 문서 section) for `/` (#793). */
   onFind: () => void;
   /** Narrow screen: the sidebar is a drawer, so the header carries its button. */
@@ -138,7 +140,7 @@ function Dashboard({ data, ...p }: Shared) {
         <span className="ml-auto">{p.bell}</span>
       </header>
       <ApprovalCard onOpen={p.onOpen} />
-      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} fill />
+      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill />
     </>
   );
 }
@@ -217,7 +219,7 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">
         <TabsContent value="docs" className="flex flex-col">
-          <ProjectDashboard project={project} onOpen={p.onOpen} onBoard={p.onBoard} />
+          <ProjectDashboard project={project} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} />
         </TabsContent>
         <TabsContent value="plans">
           <div className="flex flex-col gap-3 px-2 pt-3">

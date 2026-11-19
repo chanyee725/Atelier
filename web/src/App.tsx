@@ -1013,6 +1013,7 @@ export function App() {
               onCreate={(k, project) => void newFile(project, k)}
               // '' = the whole-project dashboard: the whole board, not 미분류.
               onBoard={(f, tab) => showSection({ kind: 'board', tab: tab ?? 'sessions', folder: f || undefined })}
+              onSession={openBoardSession}
               // `/` on the dashboard: the command menu on its 문서 section, the same search Ctrl/⌘+K opens (#793).
               onFind={findFile}
             />

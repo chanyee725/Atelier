@@ -1,12 +1,13 @@
 // Card dashboard (#686, #793): one grid of compact cards for the project, no document list (the sidebar's 문서 tree
 // has the documents). Left: the work in progress, sessions running now and the open GitHub issues as the unit of work
-// (#776, #784, #785). Right: 사용량 설정 (limits per provider) and a tabbed card, PR과 머지 / 사용량 (#819); no 최근
+// (#776, #784, #785). Right: 세션 요청 (what sessions asked a person for, #880; it took 사용량 설정's place, the
+// sidebar shows model usage) and a tabbed card, PR과 머지 / 사용량 (#819); no 최근
 // 문서 card (the sidebar has the documents) and no branch card (branch status is the sidebar's 브랜치 row, the board's
 // 브랜치 tab). All live: agents by the event stream, sessions by session events, branches, PRs and usage by polling
 // while the page is visible.
 // `fill` (#819, the home 대시보드): side by side, both columns end at the pane's bottom edge. 실행 중인 세션 takes 2 parts
 // and 이슈 3 parts of the left column (each list scrolls inside; issues page to the rows that fit, the pager on the
-// card's bottom edge); the tabbed card takes what 사용량 설정 leaves. At a narrow main pane (under 880px) the halves
+// card's bottom edge); the tabbed card takes what 세션 요청 leaves. At a narrow main pane (under 880px) the halves
 // stack, work first, and the page scrolls as before. Live sessions show as small cards, 4 a row (#799, #875).
 import { useMemo, type ReactNode } from 'react';
 import { boardHash, plainClick } from '../projectNav';
@@ -24,7 +25,7 @@ import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
 import { PrsCard } from './WorkCards';
 import { WorkTabsCard } from './WorkTabsCard';
-import { UsageSettingsCard } from './UsageSettingsCard';
+import { SessionRequestsCard } from './SessionRequestsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches } from './projectFeeds';
 
 type Props = {
@@ -34,9 +35,11 @@ type Props = {
   onBoard: (folder: string, tab?: 'usage') => void;
   /** Fill the pane to its bottom edge (#819); the parent must be a flex column of fixed height (the home <main>). */
   fill?: boolean;
+  /** Opens a session on the 세션 보드 (a 세션 요청 row, #880). */
+  onSession?: (id: string) => void;
 };
 
-export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
+export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
@@ -55,7 +58,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
-        <UsageSettingsCard />
+        <SessionRequestsCard sessions={sessions} folder={project.path} onOpen={onOpen} onSession={onSession} />
         {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>
     </DashGrid>
