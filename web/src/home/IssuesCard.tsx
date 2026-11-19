@@ -4,13 +4,14 @@
 // 없음"). The row's chevron opens its details below: branches with ahead/behind, every PR (review, CI, conflicts) and
 // the sessions' accounts. Open session branches that no issue claims are listed at the end, so no work drops out of
 // view. Read-only; links open GitHub in a new tab.
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { ChevronRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
 import { useAccountLabels } from '../accountLabels';
 import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { PrIssueSessions } from './IssueSessionList';
+import { Pager, useFitRows, usePaging } from './Pager';
 import { fromSessions } from './issueSessions';
 import { ISSUE_STATE, initials, issueRows, issuesBlankReason, looseBranches, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
@@ -31,16 +32,29 @@ type Props = {
   branches: Feed<Branches>;
   /** CI, review and conflicts of the open PRs' branches. */
   prs: Feed<ReadonlyMap<string, PrAnswer>>;
+  /** The list's filter and sort; a change goes back to page 1 (#800). */
+  filterKey?: string;
 };
+
+/** One issue row (h-9) plus its divider, px. */
+const ROW_H = 37;
+/** Pager, the card's bottom border and the page padding under the card, px. */
+const PAGER_RESERVE = 72;
+/** The closed 이슈 없는 브랜치 line. */
+const LOOSE_H = 31;
 
 /** The head branches of open PRs, for the CI/review lookup (#686's /api/prs). */
 export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
   answer && answer !== 'failed' && answer.ok ? [...new Set(answer.issues.flatMap((i) => i.prs.flatMap((p) => (p.state === 'open' && p.branch ? [p.branch] : []))))] : [];
 
-export function IssuesCard({ issues, sessions, branches, prs }: Props) {
+export function IssuesCard({ issues, sessions, branches, prs, filterKey = '' }: Props) {
   const list = Array.isArray(sessions) ? sessions : [];
   const rows = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
   const loose = looseBranches(rows, list);
+  // Rows that fit above the card's bottom edge become one page (#800); the rest goes to the next pages.
+  const listRef = useRef<HTMLUListElement>(null);
+  const size = useFitRows(listRef, { rowHeight: ROW_H, reserve: PAGER_RESERVE + (loose.length > 0 ? LOOSE_H : 0), min: 5, max: 15, active: rows.length > 0 });
+  const paged = usePaging(rows, size, filterKey);
   return (
     <Card id="issues" grow={5} title="이슈" count={rows.length || undefined} flush>
       {issues === null ? (
@@ -52,11 +66,14 @@ export function IssuesCard({ issues, sessions, branches, prs }: Props) {
       ) : rows.length === 0 ? (
         <EmptyState>열린 이슈가 없어요.</EmptyState>
       ) : (
-        <ul aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
-          {rows.map((r) => (
-            <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
-          ))}
-        </ul>
+        <>
+          <ul ref={listRef} aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
+            {paged.shown.map((r) => (
+              <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
+            ))}
+          </ul>
+          <Pager page={paged.page} count={paged.count} onPage={paged.setPage} label="이슈 페이지" />
+        </>
       )}
       {loose.length > 0 && <LooseBranches names={loose} sessions={list} branches={branches} />}
     </Card>
