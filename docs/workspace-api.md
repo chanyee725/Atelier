@@ -4,7 +4,7 @@ Paths are relative to the workspace, `/`-separated. No `..`, absolute paths, hid
 
 | Route | Notes |
 |---|---|
-| `GET /api/tree` | folders first; unreadable files are listed with `title:''`, `revision:null`; files with a `plan` carry `pipeline: {state:'plan'}` |
+| `GET /api/tree` | folders first; unreadable files are listed with `title:''`, `revision:null`; files with a `plan` carry `pipeline: {state:'plan'}`; files with open questions carry `questions` (count) |
 | `GET /api/workspace/projects` | projects view, see below (`/api/projects` belongs to Dispatch) |
 | `GET /api/workspace/agents?project=` | live agent list, see below; `project` (a top folder) is optional |
 | `GET /api/file?path=` / `POST /api/file {path,title?,document?,canvas?,blocks?,plan?}` | create is exclusive (409 if it exists); optional content (a template) is checked like a save (400) |
@@ -110,6 +110,22 @@ A file may carry a top-level `plan`: the steps of an agent pipeline drawn in one
 | `{op:'add', step, before?}` | Insert a step before step `before`, or at the end. |
 | `{op:'set', id, step}` | Change step `id`'s fields; `null` removes a field. A new `id` is renamed in every `after` and keeps the node link. |
 | `{op:'remove', id}` | Remove step `id` and drop it from every `after`. |
+
+## Questions in a document (`discussions`, #738)
+
+An agent that needs the user's decision asks inside the document and keeps working on what it can; the answer comes back as a message and stays readable in the file. Next action for an agent: send the question with `x-drawing-session: $DRAWING_SESSION`, then wait for the `[문서 질문 답변]` message or read the file's discussions.
+
+1. Ask: `POST /api/file/discussions?path=` with `x-drawing: 1` and `x-drawing-session: $DRAWING_SESSION`, body `{anchor, question, choices?, step?}` → 201 `{path, revision, item}`; `item.id` (`q_…`) names the question. Without the header the server cannot tell who asks (400); an id that is no live session of this server also gets 400.
+2. Body: `anchor` is `{kind:'block', block}`, `{kind:'node', block, node}` (a node of a diagram block) or `{kind:'text', from, to}` (editor positions, `0 <= from < to`). `question`: 1-2000 characters. `choices`: 2-10 strings of at most 200 characters, or none (the user then types). `step`: the plan step id you work on (`plan.steps[].id`); while the question is open that step shows as blocked (`askingSteps` in `shared/dispatch/discussions.ts`). The server does not check that `step` is a real step id.
+3. The user answers in the question card at the top of the document (`POST /api/file/discussions/answer?path=` `{id, choice}` with a choice index, or `{id, text}` up to 4000 characters; one answer per question, a second gets 400). The answer is sent to the asking session by its stored id only, as one message: `[문서 질문 답변] <path>의 질문 <id> "<question>"에 사용자가 답했어요: <answer>`. The reply's `delivered` is `false` when that session is gone or refuses a message right now (a running Codex or Gemini turn, the usage guard); there is no retry.
+4. Read: `GET /api/file/discussions?path=` → `{path, revision, discussions}` (`null` when the file has none). An answered item has `status: 'answered'`, `answer` (a picked choice's text, or the typed text), `choice?` (its index), `answeredBy`, `answeredAt`. Read this when the message did not come, after a restart or a long turn.
+5. Counts: `GET /api/discussions/open` → `{total, files: [{path, title, open}], projects: {<top folder>: n}}` (root files under `''`); tree rows carry `questions`.
+
+- Stored in the file as top-level `discussions` `{v: 1, items}` (format `version` 6; an older server treats v6 files as read-only, 422). At most 500 questions per file. Item fields: `id`, `anchor`, `question`, `choices?`, `step?`, `status` (`open` / `answered`), `askedBy`, `askedById?`, `askedAt`, and when answered `answer`, `choice?`, `answeredBy`, `answeredAt` (times in ms). Rules: `discussionsProblem` / `cleanDiscussions`.
+- Who: `askedBy` / `answeredBy` is a live session's name, `user` (the page, no header) or `outside` (any other `x-drawing-session` label; labels are never stored, since they could be a real name or an email). `askedById` is the asking session's id; a later session reusing the name gets no answer.
+- Questions change only through these two POST routes. A whole-file `PUT /api/file` keeps the `discussions` on disk, whatever it sends. Both POSTs bump `revision`, keep the previous file in history and send an SSE `workspace` `change`, so an open tab with unsaved edits gets 409 on its next save.
+- A section with a newer `v` reads verbatim and cannot be changed (422). A broken section in a hand-edited file is dropped on read only.
+- Content: the question, choices and answer are document text. Write instructions and decisions only: no transcripts, tokens, keys, emails or real names.
 
 ## Code window `GET /api/code`
 
