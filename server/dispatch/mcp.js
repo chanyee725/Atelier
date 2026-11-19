@@ -167,8 +167,9 @@ const LEAD_TOOLS = [
       type: "object",
       required: ["goal", "steps"],
       properties: {
-        path: { type: "string", description: "워크스페이스 안 파일 경로. 생략하면 내 초안을 고치거나 atelier/pipelines/<제목>으로 새로 만든다" },
-        folder: { type: "string", description: "새 계획을 둘 프로젝트 폴더(워크스페이스 최상위, 이미 있어야 함). 생략하면 내 프로젝트 폴더" },
+        path: { type: "string", description: "워크스페이스 안 파일 경로. 생략하면 내 초안을 고치거나 <area>/<feature>/계획.dpx.json으로 새로 만든다" },
+        area: { type: "string", description: "영역 폴더(워크스페이스 최상위 한 단계, 예: Web, Server). 프로젝트 구조를 보고 정하고 있는 영역을 다시 쓴다. 생략하면 내 영역" },
+        feature: { type: "string", description: "영역 안 기능 폴더 이름(한 단계). 생략하면 제목" },
         title: { type: "string", description: "계획 제목 (생략하면 goal 앞부분)" },
         goal: { type: "string", description: "목표 한두 문장" },
         steps: {

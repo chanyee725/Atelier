@@ -112,15 +112,14 @@ test('lead plans: no path goes into the lead project folder; 시작하기 gives 
     await settled(d, lead.id);
     const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크', steps: STEP });
     assert.equal(w.status, 200, JSON.stringify(w.body));
-    assert.equal(w.body.path, 'alpha/pipelines/로그인-개편.dpx.json');
-    assert.ok(readdirSync(join(ws, 'alpha', 'pipelines')).length);
-    // A lead without a project keeps writing to pipelines/.
+    assert.equal(w.body.path, 'alpha/로그인-개편/계획.dpx.json');
+    assert.ok(readdirSync(join(ws, 'alpha', '로그인-개편')).length);
+    // A lead without an area names one (#782); the plan's area becomes its folder.
     const free = (await mk(call, { items: [{ role: 'lead', task: 'plan' }] })).body.sessions[0];
     await settled(d, free.id);
-    const w2 = await call('POST', '/api/pipeline/plan', { lead: free.id, title: '다른 계획', goal: 'x', steps: STEP });
-    assert.equal(w2.body.path, 'pipelines/다른-계획.dpx.json');
-    // pipelines/ is itself a top-level folder, so the plan's top folder is the project.
-    assert.equal(d.hub.get(free.id).folder, 'pipelines');
+    const w2 = await call('POST', '/api/pipeline/plan', { lead: free.id, area: 'gamma', feature: '다른', title: '다른 계획', goal: 'x', steps: STEP });
+    assert.equal(w2.body.path, 'gamma/다른/계획.dpx.json');
+    assert.equal(d.hub.get(free.id).folder, 'gamma');
     // A plan a lead puts into beta/ makes beta its folder; the start hands it to the team.
     const free2 = (await mk(call, { items: [{ role: 'lead', task: 'plan' }] })).body.sessions[0];
     await settled(d, free2.id);

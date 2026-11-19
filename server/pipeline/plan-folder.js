@@ -1,20 +1,39 @@
-// Which project folder a new plan goes into (#726): the folder write_plan names, else the lead's folder, else the
-// one top-level folder every file the plan's steps name sits in. Only top-level workspace folders count.
+// Where a new plan goes (#726, #782): <area>/<feature>/계획.dpx.json. The area is the one write_plan names, else the
+// lead's folder, else the one top-level folder every file the plan's steps name sits in. Areas are the workspace's
+// top-level folders; a lead picks them from the project's structure (no fixed list) and reuses the ones that exist.
 import { readdir } from 'node:fs/promises';
 import { topFolder } from '../dispatch/session-folder.js';
+import { RESERVED_PROJECT_NAMES } from '../workspace/paths.js';
 
-/** The workspace's top-level folders as the tree lists them (no hidden folders, no symlinks). */
+/** File name of a plan inside its feature folder. */
+export const PLAN_FILE_STEM = '계획';
+
+/** The workspace's top-level folders as the tree lists them (no hidden folders, no symlinks, no reserved names). */
 export async function topFolders(root) {
   try {
-    return (await readdir(root, { withFileTypes: true })).filter((e) => e.isDirectory() && !e.isSymbolicLink() && !e.name.startsWith('.')).map((e) => e.name);
+    return (await readdir(root, { withFileTypes: true }))
+      .filter((e) => e.isDirectory() && !e.isSymbolicLink() && !e.name.startsWith('.') && !RESERVED_PROJECT_NAMES.includes(e.name))
+      .map((e) => e.name);
   } catch {
     return [];
   }
 }
 
-/** A top-level folder name write_plan may name: one plain path segment, nothing hidden, no way out of the workspace. */
+/**
+ * An area or feature name write_plan may use: one plain path segment (no `/`, `\\`, `..` or hidden name, no control
+ * characters), not reserved, not named like a document file, at most 80 characters, no outer spaces.
+ */
 export function isFolderName(name) {
-  return typeof name === 'string' && name.length > 0 && !/[\\/]/.test(name) && !name.startsWith('.') && name.trim() === name;
+  return (
+    typeof name === 'string' &&
+    name.length > 0 &&
+    name.length <= 80 &&
+    name.trim() === name &&
+    !/[\\/\u0000-\u001f\u007f]/.test(name) &&
+    !name.startsWith('.') &&
+    !/\.dpx(\.json)?$/i.test(name) &&
+    !RESERVED_PROJECT_NAMES.includes(name)
+  );
 }
 
 /**

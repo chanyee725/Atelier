@@ -18,14 +18,13 @@ import { redact } from '../dispatch/redact.js';
 import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
-import { inferPlanFolder, isFolderName, topFolders } from './plan-folder.js';
+import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
 import { resolvedStep } from '../../shared/dispatch/plan.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
 import { nodeLabels, summaryNodes, withSummary, withoutSummary } from '../../shared/dispatch/run-summary.ts';
 
 const MAX_BODY = 1024 * 1024;
-export const PIPELINE_DIR = 'pipelines';
 const PROVIDER_NAMES = { claude: 'Claude', openai: 'OpenAI Codex', gemini: 'Gemini' };
 
 async function readJson(req) {
@@ -310,10 +309,10 @@ export async function setup(ctx) {
   }
 
   // ---- write_plan ----
-  async function freePath(title, dir = PIPELINE_DIR) {
-    const stem = `${dir ? `${dir}/` : ''}${planFileName(title)}`;
+  // <area>/<feature>/계획.dpx.json, or 계획-2… when that name is taken.
+  async function freePath(dir) {
     for (let i = 1; i < 100; i++) {
-      const p = `${stem}${i === 1 ? '' : `-${i}`}${FILE_EXT}`;
+      const p = `${dir}/${PLAN_FILE_STEM}${i === 1 ? '' : `-${i}`}${FILE_EXT}`;
       if (!(await readOrNull(p))) return p;
     }
     throw new StoreError(409, '같은 이름의 계획이 너무 많아요');
@@ -335,15 +334,21 @@ export async function setup(ctx) {
       const own = leadEntries(lead.id, 'plan')[0];
       path = own ? own[0] : null;
     }
-    // A new plan the lead names no path for goes into a project folder (E505c, #726): the folder write_plan names,
-    // else the lead's, else the one top-level folder every file the steps name sits in.
+    // A new plan the lead names no path for goes to <area>/<feature>/계획.dpx.json (#782). The area is the one
+    // write_plan names (`area`, or the older `folder`), else the lead's, else the one top-level folder every file the
+    // steps name sits in; it may be new (the lead picks areas from the project's structure). The feature defaults to
+    // the title. Names that are not one plain path segment are refused even when a path is given.
+    const named = (key, label) => {
+      const v = body[key];
+      if (v == null || v === '') return null;
+      const name = typeof v === 'string' ? v.trim().normalize('NFC') : '';
+      if (!isFolderName(name)) throw new StoreError(400, `${label} 이름은 폴더 하나여야 해요(/, .., 숨김 이름 안 돼요): ${String(v).slice(0, 80)}`);
+      return name;
+    };
+    const area = named('area', '영역') ?? named('folder', '영역');
+    const feature = named('feature', '기능');
     const folders = await topFolders(ws.root);
-    let leadFolder;
-    if (body.folder != null && body.folder !== '') {
-      const name = typeof body.folder === 'string' ? body.folder.trim() : '';
-      if (!isFolderName(name) || !folders.includes(name)) throw new StoreError(400, `작업공간에 없는 프로젝트 폴더예요: ${String(body.folder).slice(0, 80)}`);
-      leadFolder = name;
-    } else leadFolder = lead.folder ?? inferPlanFolder(input.steps, folders);
+    const leadFolder = area ?? (lead.folder && isFolderName(lead.folder) ? lead.folder : null) ?? inferPlanFolder(input.steps, folders);
     const existing = path ? all[path] : null;
     if (existing?.state === 'paused') throw new StoreError(409, '멈춘 계획이에요. 사용자가 계획 다시 열기를 누르면 고칠 수 있어요');
     if (existing?.state === 'running') throw new StoreError(409, '실행 중인 계획은 바꿀 수 없어요. 바뀐 점은 note_step으로 남겨 주세요');
@@ -362,7 +367,13 @@ export async function setup(ctx) {
       revision = r.revision;
     } else {
       built = buildPlanFile(input, null);
-      path ??= await freePath(built.title, leadFolder ? `${leadFolder}/${PIPELINE_DIR}` : PIPELINE_DIR);
+      if (!path) {
+        if (!leadFolder) {
+          const have = folders.length ? ` 지금 영역: ${folders.slice(0, 20).join(', ')}` : '';
+          throw new StoreError(400, `area(영역)를 정해 주세요. 프로젝트 구조를 보고 고르고, 있는 영역은 다시 써요.${have}`);
+        }
+        path = await freePath(`${leadFolder}/${feature ?? planFileName(built.title)}`);
+      }
       const r = await ws.createFile(path, { title: built.title, document: built.document, blocks: [built.block], plan: built.plan });
       path = r.path;
       revision = r.revision;
