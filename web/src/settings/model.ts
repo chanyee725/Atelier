@@ -376,7 +376,7 @@ export function offReason(status: { reason?: string; message?: string } | null |
 export const SECTIONS = [
   { id: 'general', label: '일반' },
   { id: 'providers', label: '모델 연결' },
-  { id: 'roles', label: '역할별 모델' },
+  { id: 'roles', label: '모드별 모델' },
   { id: 'team', label: '관리자와 팀' },
   { id: 'limits', label: '사용 한도' },
   { id: 'folders', label: '작업 폴더' },
