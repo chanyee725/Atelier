@@ -8,6 +8,7 @@ import { sessionsOf } from '../dispatch/lib/folder.ts';
 import { api } from '../api';
 import { pollWhileVisible } from './model';
 import type { Session } from '../../../shared/dispatch/types.ts';
+import type { IssuesAnswer } from './issueBoard.ts';
 
 export type Feed<T> = T | 'failed' | null;
 
@@ -123,4 +124,31 @@ export function useSessionBranches(sessions: Feed<Session[]>) {
     const prBranches = [...new Set(byRecent.map((s) => s.branch!))].slice(0, PR_BRANCHES);
     return { open, withBranch: byRecent, prBranches };
   }, [sessions]);
+}
+
+const ISSUES_POLL_MS = 60_000;
+
+/** Open GitHub issues with their PRs (#776; the server caches 60s). Skipped while PR tracking is off. */
+export function useIssues(on: boolean | null): Feed<IssuesAnswer> {
+  const [data, setData] = useState<Feed<IssuesAnswer>>(null);
+  useEffect(() => {
+    if (on === false) {
+      setData({ ok: false, reason: 'disabled' });
+      return;
+    }
+    if (on === null) return;
+    const ctl = new AbortController();
+    const load = () =>
+      void get<IssuesAnswer>('/api/issues', ctl.signal).then((d) => {
+        if (ctl.signal.aborted) return;
+        // A failed reload keeps the list already shown.
+        setData((old) => (d ?? (old && old !== 'failed' ? old : 'failed')));
+      });
+    const stop = pollWhileVisible(load, ISSUES_POLL_MS);
+    return () => {
+      ctl.abort();
+      stop();
+    };
+  }, [on]);
+  return data;
 }
