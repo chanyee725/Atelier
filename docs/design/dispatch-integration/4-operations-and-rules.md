@@ -1,17 +1,26 @@
 # E9 설계 4: 운영 규칙 (네트워크·개인정보·가드·권한·테스트)
 
-상태: 설계안 (코드 변경 없음). 기준 커밋: Atelier `develop` 0394637, Dispatch 0.14.0 작업 트리.
-배경: 이슈 #87 — Dispatch를 Atelier 안으로 합쳐 파이프라인을 문서+다이어그램으로 계획하고 실행·관찰해요.
+상태: 설계안 (코드 변경 없음). 결정 6개는 §0, 답이 필요한 것은 §8 열린 질문.
+다음: §0을 읽고 §8의 질문에 답해요(10분). 구현 순서는 §7.
+
+기준 커밋: Atelier `develop` 0394637, Dispatch 0.14.0 작업 트리. 배경은 이슈 #87(Dispatch를 Atelier 안으로 합쳐 파이프라인을 문서+다이어그램으로 계획하고 실행·관찰).
 경로 표기: `D:` = Dispatch 저장소(`~/personal/Dispatch`), 접두어 없음 = 이 저장소.
 
 ## 0. 추천 (한눈에)
 
-1. **"외부 요청 금지"는 서버 프로세스에만 걸어요.** 세션은 사용자가 이미 로그인한 CLI(`claude`, `codex`, `agy`)를 자식 프로세스로 띄우는 것이고, 그 CLI의 통신은 서버가 만들거나 중계하지 않아요. 서버 코드의 `fetch`는 루프백만 허용하고, 이걸 테스트로 막아요.
-2. **대화 원문은 디스크에 쓰지 않아요.** Dispatch는 `.dispatch/transcripts/<id>.jsonl`에 원문을 남기지만(D:server/sessions.js:87-88, 195-202), Atelier 규칙(CLAUDE.md:13)과 정면 충돌해요. 메모리 링버퍼만 두고, 재시작하면 원문은 사라져요. 디스크에는 메타데이터·사용량·단계 상태만 남겨요.
-3. **한도 가드·세션 길이 가드는 그대로 옮겨요.** 동작·기본값(5시간 90 %, 주간 85 %, 컨텍스트 70 %, 누적 15M 토큰)을 바꾸지 않아요. 바뀌는 건 하나: 한도에 걸리면 "티켓" 대신 **파이프라인 문서의 단계 상태**가 멈춤 지점이 돼요.
-4. **권한 모드는 4개 그대로, 단 Gemini의 조용한 우회를 없애요.** 지금 Gemini는 `manual`을 골라도 `auto` + `--dangerously-skip-permissions`로 돌아요(D:server/sessions.js:1066, 1075). Atelier에서는 Gemini에 `manual`·`acceptEdits`를 고르면 400으로 거절해요.
-5. **CLI 실행은 한 곳(`spawnCli`)으로 모으고 주입 가능하게 해요.** `npm test`는 가짜 CLI만 돌리고, 실제 `claude`/`codex`/`agy`는 절대 실행하지 않아요(PATH를 가짜 bin 폴더로만 채워 보장).
-6. **쓰기 범위:** 서버가 쓰는 곳은 워크스페이스 아래 `.drawing/`(숨김, 워크스페이스 API로 안 보임 — server/workspace/paths.js:20)뿐이에요. Dispatch의 `~/.dispatch/*` 공유 파일은 열린 질문으로 남겨요(§8 Q1).
+네트워크와 실행:
+
+1. **"외부 요청 금지"는 서버 프로세스에만 걸어요.** 세션의 CLI(`claude`, `codex`, `agy`) 통신은 서버가 만들거나 중계하지 않아요. 서버 코드의 `fetch`는 루프백만, 테스트로 막아요.
+2. **CLI 실행은 한 곳(`spawnCli`)으로 모아요.** `npm test`는 가짜 CLI만 돌려요. PATH를 가짜 bin 폴더로만 채워 실제 CLI가 뜨지 않게 해요.
+3. **쓰기는 워크스페이스 아래 `.drawing/`뿐이에요.** 숨김 폴더라 워크스페이스 API로 안 보여요(server/workspace/paths.js:20).
+
+데이터와 가드:
+
+1. **대화 원문은 디스크에 쓰지 않아요.** 메모리 링버퍼만 두고, 디스크에는 메타데이터·사용량·단계 상태만 남겨요. Dispatch는 `.dispatch/transcripts/<id>.jsonl`에 남기지만(D:server/sessions.js:87-88, 195-202) Atelier 규칙(CLAUDE.md:13)과 충돌해요.
+2. **한도·세션 길이 가드는 기본값 그대로 옮겨요.** 5시간 90 %, 주간 85 %, 컨텍스트 70 %, 누적 15M 토큰. 바뀌는 것 하나: 멈춤 지점이 티켓 대신 파이프라인 문서의 단계 상태예요.
+3. **Gemini의 조용한 우회를 없애요.** 지금은 `manual`을 골라도 `auto` + `--dangerously-skip-permissions`로 돌아요(D:server/sessions.js:1066, 1075). Atelier에서는 Gemini에 `manual`·`acceptEdits`를 고르면 400으로 거절해요.
+
+따로: `~/.dispatch/*` 공유 파일을 쓸지는 §8 Q1에서 정해요.
 
 ## 1. 네트워크 규칙과 세션 실행의 충돌 해소
 
