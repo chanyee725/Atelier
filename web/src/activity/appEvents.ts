@@ -25,9 +25,9 @@ export type AppEvent =
   | { type: 'deleted'; kind: EntryKind; path: string }
   | { type: 'moved'; kind: EntryKind; from: string; to: string }
   | { type: 'renamed'; kind: EntryKind; from: string; to: string }
-  | { type: 'session-started'; id: string; name: string; team: boolean }
-  | { type: 'session-ended'; id: string; name: string }
-  | { type: 'session-error'; id: string; name: string }
+  | { type: 'session-started'; id: string; name: string; team: boolean; role?: string; provider?: string }
+  | { type: 'session-ended'; id: string; name: string; role?: string; provider?: string }
+  | { type: 'session-error'; id: string; name: string; role?: string; provider?: string }
   | { type: 'model-connected'; provider: string; name: string }
   | { type: 'model-disconnected'; provider: string; name: string }
   | { type: 'model-error'; provider: string; name: string }
@@ -50,6 +50,8 @@ export interface AppToast {
   /** Errors stay until dismissed; the rest close by themselves. */
   persist: boolean;
   target?: ToastTarget;
+  /** The agent session it is about (session events): shown as who raised it in the 알림함 (#811). */
+  agent?: { name: string; role: string; provider?: string };
 }
 
 const NOUN: Record<EntryKind, string> = { doc: '문서', canvas: '캔버스', folder: '폴더', project: '프로젝트' };
@@ -87,13 +89,18 @@ export function toastOf(e: AppEvent): AppToast | null {
     case 'renamed':
       return info('files', `renamed:${e.from}>${e.to}`, `${label(e.kind, e.to)}로 이름을 바꿨어요`, e.kind === 'doc' ? { file: e.to } : undefined);
     case 'session-started':
-      return e.team
-        ? info('sessions', `session-started:${e.id}`, `${subjectOf(`${e.name} 팀`)} 만들어졌어요`, { session: e.id })
-        : info('sessions', `session-started:${e.id}`, `${e.name} 세션을 시작했어요`, { session: e.id });
     case 'session-ended':
-      return info('sessions', `session-ended:${e.id}`, `${e.name} 세션이 끝났어요`, { session: e.id });
-    case 'session-error':
-      return error('sessions', `session-error:${e.id}`, `${e.name} 세션에 오류가 났어요`, { session: e.id });
+    case 'session-error': {
+      const t =
+        e.type === 'session-error'
+          ? error('sessions', `session-error:${e.id}`, `${e.name} 세션에 오류가 났어요`, { session: e.id })
+          : e.type === 'session-ended'
+            ? info('sessions', `session-ended:${e.id}`, `${e.name} 세션이 끝났어요`, { session: e.id })
+            : e.team
+              ? info('sessions', `session-started:${e.id}`, `${subjectOf(`${e.name} 팀`)} 만들어졌어요`, { session: e.id })
+              : info('sessions', `session-started:${e.id}`, `${e.name} 세션을 시작했어요`, { session: e.id });
+      return { ...t, agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) } };
+    }
     case 'model-connected':
       return info('models', `model:${e.provider}:on`, `${objectOf(e.name)} 연결했어요`);
     case 'model-disconnected':
@@ -144,7 +151,7 @@ export function parseOff(raw: string | null): Set<ToastCategory> {
 
 // ---- Dispatch state → events (sessions and providers come over SSE as whole objects; these diff them) ----
 
-type SessionLike = { id: string; name: string; role?: string; parent?: string | null; status?: string; state?: string; startedAt?: number };
+type SessionLike = { id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number };
 type ProviderLike = { name?: string; connected?: boolean; error?: string | null };
 
 /** A session counts as new only when it started this recently (a reconnect re-sends older ones). */
@@ -154,12 +161,14 @@ const failed = (s: SessionLike) => s.status === 'error' || s.state === 'failed';
 
 /** Events between the last known copy of a session (undefined: not seen before) and the new one. */
 export function sessionEvents(prev: SessionLike | undefined, next: SessionLike, now: number): AppEvent[] {
+  // Who it is (#811): role and provider ids only, for the 알림함's model mark and 이름 · 역할.
+  const who = { id: next.id, name: next.name, ...(next.role ? { role: next.role } : {}), ...(next.provider ? { provider: next.provider } : {}) };
   if (!prev) {
     if (next.startedAt === undefined || now - next.startedAt > FRESH_MS) return [];
-    return [{ type: 'session-started', id: next.id, name: next.name, team: next.role === 'lead' && !next.parent }];
+    return [{ type: 'session-started', ...who, team: next.role === 'lead' && !next.parent }];
   }
-  if (failed(next) && !failed(prev)) return [{ type: 'session-error', id: next.id, name: next.name }];
-  if (ended(next) && !ended(prev)) return [{ type: 'session-ended', id: next.id, name: next.name }];
+  if (failed(next) && !failed(prev)) return [{ type: 'session-error', ...who }];
+  if (ended(next) && !ended(prev)) return [{ type: 'session-ended', ...who }];
   return [];
 }
 
