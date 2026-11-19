@@ -333,6 +333,43 @@ test('멈추기 pauses the plan and holds the team; 이어서 하기 hands the o
   }
 });
 
+test('a trashed plan document pauses its run, 멈추기 still works without the document, and a restart leaves no live lead (#775)', { timeout: 90_000 }, async () => {
+  let t = await start();
+  try {
+    const { call, d, lead, ws } = t;
+    const { path, runId } = await running(t);
+    // Wait for the run record on disk: only a file with run records sends the trash event.
+    await until(() => {
+      try {
+        return readdirSync(join(ws, '.drawing', 'runs', ...path.split('/'))).length > 0;
+      } catch {
+        return false;
+      }
+    }, 10_000);
+    const del = await call('DELETE', `/api/file?path=${encodeURIComponent(path)}`);
+    assert.equal(del.status, 200, JSON.stringify(del.body));
+    await until(() => d.store.data.pipelines[path]?.state === 'paused', 10_000);
+    assert.equal(d.store.data.pipelines[path].pause.by, 'stop');
+
+    // An entry left running before this fix: 멈추기 finds it by path although the document is in the trash.
+    d.store.data.pipelines[path].state = 'running';
+    const stopped = await call('POST', '/api/pipeline/stop', { path });
+    assert.equal(stopped.status, 200, JSON.stringify(stopped.body));
+    assert.equal(stopped.body.state, 'paused');
+    assert.equal(stopped.body.runId, runId);
+
+    // After a restart the lead has no process, so the folder-switch guard does not count its plan as running.
+    d.store.data.pipelines[path].state = 'running';
+    d.store.save();
+    await t.stop();
+    t = await start(t);
+    assert.equal(t.d.hub.alive(lead.id), false);
+    assert.equal(t.d.hub.alive('nobody'), false);
+  } finally {
+    await t.stop();
+  }
+});
+
 test('the limit guard pauses a running plan and resumes it after the reset; 이어서 하기 waits for it', { timeout: 60_000 }, async () => {
   const t = await start();
   try {
