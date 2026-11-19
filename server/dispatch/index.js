@@ -15,6 +15,7 @@ import { Ledger } from "./ledger.js";
 import { accountLabelOf } from "../../shared/dispatch/accounts.js";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
+import { createLiveBranches } from "./live-branches.js";
 import { createIssueList } from "./issues.js";
 import { createAccountsComment } from "./pr-comment.js";
 import { claimProject, findProject, OFF_MESSAGES } from "./project.js";
@@ -212,6 +213,8 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
     // One accounts-summary comment per PR through `gh api` (pr-comment.js, #756); same switch, never reads bodies.
     postAccounts: dep.postAccounts ?? createAccountsComment({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
   };
+  // Session branches with ahead/behind, last commit, dirty flag and PR phase (#792); cached 3s.
+  d.liveBranches = dep.liveBranches ?? createLiveBranches({ root, sessions: () => hub.sessions, prStatus: d.prStatus });
 
   const timers = [];
   // Each timer is guarded on its own: a Hub error must not stop the server or the drawing routes.

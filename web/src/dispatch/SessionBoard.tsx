@@ -17,6 +17,7 @@ import { guardValue, usageGroups, type SectionId, type UsageEntry } from '../set
 import { elapsed } from '../../../shared/dispatch/attention.ts';
 import { AlertWatcher } from './AlertWatcher';
 import { AlwaysOnView } from './AlwaysOnView';
+import { BranchesPage } from './BranchesView';
 import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
@@ -40,6 +41,7 @@ const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
 const TABS: { tab: BoardTab; label: string }[] = [
   { tab: 'sessions', label: '세션' },
+  { tab: 'branches', label: '브랜치' },
   { tab: 'timeline', label: '타임라인' },
   { tab: 'usage', label: '사용량' },
 ];
@@ -158,6 +160,8 @@ export default function SessionBoard(p: BoardProps) {
             <Skeleton />
           ) : p.tab === 'usage' ? (
             <UsagePage />
+          ) : p.tab === 'branches' ? (
+            <BranchesPage />
           ) : p.tab === 'timeline' ? (
             <SessionTimeline onOpen={(id) => openSession(id)} />
           ) : (
