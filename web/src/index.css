@@ -250,7 +250,10 @@
   --shadow-pop: var(--shadow-pop);
 }
 
-html, body, #root { height: 100%; }
+/* The app shell is exactly one viewport tall (100dvh, #800): no document scroll, only panes scroll inside.
+   overflow: hidden on html and body keeps anything that lands outside #root from growing the page past the frame. */
+html, body { height: 100%; overflow: hidden; }
+#root { height: 100dvh; }
 body {
   margin: 0;
   background: var(--background);

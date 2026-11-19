@@ -91,7 +91,7 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
 
       <DashColumn label="진행 중인 작업">
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} />
+        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} filterKey={query} />
       </DashColumn>
     </DashGrid>
   );
