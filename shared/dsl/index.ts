@@ -1,12 +1,14 @@
+import { parseBpmn } from './bpmn.ts';
 import { Cursor, GRAPH_KEYS } from './common.ts';
 import { parseErd } from './erd.ts';
 import { parseGraph } from './graph.ts';
 import { parseSequence } from './sequence.ts';
 import { tokenize } from './tokenizer.ts';
-import type { Diagnostic, Diagram, DiagramType, ErdDiagram, GraphDiagram, ParseResult, SequenceDiagram } from './types.ts';
+import type { BpmnDiagram, Diagnostic, Diagram, DiagramType, ErdDiagram, GraphDiagram, ParseResult, SequenceDiagram } from './types.ts';
 
 export type * from './types.ts';
 export { tokenize } from './tokenizer.ts';
+export { bpmnAsGraph } from './bpmn.ts';
 export type { Token, TokenKind } from './tokenizer.ts';
 
 /** First-line markers used by Eraser's `.eraserdiagram` files. */
@@ -16,6 +18,7 @@ const MARKERS: Record<string, DiagramType> = {
   'flowchart-diagram': 'flowchart',
   'sequence-diagram': 'sequence',
   'entity-relationship-diagram': 'erd',
+  'bpmn-diagram': 'bpmn',
 };
 
 function stripMarker(code: string): { code: string; type?: DiagramType } {
@@ -33,7 +36,8 @@ function stripMarker(code: string): { code: string; type?: DiagramType } {
 
 /**
  * Guess the diagram type from the code: a first-line marker, sequence keywords, ERD keywords
- * (`notation`, `pk`/`fk`), `shape:` for flowcharts, otherwise cloud architecture.
+ * (`notation`, `pk`/`fk`), BPMN (`type: activity|event|gateway`, `layout compact|sequential`), `shape:` for
+ * flowcharts, otherwise cloud architecture.
  */
 export function detectDiagramType(code: string): DiagramType {
   const marked = stripMarker(code).type;
@@ -48,6 +52,12 @@ export function detectDiagramType(code: string): DiagramType {
     return 'sequence';
   }
   if (/^[ \t]*notation[ \t]+(chen|crows-foot)\b/m.test(text) || /\{[^{}]*?[^{}\s][ \t]+(pk|fk)(?=[ \t]|\r?\n|\}|$)/m.test(text)) return 'erd';
+  if (
+    /\[[^\]\n]*\btype\s*:\s*(activity|event|gateway)\b/.test(text) ||
+    /^[ \t]*layout[ \t]*:?[ \t]*(compact|sequential)[ \t]*$/m.test(text)
+  ) {
+    return 'bpmn';
+  }
   if (/\bshape\s*:/.test(text)) return 'flowchart';
   return 'cloud-architecture';
 }
@@ -58,7 +68,7 @@ function run(code: string, type: DiagramType): ParseResult {
   const { tokens, diagnostics: lexDiagnostics } = tokenize(src);
   const c = new Cursor(src, tokens, GRAPH_KEYS);
   const ast: Diagram =
-    type === 'sequence' ? parseSequence(c) : type === 'erd' ? parseErd(c) : parseGraph(c, type);
+    type === 'sequence' ? parseSequence(c) : type === 'erd' ? parseErd(c) : type === 'bpmn' ? parseBpmn(c) : parseGraph(c, type);
   const diagnostics = [...lexDiagnostics, ...c.diagnostics].sort(
     (a, b) => a.offset - b.offset || (a.severity === b.severity ? 0 : a.severity === 'error' ? -1 : 1),
   );
@@ -69,6 +79,7 @@ function emptyAst(type: DiagramType): Diagram {
   const base = { styles: {}, globalStyles: [] };
   if (type === 'sequence') return { ...base, type, autoNumber: 'off', columns: [], items: [] };
   if (type === 'erd') return { ...base, type, notation: 'chen', entities: [], relationships: [] };
+  if (type === 'bpmn') return { ...base, type, direction: 'right', layout: 'compact', pools: [], lanes: [], nodes: [], edges: [] };
   return { ...base, type, direction: type === 'flowchart' ? 'down' : 'right', children: [], edges: [] };
 }
 
@@ -101,4 +112,7 @@ export function parseSequenceDiagram(code: string): ParseResult<SequenceDiagram>
 }
 export function parseErdDiagram(code: string): ParseResult<ErdDiagram> {
   return parse(code, 'erd') as ParseResult<ErdDiagram>;
+}
+export function parseBpmnDiagram(code: string): ParseResult<BpmnDiagram> {
+  return parse(code, 'bpmn') as ParseResult<BpmnDiagram>;
 }
