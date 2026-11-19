@@ -25,7 +25,7 @@ export function cleanSessionLabel(raw) {
 
 /**
  * The `x-drawing-session` header when it carries a session id (the `DRAWING_SESSION` value a session started by this
- * Drawing gets, #656): the lowercased id, else null. A session id is never shown as a label.
+ * Atelier gets, #656): the lowercased id, else null. A session id is never shown as a label.
  */
 export function sessionIdOf(raw) {
   if (typeof raw !== 'string') return null;

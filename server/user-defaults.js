@@ -306,7 +306,7 @@ export function checkPatch(body) {
   return out;
 }
 
-/** Drawing module entry (server/modules.js): GET/POST /api/user-defaults. Other modules use `defaults`. */
+/** Atelier module entry (server/modules.js): GET/POST /api/user-defaults. Other modules use `defaults`. */
 export async function setup(ctx, { file } = {}) {
   const defaults = new UserDefaults(file === undefined ? defaultsFile() : file);
   await defaults.load();
@@ -359,7 +359,7 @@ export async function setup(ctx, { file } = {}) {
 
 /**
  * The theme the standalone Dispatch saved in ~/.dispatch/prefs.json (next to drawing.json), or null.
- * Read only: Drawing never writes that file.
+ * Read only: Atelier never writes that file.
  */
 export async function readLegacyTheme(file) {
   if (!file) return null;

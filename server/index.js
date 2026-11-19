@@ -36,7 +36,7 @@ try {
   const claim = await claimWorkspace(opts.workspaceDir);
   if (!claim.ok) {
     const at = claim.holder?.port ? `: http://${HOST}:${claim.holder.port}/` : '';
-    console.error(`Another Drawing server is already running for this workspace${at}`);
+    console.error(`Another Atelier server is already running for this workspace${at}`);
     process.exit(1);
   }
   lock = claim.lock;
@@ -65,7 +65,7 @@ app.server.on('error', async (err) => {
 });
 app.server.listen(port, HOST, () => {
   app.ctx.lock?.setPort(port).catch((err) => console.error(`Could not update the workspace lock (${err.code ?? err.name})`));
-  console.log(`Drawing: http://${HOST}:${port}/  (workspace ${opts.workspaceDir}${opts.projectMode ? ', project mode' : ''})`);
+  console.log(`Atelier: http://${HOST}:${port}/  (workspace ${opts.workspaceDir}${opts.projectMode ? ', project mode' : ''})`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

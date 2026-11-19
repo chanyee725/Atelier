@@ -107,7 +107,7 @@ Response `start`/`end` are the first and last line of the returned `lines` (cont
   with a full example block (DSL + `codeRefs` JSON) and the API call to save it.
 - `summary` and `note` are stored in documents: the guide tells agents to describe the code only, never paste secrets,
   tokens, emails, real names or transcript text there.
-- The server-side prompt fragment that Drawing gives agent sessions for diagrams (where `write_plan`'s description and
+- The server-side prompt fragment that Atelier gives agent sessions for diagrams (where `write_plan`'s description and
   the cursor docs live) gets the same two-line rule.
 
 ## 5. Font: Pretendard on the canvas

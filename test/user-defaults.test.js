@@ -281,7 +281,7 @@ test('npm start with no arguments uses the default workspace and port from drawi
   try {
     const deadline = Date.now() + 20_000;
     while (!log.includes(`http://127.0.0.1:${port}/`) && Date.now() < deadline && child.exitCode === null) await new Promise((r) => setTimeout(r, 100));
-    assert.match(log, new RegExp(`Drawing: http://127\\.0\\.0\\.1:${port}/ +\\(workspace ${ws.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    assert.match(log, new RegExp(`Atelier: http://127\\.0\\.0\\.1:${port}/ +\\(workspace ${ws.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
     const info = await (await fetch(`http://127.0.0.1:${port}/api/info`)).json();
     assert.ok(info.workspace);
   } finally {

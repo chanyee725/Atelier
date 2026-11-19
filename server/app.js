@@ -138,7 +138,7 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
     if (claimWorkspace) {
       try {
         const claim = await claimWorkspace(dir);
-        if (!claim.ok) throw new WorkspaceError(409, 'another Drawing server has this folder open', 'in_use');
+        if (!claim.ok) throw new WorkspaceError(409, 'another Atelier server has this folder open', 'in_use');
         lock = claim.lock;
       } catch (err) {
         if (err instanceof WorkspaceError) throw err;
@@ -176,7 +176,7 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
     await runListeners();
     await lock?.setPort(ctx.port).catch((err) => console.error(`Could not update the workspace lock (${err.code ?? err.name})`));
     // Folder name only: the full path can hold the user name.
-    console.log(`Drawing: switched to workspace ${basename(dir)}`);
+    console.log(`Atelier: switched to workspace ${basename(dir)}`);
   }
 
   /** Moves the server to the workspace folder `dir` (an absolute real path). One switch at a time. */
@@ -251,7 +251,7 @@ export async function createApp(opts = {}, { publicDir = PUBLIC_DIR, moduleList 
 /**
  * Every non-GET /api request needs a custom header: a browser can't send it cross-origin without a
  * preflight this server never approves, so another site can't write here. x-drawing: 1 is
- * Drawing's own; x-dispatch: 1 is accepted for the Dispatch plugin.
+ * Atelier's own; x-dispatch: 1 is accepted for the Dispatch plugin.
  */
 export function writeAllowed(headers) {
   return headers['x-drawing'] === '1' || headers['x-dispatch'] === '1';

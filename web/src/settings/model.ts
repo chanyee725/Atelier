@@ -202,7 +202,7 @@ export function stopEscWhileOpen(target: Pick<EventTarget, 'addEventListener' | 
   return () => target.removeEventListener('keydown', onKey, { capture: true });
 }
 
-// 설정 page (#587, ported from standalone Dispatch's SettingsPage): the team settings Drawing's server acts on.
+// 설정 page (#587, ported from standalone Dispatch's SettingsPage): the team settings Atelier's server acts on.
 // Values are saved through POST /api/settings `team`; the server checks every range again.
 export type TeamNumberId = 'rotateLead' | 'rotateOthers' | 'maxChildren' | 'autoRemoveGraceSec' | 'stuckFails' | 'stuckSilentMinutes' | 'stuckMismatchMinutes' | 'stuckEtaRatio';
 export type TeamToggleId = 'shareDeps' | 'dropWorktrees' | 'replyStyle' | 'autoRemoveDone';

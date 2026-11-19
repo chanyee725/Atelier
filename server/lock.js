@@ -1,5 +1,5 @@
 // One-server locks (E13): a small JSON file { pid, port } that says which server owns a folder.
-// `<workspace>/.drawing/server.lock` keeps two Drawing servers off one workspace;
+// `<workspace>/.drawing/server.lock` keeps two Atelier servers off one workspace;
 // `<project>/.dispatch/drawing.lock` keeps two Dispatch modules off one project's `.dispatch/`.
 // A lock whose owner is gone (dead pid, or its port no longer answers as that server) is stale and
 // gets replaced, so a crash never blocks the next start.
@@ -292,7 +292,7 @@ function ownLock(file) {
   };
 }
 
-/** Lock for one workspace folder: another Drawing server is live if its pid runs and its port
+/** Lock for one workspace folder: another Atelier server is live if its pid runs and its port
  *  (once known) answers /api/info with this workspace's folder name. */
 export function claimWorkspace(workspaceDir) {
   const name = basename(workspaceDir);

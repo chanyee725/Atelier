@@ -33,7 +33,7 @@ export function WorkspaceMenu({ workspace, onSwitch, onOpenFolder }: Props) {
     setFailed(false);
     api.workspaces().then(setList, () => setFailed(true));
   };
-  const name = workspace ?? 'Drawing';
+  const name = workspace ?? 'Atelier';
   const current = list?.folders.find((f) => f.current)?.path ?? '';
   return (
     <DropdownMenu onOpenChange={load}>

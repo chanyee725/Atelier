@@ -77,7 +77,7 @@ export async function renderPreview(type: string, code: string, theme: PreviewTh
       const { svg, diagnostics, scene } = await renderDiagram(code, { type: pt, theme, wrapGroups: GROUP_WRAP });
       return { svg, diagnostics, scene, theme };
     }
-    // Drawing never changes the file: overrides the code no longer fits are left out here and pruned on save.
+    // Atelier never changes the file: overrides the code no longer fits are left out here and pruned on save.
     const { ast, diagnostics } = parse(code, pt);
     const kept = ast.type === 'sequence' || ast.type === 'erd' ? { layout: undefined } : reconcileLayout(ast, layout);
     const { svg, scene } = await renderDiagram(ast, { theme, layout: kept.layout, wrapGroups: GROUP_WRAP });

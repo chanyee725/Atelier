@@ -1,4 +1,4 @@
-# Drawing code-analysis diagrams (guide for agents)
+# Atelier code-analysis diagrams (guide for agents)
 
 Design: `docs/design/code-linked-nodes.md` (§1 data model, §4 agent side). API details: `docs/workspace-api.md`.
 
@@ -31,7 +31,7 @@ LeRobot 형식 변환 [code: "convert/lerobot.py:10-80#to_lerobot; convert/schem
 로봇 데이터 녹화 > LeRobot 형식 변환 > 학습 데이터 저장
 ```
 
-DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. How Eraser treats the `code` attribute is not verified, so Drawing strips `code:` attributes when it exports the DSL (copy for Eraser).
+DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. How Eraser treats the `code` attribute is not verified, so Atelier strips `code:` attributes when it exports the DSL (copy for Eraser).
 
 ## Full block (in a `.dpx.json` file)
 
@@ -91,7 +91,7 @@ jq '.blocks |= map(if .id == "b1" then .codeRefs = {
 curl -sf -X PUT "$URL" -H 'content-type: application/json' -H 'x-drawing: 1' -H "x-drawing-session: $DRAWING_SESSION" --data-binary @/tmp/robot.next.json
 ```
 
-`x-drawing-session`: a session started by this Drawing sends `$DRAWING_SESSION` (its session id, set in its environment), so the cursor and the project's agent list show its name for certain (#656). Without it the server guesses from your tool calls, also when the path has no `.dpx.json`, is partly encoded, or the PUT runs from a script you saved (`bash save.sh`). While you work, your cursor stays at your last edit with a short status (`글 작성 중…`, `다이어그램 작성 중…`) and leaves when your session ends. A writer outside this Drawing may send its own session name (e.g. `Otto`) instead. Never put a real name or an email there; it is kept in memory only, cut to 32 characters, and stripped of HTML and control characters.
+`x-drawing-session`: a session started by this Atelier sends `$DRAWING_SESSION` (its session id, set in its environment), so the cursor and the project's agent list show its name for certain (#656). Without it the server guesses from your tool calls, also when the path has no `.dpx.json`, is partly encoded, or the PUT runs from a script you saved (`bash save.sh`). While you work, your cursor stays at your last edit with a short status (`글 작성 중…`, `다이어그램 작성 중…`) and leaves when your session ends. A writer outside this Atelier may send its own session name (e.g. `Otto`) instead. Never put a real name or an email there; it is kept in memory only, cut to 32 characters, and stripped of HTML and control characters.
 
 The GET body already holds `revision`, `title`, `document`, `canvas`, `blocks` and `plan` (if any), so the PUT body is the same JSON with the edited block. The block shown above is what `b1` looks like after the edit.
 
