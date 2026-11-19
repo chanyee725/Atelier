@@ -1,6 +1,7 @@
 // 승인 대기 (#836): what waits for a person, on top of the 대시보드 so a waiting plan cannot stall a team unseen. Plans
-// waiting for 시작하기 (start them here with the revision the server holds, the plan view's API) and open permission
-// prompts of sessions (allow or deny). A plan whose lead session is gone shows why and offers 정리 instead.
+// waiting for 시작하기 (opens the plan with its own confirm dialog, so the person sees the plan they approve) and open
+// permission prompts of sessions (the command or input to run, then allow or deny). A plan whose lead session is gone
+// shows why and offers 정리 instead.
 // Hidden when nothing waits. Built on the dashboard's <Card>; the one accent is the warn dot in the header.
 import { useState } from 'react';
 import { ShieldAlert, Workflow } from 'lucide-react';
@@ -9,12 +10,11 @@ import { cn } from '../lib/utils';
 import { api } from '../dispatch/store';
 import { useNow } from '../dispatch/AttentionStrip';
 import { elapsed } from '../../../shared/dispatch/attention.ts';
-import { planAction, type PermissionAsk } from '../activity/approvals.ts';
+import { planAction, shortDetail, type PermissionAsk } from '../activity/approvals.ts';
 import { planTitle, planWaitingText, type WaitingPlan } from '../activity/plans.ts';
 import { usePermissionAsks, reloadPermissionAsks } from '../activity/permissionAsksStore';
 import { useWaitingPlans } from '../activity/waitingPlans';
-import { requestStart } from '../run/planOpen';
-import { startError } from '../run/planStripModel';
+import { requestPlanConfirm } from '../run/planConfirmRequest';
 import { Card, StatusDot } from './dash';
 
 /** "8분째 기다려요", "방금 왔어요"; null when unknown. */
@@ -25,14 +25,15 @@ const waited = (since: number | null, now: number) => {
 
 type Busy = { key: string } | null;
 
-function Row({ icon, title, sub, note, bad, children }: { icon: React.ReactNode; title: React.ReactNode; sub: React.ReactNode; note?: string | null; bad?: boolean; children: React.ReactNode }) {
+function Row({ icon, title, sub, note, bad, detail, children }: { icon: React.ReactNode; title: React.ReactNode; sub: React.ReactNode; note?: string | null; bad?: boolean; detail?: React.ReactNode; children: React.ReactNode }) {
   return (
     <li className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5">
       <span aria-hidden className="grid size-5 shrink-0 place-items-center text-muted-foreground [&_svg]:size-4">{icon}</span>
       <span className="min-w-0 flex-1 basis-56">
         <span className="block truncate text-sm">{title}</span>
         <span className="block truncate text-xs text-muted-foreground">{sub}</span>
-        {note && <span role={bad ? 'alert' : undefined} className={cn('block text-xs', bad ? 'text-destructive' : 'text-warn')}>{note}</span>}
+        {detail}
+        {note && <span role={bad ? 'alert' : undefined} className={cn('block text-xs', bad ? 'text-destructive' : 'text-[color-mix(in_oklch,var(--warn)_65%,var(--foreground))]')}>{note}</span>}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1.5">{children}</span>
     </li>
@@ -49,10 +50,11 @@ function PlanRow({ plan, now, onOpen, busy, run }: { plan: WaitingPlan; now: num
     setError(err);
     return err;
   });
-  const start = () => go(async () => {
-    const { res, body } = await requestStart(plan.path, { revision: plan.revision! });
-    return res.ok ? null : startError(res.status, body);
-  });
+  // The plan's strip opens its confirm dialog (steps, sessions, the revision seen) once the document is loaded.
+  const start = () => {
+    requestPlanConfirm(plan.path);
+    onOpen(plan.path);
+  };
   const dismiss = () => go(() => api('POST', '/api/pipeline/dismiss', { path: plan.path }).then(() => null, (e: Error) => e.message));
   return (
     <Row
@@ -66,7 +68,7 @@ function PlanRow({ plan, now, onOpen, busy, run }: { plan: WaitingPlan; now: num
       note={error ?? (plan.blockers.length ? plan.blockers.join(' · ') : null)}
       bad={!!error}
     >
-      {action === 'start' && <Button size="sm" disabled={!!busy} onClick={start}>시작하기</Button>}
+      {action === 'start' && <Button size="sm" onClick={start}>시작하기</Button>}
       {action === 'dismiss' && <Button size="sm" variant="outline" disabled={!!busy} onClick={dismiss}>정리</Button>}
       {action === null && <Button size="sm" variant="outline" onClick={() => onOpen(plan.path)}>열기</Button>}
     </Row>
@@ -79,15 +81,29 @@ function AskRow({ ask, now, busy, run }: { ask: PermissionAsk; now: number; busy
     run(`ask:${ask.requestId}`, async () => {
       const err = await api('POST', `/api/sessions/${encodeURIComponent(ask.sessionId)}/permission`, { requestId: ask.requestId, behavior }).then(() => null, (e: Error) => e.message);
       setError(err);
-      reloadPermissionAsks();
+      // A success comes back as the session's SSE event; a failure may mean the prompt is gone, so read them again.
+      if (err) reloadPermissionAsks();
       return err;
     });
   const time = waited(ask.since, now);
   return (
-    <Row icon={<ShieldAlert />} title={`${ask.tool} 실행을 허용할까요?`} sub={[`${ask.session} 세션`, time].filter(Boolean).join(' · ')} note={error} bad={!!error}>
+    <Row icon={<ShieldAlert />} title={`${ask.tool} 실행을 허용할까요?`} sub={[`${ask.session} 세션`, ask.description, time].filter(Boolean).join(' · ')} note={error} bad={!!error} detail={ask.detail && <AskDetail text={ask.detail} />}>
       <Button size="sm" disabled={!!busy} onClick={() => answer('allow')}>허용</Button>
       <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={!!busy} onClick={() => answer('deny')}>거절</Button>
     </Row>
+  );
+}
+
+/** What runs once allowed: one short line, the whole text a click away. */
+function AskDetail({ text }: { text: string }) {
+  const short = shortDetail(text);
+  const code = 'font-mono text-xs';
+  if (short === text) return <code className={cn(code, 'mt-1 block truncate rounded-md bg-muted px-1.5 py-0.5')} data-ask-detail>{text}</code>;
+  return (
+    <details className="mt-1" data-ask-detail>
+      <summary className={cn(code, 'block cursor-pointer list-none truncate rounded-md bg-muted px-1.5 py-0.5 [&::-webkit-details-marker]:hidden')} title="눌러서 전체 보기">{short}</summary>
+      <pre className={cn(code, 'mt-1 max-h-48 overflow-auto rounded-md bg-muted p-2 whitespace-pre-wrap break-all')}>{text}</pre>
+    </details>
   );
 }
 
