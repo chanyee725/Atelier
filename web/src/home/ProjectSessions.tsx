@@ -28,7 +28,8 @@ export function ProjectSessions({ folder, onOpen, onBoard }: { folder: string; o
     };
   }, [folder]);
 
-  const board = `/${boardHash({ tab: 'sessions', folder })}`;
+  // Same target as the click: '' is the whole project, so the board opens unscoped (#715).
+  const board = `/${boardHash({ tab: 'sessions', folder: folder || undefined })}`;
   const list = Array.isArray(sessions) ? sessions : [];
   const open = list.filter(isOpen).length;
   return (
