@@ -789,10 +789,10 @@ export function App() {
   const projectCommands = (): Command[] => [
     {
       id: 'project:all',
-      title: '홈',
+      title: '대시보드',
       group: 'project',
       icon: Layers,
-      keywords: ['dashboard', 'home', '대시보드', '프로젝트', '모든 파일'],
+      keywords: ['dashboard', 'home', '홈', '프로젝트', '모든 파일'],
       run: () => goProject(null),
     },
     ...tree
@@ -860,6 +860,11 @@ export function App() {
   useEffect(() => {
     if (section.kind !== 'board') setBoardOpen(null);
   }, [section.kind]);
+  const findFile = useCallback(() => {
+    setExportOpen(false);
+    setPaletteGroup('file');
+    setPaletteOpen(true);
+  }, []);
   const showBoard = useCallback((folder?: string | null) => showSection({ kind: 'board', tab: 'sessions', folder }), [showSection]);
   // 세션 열기 on a toast: the board opens (keeping its tab and scope when it is already shown) with that session.
   const openBoardSession = useCallback(
@@ -994,9 +999,9 @@ export function App() {
               onOpen={openFile}
               onCreate={(k, project) => void newFile(project, k)}
               // '' = the whole-project dashboard: the whole board, not 미분류.
-              onBoard={(f) => showBoard(f || undefined)}
-              // The projects view has the document's sub-documents, so the confirm can say they go too.
-              onDelete={(p, t) => void remove(docPlace(projects, p).node ?? { type: 'doc', name: p.split('/').pop() ?? p, path: p, title: t, revision: null, created: null, modified: null, count: 0, children: [] })}
+              onBoard={(f, tab) => showSection({ kind: 'board', tab: tab ?? 'sessions', folder: f || undefined })}
+              // `/` on the dashboard: the command menu on its 문서 section, the same search Ctrl/⌘+K opens (#793).
+              onFind={findFile}
             />
           ) : (
             <>

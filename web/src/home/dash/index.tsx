@@ -49,16 +49,18 @@ type CardProps = {
    * The card never gets shorter than its content, so a full card pushes the split instead of clipping rows.
    */
   grow?: number;
+  /** The body scrolls inside the card instead of growing it (#793): the card keeps its share of the column. */
+  scroll?: boolean;
 };
 
 /** A titled panel. The header is part of the card; rows inside use <CardRow>. */
-export function Card({ title, count, actions, hint, children, className, flush, id, grow }: CardProps) {
+export function Card({ title, count, actions, hint, children, className, flush, id, grow, scroll }: CardProps) {
   const headId = useId();
-  const share = grow === undefined ? undefined : { flex: `${grow} 1 0%`, minBlockSize: 'fit-content' };
+  const share = grow === undefined ? undefined : { flex: `${grow} 1 0%`, minBlockSize: scroll ? '7.5rem' : 'fit-content' };
   return (
-    <section aria-labelledby={headId} data-card={id} style={share} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground', className)}>
+    <section aria-labelledby={headId} data-card={id} style={share} className={cn('min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground', scroll && 'flex flex-col', className)}>
       <CardHeader id={headId} title={title} count={count} actions={actions} hint={hint} />
-      <div className={flush ? undefined : 'px-4 py-3'}>{children}</div>
+      <div className={cn(!flush && 'px-4 py-3', scroll && 'min-h-0 flex-1 overflow-y-auto overscroll-contain')}>{children}</div>
     </section>
   );
 }

@@ -1,44 +1,41 @@
-// Project dashboard (#686): a 5:5 split under the project head. Left: the project's documents (titles, last changed,
-// which agent holds each) with new document / canvas actions. Right: the work in progress: sessions running now,
-// and the open GitHub issues as the unit of work (#776; branches and PRs are details of an issue). All live: agents by
-// the event stream, sessions by session events, branches and PRs by polling while the page is visible.
-// At a narrow main pane (under 880px) the halves stack, documents first.
-// The work column splits its height 5:5 (sessions, issues): live sessions as small cards, issues as one dense row each
-// (#784, #785); an empty sessions card shrinks to its header.
+// Card dashboard (#686, #793): one grid of compact cards for the project, no document list (the sidebar's 문서 tree
+// has the documents). Left: the work in progress, sessions running now and the open GitHub issues as the unit of work
+// (#776, #784, #785; issues page to the rows that fit, #800). Right: 사용량, 이슈 없는 브랜치, PR과 머지 and 최근 문서, whose long
+// lists scroll inside their card so the page keeps one screen. All live: agents by the event stream, sessions by
+// session events, branches, PRs and usage by polling while the page is visible.
+// At a narrow main pane (under 880px) the halves stack, work first. Live sessions show as small cards (#799).
 import { useMemo } from 'react';
 import { boardHash, plainClick } from '../projectNav';
-import { ArrowRight, FilePlus2, FileText, LoaderCircle, PenTool, Plus, RotateCw } from 'lucide-react';
-import type { ProjectInfo } from '../api';
+import { ArrowRight, FileText, LoaderCircle, RotateCw } from 'lucide-react';
+import type { ProjectInfo, RecentFile } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
 import { Card, CardGrid, DashColumn, DashGrid, EmptyState, StatusDot } from './dash';
 import { AgentTag } from './AgentPanel';
 import { openAgentLive } from '../live/store';
-import { agentStateLabel, agentsIn, fileStem, holdersByFile, isBusy, needsLook, type AgentPresence } from './agents';
-import { ColumnHead, DocList } from './DocList';
-import { allDocs, filterDocs } from './model';
+import { agentStateLabel, agentsIn, fileStem, isBusy, needsLook, type AgentPresence } from './agents';
+import { allDocs } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
+import { issueRows } from './issueBoard';
+import { BranchesCard, PrsCard, RecentDocsCard, UsageCard } from './WorkCards';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches } from './projectFeeds';
+
+/** Rows of the 최근 문서 card. */
+const RECENT_DOCS = 12;
 
 type Props = {
   project: ProjectInfo;
-  query: string;
-  running: ReadonlySet<string>;
-  collapsed: ReadonlySet<string>;
-  onToggle: (path: string) => void;
+  /** Every document of the dashboard's scope, newest change first; the card shows the first few. */
+  recent: readonly RecentFile[];
   onOpen: (path: string) => void;
-  /** null = the workspace root (the whole-project dashboard, #778). */
-  onCreate: (kind: 'doc' | 'canvas', project: string | null) => void;
-  onDelete: (path: string, title: string) => void;
-  /** '' = the whole board (the whole-project dashboard). */
-  onBoard: (folder: string) => void;
+  /** '' = the whole board (the whole-project dashboard); `tab` picks a board tab (default 세션). */
+  onBoard: (folder: string, tab?: 'usage') => void;
 };
 
-export function ProjectDashboard({ project, query, running, collapsed, onToggle, onOpen, onCreate, onDelete, onBoard }: Props) {
+export function ProjectDashboard({ project, recent, onOpen, onBoard }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
-  const holders = useMemo(() => holdersByFile(Array.isArray(agents) ? agents : []), [agents]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
   const sessions = useProjectSessions(project.path);
   const { open } = useSessionBranches(sessions);
@@ -47,51 +44,23 @@ export function ProjectDashboard({ project, query, running, collapsed, onToggle,
   const prBranches = useMemo(() => openPrBranches(issues), [issues]);
   const branches = useBranches([...open.map((s) => s.branch), ...prBranches].join(','));
   const prs = usePrs(prBranches, tracking);
-  const docs = filterDocs(project.docs, query);
+  // Branches an open issue lists (its sessions' and PRs'); the rest go to the 이슈 없는 브랜치 card.
+  const claimed = useMemo(
+    () => new Set(issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, Array.isArray(sessions) ? sessions : []).flatMap((r) => r.branches) : []),
+    [issues, sessions],
+  );
 
   return (
-    <DashGrid>
-      <DashColumn label="문서">
-        <Card
-          id="docs"
-          title="문서"
-          count={project.docCount}
-          flush
-          actions={
-            <>
-              <Button variant="ghost" size="sm" onClick={() => onCreate('canvas', project.id || null)}>
-                <PenTool aria-hidden /> 새 캔버스
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onCreate('doc', project.id || null)}>
-                <Plus aria-hidden /> 새 문서
-              </Button>
-            </>
-          }
-        >
-          {project.docs.length === 0 ? (
-            <EmptyState
-              action={
-                <Button size="sm" onClick={() => onCreate('doc', project.id || null)}>
-                  <FilePlus2 aria-hidden /> 첫 문서 만들기
-                </Button>
-              }
-            >
-              이 프로젝트에는 아직 문서가 없어요.
-            </EmptyState>
-          ) : docs.length === 0 ? (
-            <EmptyState>맞는 문서가 없어요</EmptyState>
-          ) : (
-            <>
-              <ColumnHead showCreated={false} />
-              <DocList docs={docs} collapsed={collapsed} label={`${project.name} 문서`} running={running} holders={holders} showCreated={false} onOpen={onOpen} onToggle={onToggle} onDelete={onDelete} />
-            </>
-          )}
-        </Card>
-      </DashColumn>
-
+    <DashGrid ratio="3fr 2fr">
       <DashColumn label="진행 중인 작업">
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} filterKey={query} />
+        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} />
+      </DashColumn>
+      <DashColumn label="현황">
+        <UsageCard onBoard={onBoard} />
+        <BranchesCard branches={branches} claimed={claimed} grow={1} />
+        <PrsCard issues={issues} prs={prs} grow={1} />
+        <RecentDocsCard files={recent.slice(0, RECENT_DOCS)} onOpen={onOpen} grow={1} />
       </DashColumn>
     </DashGrid>
   );
