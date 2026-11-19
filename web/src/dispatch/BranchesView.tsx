@@ -119,7 +119,7 @@ export function BranchesPage() {
                   key={r.branch}
                   data-branch-row
                   data-merged={r.merged || undefined}
-                  className={cn('[&>*]:border-b last:[&>*]:border-b-0 @max-[720px]/branches:block @max-[720px]/branches:border-b @max-[720px]/branches:px-3 @max-[720px]/branches:py-2 @max-[720px]/branches:[&>*]:border-b-0 @max-[720px]/branches:[&>*]:block', r.merged && 'opacity-50')}
+                  className={cn('[&>*]:border-b last:[&>*]:border-b-0 @max-[720px]/branches:block @max-[720px]/branches:border-b @max-[720px]/branches:px-3 @max-[720px]/branches:py-2 @max-[720px]/branches:[&>*]:border-b-0 @max-[720px]/branches:[&>th]:block', r.merged && 'opacity-50')}
                 >
                   <th scope="row" className="px-3 py-2 text-left font-normal @max-[720px]/branches:px-0">
                     <span className="flex min-w-0 items-center gap-1.5">
