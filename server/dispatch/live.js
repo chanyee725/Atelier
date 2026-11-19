@@ -7,6 +7,7 @@
 // most every 250 ms: `{ sid, current?, actions?, files? }`, where `actions` and `files` hold only the items added
 // or changed since the last event (upsert by `id` and `path`). GET /api/sessions/:id/live gives the full state.
 
+import os from "node:os";
 import path from "node:path";
 import { activityOf } from "./hub.js";
 import { redact } from "./redact.js";
@@ -69,10 +70,26 @@ export function shownPath(p, { cwd = null, workspaceDir = null } = {}) {
   return base ? { path: base, doc: false } : null;
 }
 
-/** A command's first line, leading `VAR=value` assignments dropped, masked and clipped to 80 characters. */
-export function commandTarget(cmd) {
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const HOME = os.homedir();
+
+/**
+ * Paths in a command line without home folders or user names: the session's folder (and the workspace) become
+ * relative (`.` for the folder itself), the home folder and any `/home/<user>`, `/Users/<user>` or `/root` become `~`.
+ */
+export function unhome(line, { cwd = null, workspaceDir = null } = {}) {
+  const dirs = [cwd, workspaceDir].filter(d => typeof d === "string" && d.length > 1).sort((a, b) => b.length - a.length);
+  for (const dir of dirs) {
+    line = line.replace(new RegExp(`${escRe(dir.replace(/\/+$/, ""))}(?:/|(?=[\\s'"\`;)|&]|$))`, "g"), m => (m.endsWith("/") ? "" : "."));
+  }
+  if (HOME && HOME.length > 1) line = line.replace(new RegExp(`${escRe(HOME)}(?=/|[\\s'"\`;)|&]|$)`, "g"), "~");
+  return line.replace(/\/(?:home|Users)\/[^/\s'"`;)|&]+/g, "~").replace(/(^|[\s'"`=(])\/root(?=\/|[\s'"`;)|&]|$)/g, "$1~");
+}
+
+/** A command's first line, leading `VAR=value` assignments dropped, home paths shortened (unhome), masked and clipped to 80 characters. */
+export function commandTarget(cmd, where = {}) {
   const line = String(cmd || "").trim().split("\n")[0].replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+/, "");
-  return clipTarget(redact(line));
+  return clipTarget(redact(unhome(line, where)));
 }
 
 function kindOf(tool, label) {
@@ -100,7 +117,7 @@ export function liveOf(name = "", text = "", where = {}) {
   if (SHELLS.has(tool)) {
     const cmd = name === "shell" ? text : field(text, parse(text), ["command"]) || "";
     const label = activityOf(tool, cmd);
-    return { kind: kindOf(tool, label), label, tool: short, target: commandTarget(cmd), files: [] };
+    return { kind: kindOf(tool, label), label, tool: short, target: commandTarget(cmd, where), files: [] };
   }
   if (name === "edit") {
     // Codex file_change: one "kind path" per line; the first file is the target.
@@ -121,8 +138,10 @@ export function liveOf(name = "", text = "", where = {}) {
 }
 
 export class LiveTracker {
-  constructor({ emit, workspaceDir = null, flushMs = LIVE_FLUSH_MS, now = () => Date.now() } = {}) {
+  /** `known(id)`: whether the id is a hub session; others (outside writers, removed sessions) get no state. */
+  constructor({ emit, workspaceDir = null, flushMs = LIVE_FLUSH_MS, now = () => Date.now(), known = () => true } = {}) {
     this.emitFn = emit || (() => {});
+    this.known = known;
     this.workspaceDir = workspaceDir;
     this.flushMs = flushMs;
     this.now = now;
@@ -138,11 +157,12 @@ export class LiveTracker {
 
   /** Takes one transcript entry (after masking). Only tool calls and tool results count. */
   note(s, entry) {
+    if (!this.known(s.id)) return;
     if (entry.kind === "tool") {
       const st = this.state(s.id);
       const at = entry.at ?? this.now();
       const info = liveOf(entry.name, entry.text, { cwd: s.cwd, workspaceDir: this.workspaceDir });
-      const action = { id: entry.id ?? st.recent.length + 1, at, kind: info.kind, label: info.label, tool: info.tool, target: info.target };
+      const action = { id: entry.id, at, kind: info.kind, label: info.label, tool: info.tool, target: info.target };
       // Codex reports a finished call (final) in one entry.
       if (entry.final) Object.assign(action, { ok: !entry.error, endedAt: at });
       st.recent.push(action);
@@ -173,7 +193,7 @@ export class LiveTracker {
 
   /** A document write credited to the session by the cursor module (workspace-relative path). */
   noteDoc(sid, file, at = this.now()) {
-    if (!sid || typeof file !== "string" || !file || isSecretFile(file)) return;
+    if (!sid || typeof file !== "string" || !file || isSecretFile(file) || !this.known(sid)) return;
     const st = this.state(sid);
     this.addFile(st, { path: file, doc: file.endsWith(DOC_EXT), edited: true }, at);
     this.schedule(sid, st);
@@ -231,7 +251,8 @@ export class LiveTracker {
     const ev = { sid: id };
     if (d.current) ev.current = st.current && { ...st.current };
     if (d.actions.size) ev.actions = st.recent.filter(a => d.actions.has(a.id)).reverse().map(a => ({ ...a }));
-    if (d.files.size) ev.files = [...d.files].map(p => st.files.get(p)).filter(Boolean).reverse().map(f => ({ ...f }));
+    // st.files is in touch order (a re-touched file moves to the end), so newest first comes from it, not from the Set.
+    if (d.files.size) ev.files = [...st.files.values()].filter(f => d.files.has(f.path)).reverse().map(f => ({ ...f }));
     st.dirty = { current: false, actions: new Set(), files: new Set() };
     st.lastSent = this.now();
     this.emitFn(ev);
