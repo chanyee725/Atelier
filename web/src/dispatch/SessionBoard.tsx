@@ -81,6 +81,8 @@ export type BoardProps = {
   /** 상시 화면 or 설정 asked for by the address (old /dispatch#tv, #settings); handled once, then `onExtraDone`. */
   extra?: BoardExtra | null;
   onExtraDone?: () => void;
+  /** The 알림함 bell, on the right of the header like every top bar (#786). */
+  bell?: ReactNode;
 };
 
 export default function SessionBoard(p: BoardProps) {
@@ -140,6 +142,7 @@ export default function SessionBoard(p: BoardProps) {
           onTv={() => setTv(true)}
           onSettings={setSettings}
           disabled={!ready || unavailable}
+          bell={p.bell}
         />
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
@@ -191,6 +194,7 @@ function BoardHeader(p: {
   onTv: () => void;
   onSettings: (s: SectionId) => void;
   disabled: boolean;
+  bell?: ReactNode;
 }) {
   const connected = useDispatch((s) => Object.values(s.providers ?? {}).some((x) => x?.connected));
   const scopeId = useId();
@@ -236,6 +240,7 @@ function BoardHeader(p: {
         </Button>
         <TaskBoardButton />
         <BoardMenu onTv={p.onTv} onSettings={() => p.onSettings('general')} disabled={p.disabled} />
+        {p.bell}
       </div>
     </header>
   );

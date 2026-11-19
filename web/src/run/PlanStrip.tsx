@@ -10,6 +10,7 @@ import { PLAN_CHANGED_NOTICE, confirmSnapshot, isPlanChanged, limitLine, startEr
 import { openPlanConfirm, requestStart } from './planOpen';
 import { events } from '../lib/events';
 import { StepModels } from './StepModels';
+import { onPlanConfirmRequest, samePlan, takePlanConfirm } from './planConfirmRequest';
 
 async function readStatus(path: string): Promise<PipelineStatus | null> {
   const res = await fetch(`/api/pipeline?path=${encodeURIComponent(path)}`);
@@ -62,6 +63,16 @@ export function PlanStrip({ session }: { session: FileSession }) {
     if (!confirming && d.open) d.close();
   }, [confirming]);
 
+  // 시작하기 in the 알림함 (#786) opens this file and asks for the same confirm; it waits until the plan is loaded.
+  const openRef = useRef<() => void>(() => {});
+  const [asked, setAsked] = useState(0);
+  useEffect(() => onPlanConfirmRequest(() => setAsked((n) => n + 1)), []);
+  useEffect(() => {
+    // A status left over from the file open before is not this plan's.
+    if (!path || !status || status.state !== 'plan' || !samePlan(status.path, path) || busy || confirming) return;
+    if (takePlanConfirm(path) && status.blockers.length === 0) openRef.current();
+  }, [path, status, asked, busy, confirming]);
+
   if (!path || !status || status.state !== 'plan') return null;
   const blocked = status.blockers.length > 0;
   const asks = unansweredAsks(document);
@@ -87,6 +98,8 @@ export function PlanStrip({ session }: { session: FileSession }) {
       setBusy(false);
     }
   };
+
+  openRef.current = () => void open();
 
   const start = async () => {
     if (!shown) return;

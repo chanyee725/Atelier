@@ -54,10 +54,12 @@ test('whenText: 방금, minutes, hours, then a date', () => {
   assert.match(whenText(3 * 86_400_000, Date.UTC(2026, 10, 16, 12)), /^11월 1[67]일$/);
 });
 
-test('placeFeed: under the bell, flipped above near the bottom, kept inside the viewport', () => {
-  const view = { width: 400, height: 600 };
-  assert.deepEqual(placeFeed({ left: 200, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 32, top: 46 });
-  assert.deepEqual(placeFeed({ left: 10, top: 500, bottom: 530 }, { width: 100, height: 300 }, view), { left: 10, top: 194 });
+test('placeFeed: under the bell with right edges lined up (top-right bell, #786), flipped above near the bottom, kept inside the viewport', () => {
+  const view = { width: 1200, height: 600 };
+  assert.deepEqual(placeFeed({ right: 1188, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 828, top: 46 }, 'opens down and to the left');
+  assert.deepEqual(placeFeed({ right: 200, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 8, top: 46 }, 'shifted in at the left edge');
+  assert.deepEqual(placeFeed({ right: 1198, top: 10, bottom: 40 }, { width: 360, height: 300 }, view), { left: 832, top: 46 }, 'kept off the right edge');
+  assert.deepEqual(placeFeed({ right: 110, top: 500, bottom: 530 }, { width: 100, height: 300 }, view), { left: 10, top: 194 });
 });
 
 test('nextToasts: toasts waiting behind a modal are all kept and shown in order, at most max at once (#666)', () => {
