@@ -17,11 +17,14 @@ const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-r
 
 type Props = {
   file: string;
+  /** Open questions in the document (#738): a badge in the agent area that scrolls to them. */
+  questions?: number;
+  onQuestions?: () => void;
   /** The document column; `onEditor` hands the editor up (stable for the life of the layout). */
   children: (onEditor: (editor: Editor | null) => void) => ReactNode;
 };
 
-export function DocMargin({ file, children }: Props) {
+export function DocMargin({ file, questions, onQuestions, children }: Props) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const onEditor = useCallback((e: Editor | null) => setEditor(e), []);
   const host = useRef<HTMLDivElement>(null);
@@ -118,7 +121,7 @@ export function DocMargin({ file, children }: Props) {
           // Clicks here never take the caret out of the editor.
           onMouseDown={(e) => e.preventDefault()}
         >
-          <MarginPanel agents={m.open ? m.agents : last.current} form={m.form} collapsed={m.collapsed} onToggle={onToggle} onJump={m.jump} />
+          <MarginPanel agents={m.open ? m.agents : last.current} form={m.form} collapsed={m.collapsed} onToggle={onToggle} onJump={m.jump} questions={questions} onQuestions={onQuestions} />
         </aside>
       )}
     </div>

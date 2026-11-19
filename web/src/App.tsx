@@ -18,7 +18,8 @@ import type { EntryKind } from './activity/appEvents';
 import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHash, shellKey, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
-import { Questions } from './doc/Questions';
+import { Questions, QUESTIONS_ID } from './doc/Questions';
+import { openQuestions } from '../../shared/dispatch/discussions.ts';
 import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { isPipelineView, shownView, toCanvas } from './viewMode';
@@ -286,6 +287,9 @@ export function App() {
   const title = useSession(session, (s) => s.file?.title ?? '');
   // A pipeline file (it has a plan): its runs show in the strip, the 실행 view and the canvas overlay.
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
+  // Open in-document questions (#738): the agent area's badge, and the blocked steps of the plan.
+  const openCount = useSession(session, (s) => openQuestions(s.file?.discussions).length);
+  const toQuestions = useCallback(() => document.getElementById(QUESTIONS_ID)?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }), []);
   const planCode = useSession(session, (s) => s.file?.blocks.find((b) => b.id === s.file?.plan?.block)?.code);
   const view: View = !hasPlan && isPipelineView(baseView) ? 'doc' : baseView;
   useEffect(() => watchRun(hasPlan ? path : null), [hasPlan, path]);
@@ -833,7 +837,7 @@ export function App() {
   const doc = hasFile && path && (
     <div className="doc-host">
       {/* Agents editing this document get a margin beside it (E532); the document and its sub-documents slide together. */}
-      <DocMargin file={path}>
+      <DocMargin file={path} questions={openCount} onQuestions={toQuestions}>
         {(onEditor) => (
           <>
             {/* Questions agents asked in this document (#738), answered in place. */}
