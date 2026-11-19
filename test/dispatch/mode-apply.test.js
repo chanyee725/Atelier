@@ -9,7 +9,7 @@ import { Hub } from "../../server/dispatch/hub.js";
 import { Store } from "../../server/dispatch/dispatch-store.js";
 import { SharedLimits } from "../../server/dispatch/limits.js";
 import { staticModels } from "../../server/dispatch/models.js";
-import { ROLES } from "../../server/dispatch/roles.js";
+import { ROLES, WRITING } from "../../server/dispatch/roles.js";
 import { MODE_IDS, resolveProfile } from "../../server/dispatch/mode-profiles.js";
 import { pickSession } from "../../server/runs/record.js";
 import { PLAN_MODES, planProblem, resolvedStep } from "../../shared/dispatch/plan.ts";
@@ -50,6 +50,18 @@ test("a mode picks the profile's model, effort and perm; no mode keeps the role 
   // Review cross-checks the implementer (Opus in impl mode).
   const [rev] = await make(hub, [{ role: "review", mode: "impl" }]);
   assert.equal(rev.model, "gpt-a");
+});
+
+test("docs mode: Sonnet writes, and every role gets the documents writing style once (#856)", async () => {
+  const { hub, store } = await makeHub(["claude"]);
+  const [impl] = await make(hub, [{ role: "impl" }], { mode: "docs" });
+  assert.equal(impl.model, "claude-sonnet-5-5");
+  const count = s => hub.systemPrompt(store.data.sessions[s.id]).split(WRITING).length - 1;
+  assert.equal(count(impl), 1);
+  const [docs] = await make(hub, [{ role: "docs" }], { mode: "docs" });
+  assert.equal(count(docs), 1, "the docs role already has it: not repeated");
+  const [plain] = await make(hub, [{ role: "impl" }], { mode: "impl" });
+  assert.equal(count(plain), 0);
 });
 
 test("a plan step's own model, effort and perm win over the mode's profile", async () => {
