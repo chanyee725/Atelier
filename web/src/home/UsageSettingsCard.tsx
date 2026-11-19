@@ -7,7 +7,8 @@ import { createPortal } from 'react-dom';
 import { ChevronRight } from 'lucide-react';
 import { api, type DispatchSettings } from '../api';
 import { cn } from '../lib/utils';
-import { PROVIDERS, providerUsage, rowStatus, type ProviderMeta } from '../modelConnect';
+import { PROVIDERS, providerUsage, rowStatus, windowlessText, type ProviderMeta } from '../modelConnect';
+import { until } from '../dispatch/lib/format.ts';
 import { percent } from '../projectNav';
 import { ProviderIcon } from '../ProviderIcon';
 import { SettingsModal } from '../settings/SettingsEntry';
@@ -112,7 +113,7 @@ function ProviderLimitRow({ meta, models, settings, onOpen }: { meta: ProviderMe
               return <LimitBar key={w.label} label={w.label} used={percent(w.used)} limit={limit} />;
             })
           ) : meta.windowless ? (
-            <span className="text-xs text-muted-foreground">{usage.reached ? '한도에 닿아 새 작업을 멈췄어요' : '한도에 닿으면 새 작업을 멈춰요'}</span>
+            <span data-windowless className={cn('text-xs', usage.reached ? 'text-foreground' : 'text-muted-foreground')}>{windowlessText(connected, usage.reached, usage.reset, (t) => until(t))}</span>
           ) : (
             <span className="text-xs text-muted-foreground">{connected ? '아직 사용량 정보가 없어요' : '연결하면 한도를 볼 수 있어요'}</span>
           )}

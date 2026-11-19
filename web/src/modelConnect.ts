@@ -128,6 +128,17 @@ export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { win
   return { windows, extra, reached, reset: flagged ? (entry?.reset ?? null) : null };
 }
 
+/**
+ * The 사용량 설정 card's line for a provider that reports no usage windows (Gemini, #819): agy's stream gives token
+ * counts per turn but no share of a quota, only a quota error with when it clears. So the line says the share can't be
+ * known, and once the quota was hit, until when new work waits. `untilText` formats the time left ("3시간 5분").
+ */
+export function windowlessText(connected: boolean, reached: boolean, reset: number | null, untilText: (t: number) => string): string {
+  if (!connected) return '연결하면 한도 상태를 볼 수 있어요';
+  if (reached) return `한도에 닿아 새 작업을 멈췄어요${reset ? ` · ${untilText(reset)} 뒤 풀려요` : ''}`;
+  return '사용률은 확인할 수 없어요 · 한도에 닿으면 새 작업을 멈춰요';
+}
+
 /** Usage rows for the dialog (Dispatch ProviderLimits): this provider's windows, then Claude's Fable weekly window
  *  (`fable`, Claude only; null until reported). Null for a provider that reports no usage. */
 export function limitRows(meta: ProviderMeta, limits: ProviderLimits): { main: LimitRow[]; fable: LimitRow[] | null; reached: boolean; reset: number | null } | null {
