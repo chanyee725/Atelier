@@ -1,6 +1,8 @@
 // The plan gate under the top bar (E20, docs/design/dispatch-integration/3-ux-flow.md §3): while a pipeline file
 // is a 계획, it says what would start and holds the one 시작하기 button; the confirm shows sessions, limits,
 // what the person changed and unanswered asks. Running files are E22's strip, so this one hides then.
+// In the 플랜 tab (#729, `inTab`) the same strip, dialog and 시작하기 sit at the top of the tab instead, with the
+// approval state as a chip (승인 대기, 개정 대기 for a revision after a run, 승인됨 once started).
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -11,6 +13,23 @@ import { openPlanConfirm, requestStart } from './planOpen';
 import { events } from '../lib/events';
 import { StepModels } from './StepModels';
 import { onPlanConfirmRequest, samePlan, takePlanConfirm } from './planConfirmRequest';
+import { planApproval, type PlanApproval } from './planApprovalModel';
+import { StatusDot } from '../home/dash';
+
+const CHIP_TONE = { waiting: 'warn', revised: 'warn', approved: 'ok', unknown: 'idle' } as const;
+
+/** The approval state in the 플랜 tab: a quiet dot and word, then the revision it is about. */
+function ApprovalChip({ a }: { a: PlanApproval }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-medium" data-testid="plan-approval" data-kind={a.kind}>
+      <StatusDot tone={CHIP_TONE[a.kind]}>{a.label}</StatusDot>
+      {a.revision !== null && <span className="font-normal text-muted-foreground tabular-nums">rev {a.revision}</span>}
+    </span>
+  );
+}
+
+const approvedWhen = (at: number | null) =>
+  at === null ? null : new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 async function readStatus(path: string): Promise<PipelineStatus | null> {
   const res = await fetch(`/api/pipeline?path=${encodeURIComponent(path)}`);
@@ -18,7 +37,7 @@ async function readStatus(path: string): Promise<PipelineStatus | null> {
   return (await res.json()) as PipelineStatus;
 }
 
-export function PlanStrip({ session }: { session: FileSession }) {
+export function PlanStrip({ session, inTab = false }: { session: FileSession; inTab?: boolean }) {
   const path = useSession(session, (s) => (s.file ? s.path : null));
   const revision = useSession(session, (s) => s.file?.revision ?? null);
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
@@ -82,10 +101,11 @@ export function PlanStrip({ session }: { session: FileSession }) {
     if (takePlanConfirm(path) && status.blockers.length === 0) openRef.current();
   }, [path, status, asked, busy, confirming]);
 
+  const approval = path && hasPlan ? planApproval(status, unread) : null;
   if (path && hasPlan && unread && !status) {
     return (
       <Alert role="status" className="bg-muted" data-testid="plan-strip">
-        <span aria-hidden="true">◐</span>
+        {inTab && approval ? <ApprovalChip a={approval} /> : <span aria-hidden="true">◐</span>}
         <span className="mr-auto">계획이에요. 시작할 수 있는지 확인하지 못했어요.</span>
         <Button size="sm" variant="ghost" className="px-2 text-sm" onClick={() => void refresh()}>
           다시 확인
@@ -93,6 +113,19 @@ export function PlanStrip({ session }: { session: FileSession }) {
         <Button size="sm" aria-disabled className="px-3 text-sm aria-disabled:hover:bg-primary">
           시작하기
         </Button>
+      </Alert>
+    );
+  }
+  // Started: the tab still says it was approved, and which revision; the strip above hides (E22's strip shows).
+  if (inTab && path && approval?.kind === 'approved') {
+    const when = approvedWhen(approval.at);
+    return (
+      <Alert role="status" className="bg-muted" data-testid="plan-strip">
+        <ApprovalChip a={approval} />
+        <span className="mr-auto text-muted-foreground">
+          {approval.text}
+          {when && <> · {when}에 시작했어요</>}
+        </span>
       </Alert>
     );
   }
@@ -159,7 +192,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
   return (
     <>
     <Alert role="status" className="bg-muted" data-testid="plan-strip">
-      <span aria-hidden="true">◐</span>
+      {inTab && approval ? <ApprovalChip a={approval} /> : <span aria-hidden="true">◐</span>}
       <span className="mr-auto">
         {error && <span className="text-destructive">{error} </span>}
         {/* Every blocker in words, also after an error, so a blocked 시작하기 never goes unexplained (#788). */}
@@ -168,7 +201,7 @@ export function PlanStrip({ session }: { session: FileSession }) {
             계획이에요. 지금은 시작할 수 없어요: <span data-testid="plan-blockers">{status.blockers.join(' · ')}</span>
           </>
         ) : (
-          !error && <>계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.</>
+          !error && <>{approval?.kind === 'revised' || inTab ? approval?.text : '계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.'}</>
         )}
       </span>
       <span className="text-muted-foreground">예상 {status.sessions}세션</span>

@@ -4,7 +4,8 @@
 //
 // Approval state lives in the Dispatch state file as metadata only:
 //   store.data.pipelines[path] = { lead, state: 'plan' | 'running' | 'paused' | 'done', draftRevision,
-//                                  approvedRevision, approvedAt, runId, steps, links, pause?, carry?, doneAt? }
+//                                  approvedRevision, approvedAt, runId, steps, links, pause?, carry?, doneAt?,
+//                                  lastApprovedRevision? }
 // `steps` is the approved step ids and `links` maps a session id to its step. E27: `pause` is { by: 'limit' |
 // 'stop', at, resetAt? } while paused; `carry` is { from: runId, steps: [ids], results? } after 계획 다시 열기, the steps the
 // stopped run finished, so the next 시작하기 marks them done instead of running them again. The lead's draft plan (for the
@@ -303,6 +304,9 @@ export async function setup(ctx) {
       draftRevision: entry?.draftRevision ?? null,
       approvedRevision: entry?.approvedRevision ?? null,
       approvedAt: entry?.approvedAt ?? null,
+      // The revision the person last started (#729): kept through 계획 다시 열기 and the lead's revisions, so a plan
+      // that waits again reads as a revision to approve anew (rev N), not a first approval.
+      lastApprovedRevision: entry?.lastApprovedRevision ?? null,
       runId: entry?.runId ?? null,
       pause: state === 'paused' ? (entry.pause ?? null) : null,
       doneAt: state === 'done' ? (entry.doneAt ?? null) : null,
@@ -391,7 +395,7 @@ export async function setup(ctx) {
     // The lead works for the project its plan lives in.
     const planFolder = topFolder(path);
     if (planFolder && planFolder !== lead.folder) d.hub.touch(lead, { folder: planFolder });
-    all[path] = { lead: lead.id, state: 'plan', waitingSince: Date.now(), draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }) };
+    all[path] = { lead: lead.id, state: 'plan', waitingSince: Date.now(), draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }), ...(existing?.lastApprovedRevision != null && { lastApprovedRevision: existing.lastApprovedRevision }) };
     drafts.set(path, built.plan);
     save();
     await ws.labelVersion(path, 'draft');
@@ -426,8 +430,9 @@ export async function setup(ctx) {
     const record = await recorder.startRun({ file: path, plan: file.plan, revision: file.revision, carry });
     const carried = Object.keys(record.steps).filter((id) => record.steps[id].carried);
     const prevCarry = entry.carry;
+    const prevApproved = entry.lastApprovedRevision;
     delete entry.carry;
-    Object.assign(entry, { state: 'running', approvedRevision: file.revision, approvedAt: Date.now(), runId: record.id, steps: Object.keys(record.steps), links: {} });
+    Object.assign(entry, { state: 'running', lastApprovedRevision: file.revision, approvedRevision: file.revision, approvedAt: Date.now(), runId: record.id, steps: Object.keys(record.steps), links: {} });
     // The lead and its live team (or members without a folder) now work for the project the approved plan
     // lives in (E505c). Descendants of the lead count, not only direct children. Only `done` sessions are finished
     // and keep their folder; an `error` session can be messaged back to running, so it moves with the team.
@@ -458,7 +463,8 @@ export async function setup(ctx) {
       d.hub.send(entry.lead, lines.join('\n'));
     } catch (err) {
       // The lead never heard of it: the run did not really start.
-      Object.assign(entry, { state: 'plan', approvedRevision: null, approvedAt: null, runId: null, steps: [], ...(prevCarry && { carry: prevCarry }) });
+      Object.assign(entry, { state: 'plan', approvedRevision: null, approvedAt: null, runId: null, steps: [], lastApprovedRevision: prevApproved, ...(prevCarry && { carry: prevCarry }) });
+      if (prevApproved == null) delete entry.lastApprovedRevision;
       save();
       await recorder.endRun(record.id, 'stopped').catch(() => {});
       throw new StoreError(409, err.message);

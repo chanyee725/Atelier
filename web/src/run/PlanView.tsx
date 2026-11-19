@@ -1,6 +1,7 @@
 // 플랜 view (#729): the open pipeline file's plan as a diagram — steps as nodes, arrows for the order they run in —
-// with each step's live state (#687 colours, glyphs and agent initial badges). Read only for now; review and
-// approval move here in later PRs. It follows the file (write_plan saves) and the run (`run` events, live sessions).
+// with each step's live state (#687 colours, glyphs and agent initial badges), and the plan strip on top, so the plan
+// is reviewed and approved (시작하기, or again for a revision) right here. It follows the file (write_plan saves) and
+// the run (`run` events, live sessions).
 import { useEffect, useMemo, type CSSProperties } from 'react';
 import { connect } from '../dispatch/store.ts';
 import type { FileSession } from '../fileSession';
@@ -9,6 +10,7 @@ import { cn } from '../lib/utils';
 import { nodeLabels, overlaySteps } from './runModel.ts';
 import { NODE_H, NODE_W, planGraph, type PlanGraphNode } from './planGraphModel.ts';
 import { useRunModel } from './useRunModel.ts';
+import { PlanStrip } from './PlanStrip';
 
 function Node({ n }: { n: PlanGraphNode }) {
   const { shown, more } = n.badges;
@@ -54,10 +56,18 @@ export default function PlanView({ session }: { session: FileSession }) {
   const labels = useMemo(() => nodeLabels(code), [code]);
   const graph = useMemo(() => (plan ? planGraph(plan, blocks ?? [], overlaySteps(m.rows), labels) : null), [plan, blocks, m.rows, labels]);
 
+  const strip = <PlanStrip session={session} inTab />;
   if (!graph || graph.nodes.length === 0) {
-    return <p className="p-6 text-sm text-muted-foreground">아직 계획에 단계가 없어요. 관리자가 계획을 쓰면 여기에 그려져요.</p>;
+    return (
+      <>
+        {strip}
+        <p className="p-6 text-sm text-muted-foreground">아직 계획에 단계가 없어요. 관리자가 계획을 쓰면 여기에 그려져요.</p>
+      </>
+    );
   }
   return (
+    <>
+    {strip}
     <div className="min-h-0 flex-1 overflow-auto bg-background" data-plan-view>
       {graph.problem && (
         <p role="status" className="px-6 pt-4 text-xs text-muted-foreground">
@@ -84,5 +94,6 @@ export default function PlanView({ session }: { session: FileSession }) {
         </ol>
       </div>
     </div>
+    </>
   );
 }

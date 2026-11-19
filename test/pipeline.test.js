@@ -498,12 +498,17 @@ test('계획 다시 열기 ends the stopped run and the next 시작하기 carrie
     assert.equal(re.body.runId, null);
     assert.deepEqual(re.body.changes, []);
     assert.match(told(d, lead.id), /\[계획 다시 열림\][^]*이미 끝난 단계: api/);
+    // The revision started before stays known (#729): the 플랜 tab asks to approve the revision anew.
+    const approvedBefore = d.store.data.pipelines[path].lastApprovedRevision;
+    assert.ok(Number.isInteger(approvedBefore));
+    assert.equal(re.body.lastApprovedRevision, approvedBefore);
     const old = (await call('GET', `/api/runs/run?path=${encodeURIComponent(path)}&id=${runId}`)).body;
     assert.equal(old.state, 'stopped');
     // A plan again: no teammates until 시작하기; the lead may revise it and the carry survives.
     assert.equal((await call('POST', '/api/sessions', { items: [{ role: 'impl', task: 'x' }], worktree: false, parent: lead.id })).status, 409);
     const rev = await call('POST', '/api/pipeline/plan', { lead: lead.id, path, goal: '멈춤 연습 2', steps: STEPS });
     assert.equal(rev.status, 200, JSON.stringify(rev.body));
+    assert.equal((await call('GET', `/api/pipeline?path=${encodeURIComponent(path)}`)).body.lastApprovedRevision, approvedBefore);
 
     const go = await call('POST', '/api/pipeline/start', { path, revision: rev.body.revision });
     assert.equal(go.status, 200, JSON.stringify(go.body));

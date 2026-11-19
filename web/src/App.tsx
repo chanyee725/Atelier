@@ -1046,7 +1046,8 @@ export function App() {
               />
             }
           />
-          <PlanStrip session={session} />
+          {/* The 플랜 tab holds its own strip (#729), so the plan is reviewed and approved in one place. */}
+          {view !== 'plan' && <PlanStrip session={session} />}
           {hasPlan && <RunStrip code={planCode} inRunView={view === 'run'} onRunView={() => setView('run')} onOpenFile={openFile} />}
               {view === 'run' ? (
             <LazyBoundary onFail={flushForReload}>
