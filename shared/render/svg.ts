@@ -248,6 +248,11 @@ function iconMarkup(ic: SceneIcon, { theme, t, c }: Ctx): string {
   const s = ic.size / 24;
   const open = `<g data-icon="${esc(ic.name)}" data-icon-set="${icon.set}" transform="translate(${n(ic.x)} ${n(ic.y)}) scale(${n(s)})">`;
   color = c(color);
+  // Official cloud artwork keeps its own colours (publisher terms: no recolouring).
+  if (icon.art) {
+    const a = icon.art.attrs ? ` ${icon.art.attrs}` : '';
+    return `${open}<svg width="24" height="24" viewBox="${icon.art.viewBox}"${a}>${icon.art.body}</svg></g>`;
+  }
   if (icon.fill) return `${open}<path d="${icon.d}" fill="${color}"/></g>`;
   const dash = icon.set === 'own' && icon.key === 'placeholder' ? ' stroke-dasharray="3 2.5"' : '';
   return (

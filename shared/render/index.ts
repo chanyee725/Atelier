@@ -8,6 +8,7 @@ import { layoutGraph } from './layout-graph.ts';
 import { layoutSequence } from './layout-sequence.ts';
 import type { Scene } from './scene.ts';
 import { sceneToSvg } from './svg.ts';
+import { loadIcons } from './icon-library.ts';
 import type { SvgOptions } from './svg.ts';
 
 export type * from './scene.ts';
@@ -15,6 +16,7 @@ export { sceneToSvg } from './svg.ts';
 export type { SvgOptions } from './svg.ts';
 export type { Theme } from './theme.ts';
 export { glyphFor, iconFor } from './icons.ts';
+export { iconFile, iconNames, loadIcons, normalizeIconName, setIconLoader } from './icon-library.ts';
 export type { IconSet, ResolvedIcon } from './icons.ts';
 export { composeGraph, graphBase } from './layout-graph.ts';
 export type { ComposeOptions, GraphBase, GraphLayoutOptions } from './layout-graph.ts';
@@ -52,5 +54,11 @@ export interface RenderResult {
 export async function renderDiagram(input: string | Diagram, options: SvgOptions & LayoutOptions & { type?: DiagramType } = {}): Promise<RenderResult> {
   const { ast, diagnostics } = typeof input === 'string' ? parse(input, options.type) : { ast: input, diagnostics: [] };
   const scene = await layoutDiagram(ast, { layout: options.layout, wrapGroups: options.wrapGroups });
+  await loadIcons(sceneIconNames(scene));
   return { svg: sceneToSvg(scene, options), scene, diagnostics };
+}
+
+/** Icon names a scene draws, so their files can be loaded before painting. */
+export function sceneIconNames(scene: Scene): string[] {
+  return [...new Set(scene.items.flatMap((it) => (it.kind === 'icon' ? [it.name] : [])))];
 }

@@ -24,6 +24,9 @@ const excalidrawFonts = fileURLToPath(new URL('../node_modules/@excalidraw/excal
 // Text, SVG and PNG export all load fonts through that registration, so they follow. docs/design/code-linked-nodes.md §5.
 const CANVAS_FONT = fileURLToPath(new URL('./fonts/drawing-sans-canvas.woff2', import.meta.url));
 const FONT_OVERRIDES: Record<string, string> = { 'Liberation/LiberationSans-Regular.woff2': CANVAS_FONT };
+// Bundled icon library (#734, scripts/import-icons.mjs): served at /icons/ in dev, copied next to the build.
+const ICON_DIR = fileURLToPath(new URL('./icons', import.meta.url));
+const ICON_PREFIX = '/icons/';
 const ASSET_BASE = '/excalidraw/';
 const FONT_PREFIX = `${ASSET_BASE}fonts/`;
 // Matches both the minified prod chunk and the readable dev chunk (`"X", \`...\``).
@@ -99,6 +102,13 @@ function excalidrawAssets(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = req.url?.split('?')[0] ?? '';
+        if (url.startsWith(ICON_PREFIX)) {
+          const file = normalize(join(ICON_DIR, decodeURIComponent(url.slice(ICON_PREFIX.length))));
+          if (!file.startsWith(ICON_DIR + sep) || !file.endsWith('.svg') || !existsSync(file) || !statSync(file).isFile()) return next();
+          res.setHeader('content-type', 'image/svg+xml');
+          createReadStream(file).pipe(res);
+          return;
+        }
         if (!url.startsWith(FONT_PREFIX)) return next();
         const name = decodeURIComponent(url.slice(FONT_PREFIX.length));
         const override = Object.hasOwn(FONT_OVERRIDES, name) ? FONT_OVERRIDES[name] : undefined;
@@ -122,6 +132,7 @@ function excalidrawAssets(): Plugin {
     writeBundle() {
       cpSync(excalidrawFonts, join(outDir, FONT_PREFIX), { recursive: true });
       for (const [name, file] of Object.entries(FONT_OVERRIDES)) cpSync(file, join(outDir, FONT_PREFIX, name));
+      cpSync(ICON_DIR, join(outDir, ICON_PREFIX), { recursive: true, filter: (f) => !f.endsWith('.md') });
     },
   };
 }

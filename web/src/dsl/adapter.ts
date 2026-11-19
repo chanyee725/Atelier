@@ -1,10 +1,17 @@
 // Seam between the editor and the parser/renderer. The editor only calls `analyzeDiagram`.
 // Parsing uses shared/dsl (E2); the live preview uses shared/render (E3) via `renderPreview`.
 import { parse, type DiagramType as ParserType, type Diagram } from '../../../shared/dsl/index.ts';
-import { renderDiagram, sceneToSvg, type BlockLayout, type Scene } from '../../../shared/render/index.ts';
+import { renderDiagram, sceneToSvg, setIconLoader, type BlockLayout, type Scene } from '../../../shared/render/index.ts';
 import { GROUP_WRAP } from '../experiments.ts';
 import { reconcileForSave, reconcileLayout, type ReconcileReason } from '../../../shared/render/overrides.ts';
 import { BLOCK_LAYOUT_VERSION } from '../../../shared/render/block-layout.ts';
+
+// Bundled icon files (web/icons/, #734) are served by this app's own server; nothing comes from outside.
+setIconLoader(async (file) => {
+  const res = await fetch(`/icons/${file}.svg`);
+  if (!res.ok) throw new Error(`icon ${file}: ${res.status}`);
+  return res.text();
+});
 
 export type Diagnostic = {
   /** 1-based line */
