@@ -98,6 +98,9 @@ export function routeTable(d) {
       if (b.team?.roleModels) broadcast("snapshot", await d.snapshot());
       return settings;
     }],
+    // Harness profiles per mode × role (#748). PUT: { cells }, { hints } or { reset: true | <mode> }.
+    ["GET", /^\/api\/mode-profiles$/, async () => d.modeProfiles.get()],
+    ["PUT", /^\/api\/mode-profiles$/, async (_, b) => d.modeProfiles.put(b)],
     ["POST", /^\/api\/sessions$/, async (_, b) => ({
       sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder }),
     })],

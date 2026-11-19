@@ -1,7 +1,7 @@
 // The user's defaults in one human-editable file, ~/.dispatch/drawing.json (E555, issue #724).
 // Schema and fallback order: docs/design/user-defaults.md.
 //
-// Metadata only: theme, default models per role, guard thresholds, team settings, default workspace
+// Metadata only: theme, default models per role, harness profiles per mode, guard thresholds, team settings, default workspace
 // folder and port, the PR tracking default, and the registered workspace folders. Never tokens, keys,
 // emails or names. Written with a stable key order and 2-space indent; keys this version does not
 // know are kept. A broken file never crashes the server: it reads as "no defaults" with an error the
@@ -18,7 +18,7 @@ export const SCHEMA_VERSION = 1;
 export const THEMES = ['system', 'light', 'dark'];
 
 /** Known top-level keys in the order they are written. Unknown keys follow in the order the file had them. */
-export const KEY_ORDER = ['version', 'theme', 'workspace', 'port', 'prStatus', 'team', 'guard', 'workspaces', 'lastWorkspace'];
+export const KEY_ORDER = ['version', 'theme', 'workspace', 'port', 'prStatus', 'team', 'guard', 'modeProfiles', 'workspaces', 'lastWorkspace'];
 
 const TEAM_INT = ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec', 'ctxHandoff', 'handoffMTokens', 'stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes'];
 const TEAM_NUM = ['stuckEtaRatio'];
@@ -79,6 +79,8 @@ export function readValues(raw) {
     else v.workspaces = raw.workspaces.filter((w) => isObj(w) && typeof w.path === 'string' && w.path).map((w) => ({ path: w.path, name: typeof w.name === 'string' ? w.name : path.basename(w.path) }));
   }
   if ('lastWorkspace' in raw) typeof raw.lastWorkspace === 'string' && raw.lastWorkspace ? (v.lastWorkspace = raw.lastWorkspace) : raw.lastWorkspace !== null && bad('lastWorkspace');
+  // Harness profiles per mode (#748): kept as an object here; server/dispatch/mode-profiles.js checks the cells.
+  if ('modeProfiles' in raw) isObj(raw.modeProfiles) ? (v.modeProfiles = raw.modeProfiles) : raw.modeProfiles !== null && bad('modeProfiles');
   return { values: v, problems };
 }
 
