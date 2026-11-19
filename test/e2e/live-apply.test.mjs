@@ -95,16 +95,17 @@ test('outside changes apply live: new file, new paragraphs, a growing diagram', 
   assert.ok(scrolled > 300, `document did not scroll: ${scrolled}`);
   const before = await page.evaluate(() => window.__scroller.scrollTop);
 
-  // Step 1: a new project folder appears in the open page's sidebar, and a new root file on the home page, without a reload.
+  // Step 1: a new project folder appears in the open page's sidebar, and a new root file in the home page's sidebar
+  // (the dashboard is cards only since #793), without a reload.
   const home2 = await browser.newPage({ viewport: { width: 1400, height: 800 } });
   home2.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
   await home2.goto(`${BASE}/`);
-  await home2.locator('[data-doc-row="open.dpx.json"]').waitFor({ timeout: 10_000 });
+  await home2.locator('nav [data-move-path="open.dpx.json"]').waitFor({ timeout: 10_000 });
   await home2.evaluate(() => (window.__sentinel = 'same home'));
   await call('POST', '/api/folder', { path: 'made-by-agent' });
   await page.locator('[data-move-path="made-by-agent"]').waitFor({ timeout: 10_000 });
   await call('POST', '/api/file', { path: 'made-by-agent.dpx.json', title: 'Made by agent', document: docOf(para('hello')) });
-  await home2.locator('[data-doc-row="made-by-agent.dpx.json"]').waitFor({ timeout: 10_000 });
+  await home2.locator('nav [data-move-path="made-by-agent.dpx.json"]').waitFor({ timeout: 10_000 });
   assert.equal(await home2.evaluate(() => window.__sentinel), 'same home', 'the home page reloaded');
   await home2.close();
 
