@@ -66,14 +66,29 @@ export function hintsPatch(p: ModeProfiles, hintEdits: Record<string, string>): 
   return Object.keys(out).length ? out : null;
 }
 
-/** The PUT body for everything changed: every mode's cell patch and the hint patch; null when nothing changed. */
+/** The hint keys of every model some mode × role cell shows after the edits. */
+export function usedHintKeys(p: ModeProfiles, edits: Edits, resets: ReadonlySet<string>): Set<string> {
+  const used = new Set<string>();
+  for (const m of p.modes)
+    for (const r of p.roles) {
+      const c = shownCell(p, edits, resets, m.id, r.id);
+      used.add(hintKey(c.provider, c.model));
+    }
+  return used;
+}
+
+/**
+ * The PUT body for everything changed: every mode's cell patch and the hint patch; null when nothing changed. Hint
+ * edits for a model no cell uses any more (edited, then the model was swapped out everywhere) are dropped.
+ */
 export function saveBody(p: ModeProfiles, edits: Edits, resets: ReadonlySet<string>, hintEdits: Record<string, string>) {
   const cells: Record<string, Record<string, Cell | null>> = {};
   for (const m of p.modes) {
     const patch = modePatch(p, edits, resets, m.id);
     if (patch) cells[m.id] = patch;
   }
-  const hints = hintsPatch(p, hintEdits);
+  const used = usedHintKeys(p, edits, resets);
+  const hints = hintsPatch(p, Object.fromEntries(Object.entries(hintEdits).filter(([k]) => used.has(k))));
   if (!Object.keys(cells).length && !hints) return null;
   return { ...(Object.keys(cells).length ? { cells } : {}), ...(hints ? { hints } : {}) };
 }

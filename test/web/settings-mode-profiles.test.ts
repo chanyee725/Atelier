@@ -52,6 +52,18 @@ test('hints are per model (Claude) or per provider, cleared ones go back to the 
   assert.equal(hintsPatch(d, { openai: '' }), null, 'clearing a built-in hint stores nothing');
 });
 
+test('hint edits for a model no cell uses any more are not sent', () => {
+  const d = p();
+  // impl/lead shows Opus (stored); plan/lead shows Opus (default). Edit Opus's hint, then swap Opus out of both cells.
+  const hint = { 'claude-opus-5-5': '큰 기능' };
+  assert.deepEqual(saveBody(d, {}, new Set(), hint), { hints: hint }, 'still used: sent');
+  const swapped = { plan: { lead: SONNET }, impl: { lead: { ...SONNET, effort: 'low' } } };
+  assert.deepEqual(saveBody(d, swapped, new Set(), hint), {
+    cells: { plan: { lead: SONNET }, impl: { lead: { ...SONNET, effort: 'low' } } },
+  });
+  assert.deepEqual(saveBody(d, swapped, new Set(), { ...hint, openai: '코덱스' }).hints, { openai: '코덱스' }, 'used models keep their edits');
+});
+
 test('the status names another mode with unsaved edits, not the open one', () => {
   const d = p();
   const edits = { plan: { lead: SONNET } };
