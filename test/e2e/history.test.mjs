@@ -12,6 +12,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// Answers the in-app dialog (#732): types `text` into its field when given, presses its confirm button and
+// returns the dialog's text.
+async function answerDialog(page, text) {
+  const d = page.locator('dialog[data-app-dialog][open]');
+  await d.waitFor();
+  const message = await d.innerText();
+  if (text !== undefined) await d.getByRole('textbox').fill(text);
+  await d.locator('button[value="ok"]').click();
+  await d.waitFor({ state: 'detached' });
+  return message;
+}
+
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const freePort = () =>
   new Promise((ok, fail) => {
@@ -69,8 +81,8 @@ test('version history: list, preview, restore', { skip: !ON && 'set DRAW_E2E=1, 
   await dialog.getByText('읽기 전용 미리보기예요').waitFor();
   assert.match(await dialog.getByTestId('history-doc').innerText(), /Old title/);
 
-  page.once('dialog', (d) => d.accept());
   await dialog.getByRole('button', { name: '이 버전으로 되돌리기' }).click();
+  await answerDialog(page); // the version dialog stays open under the confirmation
   await dialog.waitFor({ state: 'detached' });
   await page.waitForFunction(() => document.querySelector('input[aria-label="파일 제목"]')?.value === 'Old title');
 

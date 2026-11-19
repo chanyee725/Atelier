@@ -12,6 +12,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// Answers the in-app dialog (#732): types `text` into its field when given, presses its confirm button and
+// returns the dialog's text.
+async function answerDialog(page, text) {
+  const d = page.locator('dialog[data-app-dialog][open]');
+  await d.waitFor();
+  const message = await d.innerText();
+  if (text !== undefined) await d.getByRole('textbox').fill(text);
+  await d.locator('button[value="ok"]').click();
+  await d.waitFor({ state: 'detached' });
+  return message;
+}
+
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const freePort = () =>
   new Promise((ok, fail) => {
@@ -48,7 +60,6 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.stack).slice(0, 400)));
-  page.on('dialog', (d) => void d.accept('release'));
   await page.goto(BASE);
   const nav = page.getByRole('navigation', { name: '사이드바' });
   const row = (text) => nav.locator('[data-slot="sidebar-menu-button"]').filter({ hasText: text }).first();
@@ -58,6 +69,7 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   assert.equal(await nav.getByRole('img', { name: '파이프라인: 계획' }).count(), 0, 'a plain file has no badge');
 
   await page.getByRole('button', { name: '새 파이프라인 계획' }).click();
+  await answerDialog(page, 'release');
 
   // The file opened with the template.
   await page.waitForFunction(() => decodeURIComponent(location.hash).includes('release'));

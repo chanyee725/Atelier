@@ -14,6 +14,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+// Answers the in-app dialog (#732): types `text` into its field when given, presses its confirm button and
+// returns the dialog's text.
+async function answerDialog(page, text) {
+  const d = page.locator('dialog[data-app-dialog][open]');
+  await d.waitFor();
+  const message = await d.innerText();
+  if (text !== undefined) await d.getByRole('textbox').fill(text);
+  await d.locator('button[value="ok"]').click();
+  await d.waitFor({ state: 'detached' });
+  return message;
+}
+
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const freePort = () =>
   new Promise((ok, fail) => {
@@ -140,12 +152,9 @@ test('refused sidebar drops do not move to the root', { skip: !ON && 'set DRAW_E
   for (const p of ['D', 'E']) await page.getByRole('button', { name: `${p} 펼치기` }).click();
   const dialogs = [];
   const menuAction = async (label, action, answer) => {
-    page.once('dialog', (d) => {
-      dialogs.push(d.message());
-      void (answer === undefined ? d.accept() : d.accept(answer));
-    });
     await page.getByRole('navigation', { name: '사이드바' }).getByRole('button', { name: `${label} 메뉴` }).click();
     await page.getByRole('menuitem', { name: action }).click();
+    dialogs.push(await answerDialog(page, answer));
     await settle();
   };
   // Renaming onto a name whose sub-documents folder is taken (group D/new) refuses the whole rename: nothing is orphaned.

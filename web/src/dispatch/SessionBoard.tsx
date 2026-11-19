@@ -34,6 +34,7 @@ import { UsagePage } from './UsagePage';
 import { api, connect, useDispatch } from './store';
 import { usePrTracking, useStatusLine } from './usePrTracking';
 import type { Session } from './types';
+import { askConfirm } from '../appDialog';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
@@ -249,7 +250,7 @@ function BoardMenu({ onTv, onSettings, disabled }: { onTv: () => void; onSetting
   const { pr, toggle, broken } = usePrTracking(status, '');
   const [said, setSaid] = useState('');
   const clear = async (all: boolean) => {
-    if (all && !window.confirm(`세션 ${sessions.length}개를 모두 정리할까요? 실행 중인 세션도 멈춰요.`)) return;
+    if (all && !(await askConfirm({ title: `세션 ${sessions.length}개를 모두 정리할까요?`, body: '실행 중인 세션도 멈춰요.', ok: '모두 정리', danger: true }))) return;
     try {
       const r = await api<{ removed?: number }>('POST', all ? '/api/sessions/clear' : '/api/sessions/clear-done');
       setSaid(`세션 ${r?.removed ?? 0}개를 정리했어요.`);

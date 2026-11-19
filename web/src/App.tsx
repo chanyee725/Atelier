@@ -64,6 +64,8 @@ import type { CanvasHandle } from './export/types';
 import { COPY_IMAGE_SHORTCUT, EXPORT_MENU_QUERY, IS_MAC } from './platform';
 import { PlanStrip } from './run/PlanStrip';
 import { events } from './lib/events';
+import { askConfirm, askText } from './appDialog';
+import { AppDialogHost } from './AppDialogHost';
 
 const NARROW = '(max-width: 767px)';
 /** A top-level folder is a project (design doc 6 §1). */
@@ -303,7 +305,7 @@ export function App() {
   const open = useCallback(
     async (p: string): Promise<boolean> => {
       await session.flush();
-      if (session.isDirty() && !window.confirm('저장하지 못한 변경이 있어요. 그래도 다른 파일을 열까요?')) return false;
+      if (session.isDirty() && !(await askConfirm({ title: '저장하지 못한 변경이 있어요', body: '그래도 다른 파일을 열까요? 저장하지 못한 내용은 사라져요.', ok: '그래도 열기', danger: true }))) return false;
       setError(null);
       try {
         load(p, await api.readFile(p));
@@ -422,7 +424,13 @@ export function App() {
   const newFile = async (folder?: string | null, kind: CreateKind = 'doc', sub = false) => {
     const dir = sub && path ? subFolderOf(path) : folder === undefined ? newFileDir(section, projects, path) : (folder ?? '');
     const label = kind === 'plan' ? '새 파이프라인 계획 이름을 입력해 주세요' : '새 파일 이름을 입력해 주세요';
-    const name = window.prompt(sub ? '하위 문서 이름을 입력해 주세요' : dir ? `${label} (${dir} 안에 만들어요)` : label);
+    const name = await askText({
+      title: sub ? '새 하위 문서' : kind === 'plan' ? '새 파이프라인 계획' : '새 파일',
+      body: sub ? '하위 문서 이름을 입력해 주세요' : dir ? `${label} (${dir} 안에 만들어요)` : label,
+      label: '이름',
+      ok: '만들기',
+      validate: (v) => (fileStem(v) ? null : '이름을 입력해 주세요'),
+    });
     const stem = name ? fileStem(name) : '';
     if (!stem) return;
     const p = stem.includes('/') ? stem : folderPrefix(dir || null) + stem;
@@ -556,7 +564,13 @@ export function App() {
   const renameEntry = async (entry: DocNode | Project) => {
     const n = asTreeNode(entry);
     const initial = renameInitial(n);
-    const name = window.prompt('새 이름을 입력해 주세요', initial);
+    const name = await askText({
+      title: '이름 바꾸기',
+      label: '새 이름',
+      initial,
+      ok: '바꾸기',
+      validate: (v) => (v.trim() === initial ? null : nameProblem(n, v)),
+    });
     if (name == null || name.trim() === initial) return;
     const problem = nameProblem(n, name);
     if (problem) return setError(problem);
@@ -587,7 +601,7 @@ export function App() {
         : subdocs
           ? "하위 문서도 함께 지워져요. 30일 동안은 '최근에 지운 파일'에서 하나씩 되살릴 수 있어요."
           : "30일 동안은 '최근에 지운 파일'에서 되살릴 수 있어요.";
-    if (!window.confirm(`"${label}"을(를) 지울까요? ${keep}`)) return;
+    if (!(await askConfirm({ title: `"${label}"을(를) 지울까요?`, body: keep, ok: '지우기', danger: true }))) return;
     removing.current = n.path;
     try {
       // A document's sub-documents folder (`X/`, even an empty one) goes with it, so it never lingers as a group.
@@ -934,6 +948,7 @@ export function App() {
         {sidebar}
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} />
+        <AppDialogHost />
         <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
