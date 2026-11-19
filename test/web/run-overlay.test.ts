@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendSpot, nodeBadges, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 
 async function scene(code: string): Promise<Scene> {
@@ -175,4 +175,27 @@ test('eta panel (#735): working agents only, goal step left out, extra rows fold
   assert.equal(p.more, 2);
   assert.equal(p.rows[0]!.initial, 'A');
   assert.deepEqual(etaPanel([mk('x', 'pending', ['Z'])] as never).rows, []);
+});
+
+test('badges (#687): initial in role colour per agent, hover title with role, model and state, "+N" past the limit', async () => {
+  const agents = [
+    { name: 'juno', role: 'impl', model: 'Opus 5.5', state: 'working' as const },
+    { name: 'Tali', role: 'impl' },
+    { name: 'Oren', role: 'review', state: 'waiting' as const },
+  ];
+  const n = overlayModel(await scene('a'), [{ id: 'a', view: 'active', agents }]).nodes[0]!;
+  assert.deepEqual(n.badges.shown.map((b) => [b.initial, b.color]), [
+    ['J', 'var(--role-impl)'],
+    ['T', roleColor('impl', 1)],
+    ['O', 'var(--role-review)'],
+  ]);
+  assert.equal(n.badges.shown[0]!.title, 'juno · 구현자 · Opus 5.5 · 일하는 중');
+  assert.equal(n.badges.shown[2]!.title, 'Oren · 리뷰어 · 답 기다림');
+  assert.equal(n.badges.more, 0);
+  const five = ['A', 'B', 'C', 'D', 'E'].map((name) => ({ name, role: 'test' }));
+  const b = nodeBadges(five, new Map());
+  assert.deepEqual([b.shown.length, b.more], [3, 2]);
+  // One over the limit is drawn, not folded into "+1".
+  assert.deepEqual(nodeBadges(five.slice(0, 4), new Map()).more, 0);
+  assert.deepEqual(overlayModel(await scene('a'), [{ id: 'a', view: 'pending' }]).nodes[0]!.badges, { shown: [], more: 0 });
 });

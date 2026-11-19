@@ -512,6 +512,12 @@ body {
 .run-corner text { fill: currentColor; font: 600 11px var(--font-sans); }
 .run-label rect { fill: var(--background); stroke: currentColor; stroke-width: 1; }
 .run-label text { fill: var(--foreground); font: 500 11px var(--font-sans); }
+/* Agent badges over a node (#687): role colour fill, a ring in the page colour so overlapping badges stay apart. */
+.run-badge { pointer-events: auto; cursor: default; }
+.run-badge circle { fill: currentColor; stroke: var(--background); stroke-width: 2; }
+.run-badge text { fill: var(--background); font: 600 10px var(--font-sans); }
+.run-badge-more circle { fill: var(--muted); }
+.run-badge-more text { fill: var(--foreground); font-size: 9px; }
 .run-edge { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .run-edge[data-edge-kind='flow'] { stroke-dasharray: 6 6; }
 /* Static form (reduced motion, or paused): a thicker ring and a still dashed edge in the same colour. */
@@ -532,6 +538,8 @@ body {
   .run-layer g:is([data-tone='failed'], [data-tone='blocked']) .run-ring { stroke-width: 3; stroke-dasharray: 8 3; }
   .run-corner rect, .run-label rect { fill: Canvas; stroke: CanvasText; }
   .run-corner text, .run-label text { fill: CanvasText; }
+  .run-badge circle { fill: Canvas; stroke: CanvasText; stroke-width: 1.5; }
+  .run-badge text { fill: CanvasText; }
 }
 @keyframes run-pulse { from { opacity: 1; } to { opacity: 0.5; } }
 @keyframes run-flow { to { stroke-dashoffset: -12; } }

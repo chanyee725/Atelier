@@ -6,6 +6,7 @@
 import type { Point, Scene } from '../../../shared/render/scene.ts';
 import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.ts';
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
+import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
@@ -18,6 +19,8 @@ export interface RunAgent {
   role: string;
   /** Model label for the legend (metadata only). */
   model?: string;
+  /** Its Dispatch state now, for the badge's hover text (#687). */
+  state?: SessionState;
   /** Estimated time left while its step runs (#735); absent once the step is not running. */
   eta?: AgentEta;
   /** Title of the step it works on. */
@@ -63,6 +66,40 @@ export interface OverlayNode {
   /** Pulsing ring (active/review). */
   live: boolean;
   waiting: boolean;
+  /** Round initial badges above the node, one per agent, overlapping (#687). */
+  badges: NodeBadges;
+}
+
+export interface NodeBadge {
+  name: string;
+  initial: string;
+  /** The agent's role colour (--role-*, a lightness step per agent of the same role). */
+  color: string;
+  /** Hover text: `Juno · 구현자 · Opus 5.5 · 일하는 중`. */
+  title: string;
+}
+
+/** `shown` badges drawn, `more` folded into a "+N" badge. */
+export interface NodeBadges {
+  shown: NodeBadge[];
+  more: number;
+}
+
+/** Badges drawn on one node before the rest fold into "+N". */
+export const BADGE_MAX = 3;
+
+const AGENT_STATE: Record<SessionState, string> = { working: '일하는 중', waiting: '답 기다림', stuck: '멈춤', failed: '실패', resting: '쉬는 중', done: '끝남' };
+
+export function nodeBadges(agents: readonly RunAgent[], colors: ReadonlyMap<string, string>, max = BADGE_MAX): NodeBadges {
+  const all = agents.map((a) => ({
+    name: a.name,
+    initial: ([...a.name][0] ?? '?').toUpperCase(),
+    color: colors.get(a.name) ?? roleColor(a.role),
+    title: [a.name, roleLabel(a.role), ...(a.model ? [a.model] : []), ...(a.state ? [AGENT_STATE[a.state] ?? a.state] : [])].join(' · '),
+  }));
+  // With one over the limit, drawing it beats a "+1" badge of the same size.
+  const n = all.length > max + 1 ? max : all.length;
+  return { shown: all.slice(0, n), more: all.length - n };
 }
 
 export interface OverlayEdge {
@@ -205,7 +242,7 @@ export function overlayModel(scene: Scene, steps: readonly RunStep[]): OverlayMo
     const waiting = !!s.waiting && live;
     const text = [st.label, ...(who.length > 2 ? [`${who[0]} 외 ${who.length - 1}`] : who)].join(' · ');
     const label = [s.title ?? stepNode(s), st.label, ...(s.agents ?? []).map((a) => `${a.name}(${roleLabel(a.role)})`), ...(waiting ? ['사람 기다림'] : [])].join(' · ');
-    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting };
+    const n: OverlayNode = { step: s.id, node, rect: rects.get(node)!, view: s.view, tone: st.tone, glyph: st.glyph, text, label, color: st.color, live, waiting, badges: nodeBadges(s.agents ?? [], colors) };
     byNode.set(node, n);
     nodes.push(n);
   }

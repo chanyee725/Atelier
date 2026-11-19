@@ -119,6 +119,7 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
           {n.glyph}
         </text>
       </g>
+      <Badges n={n} />
       {labels && (
         <g className="run-label" aria-hidden="true">
           <rect x={cx - tw / 2} y={ly} width={tw} height={18} rx={9} />
@@ -127,6 +128,46 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
           </text>
         </g>
       )}
+    </g>
+  );
+}
+
+/** Badge radius and the step between overlapping badges (scene units). */
+const BADGE_R = 9;
+const BADGE_STEP = 13;
+
+/**
+ * Agents on the step as round initial badges above the node's top-left, overlapping, in their role colour (#687).
+ * Hover shows the full name, role, model and state (native SVG tooltip); the step's accessible name already lists them.
+ * The first agent is drawn last so it sits on top.
+ */
+function Badges({ n }: { n: OverlayNode }) {
+  const { shown, more } = n.badges;
+  if (!shown.length) return null;
+  const cy = n.rect.y - PAD - 4 - BADGE_R;
+  const cx = (i: number) => n.rect.x + BADGE_R + i * BADGE_STEP;
+  return (
+    <g className="run-badges" aria-hidden="true">
+      {more > 0 && (
+        <g className="run-badge run-badge-more">
+          <title>{`${more}명 더`}</title>
+          <circle cx={cx(shown.length)} cy={cy} r={BADGE_R} />
+          <text x={cx(shown.length)} y={cy} textAnchor="middle" dominantBaseline="central">
+            +{more}
+          </text>
+        </g>
+      )}
+      {shown
+        .map((b, i) => (
+          <g key={b.name} className="run-badge" data-agent={b.name} style={{ color: b.color }}>
+            <title>{b.title}</title>
+            <circle cx={cx(i)} cy={cy} r={BADGE_R} />
+            <text x={cx(i)} y={cy} textAnchor="middle" dominantBaseline="central">
+              {b.initial}
+            </text>
+          </g>
+        ))
+        .reverse()}
     </g>
   );
 }
