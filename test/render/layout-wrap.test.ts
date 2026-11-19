@@ -56,8 +56,8 @@ test('sample flowchart: one line becomes two rows, connectors stay clean', async
   assert.ok(after.width < before.width * 0.6, `${after.width} against ${before.width}`);
   assert.ok(after.aspect < before.aspect / 3);
   assert.deepEqual(
-    { crossings: after.crossings, overlaps: after.overlaps, throughNodes: after.throughNodes, labelsOnNodes: after.labelsOnNodes },
-    { crossings: 0, overlaps: 0, throughNodes: 0, labelsOnNodes: 0 },
+    { crossings: after.crossings, lineCrossings: after.lineCrossings, overlaps: after.overlaps, throughNodes: after.throughNodes, labelsOnNodes: after.labelsOnNodes },
+    { crossings: 0, lineCrossings: 0, overlaps: 0, throughNodes: 0, labelsOnNodes: 0 },
   );
   // The one connector between the rows: out of the bottom, along the gap, into the top.
   const link = scene.items.find((it) => it.kind === 'edge' && it.from === 'Issue the order' && it.to === 'Receive the goods');
@@ -78,7 +78,7 @@ test('sample flowchart, top to bottom: the rows are columns', async () => {
   assert.equal(pay.y, procure.y);
   assert.equal(Math.round(pay.x - (procure.x + procure.w)), WRAP_ROW_GAP);
   assert.ok(after.height < before.height * 0.6);
-  assert.deepEqual([after.crossings, after.overlaps, after.throughNodes], [0, 0, 0]);
+  assert.deepEqual([after.crossings, after.lineCrossings, after.overlaps, after.throughNodes], [0, 0, 0, 0]);
 });
 
 test('a chain of four groups wraps, nothing runs through a node, and it is deterministic', async () => {
