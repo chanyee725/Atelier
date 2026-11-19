@@ -113,15 +113,17 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard }: { a
  * One live session per card (#785, #793): name and run state on top, role badge and model below, then the step it is on
  * and the file it holds. Both lines are split left and right so the card's width is used evenly. The pointer tag (the
  * live cursor's look) shows only while the session edits a diagram (isEditingDiagram); otherwise the name is plain.
- * The card's top part opens the session's live view; the file line opens the document. In a narrow card (under 15rem)
- * the state keeps its icon and the model moves under the role.
+ * The card's top part opens the session's live view; the file line opens the document. In a narrow card the state
+ * keeps only its icon (under 11rem) and the model moves under the role (under 12rem).
  */
 function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
   const look = !busy && needsLook(a);
   const editing = isEditingDiagram(a);
   const model = a.modelLabel || a.model;
-  const state = editing && a.statusLabel ? a.statusLabel : agentStateLabel(a);
+  const state = agentStateLabel(a);
+  // Third line: the plan step when there is one, else what it does now (the cursor status, e.g. 다이어그램 작성 중…).
+  const detail = a.step || a.statusLabel || (look ? state : null);
   return (
     <li
       data-agent={a.sid}
@@ -148,17 +150,17 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
           ) : (
             <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', look ? 'bg-warn' : 'bg-idle')} />
           )}
-          <span className="sr-only @min-[15rem]/session:not-sr-only">{state}</span>
+          <span className="sr-only @min-[11rem]/session:not-sr-only">{state}</span>
         </span>
         <RoleBadge agent={a} className="justify-self-start" />
         {model ? (
-          <span className="col-span-2 inline-flex min-w-0 items-center gap-1 justify-self-start text-muted-foreground @min-[15rem]/session:col-span-1 @min-[15rem]/session:justify-self-end" title={model}>
+          <span className="col-span-2 inline-flex min-w-0 items-center gap-1 justify-self-start text-muted-foreground @min-[12rem]/session:col-span-1 @min-[12rem]/session:justify-self-end" title={model}>
             <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
             <span className="truncate">{model}</span>
           </span>
         ) : null}
-        {a.step ? (
-          <span className="col-span-2 min-w-0 truncate text-foreground" title={a.step}>{a.step}</span>
+        {detail ? (
+          <span className={cn('col-span-2 min-w-0 truncate', a.step ? 'text-foreground' : 'text-muted-foreground')} title={detail}>{detail}</span>
         ) : null}
       </button>
       <span className="mt-auto flex min-w-0 items-center gap-3 border-t border-border/60 px-3 py-1.5">
@@ -169,7 +171,9 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
             <span className="truncate">{title}</span>
           </button>
         ) : (
-          <span className="text-muted-foreground">잡고 있는 파일 없음</span>
+          <span className="truncate text-muted-foreground">
+            <span className="sr-only">잡고 있는 </span>파일 없음
+          </span>
         )}
         {a.at ? <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">{relativeTime(a.at)}</span> : null}
       </span>
