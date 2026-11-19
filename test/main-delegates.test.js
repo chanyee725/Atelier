@@ -12,7 +12,7 @@ import { NOTE, QUICKFIX_FILES, REMIND_MS, expandHome, findServer, lockLive, look
 const servers = [];
 const hits = new Map(); // port -> number of /api/info requests the fake server saw
 after(() => { for (const s of servers) s.close(); });
-function serve(info = { workspace: "pipelines", mode: "project" }, status = 200) {
+function serve(info = { workspace: ".atelier", mode: "project" }, status = 200) {
   return new Promise(ok => {
     const s = createServer((req, res) => {
       hits.set(s.address().port, (hits.get(s.address().port) ?? 0) + 1);
@@ -35,9 +35,9 @@ async function setup(portFile = "serve", lock = "live") {
     const port = portFile === "serve" ? await serve() : portFile;
     writeFileSync(join(proj, ".dispatch", "server.port"), portFile === "serve" ? `${port}\n` : port);
     if (lock !== "none") {
-      mkdirSync(join(proj, "pipelines", ".drawing"), { recursive: true });
+      mkdirSync(join(proj, ".atelier", ".drawing"), { recursive: true });
       const body = lock === "live" ? { pid: process.pid, port: Number(port) } : lock;
-      writeFileSync(join(proj, "pipelines", ".drawing", "server.lock"), typeof body === "string" ? body : JSON.stringify(body));
+      writeFileSync(join(proj, ".atelier", ".drawing", "server.lock"), typeof body === "string" ? body : JSON.stringify(body));
     }
   }
   const marks = mkdtempSync(join(tmpdir(), "dmd-marks-"));

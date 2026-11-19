@@ -4,7 +4,7 @@
 // Claude Code session, before a file edit — or a Bash command that looks like a write — it checks whether an Atelier
 // server runs for the project that holds the file: the project is the git top-level of the hook's cwd, its port is in
 // <project>/.dispatch/server.port (written by plugin/scripts/start.sh) and must be all digits, the project's
-// <project>/atelier/.drawing/server.lock (or the older pipelines/) must name that port and a live pid (the rule of ours() in start.sh), and
+// <project>/.atelier/.drawing/server.lock (or the older atelier/ or pipelines/) must name that port and a live pid (the rule of ours() in start.sh), and
 // http://127.0.0.1:<port>/api/info must answer as a project-mode server (loopback only, short timeout).
 // Lanes (#768): the main session may do a quickfix (1-3 files) itself. The hook counts the distinct files the session
 // writes in that project; once it passes QUICKFIX_FILES it adds a note to the model's context: hand normal and risky
@@ -108,6 +108,9 @@ export function projectRoot(dir) {
   }
 }
 
+// The project's workspace folder (#782) and the older ones a server started before #782 or #773 may still run on.
+const WORKSPACES = [".atelier", "atelier", "pipelines"];
+
 // The port in <root>/.dispatch/server.port when it is plain digits in 1..65535, else null.
 export function readPort(root) {
   let raw;
@@ -117,9 +120,9 @@ export function readPort(root) {
   return n >= 1 && n <= 65535 ? n : null;
 }
 
-// True when <root>/atelier/.drawing/server.lock (or the older pipelines/) names `port` and a live pid (EPERM means alive, owned by another user).
+// True when <root>/.atelier/.drawing/server.lock (or the older atelier/ or pipelines/) names `port` and a live pid (EPERM means alive, owned by another user).
 export function lockLive(root, port) {
-  return ["atelier", "pipelines"].some((ws) => {
+  return WORKSPACES.some((ws) => {
     try {
       const lock = JSON.parse(readFileSync(join(root, ws, ".drawing", "server.lock"), "utf8"));
       if (!lock || String(lock.port) !== String(port) || !Number.isInteger(lock.pid) || lock.pid <= 0) return false;
@@ -129,14 +132,14 @@ export function lockLive(root, port) {
   });
 }
 
-// True when a project-mode Atelier server on the "atelier" (or older "pipelines") workspace answers /api/info on 127.0.0.1:<port>.
+// True when a project-mode Atelier server on the ".atelier" (or older "atelier", "pipelines") workspace answers /api/info on 127.0.0.1:<port>.
 export function probe(port, timeout = 1500) {
   return new Promise(done => {
     const req = get({ host: "127.0.0.1", port, path: "/api/info", timeout }, res => {
       let b = "";
       res.setEncoding("utf8");
       res.on("data", c => { if (b.length < 4096) b += c; });
-      res.on("end", () => { try { done(res.statusCode === 200 && (i => i?.mode === "project" && (i.workspace === "atelier" || i.workspace === "pipelines"))(JSON.parse(b))); } catch { done(false); } });
+      res.on("end", () => { try { done(res.statusCode === 200 && (i => i?.mode === "project" && WORKSPACES.includes(i.workspace))(JSON.parse(b))); } catch { done(false); } });
       res.on("error", () => done(false));
     });
     req.on("error", () => done(false));

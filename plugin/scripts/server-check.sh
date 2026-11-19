@@ -27,8 +27,8 @@ is_our_server() {
   [[ "$cmd" == *"/server/index.js --project-mode $workspace" ]]
 }
 
-# Succeeds when pid $1 is our server for project $2: on <project>/atelier, or on the older <project>/pipelines
-# (a server started before #773, so stop/restart/update still find it).
+# Succeeds when pid $1 is our server for project $2: on <project>/.atelier, or on the older <project>/atelier or
+# <project>/pipelines (a server started before #782 or #773, so stop/restart/update still find it).
 is_our_project_server() {
-  is_our_server "$1" "$2/atelier" || is_our_server "$1" "$2/pipelines"
+  is_our_server "$1" "$2/.atelier" || is_our_server "$1" "$2/atelier" || is_our_server "$1" "$2/pipelines"
 }
