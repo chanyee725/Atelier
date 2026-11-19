@@ -27,6 +27,27 @@ const modalHost = (): HTMLElement | null => {
   return all.length ? all[all.length - 1] : null;
 };
 
+/** Gap between the top bar's bottom edge and the first toast. */
+const BAR_GAP = 8;
+/**
+ * Where the stack starts (#730): just under the screen's top bar, measured because its height changes with the screen
+ * (the home header wraps, the phone header is taller, the main pane is inset on a wide screen). The top bar is the
+ * lowest header that starts at the top of the window, outside dialogs; with none, CSS falls back to --h-bar. While a
+ * modal is open (the region is inside it), the stack also starts below the modal's own head, so its title and close
+ * button stay clear.
+ */
+const toastTop = (modal: HTMLElement | null): number | null => {
+  let bottom = -1;
+  for (const h of document.querySelectorAll<HTMLElement>('header')) {
+    if (h.closest(`${MODAL_SELECTOR}, [data-activity-toasts]`)) continue;
+    const r = h.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0 && r.top >= 0 && r.top < 24) bottom = Math.max(bottom, r.bottom);
+  }
+  const head = modal?.querySelector<HTMLElement>('.overlay-head, header')?.getBoundingClientRect();
+  if (head && head.height > 0) bottom = Math.max(bottom, head.bottom);
+  return bottom < 0 ? null : Math.round(bottom) + BAR_GAP;
+};
+
 type Toast = { id: string; text: string; kind: ActivityEvent['kind'] | 'info'; color?: string; persist?: boolean; target?: ToastTarget };
 let seq = 0;
 const fromApp = (t: AppToast): Toast => ({
@@ -69,6 +90,15 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   openSession.current = onSession;
   const go = (target: ToastTarget) => ('file' in target ? open.current(target.file) : openSession.current(target.session));
 
+  /** Puts the stack under the top bar (sets --toast-top on the region; unset → the CSS fallback). */
+  const place = () => {
+    const el = box.current;
+    if (!el) return;
+    const top = toastTop(modalHost());
+    if (top == null) el.style.removeProperty('--toast-top');
+    else el.style.setProperty('--toast-top', `${top}px`);
+  };
+
   const close = (id: string) => {
     clearTimeout(timers.current.get(id));
     timers.current.delete(id);
@@ -100,7 +130,11 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   useEffect(() => {
     if (!showing) return;
     setHost(modalHost());
-    const t = setInterval(() => setHost(modalHost()), MODAL_CHECK_MS);
+    // The top bar can change height while toasts are up (window resized, header wrapped): follow it on the same tick.
+    const t = setInterval(() => {
+      setHost(modalHost());
+      place();
+    }, MODAL_CHECK_MS);
     return () => clearInterval(t);
   }, [showing]);
 
@@ -149,6 +183,7 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
     // A region portaled into a modal that has just closed is detached; showPopover would throw and take the app down.
     if (!el?.showPopover || !el.isConnected) return;
     const shown = el.matches(':popover-open');
+    if (toasts.length) place();
     if (toasts.length && !shown) el.showPopover();
     else if (!toasts.length && shown) el.hidePopover();
     // A hidden region gets no mouseleave or blur: closing the last toast under the pointer must not keep the next
