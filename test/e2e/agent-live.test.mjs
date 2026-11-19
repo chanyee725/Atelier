@@ -98,6 +98,9 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '닫기', 'focus on the close button');
   assert.match(await page.evaluate(() => location.hash), new RegExp(`agent=${encodeURIComponent(s.id)}`));
   await page.waitForFunction((id) => /npm test/.test(document.querySelector(`dialog[data-agent-live="${id}"]`)?.textContent ?? ''), s.id, { timeout: 10_000 });
+  // Only the state label is announced; the clock that ticks every second is outside the live region.
+  const regions = await panel.evaluate((el) => [...el.querySelectorAll('[aria-live]')].map((r) => [r.getAttribute('aria-live'), r.textContent, !!r.querySelector('[data-live-clock]')]));
+  assert.ok(regions.length >= 1 && regions.every(([, t, clock]) => !clock && !/째/.test(t)), `live regions: ${JSON.stringify(regions)}`);
   const text = await panel.textContent();
   assert.ok(!text.includes(home) && !text.includes(repo) && !/\/home\//.test(text), `no home paths in the panel: ${text}`);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-live-board-1280.png') });
@@ -108,9 +111,10 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   assert.equal(await open.getAttribute('aria-expanded'), 'false');
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('data-session-live')), s.id, 'focus back on the trigger');
 
-  // 3. Esc closes it.
+  // 3. Esc closes it (pressed once focus has moved into the panel: Esc is handled there).
   await open.click();
   await panel.waitFor();
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '닫기');
   await page.keyboard.press('Escape');
   await page.waitForFunction((id) => !document.querySelector(`dialog[data-agent-live="${id}"]:popover-open`), s.id);
 
@@ -118,6 +122,7 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   await page.setViewportSize({ width: 600, height: 800 });
   await open.click();
   await panel.waitFor();
+  await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '닫기');
   const sheetBox = await panel.boundingBox();
   assert.ok(sheetBox.x <= 1 && Math.abs(sheetBox.width - 600) <= 1 && Math.abs(sheetBox.y + sheetBox.height - 800) <= 1 && Math.abs(sheetBox.height - 560) <= 2, `bottom sheet: ${JSON.stringify(sheetBox)}`);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-live-sheet-600.png') });
