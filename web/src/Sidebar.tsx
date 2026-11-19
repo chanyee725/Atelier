@@ -3,6 +3,9 @@
 // sub-documents (#778), one row per model with its connection status (SidebarModels.tsx) and settings.
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
+import { approvalCount } from './activity/approvals';
+import { usePermissionAsks } from './activity/permissionAsksStore';
+import { useWaitingPlans } from './activity/waitingPlans';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, FolderClosed, FolderInput, GitBranch, House, LayoutGrid, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
@@ -311,6 +314,7 @@ export function Sidebar(p: Props) {
     { id: 'recent', label: '최근', icon: Clock, key: 'R', run: () => p.onSection({ kind: 'recent' }) },
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
+  const waiting = approvalCount(useWaitingPlans(), usePermissionAsks());
   const folders = p.view?.projects ?? [];
   const loose = p.view?.loose ?? [];
   const titles = useMemo(() => titlesOf(p.view), [p.view]);
@@ -332,7 +336,13 @@ export function Sidebar(p: Props) {
               <SidebarMenuButton aria-current={p.section.kind === v.id ? 'page' : undefined} onClick={v.run} data-nav={v.id} className="group/row">
                 <v.icon aria-hidden />
                 <span className="truncate">{v.label}</span>
-                <Kbd className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">{v.key}</Kbd>
+                {/* What waits for a person (#836): waiting plans and permission prompts, shown on the dashboard's 승인 대기 card. */}
+                {v.id === 'all' && waiting > 0 && (
+                  <SidebarMenuBadge className="min-w-5 rounded-full bg-warn/15 px-1.5 text-center font-medium text-foreground" aria-label={`승인 대기 ${waiting}건`}>
+                    {waiting}
+                  </SidebarMenuBadge>
+                )}
+                <Kbd className={cn(v.id === 'all' && waiting > 0 ? 'ml-1' : 'ml-auto', 'opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden')}>{v.key}</Kbd>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
