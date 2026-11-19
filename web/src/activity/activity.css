@@ -64,16 +64,20 @@
 .activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 [data-kind='error'] .activity-dot { box-shadow: 0 0 0 2px var(--destructive); }
 
-/* Toasts: one region in the top layer, top right under the top bar (full width on a narrow screen). */
+/* Toasts: one region in the top layer, top right just under the top bar (#730; full width on a narrow screen).
+   --toast-top is the top bar's bottom edge plus a gap, set from JS (the bar's height changes with the screen); the
+   fallback leaves room for the bar and the inset main pane. */
 .activity-toasts {
+  --toast-x: max(16px, env(safe-area-inset-right));
+  --toast-y: var(--toast-top, calc(var(--h-bar) + 16px));
   position: fixed;
-  inset: 52px 16px auto auto;
+  inset: var(--toast-y) var(--toast-x) auto auto;
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   overflow: visible;
-  inline-size: min(360px, calc(100vw - 32px));
+  inline-size: min(360px, calc(100vw - 2 * var(--toast-x)));
 }
 .activity-toasts ol { display: flex; flex-direction: column; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .activity-toast {
@@ -124,7 +128,22 @@
   }
 }
 @media (max-width: 480px) {
-  .activity-toasts { inset: 52px 8px auto 8px; inline-size: auto; }
+  /* Edge to edge with an 8px margin, clear of a notch on either side. */
+  .activity-toasts {
+    --toast-x: max(8px, env(safe-area-inset-right));
+    inset-inline-start: max(8px, env(safe-area-inset-left));
+    inline-size: auto;
+  }
+}
+/* A short window (a phone on its side, 320x256 zoomed): a stack taller than the room left scrolls instead of being
+   cut off (WCAG 1.4.10 Reflow). Only here, since a scroll box clips the toasts' shadows. */
+@media (max-height: 560px) {
+  .activity-toasts {
+    max-block-size: calc(100dvh - var(--toast-y) - 8px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
 }
 @media (forced-colors: active) {
   .activity-dot { forced-color-adjust: none; }
