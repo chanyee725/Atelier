@@ -18,10 +18,14 @@ Paths are relative to the workspace, `/`-separated. No `..`, absolute paths, hid
 
 `GET /api/workspace/projects` → `{ projects: Project[], loose: DocNode[] }` (design: `docs/design/dispatch-integration/6-app-shell-projects.md` §1). Read only; built from the same walk as `/api/tree`.
 
-- **Project** = a top-level folder: `{ path, name, icon, description, created, modified, count, docs }`. An optional `<folder>/.project.json` gives `name` (max 100 characters), `icon` (max 16) and `description` (max 500); other fields, non-strings, broken JSON, files over 16 KB and symlinks are ignored. Without it `name` is the folder name, `icon` null, `description` ''. Sorted by `name`.
+- **Project** = a top-level folder: `{ path, name, icon, description, linkedPath, created, modified, count, docs }`. An optional `<folder>/.project.json` gives `name` (max 100 characters), `icon` (max 16), `description` (max 500) and `linkedPath` (an absolute path, the server folder the project is linked to, else null); other fields, non-strings, broken JSON, files over 16 KB and symlinks are ignored. Without it `name` is the folder name, `icon` null, `description` ''. Sorted by `name`.
 - **DocNode** = `{ type: 'doc'|'group', path, name, title?, revision?, created, modified, count, children }`. A folder `X/` next to `X.dpx.json` holds X's sub-documents (`children`); a folder with no such file is a `group` (its `path` is the folder). `count` is the number of documents below. Sorted by `name`.
 - `loose` = files right in the workspace root (미분류). They are not nested: a top-level folder is always a project.
 - Times are ISO strings. `modified` is the file's mtime (a group's or project's newest below). `created`: saves replace the file, so its birth time is lost; a file made through the API gets a `born` mark (ms) in its history folder, which moves with it and goes through the trash. For files made outside the app it is the earliest of the oldest kept snapshot and the file's own times.
+
+## Local folder projects (E554)
+
+`GET /api/local-folders?path=<abs>` lists sub-folder names of a folder on the server machine (home folder without `path`): no files, no hidden entries, symlinks skipped. `POST /api/workspace/local-project { path }` links that folder as a new project (`201 { path, name, linkedPath }`, 409 `{ project, code: 'already_linked' }` when already linked; 400 with `code` `inside_workspace` or `filesystem_root` for the workspace or the root). Links run one at a time. Design: `docs/design/local-folder-projects.md`.
 
 ## Live agents and who is writing (E528)
 
