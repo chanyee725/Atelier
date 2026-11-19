@@ -35,7 +35,8 @@ This replaces the first version of E554 (PR #723), which linked a folder into th
    - a switch already running → 409 `switching`.
 2. Open pages get an SSE `workspace-switch` event `{ workspace: <folder name> }`; then the event streams are closed.
 3. Every module is closed and set up again with the new `ctx.workspaceDir` (modules never see the folder change under
-   them). Requests that arrive meanwhile wait for the switch.
+   them). Requests that arrive meanwhile wait for the switch, except `/api/workspaces*` (those answer at once, so a
+   second switch gets 409 `switching` instead of queueing).
 4. The old folder's workspace lock is released and the new one gets the port.
 5. If a module fails to start in the new folder, the server goes back to the previous folder (modules and lock) and
    answers 500 `open_failed`.
@@ -72,6 +73,8 @@ All writes need `x-drawing: 1`. The POST/DELETE routes are closed in project mod
   cannot be removed (409 `current`).
 
 ## Web
+
+The web UI below was removed in #778 (the sidebar shows one project's name instead); the API stays.
 
 - `WorkspaceMenu` (sidebar header): the open folder's name is a menu button. The menu lists the remembered folders as
   radio items (the open one checked, a missing one disabled with 없음) and 폴더 열기… for the folder browser. The list
