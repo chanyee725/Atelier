@@ -1,9 +1,10 @@
-// App sidebar, layout B (design doc 6 §2.1, §3.1): workspace name with search and new-file icons, the views
-// (홈 A, 최근 R, 보관함 B) and the 세션 보드 link, projects with their nested sub-documents, one row per model with its connection
-// status (SidebarModels.tsx) and settings. Built from the shadcn Sidebar (components/ui/sidebar.tsx).
+// App sidebar, layout B (design doc 6 §2.1, §3.1): the project's name with search and new-file icons, the views
+// (홈 A, 최근 R, 보관함 B) and the 세션 보드 link, then 문서: this one project's folders and documents with their nested
+// sub-documents (#778), one row per model with its connection status (SidebarModels.tsx) and settings.
+// Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ChevronRight, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Plus, Search, SquarePen, Trash2 } from 'lucide-react';
+import { Archive, ChevronRight, LayoutGrid, Clock, File, Files, FolderClosed, FolderInput, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
 import { Kbd } from './components/ui/kbd';
@@ -12,7 +13,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
@@ -24,19 +24,20 @@ import {
 } from './components/ui/sidebar';
 import { FOCUS_RING } from './lib/focus';
 import { cn } from './lib/utils';
-import { openPathsFor, projectOf, type Section } from './projectNav';
+import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
 import { ActivityBell } from './activity/ActivityBell';
 import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
-import { WorkspaceMenu } from './WorkspaceMenu';
+import { ProjectName } from './ProjectName';
 import type { Theme, ThemePref } from './theme';
 import { displayName, titlesOf } from './docTitles';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
 
 type Props = {
-  workspace: string | null;
+  /** The project's name, shown top-left (#778); null while it loads. */
+  project: string | null;
   view: ProjectsView | null;
   section: Section;
   /** The open document's path while the document screen is shown. */
@@ -44,9 +45,6 @@ type Props = {
   onSection: (s: Section) => void;
   onOpen: (path: string) => void;
   onNewFile: () => void;
-  onNewProject: () => void;
-  /** Switch the server to another registered folder (E554). */
-  onSwitchWorkspace: (path: string) => void;
   onRename: (n: DocNode | Project) => void;
   onDelete: (n: DocNode | Project) => void;
   /** Move a document (with its sub-documents) or group into folder `dir`; resolves true when it moved. */
@@ -60,26 +58,12 @@ type Props = {
 };
 
 
-/** The project in view: the picked project section, or the project holding the open document. */
-const boardFolder = (p: Pick<Props, 'section' | 'view' | 'current'>) => (p.section.kind === 'project' ? p.section.path : (projectOf(p.view, p.current)?.path ?? null));
-
 const ICON_BUTTON = 'flex size-[30px] shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-foreground/5 hover:text-sidebar-foreground max-md:size-11 [&>svg]:size-[17px] ' + FOCUS_RING;
 
 // 새 파일 is the one raised control in the header: white with a hairline in light, a lighter square in dark and
 // 모니터링 (on --background it read as a hole in the sidebar). Hover keeps the fill and only brightens the icon.
 const NEW_FILE_BUTTON =
   'border border-sidebar-border bg-background text-sidebar-foreground/80 shadow-xs hover:bg-background dark:bg-sidebar-accent dark:shadow-none dark:hover:bg-sidebar-accent';
-
-/** First letter of a project, shown on a tinted square (no per-project colour, doc 6 §4.1). The tint is a share of
- *  --sidebar-foreground, so the square stays visible on the light sidebar, where --muted is almost the sidebar itself. */
-function ProjectMark({ p }: { p: Project }) {
-  const letter = p.icon || [...p.name][0]?.toUpperCase() || '?';
-  return (
-    <span aria-hidden className="grid size-[17px] shrink-0 place-items-center overflow-hidden rounded-sm bg-sidebar-foreground/8 text-[11px] font-semibold text-sidebar-foreground">
-      {letter}
-    </span>
-  );
-}
 
 // The document or group being dragged (dataTransfer cannot be read during dragover, so keep it here).
 let dragging: MoveItem | null = null;
@@ -181,6 +165,7 @@ function RowMenu({ label, node, p, move }: { label: string; node: DocNode | Proj
   );
 }
 
+/** depth -1: a top-level row of 문서 (no indent, its icon lines up with the views above). */
 type RowsProps = { depth: number; open: Set<string>; toggle: (path: string) => void; p: Props; move: Mover };
 
 function DocRows({ nodes, ...rest }: RowsProps & { nodes: DocNode[] }) {
@@ -207,7 +192,7 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
   const expanded = has && open.has(n.path);
   const active = n.type === 'doc' && p.current === n.path;
   // Indent: 9px + icon column (22px) + 15px per level (doc 6 prototype), within the row's own 8px padding.
-  const pad = { paddingLeft: 9 + 22 + depth * 15 };
+  const pad = depth < 0 ? undefined : { paddingLeft: 9 + 22 + depth * 15 };
   return (
     <SidebarMenuItem className={freshClass(n.path)}>
       <SidebarMenuButton
@@ -215,7 +200,7 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
         data-move-path={n.path}
         aria-current={active ? 'page' : undefined}
         aria-expanded={n.type === 'group' ? expanded : undefined}
-        className={cn(ROW_SLOTS, 'font-normal text-muted-foreground hover:text-foreground aria-[current=page]:font-medium', DROP_ROW)}
+        className={cn(ROW_SLOTS, depth >= 0 && 'font-normal text-muted-foreground hover:text-foreground', 'aria-[current=page]:font-medium', DROP_ROW)}
         {...dragProps(moveItemOf(n))}
         {...(n.type === 'group' ? drop : refuseDrop)}
         onClick={() => (n.type === 'doc' ? p.onOpen(n.path) : toggle(n.path))}
@@ -261,26 +246,16 @@ function PipelineBadge({ state }: { state: PipelineMark['state'] }) {
   );
 }
 
-function ProjectRow({ pr, open, toggle, p, move }: Omit<RowsProps, 'depth'> & { pr: Project }) {
+/** A top-level folder of the project's documents (a workspace top folder; its .project.json name wins). */
+function FolderRow({ pr, open, toggle, p, move }: Omit<RowsProps, 'depth'> & { pr: Project }) {
   const expanded = open.has(pr.path);
-  const here = p.section.kind === 'project' && p.section.path === pr.path;
   const drop = useDropTarget({ path: pr.path, label: pr.name }, move);
   return (
     <SidebarMenuItem className={freshClass(pr.path)}>
-      <SidebarMenuButton
-        data-move-path={pr.path}
-        aria-current={here ? 'page' : undefined}
-        aria-expanded={expanded}
-        className={cn(ROW_SLOTS, DROP_ROW)}
-        {...drop}
-        onClick={() => {
-          p.onSection({ kind: 'project', path: pr.path });
-          if (!expanded) toggle(pr.path);
-        }}
-      >
-        <ProjectMark p={pr} />
+      <SidebarMenuButton data-move-path={pr.path} aria-expanded={expanded} className={cn(ROW_SLOTS, DROP_ROW)} {...drop} onClick={() => toggle(pr.path)}>
+        <FolderClosed aria-hidden />
         <span className="truncate">{pr.name}</span>
-        {!expanded && pr.count > 0 && <SidebarMenuBadge className={COUNT}>{pr.count}</SidebarMenuBadge>}
+        {!expanded && pr.count > 0 && <SidebarMenuBadge className={COUNT} aria-label={`문서 ${pr.count}개`}>{pr.count}</SidebarMenuBadge>}
       </SidebarMenuButton>
       <SidebarMenuAction aria-label={`${pr.name} ${expanded ? '접기' : '펼치기'}`} aria-expanded={expanded} className="right-7 max-md:right-11" onClick={() => toggle(pr.path)}>
         <ChevronRight className={cn('transition-transform', expanded && 'rotate-90')} />
@@ -337,12 +312,13 @@ export function Sidebar(p: Props) {
     { id: 'recent', label: '최근', icon: Clock, key: 'R', run: () => p.onSection({ kind: 'recent' }) },
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
-  const projects = p.view?.projects ?? [];
+  const folders = p.view?.projects ?? [];
+  const loose = p.view?.loose ?? [];
   const titles = useMemo(() => titlesOf(p.view), [p.view]);
   return (
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
-        <WorkspaceMenu workspace={p.workspace} onSwitch={p.onSwitchWorkspace} onOpenFolder={p.onNewProject} />
+        <ProjectName name={p.project} />
         <ActivityBell className={ICON_BUTTON} onOpen={p.onOpen} />
         <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
           <Search />
@@ -363,10 +339,10 @@ export function Sidebar(p: Props) {
             </SidebarMenuItem>
           ))}
           <SidebarMenuItem>
-            {/* The board is a section of the shell (#731): it opens scoped to the project in view, else all projects. */}
+            {/* The board is a section of the shell (#731); this server holds one project, so it shows all its sessions (#778). */}
             <SidebarMenuButton
               aria-current={p.section.kind === 'board' ? 'page' : undefined}
-              onClick={() => p.onSection(p.section.kind === 'board' ? p.section : { kind: 'board', tab: 'sessions', folder: boardFolder(p) ?? undefined })}
+              onClick={() => p.onSection(p.section.kind === 'board' ? p.section : { kind: 'board', tab: 'sessions' })}
               data-nav="board"
               className="group/row"
             >
@@ -378,17 +354,15 @@ export function Sidebar(p: Props) {
         </SidebarMenu>
         <WorkingAgents current={p.current} onOpen={p.onOpen} titleOf={(path) => titles.get(path) ?? null} />
         <SidebarGroup className="mt-3">
-          <SidebarGroupLabel>프로젝트</SidebarGroupLabel>
-          <SidebarGroupAction aria-label="새 프로젝트" title="새 프로젝트" onClick={p.onNewProject}>
-            <Plus />
-          </SidebarGroupAction>
-          {projects.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">{p.view ? '아직 프로젝트가 없어요.' : '불러오는 중이에요…'}</p>
+          <SidebarGroupLabel>문서</SidebarGroupLabel>
+          {folders.length === 0 && loose.length === 0 ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">{p.view ? '아직 문서가 없어요.' : '불러오는 중이에요…'}</p>
           ) : (
             <SidebarMenu>
-              {projects.map((pr) => (
-                <ProjectRow key={pr.path} pr={pr} open={open} toggle={toggle} p={p} move={move} />
+              {folders.map((pr) => (
+                <FolderRow key={pr.path} pr={pr} open={open} toggle={toggle} p={p} move={move} />
               ))}
+              <DocRows nodes={loose} depth={-1} open={open} toggle={toggle} p={p} move={move} />
             </SidebarMenu>
           )}
         </SidebarGroup>

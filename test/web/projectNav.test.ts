@@ -27,7 +27,7 @@ const view: ProjectsView = {
       docs: [doc('A/login.dpx.json', [doc('A/login/token.dpx.json', [doc('A/login/token/exp.dpx.json')])]), { ...doc('A/g'), type: 'group', children: [doc('A/g/m.dpx.json')] }],
     },
   ],
-  loose: [doc('x.dpx.json')],
+  loose: [doc('x.dpx.json'), doc('y.dpx.json', [doc('y/z.dpx.json')])],
 };
 
 test('projectOf and openPathsFor find the project and the rows above a document', () => {
@@ -37,6 +37,8 @@ test('projectOf and openPathsFor find the project and the rows above a document'
   assert.deepEqual(openPathsFor(view, 'A/login/token/exp.dpx.json').sort(), ['A', 'A/login.dpx.json', 'A/login/token.dpx.json']);
   assert.deepEqual(openPathsFor(view, 'A/g/m.dpx.json').sort(), ['A', 'A/g']);
   assert.deepEqual(openPathsFor(view, 'x.dpx.json'), []);
+  // A loose document's sub-document unfolds its parent too (문서 lists loose files, #778).
+  assert.deepEqual(openPathsFor(view, 'y/z.dpx.json'), ['y.dpx.json']);
 });
 
 test('asTreeNode, subFolderOf and newFileDir', () => {
