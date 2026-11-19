@@ -5,7 +5,7 @@ import type { BlockLayout } from '../../shared/render/block-layout.ts';
 import type { BlockCode } from '../../shared/render/block-code.ts';
 export type { BlockCode } from '../../shared/render/block-code.ts';
 // Newest file format this web build understands; a 422 on a file above it means a newer app wrote it.
-export const FILE_FORMAT_VERSION = 5;
+export const FILE_FORMAT_VERSION = 6;
 // Pipeline steps (format v4). The web only carries it through saves for now; docs/workspace-api.md "Pipeline `plan`".
 export type { Plan, PlanStep } from '../../shared/dispatch/plan.ts';
 import type { UsageDay } from '../../shared/dispatch/types.ts';

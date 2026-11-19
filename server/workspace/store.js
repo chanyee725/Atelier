@@ -10,6 +10,7 @@ import { createResolver, parseWorkspacePath, PathError } from './paths.js';
 import { FILE_EXT, FORMAT_VERSION, newFile, normalizeContent, parseStored, ValidationError } from './model.js';
 import { applyPlanOps } from './plan-ops.js';
 import { PLAN_VERSION } from '../../shared/dispatch/plan.ts';
+import { DISCUSSIONS_VERSION, openQuestions } from '../../shared/dispatch/discussions.ts';
 
 export class StoreError extends Error {
   constructor(status, message, extra = {}) {
@@ -625,12 +626,15 @@ export function createStore(
         let title = '';
         let revision = null;
         let pipeline;
+        let questions = 0;
         try {
           const f = parseStored(await readFile(join(absDir, e.name), 'utf8'));
           title = f.title;
           revision = f.revision;
           // A file with a plan is a draft (plan) until the runs module says it is running, paused or done.
           if (f.plan) pipeline = (treeMark && (await treeMark(rel).catch(() => null))) || { state: 'plan' };
+          // Open questions for the sidebar badge (#738).
+          questions = openQuestions(f.discussions).length;
         } catch {
           // unreadable file still shows up so it can be renamed or deleted
         }
@@ -645,6 +649,7 @@ export function createStore(
         const born = st.birthtimeMs > 0 && st.birthtimeMs < st.mtimeMs ? st.birthtime : st.mtime;
         const row = { type: 'file', name: e.name, path: rel, title, revision, mtime: st.mtime.toISOString(), created: born.toISOString() };
         if (pipeline) row.pipeline = pipeline;
+        if (questions) row.questions = questions;
         out.push(row);
       }
     }
@@ -760,7 +765,10 @@ export function createStore(
       if (current.revision !== base) {
         throw new StoreError(409, 'stale write', { revision: current.revision });
       }
-      const next = { ...content, revision: current.revision + 1 };
+      // Questions change only through /api/file/discussions: a save keeps what is on disk, so a tab that loaded the
+      // file before an agent asked does not drop the question (#738).
+      const { discussions: _sent, ...rest } = content;
+      const next = { ...rest, ...(current.discussions ? { discussions: current.discussions } : {}), revision: current.revision + 1 };
       const text = serialize(next);
       // Keep what is on disk before overwriting it, so the end state of an edit session stays reachable.
       await snapshotQuietly(rel, before);
@@ -796,6 +804,35 @@ export function createStore(
       await atomicWrite(abs, text);
       known.set(rel, { hash: sha(text), revision: next.revision });
       return { path: rel, revision: next.revision, plan: next.plan ?? null };
+    });
+  }
+
+  /**
+   * Question / answer edit (#738): `change(discussions)` (undefined when the file has none) returns
+   * { discussions, item }, applied to what is on disk now under the save lock. Returns the changed item.
+   */
+  async function patchDiscussionsAt(rel, change) {
+    rel = checkedFileRel(rel);
+    const abs = await wrapPath(rel);
+    return serial(async () => {
+      const { file: current, text: before } = await syncExternal(rel, await loadStored(abs), abs);
+      if (current.version > FORMAT_VERSION) throw new StoreError(422, '더 새 버전에서 만든 파일이라 저장하지 않았어요');
+      if (current.discussions && current.discussions.v > DISCUSSIONS_VERSION) throw new StoreError(422, '더 새 버전에서 만든 질문이라 바꾸지 않았어요');
+      let next;
+      let item;
+      try {
+        const r = change(current.discussions);
+        item = r.item;
+        next = { ...normalizeContent({ ...current, discussions: r.discussions }), revision: current.revision + 1 };
+      } catch (err) {
+        if (err instanceof ValidationError) throw new StoreError(400, err.message);
+        throw err;
+      }
+      const text = serialize(next);
+      await snapshotQuietly(rel, before);
+      await atomicWrite(abs, text);
+      known.set(rel, { hash: sha(text), revision: next.revision });
+      return { path: rel, revision: next.revision, item };
     });
   }
 
@@ -1260,5 +1297,5 @@ export function createStore(
     return queue;
   }
 
-  return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
+  return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
