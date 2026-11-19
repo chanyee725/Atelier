@@ -19,6 +19,7 @@ import { codexModels, staticModels } from "./models.js";
 import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
+import { readLegacyTheme, UserDefaults } from "../user-defaults.js";
 
 /** Hub events forwarded to the shared SSE stream; none collides with Drawing's `workspace`. */
 export const HUB_EVENTS = ["session", "message", "live", "limits", "removed", "tasks", "tickets"];
@@ -37,11 +38,18 @@ const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: nu
  * Starts Dispatch for the project at `root`. `deps` replaces the parts that start CLIs or touch the
  * home folder, so tests run with fakes: { providerStatus, codexModels, limitsFile, login, loginWithKey,
  * logout, cancelLogin, spawnCli } (spawnCli as in ./cli.js: the session runners start every agent CLI through it).
+ * `deps.userDefaults` is the server's UserDefaults (~/.dispatch/drawing.json); without it nothing outside the
+ * project is read or written for settings (memory only).
  */
 export async function createDispatch({ root, broadcast, port, workspaceDir, deps = {} }) {
   const dep = { providerStatus, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
   const store = new Store(root);
   await store.load();
+  // The user's defaults file wins over the project's state.json, key by key (docs/design/user-defaults.md).
+  const userDefaults = dep.userDefaults ?? new UserDefaults(null);
+  const ud = userDefaults.values;
+  if (ud.team) store.data.settings.team = { ...(store.data.settings.team || {}), ...ud.team };
+  if (ud.guard) store.data.settings.guard = { ...store.data.settings.guard, ...ud.guard };
   const models = staticModels();
   // Claude limits and the Gemini quota live in ~/.dispatch/limits.json, shared by every server.
   const limits = new SharedLimits(...(dep.limitsFile ? [dep.limitsFile] : []));
@@ -90,15 +98,33 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
 
   for (const ev of HUB_EVENTS) hub.on(ev, data => broadcast(ev, data));
 
-  // UI preferences, kept in the project's state.json (no file in the home folder).
-  const readPrefs = async () => ({ theme: THEMES.includes(store.data.prefs?.theme) ? store.data.prefs.theme : "system" });
+  // UI preferences: ~/.dispatch/drawing.json first, then the project's state.json, then the standalone Dispatch's
+  // ~/.dispatch/prefs.json (read only), then "system".
+  const legacyTheme = dep.userDefaults ? await readLegacyTheme(userDefaults.file) : null;
+  const readPrefs = async () => {
+    const theme = [(await userDefaults.current()).theme, store.data.prefs?.theme, legacyTheme].find(t => THEMES.includes(t));
+    return { theme: theme ?? "system" };
+  };
   async function writePrefs(patch) {
     const next = await readPrefs();
-    if (THEMES.includes(patch.theme)) next.theme = patch.theme;
+    if (THEMES.includes(patch.theme)) {
+      await userDefaults.update({ theme: patch.theme });
+      next.theme = patch.theme;
+    }
     store.data.prefs = next;
     store.save();
     broadcast("prefs", next);
     return next;
+  }
+  /** Team and guard settings saved from the 설정 UI go to the user's defaults file (`enabled` stays per project). */
+  async function saveUserDefaults({ team, guard }) {
+    const patch = {};
+    if (team) patch.team = team;
+    if (guard) {
+      const { enabled, ...g } = guard;
+      patch.guard = g;
+    }
+    if (Object.keys(patch).length) await userDefaults.update(patch);
   }
 
   // Only a whole leading HOME becomes "~" (project.js `home()` undoes exactly that). A trailing slash on
@@ -132,11 +158,11 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, deps
   const projects = async () => [{ port: hub.port, name: path.basename(root), path: tilde(root), current: true }];
 
   const d = {
-    root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs,
+    root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.
-    prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root }),
+    prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),
   };
 
   const timers = [];
@@ -186,7 +212,7 @@ export async function setup(ctx, deps = {}) {
   let d;
   try {
     const topFolders = async () => ((await ctx.modules.workspace?.store?.tree()) ?? []).filter(n => n.type === "folder").map(n => n.name);
-    d = await createDispatch({ root: found.root, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
+    d = await createDispatch({ root: found.root, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.modules.userDefaults?.defaults && { userDefaults: ctx.modules.userDefaults.defaults }), ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
   } catch (e) {
     await claim.lock.release();
     throw e;

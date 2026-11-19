@@ -80,8 +80,17 @@ export function routeTable(d) {
     ["POST", /^\/api\/prefs$/, async (_, b) => d.writePrefs(b || {})],
     ["GET", /^\/api\/projects$/, async () => ({ projects: await d.projects() })],
     ["POST", /^\/api\/settings$/, async (_, b) => {
+      const before = { guard: store.data.settings.guard, team: store.data.settings.team };
       if (b.guard) store.data.settings.guard = patchGuard(store.data.settings.guard, b.guard);
       if (b.team) patchTeam(store, b.team, { roles: ROLES, models });
+      // The user's defaults file (~/.dispatch/drawing.json) gets the change first; a broken file refuses it and the
+      // project's state.json stays as it was, so the two never disagree about what was saved.
+      try {
+        await d.saveUserDefaults({ guard: b.guard ? store.data.settings.guard : undefined, team: b.team ? store.data.settings.team : undefined });
+      } catch (e) {
+        Object.assign(store.data.settings, before);
+        throw e;
+      }
       store.save();
       const settings = { ...store.data.settings, team: teamSettings(store) };
       broadcast("settings", settings);

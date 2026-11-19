@@ -1,4 +1,5 @@
-// 설정 > 일반 (#624): the theme and browser notifications (this browser only, work with Dispatch off) and the answer
+// 설정 > 일반 (#624): the theme, browser notifications (this browser only, work with Dispatch off), the user's
+// defaults from ~/.dispatch/drawing.json (UserDefaultsForm, #724) and the answer
 // style switch (a team setting, saved through POST /api/settings `team`; read-only with Dispatch off, #620).
 import { useId, useState } from 'react';
 import { api } from '../../dispatch/store';
@@ -11,6 +12,7 @@ import { useSettingsLoad } from '../context';
 import { LoadNote, OffNote, ThemeField } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
 import { TEAM_TOGGLES } from '../model';
+import { UserDefaultsForm } from './UserDefaultsForm';
 
 const REPLY = TEAM_TOGGLES.find((f) => f.id === 'replyStyle')!;
 const ALERT_NOTE = {
@@ -50,7 +52,7 @@ export default function GeneralSection() {
   };
 
   return (
-    <SectionFrame title="일반" hint="화면 테마와 알림은 이 브라우저에만 저장돼요." testId="settings-section-general">
+    <SectionFrame title="일반" hint="알림은 이 브라우저에만, 테마와 기본값은 이 컴퓨터에 저장돼요." testId="settings-section-general">
       <ThemeField />
       <div className="flex flex-col gap-2">
         <h4 className="text-sm font-medium">브라우저 알림</h4>
@@ -122,6 +124,7 @@ export default function GeneralSection() {
           {note.text}
         </p>
       </div>
+      <UserDefaultsForm />
     </SectionFrame>
   );
 }

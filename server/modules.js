@@ -1,5 +1,6 @@
 // Feature modules, set up in order. Each owns its own directory under server/
 // (e.g. server/workspace/ for E1). A new feature adds one line here.
+import * as userDefaults from './user-defaults.js';
 import * as workspace from './workspace/index.js';
 import * as runs from './runs/index.js';
 import * as dispatch from './dispatch/index.js';
@@ -10,6 +11,8 @@ import * as activity from './cursor/activity.js';
 import * as code from './code/index.js';
 
 export const modules = [
+  // The user's defaults, ~/.dispatch/drawing.json (E555): read first by the modules below, written by the 설정 UI.
+  { name: 'userDefaults', setup: userDefaults.setup },
   { name: 'workspace', setup: workspace.setup },
   // Pipeline run records beside each file (.drawing/runs/); the recorder E20 drives.
   { name: 'runs', setup: runs.setup },
