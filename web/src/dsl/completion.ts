@@ -4,10 +4,11 @@ import type { CompletionContext, CompletionResult, Completion } from '@codemirro
 import { ENUMS, GRAPH_KEYS, SEQUENCE_KEYS, ERD_KEYS, LEGEND_KEYS } from '../../../shared/dsl/common.ts';
 import { LUCIDE_ICONS, SIMPLE_ICONS } from '../../../shared/render/icon-data.ts';
 import { NAMED_COLOR_NAMES } from '../../../shared/render/theme.ts';
+import { iconNamesLoaded, loadIconNames } from '../../../shared/render/icon-registry.ts';
 
 /**
- * Icon names offered in `[icon: ...]`: the bundled Lucide icons and Simple Icons logos, plus common
- * cloud-vendor names that map to a generic Lucide icon (no vendor artwork is bundled).
+ * Icon names offered in `[icon: ...]` before the full name index has loaded: the always-bundled Lucide icons and
+ * Simple Icons logos plus common cloud names. Once loaded, every bundled icon name is offered (#734).
  */
 export const ICON_NAMES: readonly string[] = [
   ...new Set([
@@ -96,11 +97,13 @@ export function attributeCompletions(type: string, before: string, above: string
   const word = raw.trimStart();
   if (!Object.hasOwn(VALUES, key) || /[\s,]/.test(word)) return null;
   const from = open + 1 + segStart + colon + 1 + (raw.length - word.length);
-  const options = VALUES[key].map((v) => ({ label: v, type: key === 'icon' ? 'constant' : 'enum' }));
+  const values = key === 'icon' ? (iconNamesLoaded() ? Object.keys(iconNamesLoaded()!.ICON_NAMES) : ICON_NAMES) : VALUES[key];
+  const options = values.map((v) => ({ label: v, type: key === 'icon' ? 'constant' : 'enum' }));
   return { from, options };
 }
 
 export function dslCompletionSource(getType: () => string) {
+  void loadIconNames();
   return (cx: CompletionContext): CompletionResult | null => {
     const line = cx.state.doc.lineAt(cx.pos);
     const r = attributeCompletions(getType(), line.text.slice(0, cx.pos - line.from), () => cx.state.doc.sliceString(0, line.from));
