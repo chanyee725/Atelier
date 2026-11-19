@@ -42,11 +42,12 @@ export function LiveSummaryView({ d, now, compact, titleId }: { d: SummaryData; 
         </h2>
         {d.provider && d.modelLabel && <ModelTag provider={d.provider} label={d.modelLabel} className="mt-[6px]" />}
       </div>
-      {/* Announces state changes only: the text below changes when the state does, not on every tool. */}
-      <p className="m-0 flex items-center gap-1.5 text-xs" aria-live="polite" data-live-state={state}>
+      {/* Only the state label is a live region, so a state change is announced; the clock beside it ticks every
+          second and stays outside it (aria-live off) so screen readers do not read it each second. */}
+      <p className="m-0 flex items-center gap-1.5 text-xs" data-live-state={state}>
         <span aria-hidden className={cn('size-2 rounded-full', DOT[tone])} />
-        <span>{label}</span>
-        {d.stateSince ? <span className="text-muted-foreground tabular-nums">· {span(now - d.stateSince)}째</span> : null}
+        <span aria-live="polite">{label}</span>
+        {d.stateSince ? <span className="text-muted-foreground tabular-nums" data-live-clock>· {span(now - d.stateSince)}째</span> : null}
       </p>
       {compact && (
         <p className="m-0 flex min-w-0 gap-1.5 text-xs text-muted-foreground">
