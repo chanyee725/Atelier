@@ -173,6 +173,34 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
   }
 });
 
+test('the 알림함 lists plans that wait for 시작하기 until they start, are reopened or deleted (#786)', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, lead } = t;
+    const waiting = async () => (await call('GET', '/api/pipeline/waiting')).body.plans;
+    assert.deepEqual(await waiting(), []);
+    const a = (await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '가', goal: 'x', steps: STEPS })).body;
+    const b = (await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'pipelines/나', title: '나', goal: 'y', steps: STEPS })).body;
+    let list = await waiting();
+    assert.deepEqual(list.map((p) => p.path).sort(), [a.path, b.path].sort());
+    const first = list.find((p) => p.path === a.path);
+    assert.equal(first.title, '가');
+    assert.equal(first.lead, lead.name);
+    assert.equal(typeof first.since, 'number');
+    // Started: gone. Paused and reopened by the person: still gone.
+    assert.equal((await call('POST', '/api/pipeline/start', { path: a.path, revision: a.revision })).status, 200);
+    assert.deepEqual((await waiting()).map((p) => p.path), [b.path]);
+    assert.equal((await call('POST', '/api/pipeline/stop', { path: a.path })).status, 200);
+    assert.equal((await call('POST', '/api/pipeline/reopen', { path: a.path })).status, 200);
+    assert.deepEqual((await waiting()).map((p) => p.path), [b.path]);
+    // Deleted: gone.
+    assert.equal((await call('DELETE', `/api/file?path=${encodeURIComponent(b.path)}`)).status, 200);
+    assert.deepEqual(await waiting(), []);
+  } finally {
+    await t.stop();
+  }
+});
+
 test('blockers: unknown role, cycle, no lead; moving the file keeps its approval state', { timeout: 60_000 }, async () => {
   const t = await start();
   try {
