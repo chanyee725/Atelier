@@ -72,3 +72,8 @@ export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt'
   const eta = etaLine(t, now);
   return eta?.late ? { text: `예상보다 ${eta.text}`, tone: 'warn' } : null;
 }
+
+/** Ids of the tasks that 확인 필요 rows already show (keys `t:<id>` and `m:<id>`), so 작업 보드 lists them once (#924). */
+export function attentionTaskIds(items: readonly { key: string }[]): Set<string> {
+  return new Set(items.filter(i => /^[tm]:/.test(i.key)).map(i => i.key.slice(2)));
+}

@@ -3,7 +3,7 @@
 import { useLayoutEffect } from 'react';
 import { X } from 'lucide-react';
 import { roleColor } from '../run/overlayModel';
-import { AttentionStrip } from './AttentionStrip';
+import { AttentionGroup, useAttention } from './AttentionStrip';
 import { isOpen, stateOf } from './lib/format.ts';
 import { alwaysOnOrder } from './lib/usage.ts';
 import { StatusBadge } from './parts';
@@ -27,6 +27,7 @@ export function AlwaysOnView({ onExit, onOpen }: { onExit: () => void; onOpen: (
     return () => window.removeEventListener('keydown', k);
   }, [onExit]);
 
+  const attn = useAttention();
   const list = alwaysOnOrder(sessions, stateOf);
   const open = sessions.filter(isOpen).length;
 
@@ -44,7 +45,11 @@ export function AlwaysOnView({ onExit, onOpen }: { onExit: () => void; onOpen: (
         </button>
       </header>
 
-      <AttentionStrip onOpen={onOpen} />
+      {attn.items.length > 0 && (
+        <div className="overflow-hidden rounded-card bg-background [&>section]:border-b-0">
+          <AttentionGroup items={attn.items} now={attn.now} onOpen={onOpen} />
+        </div>
+      )}
 
       {list.length ? (
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3" aria-label="세션 상태">

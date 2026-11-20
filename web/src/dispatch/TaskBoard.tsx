@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
-import { useNow } from './AttentionStrip';
+import { AttentionGroup, useAttention, useNow } from './AttentionStrip';
 import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
@@ -103,14 +103,16 @@ function BoardSheet({ open, onOpenChange, tasks }: { open: boolean; onOpenChange
  * the time in the stage; a warning shows only while a task is blocked or late. Finished tasks fold behind one line.
  * 전체 보기 opens the full board in the sheet. `fill`: the card takes the rest of its column and scrolls inside.
  */
-export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
+export function TaskBoardCard({ fill = false, onOpen, onUsage }: { fill?: boolean; onOpen?: (id: string) => void; onUsage?: () => void } = {}) {
   const [open, setOpen] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const { tasks } = useScoped();
+  const attn = useAttention();
   const now = useNow(20_000);
   const groups = groupByStage(tasks);
-  const live = tasks.filter(t => t.stage !== 'done');
-  const rank = (t: BoardTask) => (t.stuck ? 0 : t.stage === 'blocked' ? 1 : 2);
+  // A task with a 확인 필요 row is shown there only.
+  const live = tasks.filter(t => t.stage !== 'done' && !attn.taskIds.has(t.id));
+  const rank = (t: BoardTask) => (t.stage === 'blocked' ? 0 : 1);
   const shown = [...live].sort((a, b) => rank(a) - rank(b) || a.stageAt - b.stageAt).slice(0, fill ? undefined : CARD_ROWS);
   const chips = STAGES.filter(s => s.id !== 'done' && groups[s.id].length > 0);
   return (
@@ -119,7 +121,7 @@ export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
       grow={fill ? 1 : undefined}
       scroll={fill}
       title="작업 보드"
-      count={live.length}
+      count={tasks.filter(t => t.stage !== 'done').length}
       flush
       actions={
         <Button variant="ghost" size="sm" disabled={!tasks.length} onClick={() => setOpen(true)}>
@@ -127,6 +129,7 @@ export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
         </Button>
       }
     >
+      {onOpen && <AttentionGroup items={attn.items} now={attn.now} onOpen={onOpen} onUsage={onUsage} />}
       {tasks.length === 0 ? (
         <EmptyState>아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</EmptyState>
       ) : (
