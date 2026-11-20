@@ -52,10 +52,11 @@ export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent
     <li
       data-agent={a.sid}
       data-busy={busy || undefined}
+      data-look={look || undefined}
       data-editing={editing || undefined}
       data-origin
       aria-current={selected || undefined}
-      className="flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60"
+      className={cn('flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60', look && 'session-look')}
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
       <button

@@ -1,5 +1,5 @@
 /* 플랜 tab refresh (#889, Plan.dc.html): the plan sheet and the step diagram as two cards on the panel, the start bar
-   pinned under them. Only existing tokens; edges are a translucent ring (the --border line), not a solid border.
+   pinned under them. Only existing tokens (the diagram's edge greys follow the diagram tokens, #935); edges are a translucent ring (the --border line), not a solid border.
    The one standout is the 시작하기 button; everything else stays quiet. */
 [data-plan-view] {
   display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--background);
@@ -34,21 +34,67 @@
   box-shadow: inset 0 0 0 1px var(--input); color: var(--foreground); font-weight: 500;
 }
 
-/* The diagram card: a dot grid behind the existing graph. */
+/* The diagram card (#935): drawn like the document diagrams (eraser-diagrams rules, docs/research/eraser/
+   09-examples-style.md): a plain canvas without a grid, 200×56 box nodes with a pale role fill, a 1.2px role border
+   and a 20px role icon on the left, 1.3px orthogonal arrows with an open V head. State never reshapes a node: a small
+   chip on its top-right corner, and a thin progress line under a running step. */
 .plan-canvas {
+  --plan-edge: #667085;
+  --plan-fill-mix: 8%;
   flex: 1.2 1 420px; min-width: 0; min-height: 420px; overflow: auto; position: relative;
-  background-image: radial-gradient(var(--border) 1px, transparent 1px); background-size: 20px 20px;
 }
+:root[data-theme='dark'] .plan-canvas { --plan-edge: #8d96a5; --plan-fill-mix: 14%; }
 .plan-canvas:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.plan-canvas .plan-graph { margin: 0; }
-[data-plan-view] .plan-node-box {
-  border-radius: 10px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+.plan-graph { position: relative; margin: 0; }
+.plan-graph ol { margin: 0; padding: 0; list-style: none; }
+.plan-edges { position: absolute; inset: 0; overflow: visible; }
+.plan-edge { fill: none; stroke: var(--plan-edge); stroke-width: 1.3; stroke-linejoin: round; }
+.plan-edge[data-done] { stroke: var(--step-done); }
+.plan-arrow path { fill: none; stroke: var(--plan-edge); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.plan-arrow[data-done] path { stroke: var(--step-done); }
+
+.plan-node { position: absolute; --role: var(--idle); }
+.plan-node[data-role='lead'] { --role: var(--role-lead); }
+.plan-node[data-role='merge'] { --role: var(--role-merge); }
+.plan-node[data-role='impl'] { --role: var(--role-impl); }
+.plan-node[data-role='review'] { --role: var(--role-review); }
+.plan-node[data-role='test'] { --role: var(--role-test); }
+.plan-node[data-role='design'] { --role: var(--role-design); }
+.plan-node[data-role='docs'] { --role: var(--role-docs); }
+.plan-node-box {
+  position: relative; display: flex; align-items: center; gap: 10px; block-size: 100%; padding: 0 14px 0 16px;
+  overflow: hidden; border: 1.2px solid var(--role); border-radius: 8px;
+  background: color-mix(in oklab, var(--role) var(--plan-fill-mix), var(--card)); color: var(--card-foreground);
 }
-[data-plan-view] .plan-node[data-tone='pending'] .plan-node-box {
-  border-style: solid; border-color: transparent; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04);
+.plan-node-icon { flex: none; color: var(--role); }
+.plan-node-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.plan-node-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 13px/18px var(--font-sans); letter-spacing: -0.01em; }
+.plan-node-n { margin-inline-end: 6px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.plan-node-role { font: 400 11px/14px var(--font-sans); color: var(--muted-foreground); }
+
+/* State chip on the top-right corner, like an eraser-diagrams badge: the glyph carries the tone, the text names it. */
+.plan-node-state {
+  position: absolute; right: 8px; top: -9px; display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px;
+  border-radius: 5px; background: var(--card); box-shadow: inset 0 0 0 1px var(--border);
+  font: 500 11px/1 var(--font-sans); color: var(--foreground); white-space: nowrap;
 }
-[data-plan-view] .plan-node-box.is-live::after { border-radius: 14px; }
-[data-plan-view] .plan-badge { border-color: var(--card); }
+.plan-node[data-tone='pending'] .plan-node-state { color: var(--muted-foreground); font-weight: 400; }
+.plan-node-glyph { font-weight: 600; color: var(--tone); }
+
+/* A running step: a thin line sweeps along the bottom of the box; with reduced motion it stays half full. */
+.plan-node-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: color-mix(in oklab, var(--tone) 25%, transparent); }
+.plan-node-progress::after { content: ''; position: absolute; inset: 0 50% 0 0; background: var(--tone); }
+@media (prefers-reduced-motion: no-preference) {
+  .plan-node-progress::after { inset: 0 auto 0 0; width: 35%; animation: plan-progress 1.6s ease-in-out infinite; }
+}
+@keyframes plan-progress { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+
+.plan-badges { position: absolute; left: 8px; top: -10px; display: flex; }
+.plan-badge {
+  display: grid; place-items: center; inline-size: 20px; block-size: 20px; margin-inline-end: -6px; border-radius: 50%;
+  border: 2px solid var(--card); color: var(--background); font: 600 10px/1 var(--font-sans); cursor: default;
+}
+.plan-badge-more { background: var(--muted); color: var(--foreground); font-size: 9px; }
 .plan-problem { margin: 0; padding: 12px 16px 0; font-size: 12px; color: var(--muted-foreground); }
 
 /* The start bar: a card-coloured strip pinned to the bottom, the line above it drawn as a shadow. */
@@ -63,4 +109,10 @@
 @media (forced-colors: active) {
   .plan-card, .plan-bar { border: 1px solid CanvasText; }
   .plan-role { border: 1px solid CanvasText; }
+  .plan-node-box { border-color: CanvasText; background: Canvas; }
+  .plan-node-icon { color: CanvasText; }
+  .plan-node-state { border: 1px solid CanvasText; }
+  .plan-node-progress::after { background: Highlight; }
+  .plan-edge, .plan-arrow path { stroke: CanvasText; }
+  .plan-badge { background: Canvas !important; color: CanvasText; border-color: CanvasText; }
 }

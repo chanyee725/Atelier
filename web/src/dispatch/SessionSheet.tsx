@@ -324,11 +324,18 @@ export function Info({ s }: { s: Session }) {
 
 export function Composer({ s, text, setText, inputRef, report }: { s: Session; text: string; setText: (v: string) => void; inputRef: Ref<HTMLTextAreaElement>; report: Report }) {
   const [busy, setBusy] = useState(false);
+  // One send at a time, checked synchronously: a Korean IME can deliver the committing Enter twice before React
+  // re-renders `busy`, which sent the same message twice (2026-11-20). The box clears at once; a failed send puts it back.
+  const sending = useRef(false);
   const send = async () => {
     const v = text.trim();
-    if (!v || busy) return;
+    if (!v || sending.current) return;
+    sending.current = true;
     setBusy(true);
-    if (await report(api('POST', `/api/sessions/${encodeURIComponent(s.id)}/message`, { text: v }))) setText('');
+    setText('');
+    const ok = await report(api('POST', `/api/sessions/${encodeURIComponent(s.id)}/message`, { text: v }));
+    if (!ok) setText(v);
+    sending.current = false;
     setBusy(false);
   };
   if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-[13px] leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>;
@@ -338,7 +345,7 @@ export function Composer({ s, text, setText, inputRef, report }: { s: Session; t
         ref={inputRef}
         value={text}
         onChange={e => setText(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229 && !e.repeat) { e.preventDefault(); void send(); } }}
         placeholder={`${s.name}에게 메시지 보내기`}
         aria-label="메시지"
         className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-[13px] leading-[1.55] md:text-[13px]"

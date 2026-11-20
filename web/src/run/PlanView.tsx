@@ -4,39 +4,62 @@
 // the run (`run` events, live sessions).
 // #889 refresh (Plan.dc.html): the plan sheet (title, opening paragraph, steps with role and model) and the diagram
 // sit side by side as cards, and the approval bar with 시작하기 is pinned under them.
+// #935: nodes and arrows follow the document diagrams (eraser-diagrams rules): a 200×56 box with a pale role
+// fill, a role icon on the left, orthogonal arrows with an open V head. State never reshapes the box: a small chip
+// on the top-right corner, and a thin progress line under a running step.
 import { useEffect, useId, useMemo, type CSSProperties } from 'react';
+import { Bot, CodeXml, Compass, Eye, FileText, FlaskConical, GitMerge, Palette, type LucideIcon } from 'lucide-react';
 import { connect } from '../dispatch/store.ts';
 import type { FileSession } from '../fileSession';
 import { useSession } from '../useSession';
 import { cn } from '../lib/utils';
 import { nodeLabels, overlaySteps } from './runModel.ts';
 import { NODE_H, NODE_W, planGraph, type PlanGraphNode } from './planGraphModel.ts';
+import { ROLES, roleLabel } from './overlayModel.ts';
 import { useRunModel } from './useRunModel.ts';
 import { useAskingSteps } from './useAskingSteps';
 import { PlanStrip } from './PlanStrip';
 import { planSheet, type PlanSheet } from './planSheetModel.ts';
 import './plan-view.css';
 
+const ROLE_ICONS: Record<string, LucideIcon> = {
+  lead: Compass,
+  merge: GitMerge,
+  impl: CodeXml,
+  review: Eye,
+  test: FlaskConical,
+  design: Palette,
+  docs: FileText,
+};
+
 function Node({ n }: { n: PlanGraphNode }) {
   const { shown, more } = n.badges;
+  const Icon = ROLE_ICONS[n.role] ?? Bot;
+  const role = n.role in ROLES || n.role === 'merge' ? n.role : '';
   return (
     <li
       className="plan-node"
       data-step={n.id}
       data-tone={n.status.tone}
+      data-role={role || undefined}
       aria-label={n.label}
       style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H, '--tone': n.status.color } as CSSProperties}
     >
-      <div className={cn('plan-node-box', n.live && 'is-live')} aria-hidden="true">
-        <span className="plan-node-title">
-          <span className="plan-node-n">{n.n}</span>
-          {n.title}
+      <div className="plan-node-box" aria-hidden="true">
+        <Icon className="plan-node-icon" size={20} strokeWidth={1.5} />
+        <span className="plan-node-text">
+          <span className="plan-node-title">
+            <span className="plan-node-n">{n.n}</span>
+            {n.title}
+          </span>
+          {n.role && <span className="plan-node-role">{roleLabel(n.role)}</span>}
         </span>
-        <span className="plan-node-state">
-          <span className="plan-node-glyph">{n.status.glyph}</span>
-          {n.status.label}
-        </span>
+        {n.live && <span className="plan-node-progress" />}
       </div>
+      <span className="plan-node-state" aria-hidden="true">
+        <span className="plan-node-glyph">{n.status.glyph}</span>
+        {n.status.label}
+      </span>
       {shown.length > 0 && (
         <span className="plan-badges" aria-hidden="true">
           {shown.map((b) => (
@@ -118,8 +141,8 @@ export default function PlanView({ session }: { session: FileSession }) {
             <svg className="plan-edges" width={graph.width} height={graph.height} aria-hidden="true">
               <defs>
                 {(['flow', 'done'] as const).map((k) => (
-                  <marker key={k} id={`plan-arrow-${k}`} className="plan-arrow" data-done={k === 'done' || undefined} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto">
-                    <path d="M0 0 L8 4 L0 8 z" />
+                  <marker key={k} id={`plan-arrow-${k}`} className="plan-arrow" data-done={k === 'done' || undefined} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto">
+                    <path d="M2 1.5 L9 5 L2 8.5" />
                   </marker>
                 ))}
               </defs>
