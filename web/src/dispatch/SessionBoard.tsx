@@ -145,7 +145,7 @@ export default function SessionBoard(p: BoardProps) {
             bell={p.bell}
             actions={
               <>
-                <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
+                <BoardMenu onCreate={() => setCreating(true)} onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
               </>
             }
           />
@@ -193,7 +193,6 @@ export default function SessionBoard(p: BoardProps) {
   );
 }
 
-
 /** A link to a board address that routes in place on a plain click (a new tab still gets the address). */
 function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab: BoardTab; folder: Scope; onRoute: BoardProps['onRoute']; className?: string; children: ReactNode } & Omit<React.ComponentProps<'a'>, 'href' | 'onClick'>) {
   return (
@@ -235,7 +234,7 @@ function DetailView({ tab, scope, onRoute, bell, narrow }: { tab: 'usage' | 'bra
 }
 
 /** ⋯ menu: 끝난 세션 정리, 모든 세션 정리 (asks first), PR·CI 추적, 브랜치, 상시 화면, 설정. */
-function BoardMenu({ onTv, onSettings, onBranches, disabled }: { onTv: () => void; onSettings: () => void; onBranches: () => void; disabled: boolean }) {
+function BoardMenu({ onCreate, onTv, onSettings, onBranches, disabled }: { onCreate: () => void; onTv: () => void; onSettings: () => void; onBranches: () => void; disabled: boolean }) {
   const sessions = useDispatch((s) => s.sessions);
   const doneCount = sessions.filter((s) => !isOpen(s)).length;
   const { note, status } = useStatusLine();
@@ -260,6 +259,11 @@ function BoardMenu({ onTv, onSettings, onBranches, disabled }: { onTv: () => voi
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-52">
+          {/* 새 세션 lives here since the header button went away (2026-11-20). */}
+          <DropdownMenuItem onSelect={onCreate}>
+            <Plus aria-hidden /> 새 세션
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!doneCount} onSelect={() => void clear(false)}>
             끝난 세션 정리{doneCount ? ` (${doneCount})` : ''}
           </DropdownMenuItem>
