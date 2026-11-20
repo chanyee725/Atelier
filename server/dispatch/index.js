@@ -235,6 +235,10 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
       every(60_000, "burn", () => hub.refreshBurn());
       // Another server may have written newer limits; the Hub broadcasts a "limits" event when it did.
       every(5_000, "limits", () => limits.refresh());
+      // Tasks whose work already landed move to done (#930): once now (clears what piled up), then every minute.
+      const autoClose = () => hub.autoCloseTasks(d.issues);
+      every(60_000, "auto-close", autoClose);
+      autoClose().catch(e => console.error("dispatch auto-close:", e.code ?? e.name));
       if (anyEnabled()) await refreshProviders().catch(e => console.error("dispatch providers:", e.code ?? e.name));
       try { hub.resumeInterrupted(); } catch (e) { console.error("dispatch resume:", e.code ?? e.name); }
     },

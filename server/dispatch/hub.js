@@ -7,6 +7,7 @@ import { ownGitEnv, runCli, spawnCli } from "./cli.js";
 import { redact, redactDeep } from "./redact.js";
 import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
+import { AUTO_CLOSE_STAGES, closeEvidence } from "./task-close.js";
 import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT, WRITING } from "./roles.js";
 import { MODE_IDS } from "./mode-profiles.js";
 import { replyStyle } from "./style.js";
@@ -506,6 +507,55 @@ export class Hub extends EventEmitter {
     this.store.save();
     this.emit("tasks", this.tasks);
     return t;
+  }
+
+  /**
+   * Moves open tasks whose work already landed to done (#930): commit on the integration branch, a merged PR tied
+   * to the task, or a closed issue it names (task-close.js). The evidence goes to `mergeCheck`; a task without any
+   * keeps its stage and gets `autoCheck.reason`. `issues` is index.js's createIssueList (null: commit check only).
+   * One run at a time; returns the ids it closed.
+   */
+  async autoCloseTasks(issues = null) {
+    if (this.autoClosing) return [];
+    this.autoClosing = true;
+    try {
+      const sessions = this.store.data.sessions || {};
+      const open = Object.values(this.store.data.tasks || {})
+        .filter(t => AUTO_CLOSE_STAGES.has(t.stage) && (!t.lead || sessions[t.lead]));
+      if (!open.length) return [];
+      let prs = null;
+      if (issues?.allPrs) {
+        const r = await issues.allPrs().catch(() => null);
+        prs = r?.ok ? r.prs : null;
+      }
+      const issueState = issues?.issueState ? n => issues.issueState(n).catch(() => null) : async () => null;
+      const verify = c => verifyMerged(this.root, c);
+      const closed = [];
+      let changed = false;
+      for (const t of open) {
+        const ev = await closeEvidence(t, { verify, prs, issueState });
+        // The lead may have moved the task while gh or git answered.
+        if (!AUTO_CLOSE_STAGES.has(t.stage)) continue;
+        const now = Date.now();
+        if (ev.ok) {
+          t.mergeCheck = { ok: true, commit: ev.commit ?? null, base: ev.base ?? null, reason: null, auto: true, via: ev.via, evidence: ev.evidence, at: now };
+          enterStage(t, "done", now);
+          t.etaAt = null;
+          t.stuck = null;
+          delete t.autoCheck;
+          t.updatedAt = now;
+          closed.push(t.id);
+          changed = true;
+        } else if (t.autoCheck?.reason !== ev.reason) {
+          t.autoCheck = { reason: ev.reason, at: now };
+          changed = true;
+        }
+      }
+      if (changed) { this.store.save(); this.emit("tasks", this.tasks); }
+      return closed;
+    } finally {
+      this.autoClosing = false;
+    }
   }
 
   /** Median and slowest minutes of past merged runs in `lane` (#768), or null before the first one. */
