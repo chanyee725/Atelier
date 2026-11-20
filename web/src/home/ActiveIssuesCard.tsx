@@ -18,12 +18,10 @@ type Props = {
   sessions: Feed<Session[]>;
   tasks: readonly BoardTask[];
   prs: Feed<ReadonlyMap<string, PrAnswer>>;
-  /** Share of a filled dashboard column (<Card fill>). */
-  fill?: number;
   now?: number;
 };
 
-export function ActiveIssuesCard({ issues, sessions, tasks, prs, fill, now = Date.now() }: Props) {
+export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now() }: Props) {
   const list = useMemo(() => {
     if (!issues || issues === 'failed' || !issues.ok || !Array.isArray(sessions)) return [];
     const approved = (b: string) => {
@@ -34,7 +32,8 @@ export function ActiveIssuesCard({ issues, sessions, tasks, prs, fill, now = Dat
   }, [issues, sessions, tasks, prs]);
   if (!list.length) return null;
   return (
-    <Card id="active-issues" title="진행 중인 이슈" count={list.length} flush fill={fill}>
+    // As tall as its rows up to a cap, then the rows scroll inside (like 세션 요청): a fill share cut rows in half.
+    <Card id="active-issues" title="진행 중인 이슈" count={list.length} flush scroll className="max-h-80 shrink-0">
       <ul aria-label="진행 중인 이슈" className="m-0 list-none p-0 *:border-t">
         {list.map((x) => (
           <ActiveLine key={x.number} issue={x} now={now} />

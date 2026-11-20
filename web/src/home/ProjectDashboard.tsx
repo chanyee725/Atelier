@@ -8,7 +8,7 @@
 // `fill` (#819, the home 대시보드): side by side, both columns end at the pane's bottom edge. 실행 중인 세션 takes 2 parts
 // and 이슈 3 parts of the left column (each list scrolls inside; issues page to the rows that fit, the pager on the
 // card's bottom edge); the tabbed card takes what 세션 요청 leaves. At a narrow main pane (under 880px) the halves
-// stack, work first, and the page scrolls as before. 진행 중인 이슈 (#898) sits between them (2 parts) and only shows
+// stack, work first, and the page scrolls as before. 진행 중인 이슈 (#898) sits between them (as tall as its rows, capped) and only shows
 // while an issue has an open session or PR. Live sessions show as small cards, 4 a row (#799, #875).
 import { useMemo, type ReactNode } from 'react';
 import { boardHash, plainClick } from '../projectNav';
@@ -57,7 +57,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
     <DashGrid ratio="3fr 2fr" fill={fill}>
       <DashColumn label="진행 중인 작업" fill={fill}>
         <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} fill={fill ? 2 : undefined} />
-        <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} fill={fill ? 2 : undefined} />
+        <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
