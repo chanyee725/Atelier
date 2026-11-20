@@ -131,3 +131,12 @@ export function planGraph(plan: Plan, blocks: readonly Block[], steps: readonly 
     problem: order.ok ? null : order.problem,
   };
 }
+
+/** Smallest fit-to-width scale (#949): below it the node text gets too small to read, so the card scrolls instead. */
+export const MIN_FIT = 0.6;
+
+/** Scale that fits a graph `width` px wide into `room` px (#949): never above 1, never below MIN_FIT. */
+export function fitScale(room: number, width: number): number {
+  if (!(room > 0) || !(width > 0) || width <= room) return 1;
+  return Math.max(MIN_FIT, room / width);
+}
