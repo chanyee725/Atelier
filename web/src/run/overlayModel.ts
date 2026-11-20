@@ -208,11 +208,11 @@ const TONE_ORDER = Object.keys(NODE_TONES) as NodeTone[];
 /** Up to 3 lightness steps per role; later sessions of the same role reuse the last step (their name tells them apart). */
 const SHADES = 3;
 
-export const roleLabel = (role: string): string => (role in ROLES ? ROLES[role as RoleId] : role);
+export const roleLabel = (role: string): string => (Object.hasOwn(ROLES, role) ? ROLES[role as RoleId] : role);
 
 /** Colour of one role at a lightness step: step 0 is the token, later steps move toward the text colour (more contrast in both themes). */
 export function roleColor(role: string, shade = 0): string {
-  const base = role in ROLES ? `var(--role-${role})` : 'var(--idle)';
+  const base = Object.hasOwn(ROLES, role) ? `var(--role-${role})` : 'var(--idle)';
   const s = Math.min(Math.max(shade, 0), SHADES - 1);
   return s === 0 ? base : `color-mix(in oklch, ${base}, var(--foreground) ${s * 25}%)`;
 }
