@@ -159,12 +159,9 @@ test('사용량, 타임라인 and 상시 화면 show a fake session', { skip: !O
     // 상시 화면: dark, a tile per session, Esc goes back to the board.
     at('상시 화면');
     const themeBefore = await page.evaluate(() => document.documentElement.dataset.theme);
-    // #731: 상시 화면 moved into the board's ⋯ menu.
-    await page.getByRole('button', { name: '더 보기' }).click();
-    await page.getByRole('menuitem', { name: '상시 화면' }).click();
+    // 2026-11-20: 상시 화면 left the board's ⋯ menu; its address still opens it.
+    await page.evaluate(() => { location.hash = '#board=tv'; });
     await page.locator('[data-always-on]').waitFor();
-    // #731: the menu opens it over the current tab without changing the address.
-    assert.equal(new URL(page.url()).hash, '#board=timeline');
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     await page.locator(`[data-tile="${name}"]`).waitFor();
     if (SHOTS) await page.screenshot({ path: join(SHOTS, 'e29-always-on.png') });
