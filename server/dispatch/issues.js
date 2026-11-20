@@ -119,5 +119,27 @@ export function createIssueList({ workspaceDir, cwd, env, prDefault = async () =
     const r = await load(force);
     return r.ok ? { ok: true, prs: prsOfIssue(r.prs, n) } : r;
   };
+  /** `{ ok: true, prs }`: every parsed PR (parsePrs) from the same cached gh answer, for the board's auto close (#930). */
+  listIssues.allPrs = async ({ force = false } = {}) => {
+    const r = await load(force);
+    return r.ok ? { ok: true, prs: r.prs } : r;
+  };
+  // Issue states for the board's auto close (#930): "open", "closed" or null (unknown), one gh run per issue per
+  // cacheMs. Only the state is kept; a closed issue stays closed in the cache.
+  const states = new Map(); // n -> { at, state }
+  listIssues.issueState = async n => {
+    const num = issueNumber(n);
+    if (!num || typeof cwd !== "string" || !cwd) return null;
+    const hit = states.get(num);
+    if (hit && (hit.state === "closed" || now() - hit.at < cacheMs)) return hit.state;
+    if (workspaceDir && !(await prTrackingEnabled(workspaceDir, await prDefault()))) return null;
+    let state = null;
+    try {
+      const s = String((await gh(["issue", "view", "--json", "number,state", "--", String(num)]))?.state || "").toLowerCase();
+      state = s === "open" || s === "closed" ? s : null;
+    } catch { state = null; }
+    states.set(num, { at: now(), state });
+    return state;
+  };
   return listIssues;
 }
