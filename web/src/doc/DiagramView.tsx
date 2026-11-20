@@ -138,7 +138,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       {block ? (
         <div ref={stage} className="doc-diagram-stage">
           <button type="button" className="doc-diagram-pic" title="캔버스에서 보기" aria-label={`${label}, 캔버스에서 보기`} onClick={() => onShow(id)}>
-            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={morph ? { visibility: 'hidden' } : undefined} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
+            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', maxWidth: pic.width * 2, ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
           {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
           {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} hideEta />}
