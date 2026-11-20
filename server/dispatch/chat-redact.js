@@ -30,8 +30,8 @@ const RULES = [
   [/\b[\w.-]+@[\w.-]+:[\w./~-]+/g, MASK],
   // Secret assignments with more key names than redact.js knows.
   [/\b((?:client[_-]?secret|private[_-]?key|credentials?|cookie|session[_-]?(?:id|key|token)|refresh[_-]?token|id[_-]?token|apikey|pwd|pass)["']?\s*[:=]\s*["']?)[^\s"',;]{4,}/gi, (_m, keep) => `${keep}${MASK}`],
-  // Windows (C:\Users\...) and UNC (\\server\share) paths.
-  [/\b[A-Za-z]:\\[^\s'"`<>|]*/g, MASK],
+  // Windows paths with either separator (C:\Users\..., C:/Users/...) and UNC (\\server\share) paths.
+  [/\b[A-Za-z]:[\\/][^\s'"`<>|]*/g, MASK],
   [/\\\\[^\s\\'"`<>|]+\\[^\s'"`<>|]*/g, MASK],
   // Home paths: ~/x, ~user/x, $HOME/x, %USERPROFILE%\x.
   [new RegExp(`(?<![\\w/])~[\\w.-]*\\/${P}*`, "g"), MASK],

@@ -49,6 +49,9 @@ test("absolute and home paths; relative paths, short API paths and URLs stay", (
   masked("cd ~/code/app", `cd ${MASK}`);
   masked("in $HOME/.config/x", `in ${MASK}`);
   masked("C:\\Users\\fakeuser\\a.txt", MASK);
+  masked("C:/Users/fakeuser/a.txt", MASK);
+  masked("open D:/work/a.txt now", `open ${MASK} now`);
+  masked("see https://example.com/a", "see https://example.com/a");
   masked("\\\\server\\share\\a", MASK);
   masked("file:///srv/x", MASK);
   masked("/opt/a/b/c and /x/y/z", `${MASK} and ${MASK}`);
