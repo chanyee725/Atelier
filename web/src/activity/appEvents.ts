@@ -29,6 +29,7 @@ export type AppEvent =
   | { type: 'session-ended'; id: string; name: string; role?: string; provider?: string }
   | { type: 'session-error'; id: string; name: string; role?: string; provider?: string }
   | { type: 'session-asks'; id: string; name: string; ask: string; since?: number; role?: string; provider?: string }
+  | { type: 'session-rotated'; id: string; name: string; from: string; mtok: number; role?: string; provider?: string }
   | { type: 'model-connected'; provider: string; name: string }
   | { type: 'model-disconnected'; provider: string; name: string }
   | { type: 'model-error'; provider: string; name: string }
@@ -119,6 +120,12 @@ export function toastOf(e: AppEvent): AppToast | null {
         persist: true,
         agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) },
       };
+    case 'session-rotated':
+      // A long session swapped for a fresh one by the system (#969): token count and session names only.
+      return {
+        ...info('sessions', `session-rotated:${e.id}`, `누적 ${e.mtok}M 토큰이라 새 세션 ${e.name}로 바꿨어요`, { session: e.id }),
+        agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) },
+      };
     case 'model-connected':
       return info('models', `model:${e.provider}:on`, `${objectOf(e.name)} 연결했어요`);
     case 'model-disconnected':
@@ -191,6 +198,8 @@ type SessionLike = {
   id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number;
   /** The question the session waits on the user for (server `ask`, redacted), and when the state began. */
   ask?: string | null; stateSince?: number;
+  /** Set on a session that replaced a long one (#969): the old session's name and its token count in millions. */
+  rotatedFrom?: { id?: string; name: string; mtok: number } | null;
 };
 /** The question a session newly waits on the user for, or null. */
 const askOf = (s: SessionLike) => (s.state === 'waiting' && s.ask ? s.ask : null);
@@ -207,6 +216,7 @@ export function sessionEvents(prev: SessionLike | undefined, next: SessionLike, 
   const who = { id: next.id, name: next.name, ...(next.role ? { role: next.role } : {}), ...(next.provider ? { provider: next.provider } : {}) };
   if (!prev) {
     if (next.startedAt === undefined || now - next.startedAt > FRESH_MS) return [];
+    if (next.rotatedFrom) return [{ type: 'session-rotated', ...who, from: next.rotatedFrom.name, mtok: next.rotatedFrom.mtok }];
     return [{ type: 'session-started', ...who, team: next.role === 'lead' && !next.parent }];
   }
   if (failed(next) && !failed(prev)) return [{ type: 'session-error', ...who }];

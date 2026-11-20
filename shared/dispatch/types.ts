@@ -38,6 +38,8 @@ export interface Session {
   branch: string | null;
   worktree: boolean;
   parent: string | null;
+  /** Set when the system swapped a session past the length guard for this one (#969): metadata only. */
+  rotatedFrom?: { id: string; name: string; mtok: number; at: number };
   /** Top-level workspace folder (project) the session works for; null = 미분류. Older servers omit it. */
   folder?: string | null;
   /** The user's label for the provider connection the session started under (#747); never an email or account id. */
