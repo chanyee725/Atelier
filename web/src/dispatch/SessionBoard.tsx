@@ -145,8 +145,7 @@ export default function SessionBoard(p: BoardProps) {
             bell={p.bell}
             actions={
               <>
-                <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
-                <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
+                <BoardMenu onCreate={() => setCreating(true)} onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
               </>
             }
           />
@@ -165,10 +164,10 @@ export default function SessionBoard(p: BoardProps) {
           ) : detail ? (
             <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
           ) : (
-            <DashGrid ratio="3fr 2fr">
+            <DashGrid ratio="3fr 2fr" fill>
               {/* No 프로젝트 card: this server holds one project (#778). Left 60%: 세션; right 40%: 작업 보드, whose card
                   takes the spare height so neither column leaves an empty band (#879). */}
-              <DashColumn label="세션">
+              <DashColumn label="세션" fill>
                 <SessionsCard
                   onCreate={() => setCreating(true)}
                   byCwd={listState === 'failed'}
@@ -176,7 +175,7 @@ export default function SessionBoard(p: BoardProps) {
                 <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
               {/* Sticky on a wide pane: 작업 보드 stays in view while 세션 scrolls. */}
-              <DashColumn label="현황" className="@min-[880px]:sticky @min-[880px]:top-4 @min-[880px]:max-h-[calc(100dvh-2rem)] @min-[880px]:self-start">
+              <DashColumn label="현황" fill>
                 <TaskBoardCard fill onOpen={(id) => openSession(id)} onUsage={() => p.onRoute('usage', scope)} />
               </DashColumn>
             </DashGrid>
@@ -191,16 +190,6 @@ export default function SessionBoard(p: BoardProps) {
         <AlertWatcher onOpen={(id) => openSession(id, null)} />
       </div>
     </ScopeProvider>
-  );
-}
-
-function NewSessionButton({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
-  const connected = useDispatch((s) => Object.values(s.providers ?? {}).some((x) => x?.connected));
-  return (
-    <Button size="sm" variant="outline" disabled={disabled || !connected} title={connected ? undefined : '연결된 모델이 없어요'} onClick={onCreate}>
-      <Plus aria-hidden />
-      <span className="max-sm:sr-only">새 세션</span>
-    </Button>
   );
 }
 
@@ -245,7 +234,7 @@ function DetailView({ tab, scope, onRoute, bell, narrow }: { tab: 'usage' | 'bra
 }
 
 /** ⋯ menu: 끝난 세션 정리, 모든 세션 정리 (asks first), PR·CI 추적, 브랜치, 상시 화면, 설정. */
-function BoardMenu({ onTv, onSettings, onBranches, disabled }: { onTv: () => void; onSettings: () => void; onBranches: () => void; disabled: boolean }) {
+function BoardMenu({ onCreate, onTv, onSettings, onBranches, disabled }: { onCreate: () => void; onTv: () => void; onSettings: () => void; onBranches: () => void; disabled: boolean }) {
   const sessions = useDispatch((s) => s.sessions);
   const doneCount = sessions.filter((s) => !isOpen(s)).length;
   const { note, status } = useStatusLine();
@@ -270,6 +259,11 @@ function BoardMenu({ onTv, onSettings, onBranches, disabled }: { onTv: () => voi
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-52">
+          {/* 새 세션 lives here since the header button went away (2026-11-20). */}
+          <DropdownMenuItem onSelect={onCreate}>
+            <Plus aria-hidden /> 새 세션
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!doneCount} onSelect={() => void clear(false)}>
             끝난 세션 정리{doneCount ? ` (${doneCount})` : ''}
           </DropdownMenuItem>
@@ -336,7 +330,7 @@ function SessionsCard({
   }, [sessions, tasks, issues]);
   const groups = useMemo(() => boardGroups(sessions, { known, names, stateOf, byCwd }), [sessions, known, names, byCwd]);
   return (
-    <Card id="sessions" title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
+    <Card id="sessions" fill={1} title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
       <div className="flex min-w-0 flex-col gap-4">
         <SummaryLine />
         {pending ? null : sessions.length === 0 ? (
