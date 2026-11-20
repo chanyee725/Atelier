@@ -18,12 +18,13 @@ import { clock, hhmm, middle, span, ticking, waitNote } from './format';
 import { LiveSummaryView, useNow, type SummaryData } from './AgentLiveSummary';
 import { closeAgentLive, useAgentLiveTarget, useSheetOpen } from './store';
 import { useAgentLive } from './useAgentLive';
+import { AgentWorkView } from './AgentWorkView';
 import './live.css';
 
 const SessionSheet = lazy(() => import('../dispatch/SessionSheet').then((m) => ({ default: m.SessionSheet })));
 
 /** Mounted once in App.tsx. */
-export function AgentLiveHost({ onOpenFile }: { onOpenFile: (path: string) => void }) {
+export function AgentLiveHost({ onOpenFile, dark = false }: { onOpenFile: (path: string) => void; dark?: boolean }) {
   const sid = useAgentLiveTarget();
   const sheetOpen = useSheetOpen();
   const [chat, setChat] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export function AgentLiveHost({ onOpenFile }: { onOpenFile: (path: string) => vo
   useEffect(() => (chat ? connect() : undefined), [chat]);
   return (
     <>
-      {sid && <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} onOpenFile={onOpenFile} onChat={() => setChat(sid)} />}
+      {sid && <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} dark={dark} onOpenFile={onOpenFile} onChat={() => setChat(sid)} />}
       {chat && (
         <Suspense fallback={null}>
           <SessionSheet id={chat} onClose={() => setChat(null)} />
@@ -41,7 +42,7 @@ export function AgentLiveHost({ onOpenFile }: { onOpenFile: (path: string) => vo
   );
 }
 
-function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidden: boolean; onOpenFile: (path: string) => void; onChat: () => void }) {
+function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string; hidden: boolean; dark: boolean; onOpenFile: (path: string) => void; onChat: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -51,6 +52,9 @@ function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidd
   const outside = sid.startsWith('outside:');
   const state: SessionState | null = session ? stateOf(session) : ((presence?.state as SessionState | null) ?? null);
   const now = useNow(!!state && ticking(state));
+  // 작업 보기 (#905): the panel body shows what the session is making instead of its progress. Off for another agent.
+  const [work, setWork] = useState(false);
+  useEffect(() => setWork(false), [sid]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -86,6 +90,7 @@ function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidd
       aria-label={`${name || '에이전트'} 작업 진행상황`}
       className="agent-live"
       data-agent-live={sid}
+      data-work={work && !outside && error !== 'missing' ? '' : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) {
           e.preventDefault();
@@ -117,6 +122,18 @@ function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidd
             <p className="agent-live-error">진행상황을 불러오지 못했어요</p>
             <button type="button" onClick={reload} className={cn('agent-live-btn', FOCUS_RING)}>다시 시도</button>
           </section>
+        ) : work ? (
+          <AgentWorkView
+            sid={sid}
+            file={presence?.file ?? null}
+            fileAt={presence?.at ?? null}
+            step={presence?.step}
+            statusLabel={presence?.statusLabel}
+            files={live?.files ?? []}
+            shown={!hidden}
+            dark={dark}
+            onOpenFile={onOpenFile}
+          />
         ) : (
           <Body live={live} session={session} loading={loading && !live} step={presence?.step} now={now} onOpenFile={onOpenFile} state={state} onChat={onChat} />
         )}
@@ -124,6 +141,9 @@ function AgentLivePanel({ sid, hidden, onOpenFile, onChat }: { sid: string; hidd
       {!outside && error !== 'missing' && (
         <footer className="agent-live-foot">
           <button type="button" onClick={onChat} className={cn('agent-live-btn', FOCUS_RING)}>대화 보기</button>
+          <button type="button" aria-pressed={work} onClick={() => setWork((w) => !w)} className={cn('agent-live-btn', FOCUS_RING)} data-work-toggle>
+            작업 보기
+          </button>
         </footer>
       )}
     </dialog>

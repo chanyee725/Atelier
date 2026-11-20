@@ -970,7 +970,7 @@ export function App() {
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
-        <AgentLiveHost onOpenFile={openFile} />
+        <AgentLiveHost onOpenFile={openFile} dark={dark} />
         <AppDialogHost />
         <SidebarInset>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}

@@ -325,3 +325,122 @@
   border-radius: 4px;
   background: var(--muted);
 }
+/* 작업 보기 (E673, #905): the body shows the session's work (a document preview or its changed files). The panel
+   widens so a diff line reads; the footer's two buttons sit side by side, the pressed one on the sunken tone. */
+.agent-live[data-work] {
+  width: min(560px, 100vw - 2rem);
+}
+@media (max-width: 719.98px) {
+  .agent-live[data-work] {
+    width: 100%;
+  }
+}
+.agent-live-foot {
+  display: flex;
+  gap: 8px;
+}
+.agent-live-btn[aria-pressed='true'] {
+  border-color: var(--border);
+  background: var(--muted);
+}
+.agent-work-doc-head {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+.agent-work-doc {
+  min-width: 0;
+}
+.agent-live .agent-work-title {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.agent-work-sum {
+  float: right;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.agent-work-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 4px;
+  margin-inline: -4px;
+  width: calc(100% + 8px);
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .agent-work-row:hover {
+    background: var(--accent);
+  }
+}
+.agent-work-chev {
+  color: var(--muted-foreground);
+  transition: rotate 140ms ease-out;
+}
+.agent-work-counts {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.agent-work-patch {
+  margin: 2px 0 8px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+.agent-work-hunk {
+  padding: 1px 8px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.agent-work-line {
+  display: grid;
+  grid-template-columns: 2.5rem 1rem 1fr;
+}
+.agent-work-line[data-kind='add'] {
+  background: color-mix(in oklch, var(--ok) 10%, transparent);
+}
+.agent-work-line[data-kind='del'] {
+  background: color-mix(in oklch, var(--destructive) 10%, transparent);
+}
+.agent-work-no {
+  padding-right: 6px;
+  color: var(--muted-foreground);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+.agent-work-sign {
+  user-select: none;
+}
+.agent-work-line[data-kind='add'] .agent-work-sign {
+  color: var(--ok);
+}
+.agent-work-line[data-kind='del'] .agent-work-sign {
+  color: var(--destructive);
+}
+.agent-work-text {
+  padding-right: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-work-note {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
