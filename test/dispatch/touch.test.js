@@ -49,3 +49,13 @@ test("touch: a permission approval mid-turn keeps the turn's text", () => {
   hub.touch(s, { status: "idle" });
   assert.equal(s.ask, "이렇게 바꿀까요?");
 });
+
+test("touch: a key cut at the ask's clip edge is masked, not left half-shown", () => {
+  const s = { id: "d", status: "running", parent: null, updatedAt: 0 };
+  // The key starts 10 characters before the 200-character clip, so clipping first would leave "sk-ABCDEF".
+  const rt = { lastText: `${"가".repeat(190)}sk-ABCDEFGHIJKLMNOPQRST 로 할까요?`, perms: new Map() };
+  const hub = fakeHub(s, rt);
+  hub.touch(s, { status: "idle" });
+  assert.equal(s.asksUser, true);
+  assert.ok(!s.ask.includes("sk-A"), s.ask);
+});

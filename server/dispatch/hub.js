@@ -252,9 +252,10 @@ export class Hub extends EventEmitter {
       const r = this.live.get(s.id);
       // A new turn drops the previous turn's answer: a turn that ends without text must not re-ask an old question.
       if (r && patch.status === "running" && (s.status === "idle" || s.status === "error")) r.lastText = null;
-      const ask = patch.status === "idle" ? askOf(r?.lastText) : "";
+      // Masked before it is clipped: a key cut at the clip edge would no longer look like a key.
+      const ask = patch.status === "idle" ? askOf(r?.lastText && redact(r.lastText)) : "";
       patch.asksUser = !!ask;
-      patch.ask = ask ? redact(ask) : null;
+      patch.ask = ask || null;
     }
     const prev = s.status;
     // Error and reply clips reach the UI and memory only after key- and email-shaped parts are masked.
