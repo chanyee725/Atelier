@@ -76,3 +76,44 @@ test('sessionGone: only a 404 forgets the helper', () => {
   assert.equal(sessionGone(Object.assign(new Error('HTTP 500'), { status: 500 })), false);
   assert.equal(sessionGone(new TypeError('Failed to fetch')), false);
 });
+
+import { chatRecord, imagesBody, isClear, parseDataUrl, pickImages, slashItems, slashQuery, worthSaving } from '../web/src/chat/lib/chatInput.ts';
+
+test('pickImages: type, size and the 4-image cap; the rest still attach', () => {
+  const png = { type: 'image/png', size: 100 };
+  assert.deepEqual(pickImages([png, { type: 'text/plain', size: 1 }, png], 0), { ok: [0, 2], error: 'PNG, JPEG, GIF, WebP 이미지만 붙일 수 있어요.' });
+  assert.equal(pickImages([png], 4).error, '이미지는 한 번에 4장까지 붙일 수 있어요.');
+  assert.equal(pickImages([{ type: 'image/png', size: 4e6 }], 0).ok.length, 0);
+  assert.deepEqual(pickImages([png], 3), { ok: [0], error: null });
+});
+
+test('parseDataUrl and imagesBody: only base64 images; the body carries no name', () => {
+  assert.deepEqual(parseDataUrl('data:image/png;base64,QUJD'), { mediaType: 'image/png', data: 'QUJD' });
+  assert.equal(parseDataUrl('data:text/html;base64,QUJD')?.mediaType, 'text/html');
+  assert.equal(parseDataUrl('https://x/y.png'), null);
+  assert.deepEqual(imagesBody([{ id: '1', mediaType: 'image/png', data: 'QUJD', name: 'a.png' }]), [{ mediaType: 'image/png', data: 'QUJD' }]);
+});
+
+test('slash menu: opens only for one slash word; /clear is built in; skills match name or description', () => {
+  assert.equal(slashQuery('/'), '');
+  assert.equal(slashQuery('/cl'), 'cl');
+  assert.equal(slashQuery('/clear now'), null);
+  assert.equal(slashQuery('hi /x'), null);
+  const skills = [{ name: 'atelier-doc', description: '문서 쓰기' }, { name: 'loop', description: 'clear a queue' }];
+  assert.deepEqual(slashItems('cl', skills).map(i => i.name), ['clear', 'loop']);
+  assert.deepEqual(slashItems('문서', skills).map(i => i.name), ['atelier-doc']);
+  assert.equal(slashItems('', skills).length, 3);
+  assert.equal(isClear('/clear '), true);
+  assert.equal(isClear('/clearx'), false);
+});
+
+test('chatRecord: text and tool names only; tools attach to the answer before them; worthSaving needs both sides', () => {
+  const e = (kind: Entry['kind'], text: string, extra: Partial<Entry> = {}) => ({ kind, text, at: 0, ...extra }) as Entry;
+  const list = [e('user', '[이미지 1장]'), e('assistant', '확인할게요'), e('tool', '{"command":"ls"}', { tool: 'Bash', label: 'ls' }), e('tool_result', 'SECRET')];
+  const rec = chatRecord(list, 's1', 'abc12345');
+  assert.deepEqual(rec.messages, [{ role: 'user', text: '[이미지 1장]' }, { role: 'assistant', text: '확인할게요', tools: [{ name: 'Bash', summary: 'ls' }] }]);
+  assert.equal(JSON.stringify(rec).includes('SECRET'), false);
+  assert.equal(rec.id, 'abc12345');
+  assert.equal(worthSaving(list), true);
+  assert.equal(worthSaving([e('user', 'hi')]), false);
+});
