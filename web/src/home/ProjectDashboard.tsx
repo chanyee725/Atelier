@@ -56,7 +56,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
   return (
     <DashGrid ratio="3fr 2fr" fill={fill}>
       <DashColumn label="진행 중인 작업" fill={fill}>
-        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} fill={fill ? 2 : undefined} />
+        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
         <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
@@ -155,15 +155,15 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
   const editing = isEditingDiagram(a);
   const model = a.modelLabel || a.model;
   const state = agentStateLabel(a);
-  // Third line: the plan step when there is one, else what it does now (the cursor status, e.g. 다이어그램 작성 중…).
-  // The run state is already on the top line, so it is not repeated here.
+  // Second line (refresh mock, #889): the plan step, else what it does now, else the file it holds.
   const detail = a.step || a.statusLabel || null;
+  const tone = busy ? 'text-ok' : look ? 'text-warn' : 'text-muted-foreground';
   return (
     <li
       data-agent={a.sid}
       data-busy={busy || undefined}
       data-editing={editing || undefined}
-      className="@container/session flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60"
+      className="flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60"
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
       <button
@@ -171,41 +171,43 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
         data-agent-live={a.sid}
         title={`${a.name} 진행상황 보기`}
         onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-start items-center gap-x-3 gap-y-1.5 rounded-card px-3 pt-2.5 pb-2 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="press flex min-w-0 flex-col gap-2 rounded-card p-3 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        {editing ? (
-          <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
-        ) : (
-          <span data-agent-name className="min-w-0 truncate text-[13px] leading-5 font-medium text-foreground">{a.name}</span>
-        )}
-        <span data-agent-state className={cn('inline-flex items-center gap-1.5 justify-self-end whitespace-nowrap', busy ? 'text-foreground' : 'text-muted-foreground')} title={state}>
-          {busy ? (
-            <LoaderCircle aria-hidden className="size-3.5 shrink-0 text-ok motion-safe:animate-spin" />
+        <span className="flex min-w-0 items-center gap-1.5">
+          {editing ? (
+            <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
           ) : (
-            <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', look ? 'bg-warn' : 'bg-idle')} />
+            <span data-agent-name className="min-w-0 truncate text-[15px] leading-5 font-semibold tracking-[-0.01em] text-foreground">{a.name}</span>
           )}
-          <span className="sr-only @min-[11rem]/session:not-sr-only">{state}</span>
-        </span>
-        <RoleBadge agent={a} className="justify-self-start" />
-        {model ? (
-          <span className="col-span-2 inline-flex min-w-0 items-center gap-1 justify-self-start text-muted-foreground @min-[12rem]/session:col-span-1 @min-[12rem]/session:justify-self-end" title={model}>
-            <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
-            <span className="truncate">{model}</span>
+          <RoleBadge agent={a} className="shrink-0" />
+          <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
+            <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full bg-current', busy && 'is-on', !busy && !look && 'opacity-60')} />
+            {state}
           </span>
-        ) : null}
-        {detail ? (
-          <span className={cn('col-span-2 min-w-0 truncate', a.step ? 'text-foreground' : 'text-muted-foreground')} title={detail}>{detail}</span>
-        ) : null}
+        </span>
+        <span className={cn('min-w-0 truncate', detail ? 'text-foreground/80' : 'text-muted-foreground')} title={detail ?? undefined}>
+          {detail ?? (a.file && title ? title : busy ? '작업 중이에요' : '다음 지시를 기다려요')}
+        </span>
+        {/* Working: a sliver sweeps the track (the one moving thing on the dashboard); idle: a quiet line. */}
+        <span aria-hidden className={cn('session-track', busy && 'is-on')} />
+        <span className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground tabular-nums">
+          {model ? (
+            <span className="inline-flex min-w-0 items-center gap-1" title={model}>
+              <ProviderIcon provider={a.provider} className="size-3 shrink-0" />
+              <span className="truncate">{model}</span>
+            </span>
+          ) : <span />}
+          {a.at ? <span className="shrink-0 whitespace-nowrap">{relativeTime(a.at)}</span> : null}
+        </span>
       </button>
-      {/* The file line only when it holds one: no "파일 없음" filler on every idle card (#793). */}
+      {/* The file it holds, as its own link under the card body (#793). */}
       {a.file && title ? (
-        <span className="mt-auto flex min-w-0 items-center gap-3 border-t px-3 py-1.5">
+        <span className="flex min-w-0 items-center border-t px-3 py-1.5">
           <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
             <span className="sr-only">잡고 있는 파일 </span>
             <span className="truncate">{title}</span>
           </button>
-          {a.at ? <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">{relativeTime(a.at)}</span> : null}
         </span>
       ) : null}
     </li>
