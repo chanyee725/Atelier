@@ -22,3 +22,27 @@ test('sortChats newest first without touching the input', () => {
   assert.deepEqual(sortChats(a).map((x) => x.id), ['b', 'c', 'a']);
   assert.equal(a[0]!.id, 'a');
 });
+
+test('openChatSession fires the window event with the CLI session id', async () => {
+  const seen: unknown[] = [];
+  const target = new EventTarget();
+  (globalThis as any).window = target;
+  (globalThis as any).CustomEvent ??= class extends Event { detail: unknown; constructor(t: string, i?: { detail?: unknown }) { super(t); this.detail = i?.detail; } };
+  target.addEventListener('atelier:open-chat-session', (e) => seen.push((e as CustomEvent).detail));
+  const { openChatSession } = await import('../../web/src/shell/chatOpen.ts');
+  openChatSession('abc-1');
+  assert.deepEqual(seen, [{ cliSessionId: 'abc-1' }]);
+});
+
+test('delete and clear send DELETE with x-drawing and update the list', async () => {
+  const calls: { method?: string; url: string; h: Record<string, string> }[] = [];
+  (globalThis as any).fetch = async (url: string, init: { method?: string; headers: Record<string, string> }) => {
+    calls.push({ url, method: init.method, h: init.headers });
+    return { ok: true, status: 200, json: async () => (init.method === 'DELETE' && url === '/api/chats' ? { removed: 2 } : { ok: true }) };
+  };
+  const { chatsApi } = await import('../../web/src/shell/chatHistory.ts');
+  await chatsApi.remove('a1b2c3d4');
+  assert.equal(await chatsApi.clear(), 2);
+  assert.deepEqual(calls.map((x) => [x.method, x.url]), [['DELETE', '/api/chats/a1b2c3d4'], ['DELETE', '/api/chats']]);
+  assert.ok(calls.every((x) => x.h['x-drawing'] === '1'));
+});
