@@ -6,7 +6,7 @@ import { api, type ProjectsResponse, type TrashItem } from '../api';
 import { Button } from '../components/ui/button';
 import { SidebarTrigger } from '../components/ui/sidebar';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
-import { fullTimeLabel, timeLabel } from '../lib/timeLabel';
+import { whenLabel } from '../lib/when';
 import { locationOf } from './model';
 import { FILTERS, KIND_LABEL, filterRecent, recentRows, type RecentFilter } from './recentModel';
 import './recent.css';
@@ -28,8 +28,8 @@ const fileLabel = (path: string) => path.replace(/\.dpx\.json$/, '');
 function When({ at }: { at: number }) {
   if (!at) return <span className="recent-when">—</span>;
   return (
-    <time className="recent-when" dateTime={new Date(at).toISOString()} title={fullTimeLabel(at)}>
-      {timeLabel(at)}
+    <time className="recent-when" dateTime={new Date(at).toISOString()} title={new Date(at).toLocaleString('ko-KR')}>
+      {whenLabel(at)}
     </time>
   );
 }

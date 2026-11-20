@@ -15,7 +15,7 @@ import { StepModels } from './StepModels';
 import { onPlanConfirmRequest, samePlan, takePlanConfirm } from './planConfirmRequest';
 import { planApproval, type PlanApproval } from './planApprovalModel';
 import { StatusDot } from '../home/dash';
-import { fullTimeLabel, timeLabel as whenLabel } from '../lib/timeLabel'; // TODO(#889): lib/when.ts whenLabel once Vera's PR merges
+import { whenLabel } from '../lib/when';
 
 const CHIP_TONE = { waiting: 'warn', revised: 'warn', approved: 'ok', unknown: 'idle' } as const;
 
@@ -139,7 +139,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
             <span className="font-normal">{approval.text}</span>
           </div>
           {approval.at !== null && (
-            <time className="plan-bar-meta" dateTime={new Date(approval.at).toISOString()} title={fullTimeLabel(approval.at)}>
+            <time className="plan-bar-meta" dateTime={new Date(approval.at).toISOString()} title={new Date(approval.at).toLocaleString('ko-KR')}>
               {whenLabel(approval.at)} 시작했어요
             </time>
           )}
