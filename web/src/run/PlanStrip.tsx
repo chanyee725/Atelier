@@ -17,6 +17,7 @@ import { onPlanConfirmRequest, samePlan, takePlanConfirm } from './planConfirmRe
 import { planApproval, type PlanApproval } from './planApprovalModel';
 import { StatusDot } from '../home/dash';
 import { whenLabel } from '../lib/when';
+import { clearPlanGate, setPlanGate } from './planGate';
 
 const CHIP_TONE = { waiting: 'warn', revised: 'warn', approved: 'ok', unknown: 'idle' } as const;
 
@@ -41,6 +42,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
   const revision = useSession(session, (s) => s.file?.revision ?? null);
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
   const document = useSession(session, (s) => s.file?.document);
+  const planBlock = useSession(session, (s) => s.file?.plan?.block ?? null);
   const [modelsOpen, setModelsOpen] = useState(false);
   const modelsId = useId();
   const [status, setStatus] = useState<PipelineStatus | null>(null);
@@ -100,6 +102,17 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
     if (takePlanConfirm(path) && status.blockers.length === 0) openRef.current();
   }, [path, status, asked, busy, confirming]);
 
+  // The plan diagram's 시작하기 (#972) reads this: the strip no longer carries its own button outside the plan tab.
+  const gateBlockers = unread && !status ? ['시작할 수 있는지 확인하지 못했어요'] : status?.state === 'plan' ? status.blockers : null;
+  useEffect(() => {
+    if (!path || !planBlock || !gateBlockers) return;
+    setPlanGate({ path, block: planBlock, blockers: gateBlockers, busy, error });
+  }, [path, planBlock, gateBlockers?.join('\n'), busy, error]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (path && !gateBlockers) clearPlanGate(path);
+  }, [path, gateBlockers === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (path) clearPlanGate(path); }, [path]);
+
   const approval = path && hasPlan ? planApproval(status, unread) : null;
   if (path && hasPlan && unread && !status) {
     if (inTab && approval)
@@ -117,18 +130,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
           </Button>
         </div>
       );
-    return (
-      <Alert role="status" className="bg-muted" data-testid="plan-strip">
-        {inTab && approval ? <ApprovalChip a={approval} /> : <span aria-hidden="true">◐</span>}
-        <span className="mr-auto">계획이에요. 시작할 수 있는지 확인하지 못했어요.</span>
-        <Button size="sm" variant="ghost" className="px-2 text-sm" onClick={() => void refresh()}>
-          다시 확인
-        </Button>
-        <Button size="sm" aria-disabled className="px-3 text-sm aria-disabled:hover:bg-primary">
-          시작하기
-        </Button>
-      </Alert>
-    );
+    return null;
   }
   // Started: the tab still says it was approved, and which revision; the strip above hides (E22's strip shows).
   if (inTab && path && approval?.kind === 'approved') {
@@ -262,16 +264,9 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
         </div>
         {buttons}
       </div>
-    ) : (
-    <Alert role="status" className="bg-muted" data-testid="plan-strip">
-      <span aria-hidden="true">◐</span>
-      <span className="mr-auto">{message}</span>
-      <span className="text-muted-foreground">예상 {status.sessions}세션</span>
-      {buttons}
-    </Alert>
-    )}
+    ) : null}
     {/* Outside the live region: picking a model must not re-read the strip. */}
-    {modelsOpen && <StepModels id={modelsId} session={session} path={path} />}
+    {inTab && modelsOpen && <StepModels id={modelsId} session={session} path={path} />}
     {/* Outside the live region too, so the open dialog and its role="alert" are not nested live regions. */}
     <dialog
       ref={dialog}
