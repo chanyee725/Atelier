@@ -13,7 +13,8 @@ import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
 import { ActivityBell } from './activity/ActivityBell';
 import { AgentLiveHost } from './live/AgentLivePanel';
-import { notifyApp } from './activity/appToasts';
+import { toastAction, toastResult } from './activity/actionToast';
+import { Toaster } from './components/ui/sonner';
 import type { EntryKind } from './activity/appEvents';
 import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHash, shellKey, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
@@ -127,7 +128,6 @@ type DocSlotProps = {
   tree: TreeNode[];
   jump: { id: string; n: number } | null;
   onOpenFile: (path: string) => void;
-  onNotice: (message: string) => void;
   onShow: (blockId: string) => void;
   onShowFrame: (frameId: string) => void;
   onExportBlock: (b: Block, kind: ImageKind) => void;
@@ -154,7 +154,7 @@ function useSettled<T>(value: T, ms: number, reset: string): T {
   }, [value, ms, reset]);
   return v.reset === reset ? v.value : value;
 }
-const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onNotice, onShow, onShowFrame, onExportBlock, onFail, onEditor }: DocSlotProps) {
+const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onShow, onShowFrame, onExportBlock, onFail, onEditor }: DocSlotProps) {
   const path = useSession(session, (s) => s.path ?? '');
   const key = useSession(session, (s) => `${s.path}#${s.loadSeq}`);
   const live = useSession(session, (s) => s.live);
@@ -196,7 +196,6 @@ const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, o
           tree={tree}
           onOpenFile={onOpenFile}
           jump={jump}
-          onNotice={onNotice}
           onDocument={onDocument}
           onBlocks={onBlocks}
           onShow={onShow}
@@ -451,7 +450,7 @@ export function App() {
     try {
       // A pipeline plan starts from the pipeline template (E18); other kinds start empty.
       await api.createFile(p, title, kind === 'plan' ? pipelineTemplate(newBlockId()) : undefined);
-      notifyApp({ type: 'created', kind: kind === 'canvas' ? 'canvas' : 'doc', path: p });
+      toastAction({ type: 'created', kind: kind === 'canvas' ? 'canvas' : 'doc', path: p });
       await refreshTree();
       if (await open(p) && kind === 'canvas') setView('canvas');
     } catch (e) {
@@ -560,7 +559,7 @@ export function App() {
       }
       const dest = (r as { path?: string }).path ?? to;
       const parent = (x: string) => x.slice(0, Math.max(0, x.lastIndexOf('/')));
-      notifyApp({ type: parent(from) === parent(dest) ? 'renamed' : 'moved', kind: entryKind(n), from, to: dest });
+      toastAction({ type: parent(from) === parent(dest) ? 'renamed' : 'moved', kind: entryKind(n), from, to: dest });
       await refreshTree();
       // The move worked but the new revision is unknown: the next save may ask to choose a version, so say why.
       if (readFailed) setError('옮겼어요. 다만 파일을 다시 읽지 못했어요. 저장이 안 되면 화면을 새로 고쳐 주세요');
@@ -620,7 +619,7 @@ export function App() {
       // A document's sub-documents folder (`X/`, even an empty one) goes with it, so it never lingers as a group.
       if (n.type === 'file') await api.removeFile(n.path, true);
       else await api.removeFolder(n.path);
-      notifyApp({ type: 'deleted', kind: entryKind(n), path: n.path });
+      toastAction({ type: 'deleted', kind: entryKind(n), path: n.path });
       const gone = n.type === 'file' ? subFolderOf(n.path) : n.path;
       if (path && (path === n.path || path.startsWith(`${gone}/`))) closeOpenFile();
       if (section.kind === 'project' && section.path === n.path) setSection({ kind: 'all' });
@@ -647,10 +646,10 @@ export function App() {
   const report = useCallback(
     (job: Promise<string> | string) =>
       Promise.resolve(job).then(
-        (m) => setStatus(m),
-        (e) => setStatus(isChunkLoadError(e) ? CHUNK_MESSAGE : e instanceof Error ? e.message : '내보내지 못했어요', true),
+        (m) => toastResult(m),
+        (e) => toastResult(isChunkLoadError(e) ? CHUNK_MESSAGE : e instanceof Error ? e.message : '내보내지 못했어요', true),
       ),
-    [setStatus],
+    [],
   );
   const imageExport = (kind: ImageKind) => void report(exportCanvas(canvasHandle.current, kind, session.getState().file?.title ?? '', exportOptions));
   const markdownExport = () => {
@@ -844,7 +843,7 @@ export function App() {
           <>
             {/* Questions agents asked in this document (#738), answered in place. */}
             <Questions session={session} />
-            <DocSlot session={session} dark={dark} tree={tree} jump={jump} onOpenFile={openFile} onNotice={setStatus} onShow={showBlock} onShowFrame={showFrame} onExportBlock={blockExport} onFail={flushForReload} onEditor={onEditor} />
+            <DocSlot session={session} dark={dark} tree={tree} jump={jump} onOpenFile={openFile} onShow={showBlock} onShowFrame={showFrame} onExportBlock={blockExport} onFail={flushForReload} onEditor={onEditor} />
             <SubDocs node={place.node} onOpen={openFile} onAdd={() => void newFile(undefined, 'doc', true)} />
           </>
         )}
@@ -922,7 +921,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showSection, showBoard]);
 
-  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise.
+  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise. A Sonner toast (#899), not the 알림함.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.code !== 'KeyS') return;
@@ -932,7 +931,7 @@ export function App() {
       void session.flush().then(() => {
         const st = session.getState();
         if (st.path !== p) return;
-        notifyApp(st.statusAlert ? { type: 'save-failed', path: p } : { type: 'saved', path: p });
+        toastAction(st.statusAlert ? { type: 'save-failed', path: p } : { type: 'saved', path: p });
       });
     };
     window.addEventListener('keydown', onKey, true);
@@ -972,6 +971,7 @@ export function App() {
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} />
         <AppDialogHost />
+        <Toaster dark={dark} />
         <SidebarInset>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}

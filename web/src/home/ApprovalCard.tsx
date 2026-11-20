@@ -15,6 +15,7 @@ import { planTitle, planWaitingText, type WaitingPlan } from '../activity/plans.
 import { usePermissionAsks, reloadPermissionAsks } from '../activity/permissionAsksStore';
 import { useWaitingPlans } from '../activity/waitingPlans';
 import { requestPlanConfirm } from '../run/planConfirmRequest';
+import { toastRequest } from '../activity/actionToast';
 import { Card, StatusDot } from './dash';
 
 /** "8분째 기다려요", "방금 왔어요"; null when unknown. */
@@ -79,7 +80,9 @@ function AskRow({ ask, now, busy, run }: { ask: PermissionAsk; now: number; busy
   const [error, setError] = useState<string | null>(null);
   const answer = (behavior: 'allow' | 'deny') =>
     run(`ask:${ask.requestId}`, async () => {
-      const err = await api('POST', `/api/sessions/${encodeURIComponent(ask.sessionId)}/permission`, { requestId: ask.requestId, behavior }).then(() => null, (e: Error) => e.message);
+      const sent = api('POST', `/api/sessions/${encodeURIComponent(ask.sessionId)}/permission`, { requestId: ask.requestId, behavior });
+      // The failure shows in the row (note), so the toast only says it went through.
+      const err = await toastRequest(sent, { loading: '답을 보내는 중이에요', success: behavior === 'allow' ? '허용했어요' : '거절했어요', error: null }).then(() => null, (e: Error) => e.message);
       setError(err);
       // A success comes back as the session's SSE event; a failure may mean the prompt is gone, so read them again.
       if (err) reloadPermissionAsks();

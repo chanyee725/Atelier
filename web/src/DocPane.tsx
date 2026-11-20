@@ -15,6 +15,7 @@ import { buildHash, fileItems, figureItems, headingItems, outlineOf, type WikiKi
 import { applyLiveDocument, LIVE_META } from './doc/liveApply';
 import { DocAgentCursors } from './doc/DocAgentCursors';
 import { copyText } from './doc/clipboard';
+import { toastResult } from './activity/actionToast';
 import { renderBlock } from './canvas/render';
 import type { ImageKind } from './export/actions';
 import { blockItems, blocksAfterHistory, frameItems, framesOf, frameNode, type CanvasEl, newBlockGeometry, diagramNode, embeddedBlockIds, isEmptyDoc, normalizeLink, withTrailingParagraph, SLASH_ITEMS, type SlashItem } from './doc/model';
@@ -43,7 +44,6 @@ type Props = {
   /** Scroll to this heading id whenever `n` changes (a heading link was opened). */
   jump: { id: string; n: number } | null;
   /** Tell the user something short (a copied link). */
-  onNotice: (message: string) => void;
   onDocument: (doc: unknown) => void;
   onBlocks: (b: Block[]) => void;
   /** Show a diagram block on the canvas. */
@@ -93,7 +93,7 @@ const newId = () => `b_${Math.random().toString(36).slice(2, 10)}`;
  * Remounted per file (App keys it), so it reads `document` only when it starts. A document the
  * editor cannot read is never saved over: the pane shows an error and stays read-only.
  */
-export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onNotice, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock, onEditor }: Props) {
+export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock, onEditor }: Props) {
   const getBlocksRef = useRef(getBlocks);
   getBlocksRef.current = getBlocks;
   const onDocumentRef = useRef(onDocument);
@@ -110,8 +110,6 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
   pathRef.current = path;
   const onOpenFileRef = useRef(onOpenFile);
   onOpenFileRef.current = onOpenFile;
-  const onNoticeRef = useRef(onNotice);
-  onNoticeRef.current = onNotice;
   const onShowRef = useRef(onShow);
   onShowRef.current = onShow;
   const editorRef = useRef<Editor | null>(null);
@@ -191,7 +189,7 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
       HeadingLinks.configure({
         copy: (id) => {
           const url = `${window.location.origin}${window.location.pathname}${buildHash(pathRef.current, id)}`;
-          void copyText(url).then((ok) => onNoticeRef.current(ok ? '제목 링크를 복사했어요' : '링크를 복사하지 못했어요'));
+          void copyText(url).then((ok) => toastResult(ok ? '제목 링크를 복사했어요' : '링크를 복사하지 못했어요', !ok));
         },
       }),
       WikiLinks.configure({
