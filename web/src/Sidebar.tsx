@@ -180,7 +180,11 @@ function DocRows({ nodes, ...rest }: RowsProps & { nodes: DocNode[] }) {
 
 // Right-hand slots, from the edge: ⋯ menu, chevron (fixed width), then the count. The row's text stops before
 // them: 56px on wide screens (24px actions), 92px below md where both actions are 44px touch targets.
+// A row with no chevron (a leaf document) only reserves the ⋯ slot, so its name gets that space back (#934).
 const ROW_SLOTS = 'pr-14 max-md:pr-[92px]';
+const LEAF_SLOTS = 'pr-8 max-md:pr-12';
+/** The row's name takes the free space and truncates; the full name is in its tooltip (#934). */
+const NAME = 'min-w-0 flex-1 truncate';
 const COUNT = 'min-w-5 text-right';
 
 const DROP_ROW = 'data-[drop=over]:bg-accent data-[drop=over]:text-foreground data-[drop=over]:outline-2 data-[drop=over]:outline-ring forced-colors:data-[drop=over]:outline-[Highlight]';
@@ -200,13 +204,15 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
         data-move-path={n.path}
         aria-current={active ? 'page' : undefined}
         aria-expanded={n.type === 'group' ? expanded : undefined}
-        className={cn(ROW_SLOTS, depth >= 0 && 'font-normal text-muted-foreground hover:text-foreground', 'aria-[current=page]:font-medium', DROP_ROW)}
+        className={cn(has ? ROW_SLOTS : LEAF_SLOTS, depth >= 0 && 'font-normal text-muted-foreground hover:text-foreground', 'aria-[current=page]:font-medium', DROP_ROW)}
         {...dragProps(moveItemOf(n))}
         {...(n.type === 'group' ? drop : refuseDrop)}
         onClick={() => (n.type === 'doc' ? p.onOpen(n.path) : toggle(n.path))}
       >
         {n.type === 'doc' ? <File className="size-[15px]! text-muted-foreground" aria-hidden /> : <FolderClosed className="size-[15px]! text-muted-foreground" aria-hidden />}
-        <span className="truncate">{label}</span>
+        <span className={NAME} title={label}>
+          {label}
+        </span>
         {n.type === 'doc' && n.questions ? <QuestionBadge count={n.questions} /> : null}
         {n.type === 'doc' && n.pipeline && <PipelineBadge state={n.pipeline.state} />}
         {has && !expanded && <SidebarMenuBadge className={COUNT} aria-label={`하위 ${n.count}개`}>{n.count}</SidebarMenuBadge>}
@@ -227,7 +233,8 @@ function DocRow({ n, depth, open, toggle, p, move }: RowsProps & { n: DocNode })
   );
 }
 
-// Pipeline file marks. Text stays in the foreground colour; only the running dot is green (state is never colour alone).
+// Pipeline file marks: one glyph in the row, its word in the tooltip and the accessible name (#934). The glyph's shape
+// carries the state, so it is never colour alone; only the running dot is green.
 const PIPELINE_MARKS: Record<PipelineMark['state'], { glyph: string; text: string; dot?: string }> = {
   plan: { glyph: '◐', text: '계획' },
   running: { glyph: '●', text: '실행 중', dot: 'var(--ok)' },
@@ -239,11 +246,15 @@ function PipelineBadge({ state }: { state: PipelineMark['state'] }) {
   const m = PIPELINE_MARKS[state] ?? PIPELINE_MARKS.plan;
   // The row's right padding (ROW_SLOTS) keeps it clear of the row actions.
   return (
-    <span role="img" aria-label={`파이프라인: ${m.text}`} title={`파이프라인 ${m.text}`} className="ml-auto flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-[11px] leading-4 text-foreground">
-      <span aria-hidden style={m.dot ? { color: m.dot } : undefined} className={m.dot ? undefined : 'text-muted-foreground'}>
-        {m.glyph}
-      </span>
-      <span aria-hidden>{m.text}</span>
+    <span
+      role="img"
+      data-pipeline-mark={state}
+      aria-label={`파이프라인: ${m.text}`}
+      title={`파이프라인 ${m.text}`}
+      style={m.dot ? { color: m.dot } : undefined}
+      className={cn('ml-auto flex w-4 shrink-0 items-center justify-center text-[11px] leading-4', !m.dot && 'text-muted-foreground')}
+    >
+      <span aria-hidden>{m.glyph}</span>
     </span>
   );
 }
@@ -274,7 +285,9 @@ function FolderRow({ pr, open, toggle, p, move }: Omit<RowsProps, 'depth'> & { p
     <SidebarMenuItem className={freshClass(pr.path)}>
       <SidebarMenuButton data-move-path={pr.path} aria-expanded={expanded} className={cn(ROW_SLOTS, DROP_ROW)} {...drop} onClick={() => toggle(pr.path)}>
         <FolderClosed aria-hidden />
-        <span className="truncate">{pr.name}</span>
+        <span className={NAME} title={pr.name}>
+          {pr.name}
+        </span>
         {!expanded && pr.count > 0 && <SidebarMenuBadge className={COUNT} aria-label={`문서 ${pr.count}개`}>{pr.count}</SidebarMenuBadge>}
       </SidebarMenuButton>
       <SidebarMenuAction aria-label={`${pr.name} ${expanded ? '접기' : '펼치기'}`} aria-expanded={expanded} className="right-7 max-md:right-11" onClick={() => toggle(pr.path)}>
