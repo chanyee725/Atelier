@@ -262,7 +262,6 @@ export function Info({ s }: { s: Session }) {
     ['모델', `${s.model}${s.effort ? ` (effort ${s.effort})` : ''}`],
     ['역할', `${s.roleName}${s.canSpawn ? ' · 다른 세션을 만들 수 있음' : ''}`],
     ['권한 모드', permLabel(s.perm)],
-    ['작업 폴더', s.cwd],
     ['컨텍스트', `${fmtK(s.ctx)} / ${fmtK(s.ctxWindow)} (${pct(s.ctxWindow ? s.ctx / s.ctxWindow : null)})`],
   ];
   const usage: [string, number][] = [['입력', s.usage.input], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite], ['출력', s.usage.output]];
