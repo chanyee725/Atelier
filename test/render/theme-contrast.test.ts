@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NAMED_COLOR_NAMES, resolvePaint } from '../../shared/render/theme.ts';
+import { NAMED_COLOR_NAMES, THEMES, resolvePaint } from '../../shared/render/theme.ts';
 import type { Theme } from '../../shared/render/theme.ts';
 
 // Independent oracle for WCAG relative luminance (deliberately not imported from theme.ts).
@@ -26,5 +26,14 @@ for (const theme of ['light', 'dark'] as Theme[]) {
       const best = Math.max(ratio('#1f2329', p.fill), ratio('#ffffff', p.fill));
       assert.equal(ratio(p.text, p.fill), best, `${theme} ${color ?? 'neutral'}`);
     }
+  });
+}
+
+// #935: a group without a colour shows its border at non-text contrast (3:1) on the canvas.
+for (const theme of ['light', 'dark'] as Theme[]) {
+  test(`neutral group border reads at 3:1 on the canvas (${theme})`, () => {
+    const p = resolvePaint({ mode: 'pastel' }, theme, true);
+    const r = ratio(p.stroke, THEMES[theme].background);
+    assert.ok(r >= 3, `${theme} group border ${p.stroke}: ${r.toFixed(2)}`);
   });
 }

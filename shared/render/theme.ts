@@ -44,7 +44,9 @@ export const THEMES: Record<Theme, ThemeColors> = {
     strongStroke: '#242424',
     fill: '#ffffff',
     groupFill: 'rgba(242,244,247,0.5)',
-    groupStroke: '#eaecf0',
+    // Visible group border (#935): the lightest grey reaching 3:1 on the canvas (WCAG 1.4.11), not Eraser's
+    // near-invisible #eaecf0.
+    groupStroke: '#868f9e',
     groupText: '#475467',
     edge: '#667085',
     flowEdge: '#1c1c1c',
@@ -59,7 +61,7 @@ export const THEMES: Record<Theme, ThemeColors> = {
     strongStroke: '#c9cdd3',
     fill: '#1f2228',
     groupFill: 'rgba(255,255,255,0.04)',
-    groupStroke: '#2e3239',
+    groupStroke: '#666e7b',
     groupText: '#a7afbb',
     edge: '#8d96a5',
     flowEdge: '#e7e9ec',
