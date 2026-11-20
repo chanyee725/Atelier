@@ -1,6 +1,6 @@
 // 세션 보드 inside the Atelier shell (#731), as a card dashboard on the home's dash primitives (#879): no header or tab
-// row and no 프로젝트 card (one project per server, #778; the scope still comes from the address). Left: 세션 and
-// 타임라인; right: 사용량 and 작업 보드. `#board=usage` and `#board=branches` open their full screen in one card;
+// row and no 프로젝트 card (one project per server, #778; the scope still comes from the address). Left 60%: 세션 and
+// 타임라인; right 40%: 작업 보드 (사용량 lives in the sidebar and the 대시보드, #919). `#board=usage` and `#board=branches` open their full screen in one card;
 // `#board=timeline` opens the dashboard at the 타임라인 card.
 // Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
@@ -11,13 +11,11 @@ import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
-import { projectsApi, type DispatchSettings, type ProjectInfo } from '../api';
+import { projectsApi, type ProjectInfo } from '../api';
 import { boardHash, plainClick, type BoardExtra, type BoardTab } from '../projectNav';
 import { Card, DashColumn, DashGrid, EmptyState } from '../home/dash';
-import { boardRows } from '../lib/usageCardRows';
-import { useUsage } from '../lib/usage';
 import { OffNote, useDispatchStatus } from '../settings/DispatchOff';
-import { guardValue, type SectionId } from '../settings/model';
+import type { SectionId } from '../settings/model';
 import { elapsed } from '../../../shared/dispatch/attention.ts';
 import { AlertWatcher } from './AlertWatcher';
 import { AlwaysOnView } from './AlwaysOnView';
@@ -26,10 +24,10 @@ import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
 import { knownFolders, scopePending, type Scope } from './lib/folder.ts';
-import { fmtK, fmtUsd, isOpen, pct, STATE, stateOf, TONE_TEXT, totalTok, until } from './lib/format.ts';
+import { fmtUsd, isOpen, STATE, stateOf, TONE_TEXT } from './lib/format.ts';
 import { stateStart } from './lib/order.ts';
 import { nowLine } from './lib/turn.ts';
-import { Meter, ModelTag, STATE_ICON } from './parts';
+import { ModelTag, STATE_ICON } from './parts';
 import { ScopeProvider, useScope, useScoped } from './scope';
 import { openAgentLive, useAgentLiveTarget } from '../live/store';
 import { shownAccount, useAccountLabels } from '../accountLabels';
@@ -170,9 +168,9 @@ export default function SessionBoard(p: BoardProps) {
           ) : detail ? (
             <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
           ) : (
-            <DashGrid ratio="minmax(0,1fr) minmax(16rem,22rem)">
-              {/* No 프로젝트 card: this server holds one project (#778). Left: 세션 and 타임라인; right: 사용량 and 작업 보드,
-                  whose last card takes the spare height so neither column leaves an empty band (#879). */}
+            <DashGrid ratio="3fr 2fr">
+              {/* No 프로젝트 card: this server holds one project (#778). Left: 세션 and 타임라인; right: 작업 보드,
+                  whose card takes the spare height so neither column leaves an empty band (#879). */}
               <DashColumn label="세션">
                 <SessionsCard
                   open={open}
@@ -183,9 +181,8 @@ export default function SessionBoard(p: BoardProps) {
                 />
                 <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
-              {/* Sticky on a wide pane: 사용량 and 작업 보드 stay in view while 세션 and 타임라인 scroll. */}
+              {/* Sticky on a wide pane: 작업 보드 stays in view while 세션 and 타임라인 scroll. */}
               <DashColumn label="현황" className="@min-[880px]:sticky @min-[880px]:top-4 @min-[880px]:max-h-[calc(100dvh-2rem)] @min-[880px]:self-start">
-                <UsageCard onSettings={setSettings} onMore={() => p.onRoute('usage', scope)} />
                 <TaskBoardCard fill />
               </DashColumn>
             </DashGrid>
@@ -515,88 +512,5 @@ function Row({ s, parent, summary, now, expanded, onOpen }: { s: Session; parent
       </span>
       <ChevronRight aria-hidden className={cn('col-start-5 row-start-1 size-4 text-muted-foreground', wide)} />
     </button>
-  );
-}
-
-/** 사용량 card: each connected provider's limits, the open sessions' totals and the guard; 자세히 opens #board=usage. */
-function UsageCard({ onSettings, onMore, className }: { onSettings: (s: SectionId) => void; onMore: () => void; className?: string }) {
-  // Per-provider windows from /api/limits, the same read as the sidebar card; the store's `limits` is only the flat
-  // Claude guard shape, so reading groups from it left Claude's 5시간 and 주간 at '—' (#897).
-  const usage = useUsage();
-  const providers = useDispatch((s) => s.providers);
-  const settings = useDispatch((s) => s.settings);
-  const sessions = useDispatch((s) => s.sessions);
-  const groups = Array.isArray(usage) ? usage : [];
-  const off = Object.entries(providers ?? {}).filter(([, x]) => !x?.connected);
-  const live = sessions.filter(isOpen);
-  const s = settings as unknown as DispatchSettings;
-  const guardOn = !!settings?.guard?.enabled;
-  const now = Date.now();
-  return (
-    <Card
-      id="usage"
-      title="사용량"
-      className={className}
-      actions={
-        <Button size="sm" variant="ghost" onClick={onMore}>
-          자세히
-        </Button>
-      }
-    >
-      <div className="flex min-w-0 flex-col gap-3">
-        {usage === null ? (
-          <p className="m-0 text-xs text-muted-foreground">불러오는 중이에요…</p>
-        ) : usage === 'failed' ? (
-          <p className="m-0 text-xs text-muted-foreground">사용량을 불러오지 못했어요.</p>
-        ) : groups.length === 0 ? (
-          <div className="flex flex-col items-start gap-2 text-sm">
-            <p className="m-0">연결된 모델이 없어요</p>
-            <Button size="sm" variant="outline" onClick={() => onSettings('providers')}>
-              모델 연결
-            </Button>
-          </div>
-        ) : (
-          groups.map((g) => {
-            const rows = boardRows(g, s);
-            return (
-              <div key={g.id} data-usage={g.id} className="flex flex-col gap-2 border-t pt-3 first:border-t-0 first:pt-0">
-                <p className="m-0 text-[13px] font-semibold">{g.name}</p>
-                {rows.length === 0 && <p className="m-0 text-xs text-muted-foreground">{g.reached ? '한도에 닿았어요' : '아직 사용량 정보가 없어요'}</p>}
-                {rows.map((r) => (
-                  <div key={r.label} className="grid grid-cols-[4.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 text-xs">
-                    <span className="truncate text-muted-foreground">{r.label}</span>
-                    <Meter value={r.used} label={`${g.name} ${r.label}`} />
-                    <span className="text-right tabular-nums">{pct(r.used)}</span>
-                    {r.reset != null && <span className="col-start-2 col-end-4 text-[11px] text-muted-foreground">초기화까지 {until(r.reset, now)}</span>}
-                  </div>
-                ))}
-              </div>
-            );
-          })
-        )}
-        {off.map(([id, x]) => (
-          <div key={id} className="flex items-center gap-2 border-t pt-2 text-xs">
-            <span className="font-medium">{x?.name || id}</span>
-            <span className="text-muted-foreground">연결 안 됨</span>
-            <Button size="sm" variant="ghost" className="ml-auto h-7" onClick={() => onSettings('providers')}>
-              연결
-            </Button>
-          </div>
-        ))}
-        <p className="m-0 border-t pt-3 text-xs text-muted-foreground tabular-nums">
-          실행 중 {live.length} · 토큰 {fmtK(live.reduce((a, x) => a + totalTok(x.usage), 0))} · {fmtUsd(live.reduce((a, x) => a + (x.cost ?? 0), 0))}
-        </p>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span>
-            {guardOn && settings?.guard
-              ? `가드: 5시간 ${guardValue('five', s)}% · 주간 ${guardValue('seven', s)}%에서 새 세션을 멈춰요`
-              : '가드가 꺼져 있어요'}
-          </span>
-          <button type="button" onClick={() => onSettings('limits')} className="inline-flex min-h-6 items-center rounded-sm text-foreground underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-            가드 바꾸기 ›
-          </button>
-        </div>
-      </div>
-    </Card>
   );
 }
