@@ -71,7 +71,8 @@ try {
   await fetch(`${BASE}/api/providers/claude/login`, { method: 'POST', headers: { 'x-drawing': '1' } });
 
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME });
-  for (const theme of ['light', 'dark']) {
+  // Dark first: the light pass presses 시작하기, which gives #954 a team, and a row with a team opens the team panel.
+  for (const theme of ['dark', 'light']) {
     const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
     await ctx.addInitScript((t) => localStorage.setItem('drawing.theme', t), theme);
     const page = await ctx.newPage();
@@ -85,7 +86,7 @@ try {
       await page.screenshot({ path: join(out, 'debug.png') });
       throw e;
     });
-    if (theme === 'light') await page.screenshot({ path: join(out, `${theme}-1-rows.png`) });
+    await page.screenshot({ path: join(out, `${theme}-1-rows.png`) });
     await row.click();
     await page.locator('[data-chat-issue="954"]').waitFor({ timeout: 10000 });
     const bar = page.locator('[data-issue-start-bar]');
