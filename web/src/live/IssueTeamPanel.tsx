@@ -5,14 +5,14 @@
 // of its own. Hidden while a session's live panel is open and back when that closes (issueStore.ts). #942: a path line
 // in the head, the row that opened a live panel keeps a ring, and working rows use the dashboard's `.session-track`.
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import { ExternalLink, GitBranch, GitPullRequest, X } from 'lucide-react';
+import { ExternalLink, GitBranch, GitPullRequest, MessageCircle, X } from 'lucide-react';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { BoardTask } from '../dispatch/types.ts';
 import { ModelTag } from '../dispatch/parts';
 import { fmtK, fmtUsd, stateOf } from '../dispatch/lib/format.ts';
 import { fmtDuration } from '../home/issueTotals.ts';
 import { ACTIVE_STAGE, issueEta, type ActiveIssue } from '../home/activeIssues';
-import type { IssueRow } from '../home/issueBoard';
+import { ISSUE_STATE, type IssueRow } from '../home/issueBoard';
 import type { Pr } from '../home/projectFeeds';
 import { issueTitles, taskSummary } from '../home/taskSummary';
 import { FOCUS_RING } from '../lib/focus';
@@ -20,6 +20,7 @@ import { cn } from '../lib/utils';
 import { liveStateLabel, liveStateTone } from './format';
 import { flowOf, teamCost, teamOf, verdict } from './issueTeam';
 import { closeIssueTeam } from './issueStore';
+import { askAboutIssue } from '../chat/lib/askIssue';
 import { PanelTrail } from './PanelTrail';
 import { TRAIL, teamTrail } from './origin';
 import { trackProps, trackTone } from '../home/trackTone';
@@ -84,8 +85,18 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now, closing = fal
               <span aria-hidden className={cn('size-1.5 rounded-full', stage.dot)} />
               {stage.label}
             </span>
-            {issue.url && <HostLink href={issue.url} label="이슈 열기" />}
+            {issue.url && <HostLink href={issue.url} label="GitHub에서 열기" />}
             {prUrl && <HostLink href={prUrl} label="PR 열기" />}
+            {/* #954: talk about this issue in the chat dock, with the team's lead when it has one. */}
+            <button
+              type="button"
+              data-issue-chat={issue.number}
+              onClick={() => askAboutIssue({ number: issue.number, title: issue.title, state: ISSUE_STATE[row.state].label, url: issue.url }, { ask: false, partner: issue.leads[0]?.id ?? null })}
+              className={cn('inline-flex h-6 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-muted-foreground hover:bg-accent hover:text-foreground', FOCUS_RING)}
+            >
+              <MessageCircle aria-hidden className="size-3" />
+              채팅으로 가기
+            </button>
           </div>
         </div>
         <button ref={closeBtn} type="button" aria-label="닫기" onClick={closeIssueTeam} className={cn('agent-live-icon', FOCUS_RING)}>

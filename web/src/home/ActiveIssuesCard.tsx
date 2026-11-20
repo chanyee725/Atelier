@@ -3,15 +3,13 @@
 // a merged-of-total bar when the issue is split into several PRs, and the time left only when a board task set an ETA.
 // Quiet on purpose: the dashboard's standout is the working-session number. Reuses the dashboard's feeds; no request
 // of its own. Hidden while nothing is in progress (the 이슈 card covers the rest).
-import { useMemo } from 'react';
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Card } from './dash';
-import { IssueTeamPanel } from '../live/IssueTeamPanel';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
-import { usePanelExit } from '../live/usePanelExit';
-import { ACTIVE_STAGE, activeIssues, issueEta, type ActiveIssue } from './activeIssues';
-import { issueRows, type IssuesAnswer } from './issueBoard';
+import { ACTIVE_STAGE, issueEta, type ActiveIssue } from './activeIssues';
+import { useActiveIssueList } from './IssuePanel';
+import type { IssuesAnswer } from './issueBoard';
 import type { Feed, PrAnswer } from './projectFeeds';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { BoardTask } from '../dispatch/types.ts';
@@ -25,24 +23,9 @@ type Props = {
 };
 
 export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now() }: Props) {
-  const rows = useMemo(() => (issues && issues !== 'failed' && issues.ok && Array.isArray(sessions) ? issueRows(issues.issues, sessions) : []), [issues, sessions]);
+  // The row's panel is drawn by the dashboard's one IssuePanel (#954).
+  const { list } = useActiveIssueList({ issues, sessions, tasks, prs });
   const open = useIssueTeamTarget();
-  // Kept mounted for the 160ms slide-out after closing (#942).
-  const exit = usePanelExit(open);
-  const list = useMemo(() => {
-    if (!rows.length || !Array.isArray(sessions)) return [];
-    const approved = (b: string) => {
-      const a = prs && prs !== 'failed' ? prs.get(b) : undefined;
-      return !!a?.ok && a.pr.review === 'approved';
-    };
-    return activeIssues(rows, sessions, tasks, approved);
-  }, [rows, sessions, tasks, prs]);
-  const answerOf = (b: string) => {
-    const a = prs && prs !== 'failed' ? prs.get(b) : undefined;
-    return a?.ok ? a.pr : null;
-  };
-  const shown = exit.shown != null ? list.find((x) => x.number === exit.shown) : undefined;
-  const shownRow = shown ? rows.find((r) => r.number === shown.number) : undefined;
   if (!list.length) return null;
   return (
     // As tall as its rows up to a cap, then the rows scroll inside (like 세션 요청): a fill share cut rows in half.
@@ -52,7 +35,6 @@ export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now(
           <ActiveLine key={x.number} issue={x} now={now} open={open === x.number} />
         ))}
       </ul>
-      {shown && shownRow && <IssueTeamPanel issue={shown} row={shownRow} tasks={tasks} answerOf={answerOf} now={now} closing={exit.closing} />}
     </Card>
   );
 }
