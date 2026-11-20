@@ -155,6 +155,8 @@ export interface TeamSettings {
   ctxHandoff?: number;
   /** Session length guard in millions of tokens processed (0 = off). */
   handoffMTokens?: number;
+  /** Swap a session past `handoffMTokens` for a fresh one between turns (#969). */
+  autoRotateLong?: boolean;
   maxChildren: number;
   replyStyle: boolean;
   shareDeps: boolean;

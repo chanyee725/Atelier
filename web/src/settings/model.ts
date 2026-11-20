@@ -205,7 +205,7 @@ export function stopEscWhileOpen(target: Pick<EventTarget, 'addEventListener' | 
 // 설정 page (#587, ported from standalone Dispatch's SettingsPage): the team settings Atelier's server acts on.
 // Values are saved through POST /api/settings `team`; the server checks every range again.
 export type TeamNumberId = 'rotateLead' | 'rotateOthers' | 'maxChildren' | 'autoRemoveGraceSec' | 'stuckFails' | 'stuckSilentMinutes' | 'stuckMismatchMinutes' | 'stuckEtaRatio';
-export type TeamToggleId = 'shareDeps' | 'dropWorktrees' | 'replyStyle' | 'autoRemoveDone';
+export type TeamToggleId = 'shareDeps' | 'dropWorktrees' | 'replyStyle' | 'autoRemoveDone' | 'autoRotateLong';
 /** `decimal`: one decimal place, and 0 (off) or min..max (the server's ratio check). Ranges and defaults mirror server/dispatch/settings.js. */
 export type TeamNumberField = { id: TeamNumberId; label: string; unit: string; min: number; max: number; def: number; hint: string; decimal?: boolean };
 export const TEAM_NUMBERS: TeamNumberField[] = [
@@ -225,6 +225,8 @@ export const TEAM_TOGGLES: { id: TeamToggleId; label: string; def: boolean; hint
   { id: 'dropWorktrees', label: '세션을 지우면 작업 폴더도 지우기', def: true, hint: '커밋 안 한 변경이 없을 때만 지워요. 브랜치는 남아요.' },
   { id: 'replyStyle', label: '답변 스타일 지침 넣기', def: true, hint: '모든 세션의 지시에 읽기 쉬운 답변 규칙을 붙여요.' },
   { id: 'autoRemoveDone', label: '일이 끝난 팀원 자동으로 지우기', def: true, hint: '보고가 관리자에게 가고 기다리는 질문이 없으면 지워요. 관리자는 지우지 않아요.' },
+  // #969: past the token limit (사용 한도), the server swaps the session for a fresh one between turns.
+  { id: 'autoRotateLong', label: '오래 쓴 세션 자동 교체', def: true, hint: '누적 토큰이 한도를 넘으면 턴이 끝난 뒤 같은 설정의 새 세션으로 바꿔요. 인계 내용과 팀원, 작업 보드도 옮겨요.' },
 ];
 
 export type TeamValues = Record<TeamNumberId, number> & Record<TeamToggleId, boolean> & { roleModels: Record<string, string> };
@@ -391,7 +393,7 @@ export const firstSection = (asked: unknown, remembered: unknown): SectionId => 
 export const SECTION_FIELDS: Partial<Record<SectionId, { numbers: TeamNumberId[]; toggles: TeamToggleId[]; roleModels?: true }>> = {
   general: { numbers: [], toggles: ['replyStyle'] },
   roles: { numbers: [], toggles: [], roleModels: true },
-  team: { numbers: ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec'], toggles: ['autoRemoveDone'] },
+  team: { numbers: ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec'], toggles: ['autoRemoveDone', 'autoRotateLong'] },
   folders: { numbers: [], toggles: ['shareDeps', 'dropWorktrees'] },
   stuck: { numbers: ['stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes', 'stuckEtaRatio'], toggles: [] },
 };
