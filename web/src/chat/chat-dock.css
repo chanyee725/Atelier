@@ -22,24 +22,25 @@
   width: var(--chat-dock-fab);
   height: var(--chat-dock-fab);
   border-radius: 999px;
-  /* Its own colour (2026-11-20): the helper is a lead-level session, so the button wears the lead role colour and
-     stands apart from the cards and panels around it. */
-  background: var(--role-lead);
+  /* Brand gradient (2026-11-20, from the planned Atelier logo): cyan → blue → violet, with a soft glow of the same hues.
+     The one coloured object on the page, so it reads as "talk to Atelier". */
+  --chat-dock-grad: linear-gradient(135deg, oklch(0.65 0.12 215) 0%, oklch(0.62 0.2 262) 52%, oklch(0.6 0.24 305) 100%);
+  background: var(--chat-dock-grad);
   color: white;
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--role-lead) 70%, black), 0 6px 20px color-mix(in oklch, var(--role-lead) 35%, transparent);
+  box-shadow: 0 0 0 1px oklch(0.55 0.2 270 / 0.55), 0 6px 22px oklch(0.62 0.2 262 / 0.38), 0 0 18px oklch(0.7 0.13 212 / 0.22);
   cursor: pointer;
-  transition: scale 140ms ease-out, background-color 150ms ease, right 200ms ease-out;
+  transition: scale 140ms ease-out, filter 150ms ease, right 200ms ease-out;
 }
 @media (hover: hover) {
   .chat-dock-fab:hover {
-    background: color-mix(in oklch, var(--role-lead) 88%, black);
+    filter: brightness(1.08) saturate(1.1);
   }
 }
 .chat-dock-fab:active {
   scale: 0.96;
 }
 .chat-dock-fab[aria-expanded="true"] {
-  background: color-mix(in oklch, var(--role-lead) 80%, black);
+  filter: brightness(0.9);
 }
 
 .chat-dock-badge {
