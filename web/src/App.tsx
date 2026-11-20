@@ -13,6 +13,7 @@ import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
 import { ActivityBell } from './activity/ActivityBell';
 import { AgentLiveHost } from './live/AgentLivePanel';
+import { ChatDock } from './chat/ChatDock';
 import { toastAction, toastResult } from './activity/actionToast';
 import { Toaster } from './components/ui/sonner';
 import type { EntryKind } from './activity/appEvents';
@@ -855,6 +856,8 @@ export function App() {
   // Every screen, the document one included, is a floating panel on the sidebar frame (#889).
   const docScreen = hasFile && section.kind === 'doc';
   const homeSection = section.kind === 'doc' ? ({ kind: 'all' } as const) : section;
+  // The project the chat dock's helper works for (#937): the one shown, else the open file's, else none.
+  const chatFolder = newFileDir(docScreen ? section : homeSection, projects, path) || null;
   // Dashboard / project home (shown outside the document screen): null = all files, else a project id (its folder path).
   const homeProject = homeSection.kind === 'project' ? homeSection.path : null;
   const showSection = useCallback(
@@ -970,6 +973,7 @@ export function App() {
         {sidebar}
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} dark={dark} />
+        <ChatDock folder={chatFolder} />
         <AppDialogHost />
         <Toaster dark={dark} />
         <SidebarInset>
