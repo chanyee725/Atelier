@@ -140,13 +140,13 @@ function Dashboard({ data, ...p }: Shared) {
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
   return (
     <>
-      <header className="flex min-h-12 shrink-0 items-center gap-3 border-b px-4 py-2">
+      <header className="flex h-(--h-bar) shrink-0 items-center gap-3 pr-3 pl-5">
         {p.narrow && (
           <SidebarTrigger aria-label="메뉴 열기">
             <Menu className="size-[17px]" />
           </SidebarTrigger>
         )}
-        <h1 className="m-0 shrink-0 text-[15px] font-semibold">대시보드</h1>
+        <h1 className="m-0 shrink-0 text-[15px] font-semibold tracking-[-0.01em]">대시보드</h1>
         <span className="ml-auto">{p.bell}</span>
       </header>
       <ApprovalCard onOpen={p.onOpen} />

@@ -1,5 +1,6 @@
 // Shared dashboard primitives for the home dashboard (#685) and the project dashboard (#686).
-// Quiet panels on the app's own tokens: hairline border, no shadow, one radius step below the app's.
+// Quiet panels on the app's own tokens (#889 refresh): card surface with the ink ring, 10px corners, a header that
+// runs straight into its first row (rows carry their own top rule), inner tiles one paper step down on --background.
 // API is additive-only: other screens import these, so props are never renamed or removed.
 import { useId, type ReactNode } from 'react';
 import { cn } from '../../lib/utils';
@@ -17,7 +18,7 @@ export function DashGrid({ children, className, ratio = '1fr 1fr', fill }: { chi
     <div className={cn('@container flex grow flex-col', fill && 'min-h-0')}>
       <div
         className={cn(
-          'dash-grid flex grow flex-col gap-4 p-4 *:last:grow @min-[880px]:grid @min-[880px]:[grid-template-columns:var(--dash-cols)]',
+          'dash-grid flex grow flex-col gap-4 px-5 pt-1 pb-5 *:last:grow @min-[880px]:grid @min-[880px]:[grid-template-columns:var(--dash-cols)]',
           fill && '@min-[880px]:min-h-0 @min-[880px]:grid-rows-[minmax(0,1fr)]',
           className,
         )}
@@ -80,7 +81,7 @@ export function Card({ title, count, actions, hint, children, className, flush, 
       data-card={id}
       style={share}
       className={cn(
-        'min-w-0 overflow-hidden rounded-lg border bg-card text-card-foreground',
+        'card-surface min-w-0 overflow-hidden',
         scroll && 'flex flex-col',
         fill !== undefined && '@min-[880px]:flex @min-[880px]:min-h-30 @min-[880px]:flex-col @min-[880px]:[flex:var(--card-fill)_1_0%]',
         className,
@@ -102,7 +103,7 @@ export function Card({ title, count, actions, hint, children, className, flush, 
 
 export function CardHeader({ id, title, count, actions, hint, lead }: { id?: string; title: ReactNode; count?: number; actions?: ReactNode; hint?: ReactNode; lead?: ReactNode }) {
   return (
-    <header className="flex min-h-[39px] items-center gap-2 border-b px-4 py-1.5">
+    <header className="flex min-h-[44px] items-center gap-2 px-4 pt-2.5 pb-1.5">
       <div className={cn('min-w-0', lead && 'sr-only')}>
         <h2 id={id} className="m-0 flex items-baseline gap-2 text-[13px] font-semibold">
           <span className="truncate">{title}</span>
@@ -119,7 +120,7 @@ export function CardHeader({ id, title, count, actions, hint, lead }: { id?: str
 /** A list of rows in a flush card. */
 export function CardList({ children, label }: { children: ReactNode; label?: string }) {
   return (
-    <ul aria-label={label} className="m-0 list-none divide-y p-0">
+    <ul aria-label={label} className="m-0 list-none p-0 *:border-t">
       {children}
     </ul>
   );
@@ -157,7 +158,7 @@ export function CardTile({ icon, title, sub, meta, onClick, href, className, dat
     </>
   );
   // With a footer the frame (border) moves to the cell and the target fills its top part.
-  const cls = cn('grid w-full min-w-0 content-start gap-1 rounded-md px-3 py-2 text-left', footer ? 'grow' : 'h-full border');
+  const cls = cn('grid w-full min-w-0 content-start gap-1 rounded-card px-3 py-2 text-left', footer ? 'grow' : 'h-full bg-background');
   const hit = 'hover:bg-accent/60 focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
   const target = href ? (
     <a href={href} target="_blank" rel="noreferrer" className={cn(cls, hit, 'text-inherit no-underline')}>{body}</a>
@@ -168,7 +169,7 @@ export function CardTile({ icon, title, sub, meta, onClick, href, className, dat
   );
   return (
     // An open <details> in the footer widens the tile to the whole row, so its list is not squeezed into a third.
-    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-md border has-[details[open]]:col-span-full', className)}>
+    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-card bg-background has-[details[open]]:col-span-full', className)}>
       {target}
       {footer}
     </li>
@@ -209,7 +210,7 @@ export function CardRow({ icon, title, sub, meta, onClick, href, className, data
 export function Stat({ value, label, tone }: { value: ReactNode; label: ReactNode; tone?: keyof typeof TONE }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-1.5 text-xl leading-7 font-semibold tabular-nums">
+      <div className="flex items-center gap-1.5 text-xl leading-7 font-semibold tracking-title tabular-nums">
         {tone && <span aria-hidden className={cn('size-1.5 rounded-full', TONE[tone])} />}
         {value}
       </div>
