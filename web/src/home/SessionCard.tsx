@@ -1,6 +1,6 @@
 // The live-session card shared by the home 대시보드 and the 세션 보드 (#919), and the grid that lays them out.
 import { type ReactNode } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, LoaderCircle } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { cn } from '../lib/utils';
 import { AgentTag, RoleBadge } from './AgentPanel';
@@ -45,9 +45,9 @@ export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent
   const state = agentStateLabel(a);
   // Second line (refresh mock, #889): the plan step, else what it does now, else the file it holds.
   const detail = a.step || a.statusLabel || null;
-  // Only the dot carries the working colour: 12px text-ok misses contrast on the light theme.
+  // Working shows a loader icon; waiting gets the amber dot, idle a muted one (12px text-ok misses contrast on light).
   const tone = busy ? 'text-foreground' : look ? 'text-warn' : 'text-muted-foreground';
-  const dotTone = busy ? 'bg-ok' : look ? 'bg-warn' : 'bg-muted-foreground';
+  const dotTone = look ? 'bg-warn' : 'bg-muted-foreground';
   return (
     <li
       data-agent={a.sid}
@@ -75,7 +75,12 @@ export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent
             )}
             <RoleBadge agent={a} className="shrink-0" />
             <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
-              <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, busy && 'is-on', !busy && !look && 'opacity-60')} />
+              {/* Working reads as a turning loader (2026-11-20), not a coloured dot; waiting and idle keep their dots. */}
+              {busy ? (
+                <LoaderCircle aria-hidden className="size-3.5 shrink-0 text-muted-foreground motion-safe:animate-spin" />
+              ) : (
+                <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, !look && 'opacity-60')} />
+              )}
               {state}
             </span>
           </span>
