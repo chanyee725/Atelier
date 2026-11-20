@@ -173,7 +173,7 @@ function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: 
           <div>
             <dt>지금</dt>
             {cur ? (
-              <dd className="agent-live-row">
+              <dd className="agent-live-row agent-live-current">
                 <span className="shrink-0">{cur.label}</span>
                 <span className="agent-live-target" title={cur.target}>{middle(cur.target)}</span>
                 <span className="agent-live-time">{clock(now - cur.at)}</span>
@@ -237,7 +237,10 @@ function ActionRow({ a }: { a: LiveAction }) {
 function Files({ files, now, onOpenFile }: { files: LiveFile[]; now: number; onOpenFile: (path: string) => void }) {
   return (
     <section>
-      <h3>건드린 파일{files.length ? ` (${files.length})` : ''}</h3>
+      <h3>
+        건드린 파일
+        {files.length > 0 && <> <span className="agent-live-count">{files.length}개</span></>}
+      </h3>
       {files.length ? (
         <ul className="agent-live-list">
           {files.map((f) => (

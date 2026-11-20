@@ -34,12 +34,13 @@ export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: bool
 
 export type FeedItem = { id: string; text: string; when: string; unread: boolean; file: string; color?: string; kind: ActivityEvent['kind'] };
 
-/** "방금", "3분 전", "2시간 전", else the date ("11월 16일"). */
+/** "방금", "3분 전", "2시간 전", "3일 전" within 7 days (#889), else the date ("11월 16일"). */
 export function whenText(ms: number, at: number): string {
   const s = Math.floor(Math.max(ms, 0) / 1000);
   if (s < 30) return '방금';
   if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}분 전`;
   if (s < 86_400) return `${Math.floor(s / 3600)}시간 전`;
+  if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}일 전`;
   const d = new Date(at);
   return `${d.getMonth() + 1}월 ${d.getDate()}일`;
 }
