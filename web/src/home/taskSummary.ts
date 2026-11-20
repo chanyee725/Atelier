@@ -1,10 +1,13 @@
 // What a session works on, as one short line for its card (#912): `fix — #886 질문이 안 보이는 사람 기다림`.
 // Built from metadata only, never from the transcript. Sources, first that answers wins:
 //   1. the session's issue (its `issue`, else the number its branch names) with the issue title from GET /api/issues;
-//   2. an open task on the board (set_task) owned by this session, else one of its lead's open tasks;
+//   2. an open task on the board (set_task) owned by this session;
 //   3. the branch name (`fix/886-hidden-question` -> `fix`, `#886 hidden question`); Dispatch's own `dispatch/…`
 //      worktree branches say nothing;
-//   4. the short summary a lead left on the session (`task`, POST /api/sessions/:id/task, at most 80 characters).
+//   4. the short summary a lead left on the session (`task`, POST /api/sessions/:id/task, at most 80 characters);
+//   5. the issue number alone, when its title is not known (issue feed off or loading);
+//   6. its lead's newest open board task (the session itself when it leads). Last because it is the team's work, not
+//      this session's: ahead of 4 and 5 it would put one title on every teammate and hide what a lead wrote.
 // The type (fix, feat, chore, docs, review) comes from the branch prefix, else from the reviewer role.
 // Pure functions only, so tests run without a browser.
 import { issueOfBranch } from '../../../shared/dispatch/issue-branch.js';
@@ -46,14 +49,18 @@ export function branchText(branch: string | null | undefined): string | null {
   return text ? clean(text) : null;
 }
 
-/** The newest open board task of the session (by id or name), else of its lead (the session itself when it leads). */
+const openTasks = (tasks: readonly BoardTask[]) => tasks.filter((t) => OPEN_STAGES.has(t.stage) && t.title.trim());
+const newest = (list: BoardTask[]) => list.reduce<BoardTask | null>((a, b) => (!a || b.updatedAt > a.updatedAt ? b : a), null);
+
+/** The newest open board task the session owns (by id or name). */
 export function boardTaskOf(s: SummarySession, tasks: readonly BoardTask[]): BoardTask | null {
-  const open = tasks.filter((t) => OPEN_STAGES.has(t.stage) && t.title.trim());
-  const newest = (list: BoardTask[]) => list.reduce<BoardTask | null>((a, b) => (!a || b.updatedAt > a.updatedAt ? b : a), null);
-  const own = newest(open.filter((t) => t.owner != null && (t.owner === s.id || t.owner === s.name)));
-  if (own) return own;
+  return newest(openTasks(tasks).filter((t) => t.owner != null && (t.owner === s.id || t.owner === s.name)));
+}
+
+/** The newest open board task of the session's lead (the session itself when it leads). */
+export function leadTaskOf(s: SummarySession, tasks: readonly BoardTask[]): BoardTask | null {
   const lead = s.role === 'lead' ? s.id : s.parent;
-  return lead ? newest(open.filter((t) => t.lead === lead)) : null;
+  return lead ? newest(openTasks(tasks).filter((t) => t.lead === lead)) : null;
 }
 
 /**
@@ -75,8 +82,9 @@ export function taskSummary(
   if (b) return { kind, text: b, from: 'branch' };
   const own = s.task ? clean(s.task) : '';
   if (own) return { kind, text: own, from: 'task' };
-  // An issue whose title is not known yet (issue feed off or loading) still says which issue.
-  return n ? { kind, text: `#${n}`, from: 'issue' } : null;
+  if (n) return { kind, text: `#${n}`, from: 'issue' };
+  const lt = leadTaskOf(s, tasks);
+  return lt ? { kind, text: clean(lt.title), from: 'board' } : null;
 }
 
 /** The summary as one string (`fix — #886 …`), for a title attribute or an accessible name. */

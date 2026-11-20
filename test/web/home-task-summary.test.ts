@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardTaskOf, branchText, issueTitles, summaryKind, summaryLine, taskSummary, type SummarySession } from '../../web/src/home/taskSummary.ts';
+import { boardTaskOf, leadTaskOf, branchText, issueTitles, summaryKind, summaryLine, taskSummary, type SummarySession } from '../../web/src/home/taskSummary.ts';
 import type { BoardTask } from '../../web/src/dispatch/types.ts';
 
 const s = (over: Partial<SummarySession> = {}): SummarySession =>
@@ -21,18 +21,25 @@ test('an issue named only by the branch gets its title and the branch type', () 
   assert.equal(summaryLine(x!), 'fix — #886 질문이 안 보이는 사람 기다림');
 });
 
-test('board: own open task, else the lead\'s newest open task; done and blocked tasks are skipped', () => {
+test('board: own open task; done and blocked tasks are skipped', () => {
   const tasks = [
     task({ id: 'a', owner: 'Otto', title: 'done one', stage: 'done', updatedAt: 9 }),
-    task({ id: 'b', lead: 'lead-1', title: 'lead old', updatedAt: 1 }),
-    task({ id: 'c', lead: 'lead-1', title: 'lead new', updatedAt: 5 }),
-    task({ id: 'd', lead: 'lead-1', title: 'lead blocked', stage: 'blocked', updatedAt: 8 }),
+    task({ id: 'b', owner: 'Otto', title: 'old', updatedAt: 1 }),
+    task({ id: 'c', owner: 'id-1', title: 'mine', updatedAt: 5 }),
+    task({ id: 'd', owner: 'Otto', title: 'blocked', stage: 'blocked', updatedAt: 8 }),
   ];
-  assert.equal(boardTaskOf(s(), tasks)?.title, 'lead new');
-  const mine = [...tasks, task({ id: 'e', owner: 'id-1', title: 'mine', updatedAt: 0 })];
-  assert.deepEqual(taskSummary(s(), none, mine), { kind: null, text: 'mine', from: 'board' });
-  // A lead reads its own tasks.
-  assert.equal(boardTaskOf(s({ id: 'lead-1', role: 'lead', parent: null }), tasks)?.title, 'lead new');
+  assert.equal(boardTaskOf(s(), tasks)?.title, 'mine');
+  assert.deepEqual(taskSummary(s({ branch: 'fix/1-x', task: '직접' }), none, tasks), { kind: 'fix', text: 'mine', from: 'board' });
+});
+
+test('lead\'s task comes last: after the branch, the session\'s own summary and a bare issue number', () => {
+  const tasks = [task({ id: 'b', lead: 'lead-1', title: 'lead old', updatedAt: 1 }), task({ id: 'c', lead: 'lead-1', title: 'lead new', updatedAt: 5 })];
+  assert.equal(leadTaskOf(s(), tasks)?.title, 'lead new');
+  assert.equal(leadTaskOf(s({ id: 'lead-1', role: 'lead', parent: null }), tasks)?.title, 'lead new', 'a lead reads its own tasks');
+  assert.deepEqual(taskSummary(s(), none, tasks), { kind: null, text: 'lead new', from: 'board' });
+  assert.equal(taskSummary(s({ task: '직접' }), none, tasks)!.text, '직접');
+  assert.equal(taskSummary(s({ issue: 7 }), none, tasks)!.text, '#7');
+  assert.equal(taskSummary(s({ branch: 'feat/x-y' }), none, tasks)!.text, 'x y');
 });
 
 test('branch inference: type, number and words; Dispatch worktree branches say nothing', () => {

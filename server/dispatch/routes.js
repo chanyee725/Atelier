@@ -173,7 +173,7 @@ export function routeTable(d) {
     }],
     ["POST", /^\/api\/tasks\/([\w-]+)\/remove$/, async ([id]) => { hub.removeTask(id); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/to-lead$/, async ([id], b) => { hub.messageLead(id, required(b?.text)); return { ok: true }; }],
-    ["POST", /^\/api\/sessions\/([\w-]+)\/task$/, async ([id], b) => { hub.setTask(id, typeof b?.task === "string" ? b.task : ""); return { ok: true }; }],
+    ["POST", /^\/api\/sessions\/([\w-]+)\/task$/, async ([id], b) => { hub.setSessionTask(id, typeof b?.task === "string" ? b.task : ""); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/parent$/, async ([id], b) => { hub.setParent(id, b.parent ? String(b.parent) : null); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/perm$/, async ([id], b) => { hub.setPerm(id, String(b.perm || "")); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/permission$/, async ([id], b) => {

@@ -993,7 +993,7 @@ export class Hub extends EventEmitter {
    * The short work summary a lead leaves on a session for its card (#912): one line, at most 80 characters; empty
    * clears it. Metadata only, never taken from the transcript.
    */
-  setTask(id, text) {
+  setSessionTask(id, text) {
     const s = this.get(id);
     if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
     const task = String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || null;
