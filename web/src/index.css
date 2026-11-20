@@ -430,19 +430,21 @@ body {
 }
 .doc-editor .suggestion { color: var(--muted-foreground); }
 
-/* Diagram block (#889): a ringed card on the panel step. The caption and the export buttons form its head row;
-   the picture, the run ETA and legend fill the rows under it. */
+/* Diagram block (#889): a card (the card step, not the muted panel step, #971) with a translucent ring. The caption
+   and the export buttons form its head row; the picture and the run ETA fill the rows under it. */
 .doc-diagram {
   margin: 1em 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   border-radius: var(--radius-card);
-  background: var(--background);
-  box-shadow: var(--shadow-card);
+  background: var(--card);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 10%, transparent), 0 1px 2px rgb(0 0 0 / 0.04);
   overflow: hidden;
   transition: box-shadow 150ms ease;
 }
+/* Forced colors drop box-shadow, so the ring comes back as a system-colour outline. */
+@media (forced-colors: active) { .doc-diagram { outline: 1px solid CanvasText; } }
 .doc-diagram > * { grid-column: 1 / -1; }
 .doc-diagram > figcaption, .doc-diagram > .doc-diagram-actions { grid-column: auto; grid-row: 1; }
 .doc-diagram > figcaption {
