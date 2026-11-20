@@ -7,7 +7,7 @@
 // no SessionSheet opens over the panel. Touched files link: a document opens in the editor, a code file in 작업 보기.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Check, Code, Eye, FileText, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Check, Code, Eye, FileText, Pencil, X } from 'lucide-react';
 import type { AgentLive, LiveAction, LiveFile } from '../../../shared/dispatch/live.ts';
 import type { Session, SessionState } from '../../../shared/dispatch/types.ts';
 import { fmtK, fmtUsd, stateOf, totalTok, ago } from '../dispatch/lib/format.ts';
@@ -18,6 +18,7 @@ import { cn } from '../lib/utils';
 import { clock, hhmm, middle, span, ticking, waitNote } from './format';
 import { LiveSummaryView, useNow, type SummaryData } from './AgentLiveSummary';
 import { closeAgentLive, useAgentLiveTarget, useSheetOpen } from './store';
+import { closeIssueTeam, useIssueTeamTarget } from './issueStore';
 import { useAgentLive } from './useAgentLive';
 import { AgentWorkView } from './AgentWorkView';
 import type { SessionTab } from './AgentLiveSession';
@@ -41,6 +42,7 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+  const fromTeam = useIssueTeamTarget() != null;
   const { live, session, error, loading, online, reload } = useAgentLive(sid);
   const { agents } = useAgents();
   const presence = Array.isArray(agents) ? (agents.find((a) => a.sid === sid) ?? null) : null;
@@ -102,11 +104,16 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
       }}
     >
       <header className="agent-live-head">
+        {fromTeam && (
+          <button type="button" aria-label="팀 패널로 돌아가기" data-live-back onClick={closeAgentLive} className={cn('agent-live-icon', FOCUS_RING)}>
+            <ArrowLeft aria-hidden className="size-4" />
+          </button>
+        )}
         <LiveSummaryView d={d} now={now} titleId={titleId} plain />
         {tab === 'chat' && !outside && (
           <Suspense fallback={null}><SessionActions sid={sid} onRemoved={closeAgentLive} /></Suspense>
         )}
-        <button ref={closeBtn} type="button" aria-label="닫기" onClick={closeAgentLive} className={cn('agent-live-icon', FOCUS_RING)}>
+        <button ref={closeBtn} type="button" aria-label="닫기" onClick={() => { closeAgentLive(); closeIssueTeam(); }} className={cn('agent-live-icon', FOCUS_RING)}>
           <X aria-hidden className="size-4" />
         </button>
       </header>
