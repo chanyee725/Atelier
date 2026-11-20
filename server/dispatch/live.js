@@ -107,6 +107,41 @@ function kindOf(tool, label) {
   return "other";
 }
 
+const SHELL_READERS = new Set(["cat", "head", "tail", "nl", "less", "more", "bat", "sed"]);
+/** Options that take a value as the next word, per reader. */
+const VALUE_OPTS = { head: new Set(["-n", "-c"]), tail: new Set(["-n", "-c"]), sed: new Set(["-e", "-f"]) };
+const SHELL_READ_MAX = 5;
+
+/**
+ * The files a plain shell read names (`cat a b`, `sed -n 1,20p a`, `head -n 5 a`, after optional `cd dir &&`), as
+ * `{ path, doc, edited: false }` through shownPath; [] for anything with globs, variables or substitutions.
+ */
+export function shellReadFiles(cmd, where = {}) {
+  const out = [];
+  let base = where.cwd ?? null;
+  for (const seg of String(cmd || "").split("\n")[0].split(/\s*(?:&&|;)\s*/)) {
+    const words = seg.split("|")[0].match(/'[^']*'|"[^"]*"|\S+/g) || [];
+    const [head, ...rest] = words.map(w => w.replace(/^(['"])(.*)\1$/, "$2"));
+    if (head === "cd" && rest.length === 1 && base) { base = path.resolve(base, rest[0].replace(/^~(?=\/|$)/, os.homedir())); continue; }
+    // `sed -i` writes; it is not a read.
+    if (!SHELL_READERS.has(head) || (head === "sed" && rest.some(w => /^-[^-]*i|^--in-place/.test(w)))) continue;
+    let script = head === "sed" && !rest.includes("-e");
+    for (let i = 0; i < rest.length; i++) {
+      const w = rest[i];
+      if (VALUE_OPTS[head]?.has(w)) { i++; continue; }
+      if (/^\d*[<>]/.test(w)) break;
+      if (w.startsWith("-")) continue;
+      if (/[*?$`(){}<>]/.test(w) || /^\d+$/.test(w)) continue;
+      if (script) { script = false; continue; }
+      const abs = path.isAbsolute(w) ? w : base ? path.resolve(base, w) : w;
+      const f = shownPath(abs, where);
+      if (f && !out.some(o => o.path === f.path)) out.push({ ...f, edited: false });
+      if (out.length >= SHELL_READ_MAX) return out;
+    }
+  }
+  return out;
+}
+
 /**
  * What one tool entry does: `{ kind, label, tool, target, files }`. `text` is the entry's already masked and
  * clipped text (JSON input, or a Codex shell command / edit list).
@@ -116,8 +151,12 @@ export function liveOf(name = "", text = "", where = {}) {
   const short = String(name).replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
   if (SHELLS.has(tool)) {
     const cmd = name === "shell" ? text : field(text, parse(text), ["command"]) || "";
-    const label = activityOf(tool, cmd);
-    return { kind: kindOf(tool, label), label, tool: short, target: commandTarget(cmd, where), files: [] };
+    let label = activityOf(tool, cmd);
+    let kind = kindOf(tool, label);
+    // A shell read (`cat a`, `cd dir && sed -n 1,9p a`) counts as reading its files; the first one is the target, like Read's.
+    const files = kind === "read" || kind === "command" ? shellReadFiles(cmd, where) : [];
+    if (files.length && kind === "command") [kind, label] = ["read", "코드 읽기"];
+    return { kind, label, tool: short, target: files.length ? clipTarget(files[0].path) : commandTarget(cmd, where), files };
   }
   if (name === "edit") {
     // Codex file_change: one "kind path" per line; the first file is the target.
