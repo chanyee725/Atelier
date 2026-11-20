@@ -48,11 +48,12 @@ test('feedOf: newest first, sentence, unread flag, only a safe colour', () => {
   assert.match(a.text, /^Jude가 07 서버 작성을 시작했어요$/);
 });
 
-test('whenText: 방금, minutes, hours, days, then a date from a week on', () => {
+test('whenText: 방금, minutes, hours, days within a week, then a date', () => {
   assert.equal(whenText(10_000, 0), '방금');
   assert.equal(whenText(2 * 3600_000, 0), '2시간 전');
-  assert.equal(whenText(3 * 86_400_000, Date.UTC(2026, 10, 16, 12)), '3일 전');
-  assert.match(whenText(8 * 86_400_000, Date.UTC(2026, 10, 16, 12)), /^11월 1[67]일$/);
+  assert.equal(whenText(3 * 86_400_000, 0), '3일 전');
+  assert.equal(whenText(7 * 86_400_000 - 1000, 0), '6일 전');
+  assert.match(whenText(7 * 86_400_000, Date.UTC(2026, 10, 16, 12)), /^11월 1[67]일$/);
 });
 
 test('placeFeed: under the bell with right edges lined up (top-right bell, #786), flipped above near the bottom, kept inside the viewport', () => {

@@ -29,26 +29,42 @@
   max-block-size: min(480px, calc(100dvh - 16px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 8px 12px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  padding: 6px 0 4px;
+  border: 0;
+  border-radius: 12px;
   background: var(--popover);
   color: var(--popover-foreground);
-  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  /* Refresh (#889): the edge is a translucent ring, the shadow faint. */
+  box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.1);
   font-size: 13px;
+  /* Grows out of the bell: right edges line up under it (placeFeed), so the top-right corner touches it. */
+  transform-origin: top right;
 }
-.activity-feed-title { margin: 4px 8px 6px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
-.activity-empty { margin: 8px; color: var(--muted-foreground); }
+.activity-feed:popover-open {
+  animation: activity-feed-fade 160ms ease-out both;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .activity-feed:popover-open {
+    animation: activity-feed-fade 160ms ease-out both, activity-feed-grow 160ms ease-out both;
+  }
+}
+@keyframes activity-feed-fade { from { opacity: 0; } }
+@keyframes activity-feed-grow { from { scale: 0.97; } }
+.activity-feed-title { margin: 8px 16px 6px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.activity-empty { margin: 8px 16px 12px; color: var(--muted-foreground); }
 .activity-gone { margin: 0; font-size: 12px; color: var(--muted-foreground); }
-.activity-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.activity-list { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
+.activity-list > li + li { border-top: 1px solid var(--border); }
 .activity-dot { display: block; inline-size: 8px; block-size: 8px; border-radius: 50%; background: var(--idle); translate: 0 -1px; }
 .activity-text { margin: 0; min-inline-size: 0; text-wrap: pretty; overflow-wrap: anywhere; }
 .activity-when { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* The 알림함 (#797, #811): a head with 모두 읽음 and 전체 삭제, then one row per item — who raised it (model mark,
    이름 · 역할, time), the line, and the one action 확인하기. */
-.activity-inbox-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-block: 6px 4px; }
-.activity-inbox-head .activity-feed-title { margin-block: 4px; }
+.activity-inbox-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 8px 16px; }
+/* The list's heading is the popover's title: a step larger, tracked in. */
+.activity-inbox-head .activity-feed-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--foreground); }
+.activity-list + .activity-inbox-head { border-top: 1px solid var(--border); margin-top: 4px; }
 .activity-inbox-actions { display: flex; gap: 2px; }
 .activity-inbox-action {
   display: inline-flex;
@@ -64,17 +80,19 @@
   cursor: pointer;
 }
 .activity-inbox-action svg { inline-size: 13px; block-size: 13px; }
-.activity-inbox-action:hover:not(:disabled) { background: var(--accent); color: var(--foreground); }
+@media (hover: hover) {
+  .activity-inbox-action:hover:not(:disabled) { background: var(--accent); color: var(--foreground); }
+}
 .activity-inbox-action:disabled { opacity: 0.5; cursor: default; }
 .activity-inbox-action:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .activity-inbox-row {
   display: grid;
   grid-template-columns: 28px 1fr;
   gap: 10px;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 11px 16px;
 }
 .activity-inbox-row[data-unread] { background: color-mix(in oklab, var(--primary) 7%, transparent); }
+.activity-inbox-row:not([data-unread]) .activity-name { font-weight: 500; }
 .activity-mark {
   display: grid;
   place-items: center;
@@ -93,7 +111,7 @@
 .activity-check {
   margin-block-start: 4px;
   padding: 4px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--input);
   border-radius: 6px;
   background: none;
   color: var(--foreground);
@@ -103,7 +121,12 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.activity-check:hover { background: var(--accent); }
+@media (hover: hover) {
+  .activity-check:hover { background: var(--accent); }
+}
+/* Press feedback on the feed's buttons (#889): scale only, never `all`. */
+.activity-feed button { transition: scale 140ms ease-out, background-color 150ms ease; }
+.activity-feed button:active:not(:disabled) { scale: 0.97; }
 .activity-check:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 /* Plans waiting for 시작하기 (#786): what and where on the left, 확인하기 (opens the plan's confirm) on the right. */
@@ -112,7 +135,7 @@
   grid-template-columns: 8px 1fr auto;
   align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 11px 16px;
 }
 .activity-plan .activity-dot { background: var(--primary); }
 .activity-plan .activity-check { margin: 0; }
