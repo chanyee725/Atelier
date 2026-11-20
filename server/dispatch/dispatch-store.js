@@ -5,8 +5,9 @@ import { stateLayout } from "./paths.js";
 // Persists session metadata and usage totals to <project>/.atelier/state.json (paths.js). Transcripts are
 // never written: the Hub keeps them in memory only. Free text that came from a person or a CLI is
 // kept in memory and left out of the file: `last` (a clip of the latest reply), `prompt` (the role
-// prompt, read from the role again after a restart) and `error` (CLI error text).
-const MEMORY_ONLY = ["last", "prompt", "error"];
+// prompt, read from the role again after a restart), `error` (CLI error text) and `ask` (the question
+// a reply ends with, #886).
+const MEMORY_ONLY = ["last", "prompt", "error", "ask"];
 
 export function diskView(data) {
   const sessions = {};

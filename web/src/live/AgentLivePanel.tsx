@@ -2,7 +2,8 @@
 // on the right edge (a bottom sheet under 720px). The page stays usable behind it. One panel at a time; opening another
 // agent swaps the content. Closes with ✕, Esc while focus is inside, or the same trigger again; focus then goes back
 // to the trigger (store.ts). Hidden while a SessionSheet (modal) is open and shown again when it closes.
-// Shows metadata only (tool labels, short targets, shown paths, numbers), never the session folder or transcript text.
+// Shows metadata only (tool labels, short targets, shown paths, numbers), never the session folder or transcript text;
+// the one exception is the redacted question a waiting session asks (`ask`, #886).
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Eye, FileText, Pencil, X } from 'lucide-react';
 import type { AgentLive, LiveAction, LiveFile } from '../../../shared/dispatch/live.ts';
@@ -13,7 +14,7 @@ import { useAgents } from '../home/useAgents';
 import type { AgentPresence } from '../home/agents';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { clock, hhmm, middle, span, ticking } from './format';
+import { clock, hhmm, middle, span, ticking, waitNote } from './format';
 import { LiveSummaryView, useNow, type SummaryData } from './AgentLiveSummary';
 import { closeAgentLive, useAgentLiveTarget, useSheetOpen } from './store';
 import { useAgentLive } from './useAgentLive';
@@ -157,7 +158,7 @@ function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: 
     <>
       {state === 'waiting' && (
         <section className="agent-live-ask">
-          <p>권한 요청이 있어요</p>
+          <p className="line-clamp-3 min-w-0 break-words" title={waitNote(session)}>{waitNote(session)}</p>
           <button type="button" onClick={onChat} className={cn('agent-live-btn', FOCUS_RING)}>대화 보기</button>
         </section>
       )}
@@ -172,7 +173,7 @@ function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: 
           <div>
             <dt>지금</dt>
             {cur ? (
-              <dd className="agent-live-row">
+              <dd className="agent-live-row agent-live-current">
                 <span className="shrink-0">{cur.label}</span>
                 <span className="agent-live-target" title={cur.target}>{middle(cur.target)}</span>
                 <span className="agent-live-time">{clock(now - cur.at)}</span>
@@ -236,7 +237,10 @@ function ActionRow({ a }: { a: LiveAction }) {
 function Files({ files, now, onOpenFile }: { files: LiveFile[]; now: number; onOpenFile: (path: string) => void }) {
   return (
     <section>
-      <h3>건드린 파일{files.length ? ` (${files.length})` : ''}</h3>
+      <h3>
+        건드린 파일
+        {files.length > 0 && <> <span className="agent-live-count">{files.length}개</span></>}
+      </h3>
       {files.length ? (
         <ul className="agent-live-list">
           {files.map((f) => (

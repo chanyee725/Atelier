@@ -55,3 +55,12 @@ export function liveStateTone(state: SessionState): 'ok' | 'warn' | 'bad' | 'idl
 
 /** Whether the clocks still move: frozen once the session ended or stopped. */
 export const ticking = (state: SessionState) => state !== 'done' && state !== 'failed';
+
+/**
+ * What a waiting session waits for (#886): a permission prompt, or the question its turn ended with (the server's
+ * redacted `ask`). Never blank, and never "권한 요청" for a question.
+ */
+export function waitNote(s: { pending?: readonly unknown[]; status?: string; ask?: string | null } | null): string {
+  if (s && ((s.pending?.length ?? 0) > 0 || s.status === 'waiting')) return '권한 요청이 있어요';
+  return s?.ask ? `답을 기다려요: ${s.ask}` : '답을 기다려요(내용 없음)';
+}

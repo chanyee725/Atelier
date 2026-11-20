@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { agentFromHash, closeAgentLive, followHash, openAgentLive, resetLiveStore, withAgent } from '../../web/src/live/store.ts';
 import { eventFor } from '../../web/src/live/useAgentLive.ts';
 import { Hub } from '../../server/dispatch/hub.js';
-import { clock, liveStateLabel, middle, span } from '../../web/src/live/format.ts';
+import { clock, liveStateLabel, middle, span, waitNote } from '../../web/src/live/format.ts';
 
 test('the agent= hash part is read and written without touching the file part', () => {
   assert.equal(agentFromHash('#file=a.dpx.json&agent=s1'), 's1');
@@ -87,4 +87,12 @@ test('display formats', () => {
   assert.equal(liveStateLabel('working', false), '생각 중');
   assert.equal(liveStateLabel('working', true), '작업 중');
   assert.equal(liveStateLabel('done', false), '끝났어요');
+});
+
+test('waitNote: a question is not called a permission prompt, and is never blank (#886)', () => {
+  assert.equal(waitNote({ pending: [], status: 'idle', ask: '머지할까요?' }), '답을 기다려요: 머지할까요?');
+  assert.equal(waitNote({ pending: [{}], status: 'running' }), '권한 요청이 있어요');
+  assert.equal(waitNote({ pending: [], status: 'waiting' }), '권한 요청이 있어요');
+  assert.equal(waitNote({ pending: [], status: 'idle' }), '답을 기다려요(내용 없음)');
+  assert.equal(waitNote(null), '답을 기다려요(내용 없음)');
 });

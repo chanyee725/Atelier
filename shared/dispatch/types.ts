@@ -48,6 +48,9 @@ export interface Session {
   startedAt: number;
   updatedAt: number;
   last: string;
+  /** The question the last turn ended with (redacted, at most 200 characters) while the session waits for the
+   *  user's answer; null or absent otherwise (#886). */
+  ask?: string | null;
   turns: number;
   ctx: number;
   ctxWindow: number;

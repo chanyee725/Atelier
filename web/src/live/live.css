@@ -1,9 +1,9 @@
 /* Agent live view panel (E559, #728; docs/design/agent-live-view.md §1-2). A non-modal top-layer dialog docked to the
    right edge under the top bar, 400px; a bottom sheet (full width, 70vh) under 720px. App chrome tokens only; hue
-   only for status. */
+   only for status. Refresh (#889): a floating panel 8px off the edges, radius 12, its edge a translucent ring. */
 .agent-live {
   position: fixed;
-  inset: var(--h-bar, 52px) 0 0 auto;
+  inset: calc(var(--h-bar, 52px) + 8px) 8px 8px auto;
   width: min(400px, 100vw - 2rem);
   height: auto;
   max-height: none;
@@ -11,28 +11,62 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-left: 1px solid var(--border);
+  border-radius: 12px;
   background: var(--card);
   color: var(--card-foreground);
-  box-shadow: -8px 0 28px rgb(0 0 0 / 0.18);
+  box-shadow: 0 0 0 1px var(--border), 0 8px 28px rgb(0 0 0 / 0.12);
   font-size: 13px;
   overscroll-behavior: contain;
+  overflow: hidden;
 }
 .agent-live:popover-open {
   display: flex;
   flex-direction: column;
+  /* Enters from the right edge it docks to; under reduced motion only the fade stays. */
+  animation: agent-live-fade 180ms ease-out both;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .agent-live:popover-open {
+    animation: agent-live-fade 180ms ease-out both, agent-live-slide 180ms ease-out both;
+  }
+}
+@keyframes agent-live-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes agent-live-slide {
+  from {
+    translate: 12px 0;
+  }
 }
 @media (max-width: 719.98px) {
   .agent-live {
     inset: auto 0 0 0;
     width: 100%;
     height: 70vh;
-    border-left: 0;
-    border-top: 1px solid var(--border);
     border-radius: 12px 12px 0 0;
-    box-shadow: 0 -8px 28px rgb(0 0 0 / 0.18);
+    box-shadow: 0 0 0 1px var(--border), 0 -8px 28px rgb(0 0 0 / 0.12);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .agent-live:popover-open {
+      animation: agent-live-fade 180ms ease-out both, agent-live-rise 180ms ease-out both;
+    }
   }
 }
+@keyframes agent-live-rise {
+  from {
+    translate: 0 16px;
+  }
+}
+/* Press, hover and focus for the panel's own controls (#889): hover only where a pointer can hover. */
+.agent-live :is(.agent-live-icon, .agent-live-btn) {
+  transition: scale 140ms ease-out, background-color 150ms ease;
+}
+.agent-live :is(.agent-live-icon, .agent-live-btn):active {
+  scale: 0.97;
+}
+/* Focus: FOCUS_RING on each control (2px --primary outline). */
 .agent-live-head {
   display: flex;
   align-items: flex-start;
@@ -55,9 +89,11 @@
   background: none;
   color: var(--muted-foreground);
 }
-.agent-live-icon:hover {
-  background: var(--accent);
-  color: var(--foreground);
+@media (hover: hover) {
+  .agent-live-icon:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
 }
 .agent-live-offline {
   margin: 0;
@@ -96,9 +132,20 @@
 }
 .agent-live h3 {
   margin: 0;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.agent-live h3 .agent-live-count {
   color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+/* The agent's name is the panel's title: a step larger, tracked in. */
+.agent-live-head h2 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
 }
 .agent-live-muted {
   margin: 0;
@@ -147,6 +194,17 @@
 .agent-live-file {
   min-height: 30px;
 }
+/* The running tool: the one row that stands out, on the sunken tone. */
+.agent-live-now .agent-live-current {
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-radius: 6px;
+  background: var(--muted);
+}
+.agent-live-target {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
 .agent-live-at {
   flex: 0 0 40px;
   color: var(--muted-foreground);
@@ -181,10 +239,8 @@
 .agent-live-list > li {
   animation: agent-live-in 120ms ease-out;
 }
-@media (prefers-reduced-motion: reduce) {
-  .agent-live-list > li {
-    animation: none;
-  }
+.agent-live-list > li + li {
+  border-top: 1px solid var(--border);
 }
 @keyframes agent-live-in {
   from {
@@ -231,21 +287,27 @@
   text-overflow: ellipsis;
   cursor: pointer;
 }
-.agent-live-link:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  .agent-live-link:hover {
+    text-decoration: underline;
+  }
 }
 .agent-live-btn {
   justify-self: start;
   height: 28px;
   padding: 0 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--input);
   border-radius: 6px;
-  background: var(--background);
+  background: var(--card);
   color: var(--foreground);
   font: inherit;
+  font-size: 12px;
+  font-weight: 500;
 }
-.agent-live-btn:hover {
-  background: var(--accent);
+@media (hover: hover) {
+  .agent-live-btn:hover {
+    background: var(--accent);
+  }
 }
 .agent-live-foot {
   padding: 12px 16px;

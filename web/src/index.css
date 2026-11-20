@@ -276,6 +276,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sunken: var(--sunken);
+  --color-line-strong: var(--line-strong);
   --color-ok: var(--ok);
   --color-merged: var(--merged);
   --color-warn: var(--warn);
@@ -314,6 +316,12 @@ body {
     --tw-enter-translate-x: 0 !important; --tw-enter-translate-y: 0 !important;
     --tw-exit-translate-x: 0 !important; --tw-exit-translate-y: 0 !important;
     --tw-enter-rotate: 0 !important; --tw-exit-rotate: 0 !important;
+  }
+  /* Tailwind transitions that would move something (chevrons, switch thumbs, bars) keep only their colour and fade.
+     Unlayered, so it outranks the utilities layer. */
+  .transition, .transition-all, .transition-transform {
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke,
+      opacity, box-shadow;
   }
 }
 /* A card (#889): card surface, 10px corners, the ink ring and a faint shadow. */
@@ -608,8 +616,8 @@ body {
 .run-layer[data-motion-inside] .run-motion { bottom: auto; top: 4px; right: 4px; margin: 0; }
 @media (hover: hover) { .run-motion:hover { color: var(--foreground); background: var(--accent); } }
 .run-motion:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
-/* Short colour fade on the document's and overlay's own controls (#546). Under reduced motion the global rule above
-   cuts it to 0.01ms, so colours change at once there (#564). */
+/* Short colour fade on the document's and overlay's own controls (#546). Colour is not movement, so it stays under
+   reduced motion too (#889). */
 :is(.doc-diagram-actions button, .doc-slash button, .doc-table-bar button, .doc-outline li > button, .doc-wikilink,
   .doc-diagram-pic, .doc-h-link, .run-motion) {
   transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;

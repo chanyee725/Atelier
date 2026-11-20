@@ -66,7 +66,7 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '', fi
         <>
           {/* Filled: this box takes the card's spare height, so the pager below sits on the card's bottom edge. */}
           <div ref={box} data-issues-box className={cn(fill !== undefined && '@min-[880px]:min-h-0 @min-[880px]:flex-1 @min-[880px]:overflow-y-auto')}>
-            <ul aria-label="열린 이슈" className="m-0 list-none divide-y p-0">
+            <ul aria-label="열린 이슈" className="m-0 list-none p-0 *:border-t">
               {paged.shown.map((r) => (
                 <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
               ))}
@@ -89,7 +89,7 @@ function liveOf(pr: IssueRow['prs'][number] | undefined, prs: Feed<ReadonlyMap<s
 function StateChip({ row }: { row: IssueRow }) {
   const st = ISSUE_STATE[row.state];
   return (
-    <span data-issue-state={row.state} className="inline-flex h-6 w-[5.25rem] shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-xs text-muted-foreground">
+    <span data-issue-state={row.state} className="inline-flex h-6 w-[5.25rem] shrink-0 items-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', TONE[st.tone], row.state === 'progress' && 'motion-safe:animate-pulse')} />
       <span className="truncate">{st.label}</span>
     </span>

@@ -11,7 +11,7 @@ import { cn } from '../lib/utils';
 import { DiffView } from './DiffView';
 import { ModelTag, StatusBadge } from './parts';
 import { fmtK, fmtUsd, pct, permLabel, providerName, stateOf } from './lib/format.ts';
-import { questionOf } from './lib/question.ts';
+import { answerQuestion } from './lib/question.ts';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
@@ -168,20 +168,14 @@ function PermissionCard({ s, p, report }: { s: Session; p: Pending; report: Repo
 }
 
 /**
- * "답할 것": the question the last turn ended with, from the transcript in this tab (or the session's last line).
+ * "답할 것": the question the last turn ended with, from the transcript in this tab, else the server's `ask` (#886).
+ * Never hidden while the session waits: without any question it says so instead of showing nothing.
  * A choice fills the message box so the person can check it before sending.
  */
 function AnswerCard({ s, onPick }: { s: Session; onPick: (text: string) => void }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   if (!awaitsAnswer(s)) return null;
-  let text: string | undefined;
-  for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
-    const e = entries![i]!;
-    if (e.kind === 'user') break;
-    if (e.kind === 'assistant') { text = e.text; break; }
-  }
-  const q = questionOf(text ?? s.last);
-  if (!q) return null;
+  const q = answerQuestion(s, entries);
   return (
     <section aria-label="답할 것" className="mx-(--overlay-x) mt-3 rounded-xl border border-warn/60 bg-warn/5 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-warn">
