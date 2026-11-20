@@ -71,6 +71,20 @@ test("the transcript ring buffer, errors and the task board get masked text", as
   assert.equal(t.note, `uses ${MASK}`);
 });
 
+test("state.json drops the question a reply ends with (ask) but memory keeps it", async () => {
+  const { root, store, s } = await makeHub();
+  s.asksUser = true;
+  s.ask = "Which branch should the secret question use?";
+  const view = diskView(store.data);
+  assert.equal("ask" in view.sessions.s1, false);
+  assert.equal(view.sessions.s1.asksUser, true);
+  assert.equal(store.data.sessions.s1.ask, "Which branch should the secret question use?");
+
+  await store.flush();
+  const disk = readFileSync(path.join(root, ".atelier", "state.json"), "utf8");
+  assert.doesNotMatch(disk, /secret question/);
+});
+
 test("state.json drops prompt, error, task notes and ticket item notes", async () => {
   const { root, store, hub, s } = await makeHub();
   s.error = "CLI said something";

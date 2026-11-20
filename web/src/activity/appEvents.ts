@@ -28,6 +28,7 @@ export type AppEvent =
   | { type: 'session-started'; id: string; name: string; team: boolean; role?: string; provider?: string }
   | { type: 'session-ended'; id: string; name: string; role?: string; provider?: string }
   | { type: 'session-error'; id: string; name: string; role?: string; provider?: string }
+  | { type: 'session-asks'; id: string; name: string; ask: string; since?: number; role?: string; provider?: string }
   | { type: 'model-connected'; provider: string; name: string }
   | { type: 'model-disconnected'; provider: string; name: string }
   | { type: 'model-error'; provider: string; name: string }
@@ -47,6 +48,8 @@ export interface AppToast {
   category: ToastCategory;
   tone: ToastTone;
   text: string;
+  /** What the 알림함 keeps instead of `text` when the toast says more than metadata (a session's question, #886). */
+  inboxText?: string;
   /** Errors stay until dismissed; the rest close by themselves. */
   persist: boolean;
   target?: ToastTarget;
@@ -58,6 +61,12 @@ const NOUN: Record<EntryKind, string> = { doc: '문서', canvas: '캔버스', fo
 const nameOf = (path: string) => fileStemOf(path.replace(/\/+$/, '')) || path;
 /** "‘설계’ 문서" — the entry's own name in quotes, then what it is. */
 const label = (kind: EntryKind, path: string, title?: string) => `‘${(title || nameOf(path)).slice(0, 40)}’ ${NOUN[kind]}`;
+/** A short signature of a text, so a key tells two texts apart without holding either. */
+const textSig = (t: string) => {
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
 const PR_STATE: Record<string, string> = { open: '열렸어요', merged: '병합됐어요', closed: '닫혔어요' };
 
 /** The toast for one event; null when it says nothing worth a toast (an unknown PR state). */
@@ -101,6 +110,15 @@ export function toastOf(e: AppEvent): AppToast | null {
               : info('sessions', `session-started:${e.id}`, `${e.name} 세션을 시작했어요`, { session: e.id });
       return { ...t, agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) } };
     }
+    case 'session-asks':
+      // Stays until closed: a question left unseen stalls the team (#886). 열기 goes to the session's live view.
+      // The question shows in the toast only: the 알림함 is saved to localStorage, so it and the key keep metadata.
+      return {
+        ...info('sessions', `session-asks:${e.id}:${e.since ?? textSig(e.ask)}`, `${e.name} 세션이 답을 기다려요: ${e.ask}`, { session: e.id }),
+        inboxText: `${e.name} 세션이 답을 기다려요`,
+        persist: true,
+        agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) },
+      };
     case 'model-connected':
       return info('models', `model:${e.provider}:on`, `${objectOf(e.name)} 연결했어요`);
     case 'model-disconnected':
@@ -151,7 +169,13 @@ export function parseOff(raw: string | null): Set<ToastCategory> {
 
 // ---- Dispatch state → events (sessions and providers come over SSE as whole objects; these diff them) ----
 
-type SessionLike = { id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number };
+type SessionLike = {
+  id: string; name: string; role?: string; provider?: string; parent?: string | null; status?: string; state?: string; startedAt?: number;
+  /** The question the session waits on the user for (server `ask`, redacted), and when the state began. */
+  ask?: string | null; stateSince?: number;
+};
+/** The question a session newly waits on the user for, or null. */
+const askOf = (s: SessionLike) => (s.state === 'waiting' && s.ask ? s.ask : null);
 type ProviderLike = { name?: string; connected?: boolean; error?: string | null };
 
 /** A session counts as new only when it started this recently (a reconnect re-sends older ones). */
@@ -169,6 +193,8 @@ export function sessionEvents(prev: SessionLike | undefined, next: SessionLike, 
   }
   if (failed(next) && !failed(prev)) return [{ type: 'session-error', ...who }];
   if (ended(next) && !ended(prev)) return [{ type: 'session-ended', ...who }];
+  const ask = askOf(next);
+  if (ask && ask !== askOf(prev)) return [{ type: 'session-asks', ...who, ask, ...(next.stateSince ? { since: next.stateSince } : {}) }];
   return [];
 }
 

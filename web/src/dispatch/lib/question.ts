@@ -53,3 +53,24 @@ export function questionOf(text: string | null | undefined): Question | null {
   if (!options.length && !OPEN.test(summary)) return { summary, options: ['네, 진행해 주세요', '아니요, 멈춰 주세요'] };
   return { summary, options };
 }
+
+/** Shown when a session waits for an answer but no question can be read (#886): never an empty card. */
+export const NO_QUESTION: Question = { summary: '질문 내용을 찾지 못했어요. 대화의 마지막 메시지를 보고 답해 주세요.', options: [] };
+
+/**
+ * The "답할 것" card's question: from the last assistant entry of this turn in the tab's transcript, else from the
+ * server's `ask` (kept for the session even when the transcript is not loaded and `last` cut the question off), else
+ * NO_QUESTION.
+ */
+export function answerQuestion(
+  s: { ask?: string | null },
+  entries: readonly { kind: string; text: string }[] | undefined,
+): Question {
+  let text: string | undefined;
+  for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
+    const e = entries![i]!;
+    if (e.kind === 'user') break;
+    if (e.kind === 'assistant') { text = e.text; break; }
+  }
+  return questionOf(text) ?? questionOf(s.ask) ?? (s.ask ? { summary: clip(s.ask, 240), options: [] } : NO_QUESTION);
+}

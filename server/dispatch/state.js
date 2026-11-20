@@ -9,7 +9,7 @@ import { createHash } from "node:crypto";
 //   failed   — the last turn ended in an error
 //   resting  — turn finished, nothing asked; waiting for the next instruction
 //   done     — closed
-import { askIndex, linesOf } from "../../shared/dispatch/ask.js";
+import { askIndex, askLineOf, linesOf } from "../../shared/dispatch/ask.js";
 
 export const STATES = ["working", "waiting", "stuck", "failed", "resting", "done"];
 
@@ -18,6 +18,9 @@ export function asksUser(text) {
   if (!text) return false;
   return askIndex(linesOf(text)) >= 0;
 }
+
+/** The question a final answer ends with, for the session's `ask` (#886); "" when it asks nothing. */
+export const askOf = text => (text ? askLineOf(text) : "");
 
 /**
  * A session's monitoring state. `pending` is the number of open permission prompts.
@@ -29,7 +32,8 @@ export function sessionState(s, pending = 0) {
   if (pending > 0 || s.status === "waiting") return "waiting";
   if (s.stuck) return "stuck";
   if (s.status === "running" || s.status === "starting") return "working";
-  if (s.asksUser && !s.parent) return "waiting";
+  // Waiting on the user only with a question to show (#886): a flag without one (an older record) rests.
+  if (s.asksUser && s.ask && !s.parent) return "waiting";
   return "resting";
 }
 
@@ -61,7 +65,7 @@ export function longOver(s, cfg) {
 export function attentionOf(s, state, pending = 0, since = null) {
   switch (state) {
     case "failed": return { level: "bad", reason: "오류로 멈췄어요", since };
-    case "waiting": return { level: "warn", reason: pending > 0 || s.status === "waiting" ? "권한 승인을 기다려요" : "사용자 답을 기다려요", since };
+    case "waiting": return { level: "warn", reason: pending > 0 || s.status === "waiting" ? "권한 승인을 기다려요" : s.ask ? `답을 기다려요: ${s.ask}` : "답을 기다려요(내용 없음) · 세션 열기", since };
     case "stuck": return { level: "warn", reason: s.stuck?.label || "멈춘 것 같아요", since: s.stuck?.sinceMs ?? since };
     default:
       // Over the context guard: not stuck, but the next message starts a fresh CLI session.

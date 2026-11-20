@@ -113,7 +113,7 @@ export function itemOfToast(t: AppToast, at: number): InboxItem {
     key: t.key,
     kind: plan ? 'plan' : t.category,
     error: t.tone === 'error',
-    text: clip(t.text),
+    text: clip(t.inboxText ?? t.text),
     at,
     read: false,
     ...(plan ? { target: { plan: (t.target as { file: string }).file } } : t.target ? { target: t.target } : {}),
