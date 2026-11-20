@@ -272,7 +272,7 @@ function ActionRow({ a, link, onOpenLink }: { a: LiveAction; link: FileLink | nu
     <li className="agent-live-row" data-live-action={a.id}>
       <span className="agent-live-at">{hhmm(a.at)}</span>
       <span className="shrink-0">{a.label}</span>
-      <Target target={a.target} link={link} max={36} onOpenLink={onOpenLink} />
+      <Target target={a.target} link={link} max={60} onOpenLink={onOpenLink} />
       <span className="agent-live-ok">
         {a.ok === true ? (
           <><Check aria-hidden className="size-3.5 text-ok" /><span className="sr-only">성공</span></>
