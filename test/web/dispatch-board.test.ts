@@ -53,3 +53,14 @@ test('완료 column lists the newest first and caps at DONE_LIMIT with a hidden 
   const impl = groupByStage(Array.from({ length: 15 }, (_, i) => mk(`i${i}`, 'impl', i))).impl;
   assert.equal(visibleTasks('impl', impl, false).shown.length, 15);
 });
+
+test('taskWarn: only blocked, stuck or late tasks carry a warning (#919)', async () => {
+  const { taskWarn } = await import('../../web/src/dispatch/lib/board.ts');
+  const now = 10_000_000;
+  assert.equal(taskWarn({ stage: 'impl', note: null, stuck: null, etaAt: now + 600_000 } as never, now), null);
+  assert.equal(taskWarn({ stage: 'impl', note: null, stuck: null, etaAt: null } as never, now), null);
+  assert.deepEqual(taskWarn({ stage: 'blocked', note: '리뷰 대기', stuck: null, etaAt: null } as never, now), { text: '리뷰 대기', tone: 'bad' });
+  assert.equal(taskWarn({ stage: 'blocked', note: '', stuck: null, etaAt: null } as never, now)?.text, '막혔어요');
+  assert.deepEqual(taskWarn({ stage: 'impl', note: null, stuck: { label: '예상 20분의 1.5배' }, etaAt: null } as never, now), { text: '예상 20분의 1.5배', tone: 'warn' });
+  assert.equal(taskWarn({ stage: 'impl', note: null, stuck: null, etaAt: now - 10 * 60_000 } as never, now)?.tone, 'warn');
+});

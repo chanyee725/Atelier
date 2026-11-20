@@ -61,3 +61,14 @@ export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt'>, now: number): { t
     ? { text: `${span(left)} 남음`, late: false }
     : left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지났어요`, late: true };
 }
+
+/**
+ * The one small warning a 작업 보드 row may carry (#919): why a task is blocked, or why it is late or stuck. Quiet
+ * rows (on time, in progress) get none. `tone` picks the colour (막힘 red, 지연 amber).
+ */
+export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt'>, now: number): { text: string; tone: 'bad' | 'warn' } | null {
+  if (t.stage === 'blocked') return { text: t.note || '막혔어요', tone: 'bad' };
+  if (t.stuck) return { text: t.stuck.label, tone: 'warn' };
+  const eta = etaLine(t, now);
+  return eta?.late ? { text: `예상보다 ${eta.text}`, tone: 'warn' } : null;
+}
