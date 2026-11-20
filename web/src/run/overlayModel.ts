@@ -8,6 +8,7 @@ import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
+import { badgeRect } from '../../../shared/render/badge.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -67,7 +68,7 @@ export interface OverlayNode {
   /** Full accessible name: `Implement · 진행 · Juno(구현자) · 사람 기다림`. */
   label: string;
   color: string;
-  /** Pulsing ring (active/review). */
+  /** A session runs on it (active/review): a progress line sweeps under the node. */
   live: boolean;
   waiting: boolean;
   /** Round initial badges above the node, one per agent, overlapping (#687). */
@@ -315,4 +316,39 @@ export function legendSpot(pic: Box, size: Size, area: Size, gap = 12, below = 0
 /** SVG path data through the edge's points (straight segments; the overlay traces, it does not redraw the connector). */
 export function pathData(points: readonly Point[]): string {
   return points.map((p, i) => `${i ? 'L' : 'M'}${Math.round(p.x * 10) / 10} ${Math.round(p.y * 10) / 10}`).join('');
+}
+
+/** Gap between a node and its marks, and the label text size (scene units). */
+export const MARK_PAD = 5;
+export const MARK_FONT = 11;
+
+/** Rough text width for the label plate: Hangul and other wide characters about one em, the rest about 0.6 em. */
+export function textWidth(s: string, size = MARK_FONT): number {
+  let w = 0;
+  for (const ch of s) w += /[ᄀ-ᇿ　-鿿가-힯＀-￯]/.test(ch) ? size : ch === ' ' ? size * 0.3 : size * 0.6;
+  return Math.ceil(w);
+}
+
+export interface StepMarks {
+  /** Glyph chip on the top-right corner, the same chip as a diagram node's `badge:` (shared/render/badge.ts). */
+  chip: Rect;
+  /** "state · agent" chip under the node; none when labels are hidden (too small to read). */
+  label?: Rect & { text: string };
+  /** Running step: a thin line along the node's bottom edge, inside the box. */
+  progress?: { x1: number; x2: number; y: number };
+}
+
+/**
+ * What the run layer draws for a step (#935): only chips and a progress line, never a fill or a ring over the node,
+ * so the node keeps the diagram's own look (eraser-diagrams rules) and the state never reshapes it.
+ */
+export function stepMarks(n: Pick<OverlayNode, 'rect' | 'glyph' | 'text' | 'live'>, labels: boolean): StepMarks {
+  const { x, y, w, h } = n.rect;
+  const chip = badgeRect(x + w + MARK_PAD, y - MARK_PAD, textWidth(n.glyph));
+  const text = `${n.glyph} ${n.text}`;
+  const tw = textWidth(text) + 12;
+  const label = labels ? { x: x + w / 2 - tw / 2, y: y + h + MARK_PAD + 4, w: tw, h: 18, text } : undefined;
+  const inset = Math.min(6, w / 4);
+  const progress = n.live ? { x1: x + inset, x2: x + w - inset, y: y + h - 2 } : undefined;
+  return { chip, ...(label ? { label } : {}), ...(progress ? { progress } : {}) };
 }

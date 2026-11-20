@@ -590,12 +590,11 @@ body {
 .run-eta-time { flex: none; white-space: nowrap; }
 .run-eta-more { margin: 2px 0 0; color: var(--muted-foreground); }
 .run-layer svg { display: block; overflow: visible; }
-/* The node itself is tinted in its state colour (#687); glyph and text say the state too, never colour alone. */
-.run-fill { fill: currentColor; fill-opacity: 0.16; stroke: none; }
-.run-layer g[data-tone='failed'] .run-fill, .run-layer g[data-tone='blocked'] .run-fill { fill-opacity: 0.22; }
-.run-ring { fill: none; stroke: currentColor; stroke-width: 2; }
-.run-ring[data-view='pending'] { stroke-dasharray: 4 3; }
-.run-ring[data-view='done'] { stroke-width: 1.5; }
+/* #935: nothing covers the node, so it keeps the diagram's own look; the state shows as chips (glyph and text, never
+   colour alone) and a running step gets a thin progress line along its bottom edge. */
+.run-progress-line line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.run-progress-track { stroke-opacity: 0.25; }
+.run-progress-bar { stroke-dasharray: 50 100; }
 .run-corner rect { fill: var(--background); stroke: currentColor; stroke-width: 1.5; }
 .run-corner text { fill: currentColor; font: 600 11px var(--font-sans); }
 .run-label rect { fill: var(--background); stroke: currentColor; stroke-width: 1; }
@@ -611,28 +610,25 @@ body {
 .run-badge-more text { fill: var(--foreground); font-size: 9px; }
 .run-edge { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .run-edge[data-edge-kind='flow'] { stroke-dasharray: 6 6; }
-/* Static form (reduced motion, or paused): a thicker ring and a still dashed edge in the same colour. */
-.run-layer[data-still] .run-ring.is-live { stroke-width: 3; }
+/* Static form (reduced motion, or paused): the progress line stays half full and the dashed edge stands still. */
 @media (prefers-reduced-motion: reduce) {
-  .run-ring.is-live { stroke-width: 3; }
   .run-motion { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .run-layer:not([data-still]) .run-ring.is-live { animation: run-pulse 0.8s ease-in-out infinite alternate; }
+  .run-layer:not([data-still]) .run-progress-bar { stroke-dasharray: 35 100; animation: run-sweep 1.6s ease-in-out infinite; }
   .run-layer:not([data-still]) .run-edge[data-edge-kind='flow'] { animation: run-flow 0.9s linear infinite; }
 }
 @media (forced-colors: active) {
-  /* System colours only: no tint, rings and chips in text colour, the glyph and text carry the state. */
-  .run-fill { fill: none; }
-  .run-ring, .run-edge { stroke: CanvasText; }
-  .run-ring.is-live { stroke: Highlight; }
-  .run-layer g:is([data-tone='failed'], [data-tone='blocked']) .run-ring { stroke-width: 3; stroke-dasharray: 8 3; }
+  /* System colours only: chips in text colour, the glyph and text carry the state. */
+  .run-edge { stroke: CanvasText; }
+  .run-progress-line line { stroke: Highlight; }
   .run-corner rect, .run-label rect { fill: Canvas; stroke: CanvasText; }
   .run-corner text, .run-label text { fill: CanvasText; }
   .run-badge circle { fill: Canvas; stroke: CanvasText; stroke-width: 1.5; }
   .run-badge text { fill: CanvasText; }
 }
 @keyframes run-pulse { from { opacity: 1; } to { opacity: 0.5; } }
+@keyframes run-sweep { from { stroke-dashoffset: 35; } to { stroke-dashoffset: -100; } }
 @keyframes run-flow { to { stroke-dashoffset: -12; } }
 .run-motion {
   position: absolute; right: 0; bottom: 100%; margin-bottom: 6px; pointer-events: auto;
