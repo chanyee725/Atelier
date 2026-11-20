@@ -2,10 +2,16 @@
 // number and title with the stage chip (구현, 리뷰, 머지 대기, 머지됨), then who has it (관리자, 팀원), the PR counts,
 // a merged-of-total bar when the issue is split into several PRs, and the time left only when a board task set an ETA.
 // Quiet on purpose: the dashboard's standout is the working-session number. Reuses the dashboard's feeds; no request
-// of its own. Hidden while nothing is in progress (the 이슈 card covers the rest).
+// of its own. #975: a 이슈 | 문서 switch in the header; the tab is remembered. Always shown (empty states say so).
+import { useState } from 'react';
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Card } from './dash';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Card, EmptyState } from './dash';
+import { ActiveDocsList, useActiveDocs } from './ActiveDocsList';
+import { readActiveTab, saveActiveTab, type ActiveTab } from './activeDocs';
+import type { AgentPresence } from './agents';
+import type { ProjectInfo } from '../api';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
 import { ACTIVE_STAGE, issueEta, type ActiveIssue } from './activeIssues';
 import { useActiveIssueList } from './IssuePanel';
@@ -19,23 +25,58 @@ type Props = {
   sessions: Feed<Session[]>;
   tasks: readonly BoardTask[];
   prs: Feed<ReadonlyMap<string, PrAnswer>>;
+  project: ProjectInfo;
+  agents: AgentPresence[] | 'off' | 'failed' | null;
+  onOpen: (path: string) => void;
   now?: number;
 };
 
-export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now() }: Props) {
+const LIST = 'h-6 bg-muted p-0.5';
+const TRIGGER = 'h-5 px-2 text-xs';
+
+export function ActiveIssuesCard({ issues, sessions, tasks, prs, project, agents, onOpen, now = Date.now() }: Props) {
   // The row's panel is drawn by the dashboard's one IssuePanel (#954).
   const { list } = useActiveIssueList({ issues, sessions, tasks, prs });
   const open = useIssueTeamTarget();
-  if (!list.length) return null;
+  const docs = useActiveDocs(project, agents);
+  const [tab, setTab] = useState<ActiveTab>(() => readActiveTab());
+  const pick = (v: string) => {
+    setTab(v as ActiveTab);
+    saveActiveTab(v as ActiveTab);
+  };
+  const count = (n: number) => <span className="font-normal text-muted-foreground tabular-nums">{n}</span>;
   return (
-    // As tall as its rows up to a cap, then the rows scroll inside (like 세션 요청): a fill share cut rows in half.
-    <Card id="active-issues" title="진행 중인 이슈" count={list.length} flush scroll className="max-h-80 shrink-0">
-      <ul aria-label="진행 중인 이슈" className="m-0 list-none p-0 *:border-t">
-        {list.map((x) => (
-          <ActiveLine key={x.number} issue={x} now={now} open={open === x.number} />
-        ))}
-      </ul>
-    </Card>
+    <Tabs value={tab} onValueChange={pick} data-card-tabs className="min-w-0 shrink-0 gap-0">
+      {/* As tall as its rows up to a cap, then the rows scroll inside (like 세션 요청): a fill share cut rows in half. */}
+      <Card
+        id="active-issues"
+        title="진행 중"
+        flush
+        scroll
+        className="max-h-80"
+        lead={
+          <TabsList aria-label="진행 중, 이슈와 문서" className={LIST}>
+            <TabsTrigger value="issues" className={TRIGGER}>이슈 {count(list.length)}</TabsTrigger>
+            <TabsTrigger value="docs" className={TRIGGER}>문서 {count(docs.length)}</TabsTrigger>
+          </TabsList>
+        }
+      >
+        <TabsContent value="issues" className="flex-none">
+          {list.length ? (
+            <ul aria-label="진행 중인 이슈" className="m-0 list-none p-0 *:border-t">
+              {list.map((x) => (
+                <ActiveLine key={x.number} issue={x} now={now} open={open === x.number} />
+              ))}
+            </ul>
+          ) : (
+            <EmptyState>지금 진행 중인 이슈가 없어요.</EmptyState>
+          )}
+        </TabsContent>
+        <TabsContent value="docs" className="flex-none">
+          <ActiveDocsList docs={docs} onOpen={onOpen} now={now} />
+        </TabsContent>
+      </Card>
+    </Tabs>
   );
 }
 
