@@ -2,18 +2,21 @@
 // dashboard card on the 세션 보드 (#879) that opens the full board in a side sheet.
 // Reads the live `tasks` slice of the store; shows metadata only (titles, stages, times), never transcripts.
 import { useState } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronRight, TriangleAlert } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import { Card, CardList, CardRow, EmptyState } from '../home/dash';
+import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { useNow } from './AttentionStrip';
-import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, visibleTasks } from './lib/board.ts';
+import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
 
 /** Bar colour per stage: the mix tells at a glance where a task spent its time. */
+/** How many open tasks the card lists before 전체 보기. */
+const CARD_ROWS = 5;
+
 const BAR: Record<TaskStage, string> = {
   plan: 'bg-muted-foreground/40', impl: 'bg-foreground/60', review: 'bg-ok/70', test: 'bg-warn/70', merge: 'bg-foreground/30', done: 'bg-ok', blocked: 'bg-destructive',
 };
@@ -94,22 +97,22 @@ function BoardSheet({ open, onOpenChange, tasks }: { open: boolean; onOpenChange
   );
 }
 
-/** How many open tasks the card lists before 전체 보기. */
-const CARD_ROWS = 5;
-
 /**
- * 작업 보드 as a dashboard card (#879): open tasks per stage on one line, then the open tasks that need a look first
- * (stuck, then blocked, then the longest in their stage). 전체 보기 opens the full board in the sheet.
- * `fill`: the card takes the rest of its column and lists every open task, scrolling inside (세션 보드 right column).
+ * 작업 보드 as a dashboard card (#879, #919): the stages that hold tasks as one line of chips, then the open tasks
+ * that need a look first (stuck, then blocked, then the longest in their stage). A row is the title, a stage dot and
+ * the time in the stage; a warning shows only while a task is blocked or late. Finished tasks fold behind one line.
+ * 전체 보기 opens the full board in the sheet. `fill`: the card takes the rest of its column and scrolls inside.
  */
 export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
   const [open, setOpen] = useState(false);
+  const [showDone, setShowDone] = useState(false);
   const { tasks } = useScoped();
   const now = useNow(20_000);
   const groups = groupByStage(tasks);
   const live = tasks.filter(t => t.stage !== 'done');
   const rank = (t: BoardTask) => (t.stuck ? 0 : t.stage === 'blocked' ? 1 : 2);
   const shown = [...live].sort((a, b) => rank(a) - rank(b) || a.stageAt - b.stageAt).slice(0, fill ? undefined : CARD_ROWS);
+  const chips = STAGES.filter(s => s.id !== 'done' && groups[s.id].length > 0);
   return (
     <Card
       id="tasks"
@@ -128,32 +131,65 @@ export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
         <EmptyState>아직 작업이 없어요. 관리자가 작업을 적으면 여기에 나타나요.</EmptyState>
       ) : (
         <>
-          <ul aria-label="단계별 작업 수" className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 border-b px-4 py-2 text-xs text-muted-foreground">
-            {STAGES.map(s => (
-              <li key={s.id} data-stage-count={s.id} className={cn('tabular-nums', s.id === 'blocked' && groups.blocked.length > 0 && 'text-destructive')}>
-                {s.label} <span className={cn(groups[s.id].length > 0 && 'font-medium text-foreground', s.id === 'blocked' && groups.blocked.length > 0 && 'text-destructive')}>{groups[s.id].length}</span>
-              </li>
-            ))}
-          </ul>
+          {chips.length > 0 && (
+            <ul aria-label="단계별 작업 수" className="m-0 flex list-none flex-nowrap gap-1.5 overflow-x-auto border-b px-4 py-2">
+              {chips.map(s => (
+                <li key={s.id} data-stage-count={s.id} className={cn('inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs tabular-nums shadow-[inset_0_0_0_1px_var(--line-strong)]', s.id === 'blocked' ? 'text-destructive' : 'text-muted-foreground')}>
+                  <span aria-hidden className={cn('size-1.5 rounded-full', BAR[s.id])} />
+                  {s.label}
+                  <span className={cn('font-medium', s.id === 'blocked' ? 'text-destructive' : 'text-foreground')}>{groups[s.id].length}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           {shown.length === 0 ? (
             <EmptyState>진행 중인 작업이 없어요.</EmptyState>
           ) : (
             <CardList label="진행 중인 작업">
-              {shown.map(t => (
-                <CardRow
-                  key={t.id}
-                  data={t.id}
-                  icon={t.stuck || t.stage === 'blocked' ? <TriangleAlert className={t.stage === 'blocked' ? 'text-destructive' : 'text-warn'} /> : undefined}
-                  title={t.title}
-                  sub={t.stuck?.label ?? (t.stage === 'blocked' && t.note ? t.note : t.owner || '맡은 사람 없음')}
-                  meta={<span title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>}
-                />
-              ))}
+              {shown.map(t => <TaskRow key={t.id} t={t} now={now} />)}
             </CardList>
+          )}
+          {groups.done.length > 0 && (
+            <div className="border-t">
+              <button
+                type="button"
+                aria-expanded={showDone}
+                onClick={() => setShowDone(v => !v)}
+                className="flex h-9 w-full items-center gap-1.5 px-4 text-left text-xs text-muted-foreground tabular-nums hover:bg-accent/60 focus-visible:bg-accent focus-visible:outline-none"
+              >
+                <ChevronRight aria-hidden className={cn('size-3.5 transition-transform', showDone && 'rotate-90')} />
+                완료 {groups.done.length}개
+              </button>
+              {showDone && (
+                <CardList label="완료한 작업">
+                  {groups.done.slice(0, DONE_LIMIT).map(t => <TaskRow key={t.id} t={t} now={now} />)}
+                </CardList>
+              )}
+            </div>
           )}
         </>
       )}
       <BoardSheet open={open} onOpenChange={setOpen} tasks={tasks} />
     </Card>
+  );
+}
+
+/** One row of the card: stage dot, title, time in the stage; a small warning line only when blocked or late. */
+function TaskRow({ t, now }: { t: BoardTask; now: number }) {
+  const warn = taskWarn(t, now);
+  return (
+    <li data-row={t.id} className="flex min-w-0 flex-col gap-0.5 px-4 py-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span role="img" aria-label={stageLabel(t.stage)} title={stageLabel(t.stage)} className={cn('size-2 shrink-0 rounded-full', BAR[t.stage])} />
+        <span className="min-w-0 flex-1 truncate text-sm" title={t.title}>{t.title}</span>
+        <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="이 단계에 있은 시간">{inStage(now - t.stageAt)}</span>
+      </div>
+      {warn && (
+        <p data-warn className={cn('m-0 flex min-w-0 items-center gap-1 pl-[1.125rem] text-xs', warn.tone === 'bad' ? 'text-destructive' : 'text-muted-foreground')}>
+          <TriangleAlert aria-hidden className={cn('size-3 shrink-0', warn.tone === 'warn' && 'text-warn')} />
+          <span className="truncate" title={warn.text}>{warn.text}</span>
+        </p>
+      )}
+    </li>
   );
 }
