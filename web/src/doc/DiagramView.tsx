@@ -11,7 +11,7 @@ import { renderBlock, type BlockPicture } from '../canvas/render';
 import { MorphLayer, willMorph } from '../canvas/MorphLayer';
 import { createCoalescer } from '../lib/liveMotion';
 import { DIAGRAM_TYPES } from '../dsl/templates';
-import { RunEta, RunLayer, RunLegend } from '../run/RunLayer';
+import { RunEta, RunLayer } from '../run/RunLayer';
 import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
@@ -110,7 +110,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   const img = imgRef;
   const [box, setBox] = useState<{ left: number; top: number; scale: number } | null>(null);
   const scene = pic?.scene;
-  // The legend shows exactly when the board draws (a step links to a node), the same rule as on the canvas.
+  // The board draws only when a step links to a node, the same rule as on the canvas. No legend in the document (#971).
   const board = useMemo(() => (steps && scene && boardShown(scene, steps) ? { scene, steps } : null), [steps, scene]);
   useEffect(() => {
     const s = stage.current;
@@ -147,7 +147,6 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
         <p className="doc-diagram-gone">캔버스에서 지운 다이어그램이에요. 이 줄을 지워도 돼요.</p>
       )}
       {block && board && box && <RunEta steps={board.steps} />}
-      {block && board && box && <RunLegend steps={board.steps} />}
       {/* The block's head row (#889): its name, then the hint in muted text. */}
       <figcaption>
         <strong>{label}</strong>

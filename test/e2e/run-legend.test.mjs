@@ -105,14 +105,10 @@ test('run strip bar and the progress legend in the document and on the canvas', 
   assert.equal((await bar.boundingBox()).width, 64, 'w-16 bar');
   assert.equal(await bar.evaluate((el) => el.previousElementSibling?.textContent), '●', 'bar right after the glyph');
 
-  // Document: the legend under the picture.
+  // Document: no legend (#971); the board marks the steps on the picture itself.
   await page.getByRole('button', { name: '문서', exact: true }).click();
-  const docLegend = page.locator('.doc-diagram > [data-run-legend]');
-  await docLegend.waitFor({ timeout: 30000 });
-  const pic = await page.locator('.doc-diagram-pic img').boundingBox();
-  const dl = await docLegend.boundingBox();
-  assert.ok(dl.y >= pic.y + pic.height - 1, 'document legend under the picture');
-  assert.match(await docLegend.innerText(), /36%/);
+  await page.locator('.doc-diagram [data-run-layer]').waitFor({ timeout: 30000 });
+  assert.equal(await page.locator('.doc-diagram > [data-run-legend]').count(), 0, 'no legend in the document');
 
   // Canvas: beside the picture, not over it, inside the overlay.
   await page.getByRole('button', { name: '캔버스', exact: true }).click();
