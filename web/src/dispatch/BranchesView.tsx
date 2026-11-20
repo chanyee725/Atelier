@@ -1,15 +1,29 @@
 // Live branch view (#792): every session branch with its owner sessions, issue, commits ahead/behind the integration
 // branch, last commit, PR phase and uncommitted-work flag. BranchesPage is the 세션 보드 › 브랜치 tab, drawn as a commit
-// tree (#877); BranchesWidget is the compact list a dashboard can place (it loads its own data). Merged branches fade.
+// tree (#877) and a table (#889); BranchesWidget is the compact list a dashboard can place (it loads its own data). Merged branches fade.
 // Read-only, metadata only.
-import { useId, useMemo } from 'react';
-import { ArrowRight, GitBranch } from 'lucide-react';
+import { useId, useMemo, type ReactNode } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { roleColor } from '../run/overlayModel';
 import { initials } from '../home/issueBoard';
 import { boardHash } from '../projectNav';
 import { ago, TONE_TEXT } from './lib/format.ts';
-import { aheadBehindText, PR_PHASE, prOffText, shownRows, type BranchRow, type BranchSession } from './lib/liveBranches.ts';
+import { whenLabel } from '../lib/when';
+import {
+  aheadBehindText,
+  BRANCH_STATE,
+  branchState,
+  branchSummary,
+  LEGEND_STATES,
+  PR_PHASE,
+  prOffText,
+  shownRows,
+  type BranchRow,
+  type BranchSession,
+  type BranchState,
+  type PrPhase,
+} from './lib/liveBranches.ts';
 import { useScoped } from './scope';
 import { useNow } from './AttentionStrip';
 import { useBranchTree, useLiveBranches } from './useLiveBranches';
@@ -63,35 +77,170 @@ function PrChip({ pr }: { pr: BranchRow['pr'] }) {
   );
 }
 
-/** 세션 보드 › 브랜치: the commit tree of the board's project scope (#877), lanes per session branch, updating live. */
+/** Dot colour per state: the app's own state colours; 작업 중 takes the ink colour (the app's emphasis). */
+const STATE_DOT: Record<BranchState, string> = {
+  working: 'bg-foreground',
+  review: 'bg-warn',
+  passed: 'bg-ok',
+  merged: 'bg-merged',
+  conflict: 'bg-destructive',
+  closed: 'bg-muted-foreground',
+};
+
+/** State chip (refresh rule): neutral ground, a small coloured dot carries the state, the label says it in words. */
+function StateChip({ state, title, children }: { state: BranchState; title?: string; children: ReactNode }) {
+  return (
+    <span title={title} className="inline-flex h-5 items-center gap-1.5 rounded-full bg-foreground/[0.06] px-2 text-xs font-medium whitespace-nowrap tabular-nums text-foreground">
+      <span aria-hidden className={cn('size-[5px] shrink-0 rounded-full', STATE_DOT[state])} />
+      {children}
+    </span>
+  );
+}
+
+/** Short PR word for the table chip: "#882 리뷰", "#884 통과", "#883 머지"; "PR 없음" without a PR. */
+const PR_SHORT: Record<PrPhase, string> = { draft: '초안', review: '리뷰', mergeable: '통과', conflict: '충돌', merged: '머지', closed: '닫힘' };
+
+function PrStateCell({ row }: { row: BranchRow }) {
+  const state = branchState(row);
+  const pr = row.pr;
+  const chip = (
+    <StateChip state={state} title={BRANCH_STATE[state]}>
+      {pr ? `#${pr.number} ${row.merged ? PR_SHORT.merged : PR_SHORT[pr.phase]}` : row.merged ? BRANCH_STATE.merged : 'PR 없음'}
+    </StateChip>
+  );
+  return pr?.url ? (
+    <a href={pr.url} target="_blank" rel="noreferrer" className="press inline-flex rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none hover:[&>span]:bg-foreground/10">
+      {chip}
+    </a>
+  ) : (
+    chip
+  );
+}
+
+/** 실시간 chip: the data refreshes on its own. The dot breathes only when motion is welcome. */
+function LiveChip() {
+  return (
+    <span className="inline-flex h-5 items-center gap-1.5 rounded-full bg-foreground/[0.06] px-2 text-xs font-medium text-ok">
+      <span aria-hidden className="size-1.5 rounded-full bg-ok motion-safe:animate-[run-pulse_1.3s_ease-in-out_infinite_alternate]" />
+      실시간
+    </span>
+  );
+}
+
+const COLS = ['브랜치', '세션', '앞 / 뒤', 'PR', '마지막 커밋', '시각'] as const;
+
+/** The 브랜치 table (Branches.dc.html): one row per session branch, merged ones faded. Scrolls sideways when narrow. */
+function BranchTable({ rows, base, now }: { rows: BranchRow[]; base: string | null; now: number }) {
+  const title = useId();
+  return (
+    <section aria-labelledby={title} className="card-surface flex min-w-0 flex-col">
+      <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5">
+        <h2 id={title} className="m-0 text-sm font-semibold">브랜치</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
+      </div>
+      <div tabIndex={0} role="region" aria-labelledby={title} className="overflow-x-auto rounded-b-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <table data-branch-table className="w-full min-w-[40rem] table-fixed border-separate border-spacing-0 text-sm">
+          <colgroup>
+            <col className="w-[28%]" />
+            <col className="w-[5.5rem]" />
+            <col className="w-[5.5rem]" />
+            <col className="w-[7rem]" />
+            <col />
+            <col className="w-[5.5rem]" />
+          </colgroup>
+          <thead>
+            <tr className="text-xs text-muted-foreground">
+              {COLS.map((c, i) => (
+                <th key={c} scope="col" className={cn('px-2 pb-2 text-left font-normal first:pl-4 last:pr-4', i === COLS.length - 1 && 'text-right')}>
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.branch} data-branch-row data-merged={r.merged || undefined} className={cn('h-[38px] [&>*]:border-t [&>*]:border-border', r.merged && 'opacity-50')}>
+                <th scope="row" className="truncate px-2 pl-4 text-left font-medium" title={r.branch}>
+                  <span className="font-mono text-[13px]">{r.branch}</span>
+                  {r.issue != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">#{r.issue}</span>}
+                  {r.dirty && (
+                    <span className="ml-1.5 text-xs text-warn" title="커밋하지 않은 변경이 있어요">
+                      ●<span className="sr-only">커밋하지 않은 변경 있음</span>
+                    </span>
+                  )}
+                </th>
+                <td className="px-2"><Owners sessions={r.sessions} /></td>
+                <td className="px-2 text-xs"><AheadBehind row={r} base={base} /></td>
+                <td className="px-2"><PrStateCell row={r} /></td>
+                <td className="truncate px-2 text-xs text-muted-foreground" title={r.subject}>{r.subject || '—'}</td>
+                <td className="px-2 pr-4 text-right text-xs text-muted-foreground tabular-nums">{r.lastAt ? whenLabel(r.lastAt, now) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 세션 보드 › 브랜치 (Branches.dc.html, #889): a live line (실시간, counts, last commit), the commit tree of the board's
+ * project scope (#877) with the state legend, and the branch table. The tab's title and bell come from SessionBoard.
+ */
 export function BranchesPage() {
   const data = useLiveBranches();
   const tree = useBranchTree();
   const { sessions, scope } = useScoped();
   const now = useNow();
+  const graphTitle = useId();
   const ids = useMemo(() => (scope === undefined ? null : new Set(sessions.map((s) => s.id))), [sessions, scope]);
   const rows = useMemo(() => (data && data !== 'failed' ? shownRows(data.rows, ids ? (s) => ids.has(s.id) : null) : []), [data, ids]);
 
   if (data === null || tree === null) return <p role="status" className="m-0 px-6 py-6 text-sm text-muted-foreground max-md:px-4">브랜치를 불러오는 중이에요.</p>;
   if (data === 'failed' || tree === 'failed') return <p role="alert" className="m-0 px-6 py-6 text-sm text-destructive max-md:px-4">브랜치를 불러오지 못했어요. 잠시 뒤 다시 시도해요.</p>;
   const off = prOffText(data.pr);
+  const sum = branchSummary(rows);
   return (
-    <section data-branches-page className="flex min-w-0 flex-col gap-3 px-6 py-5 max-md:px-4">
+    <section data-branches-page className="flex min-w-0 flex-col gap-4 px-5 pt-1 pb-5 max-md:px-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <LiveChip />
+        <span className="flex-1" />
+        <span data-branch-summary className="text-xs text-muted-foreground tabular-nums">
+          브랜치 {sum.branches} · 열린 PR {sum.openPrs} · 마지막 커밋 {sum.lastAt ? whenLabel(sum.lastAt, now) : '—'}
+        </span>
+      </div>
       {off && <p className="m-0 text-xs text-muted-foreground">{off}</p>}
-      {!rows.length && <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>}
-      <BranchTreeView
-        tree={tree}
-        rows={rows}
-        now={now}
-        renderTip={(r) => (
-          <>
-            <Owners sessions={r.sessions} />
-            <AheadBehind row={r} base={data.base} />
-            <PrChip pr={r.pr} />
-            {r.dirty && <span className="whitespace-nowrap text-warn" title="커밋하지 않은 변경이 있어요">● 변경 있음</span>}
-          </>
-        )}
-      />
+      {!rows.length ? (
+        <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>
+      ) : (
+        <>
+          <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 id={graphTitle} className="m-0 text-sm font-semibold">커밋 그래프</h2>
+              <span className="text-xs text-muted-foreground">{data.base ?? '기준 브랜치'}에서 갈라진 순서대로 보여요</span>
+              <span className="flex-1" />
+              <ul aria-label="상태 범례" data-branch-legend className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                {LEGEND_STATES.map((s) => (
+                  <li key={s}><StateChip state={s}>{BRANCH_STATE[s]}</StateChip></li>
+                ))}
+              </ul>
+            </div>
+            <BranchTreeView
+              tree={tree}
+              rows={rows}
+              now={now}
+              renderTip={(r) => (
+                <>
+                  <Owners sessions={r.sessions} />
+                  <StateChip state={branchState(r)}>{BRANCH_STATE[branchState(r)]}</StateChip>
+                  {r.dirty && <span className="whitespace-nowrap text-warn" title="커밋하지 않은 변경이 있어요">● 변경 있음</span>}
+                </>
+              )}
+            />
+          </section>
+          <BranchTable rows={rows} base={data.base} now={now} />
+        </>
+      )}
     </section>
   );
 }
