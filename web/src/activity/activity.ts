@@ -1,6 +1,7 @@
 // Agent activity feed of the app (E537, issue #654): the server's activity log (shared/dispatch/agent-activity.ts)
 // as the page shows it — the bell's unread count and feed, and browser notifications while the page is hidden (no
 // toasts since #811: the 알림함 is the one place). Pure (no React or DOM), so it runs under `node --test`. Metadata only: who, which file, when.
+import { whenLabel } from '../lib/when.ts';
 import { activitySentence, ACTIVITY_MAX, isActivityEvent, type ActivityEvent, type ActivityLog } from '../../../shared/dispatch/agent-activity.ts';
 
 export type { ActivityEvent, ActivityLog };
@@ -34,15 +35,9 @@ export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: bool
 
 export type FeedItem = { id: string; text: string; when: string; unread: boolean; file: string; color?: string; kind: ActivityEvent['kind'] };
 
-/** "방금", "3분 전", "2시간 전", "3일 전" within 7 days (#889), else the date ("11월 16일"). */
+/** The app's time label (lib/when.ts) for an event `ms` old that happened at `at`. */
 export function whenText(ms: number, at: number): string {
-  const s = Math.floor(Math.max(ms, 0) / 1000);
-  if (s < 30) return '방금';
-  if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}분 전`;
-  if (s < 86_400) return `${Math.floor(s / 3600)}시간 전`;
-  if (s < 7 * 86_400) return `${Math.floor(s / 86_400)}일 전`;
-  const d = new Date(at);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  return whenLabel(at, at + Math.max(ms, 0));
 }
 
 /** The feed, newest first. */

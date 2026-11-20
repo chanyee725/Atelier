@@ -87,10 +87,12 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
     <DialogPrimitive.Root open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         aria-describedby={undefined}
-        // 648px at 14% from the top (design doc 6 §2.5); under 640px it docks to the top edge, full width.
-        overlayClassName="bg-black/50"
+        // 600px at 14% from the top (#889 refresh); under 640px it docks to the top edge, full width.
+        // A menu opened from the keyboard appears and goes at once: no fade or zoom on it or its backdrop (#889).
+        overlayClassName="bg-black/50 data-[state=open]:animate-none data-[state=closed]:animate-none"
         className={cn(
-          'top-[14%] w-[min(648px,calc(100%-2rem))] translate-y-0 rounded-lg bg-popover shadow-pop',
+          'top-[14%] w-[min(600px,calc(100%-2rem))] translate-y-0 bg-card text-card-foreground shadow-[0_0_0_1px_var(--border),0_24px_60px_rgb(0_0_0/0.22)]',
+          'data-[state=open]:animate-none data-[state=closed]:animate-none',
           'max-sm:top-0 max-sm:w-full max-sm:rounded-t-none max-sm:border-x-0 max-sm:border-t-0 max-sm:pt-[env(safe-area-inset-top)]',
         )}
         onOpenAutoFocus={(e) => {
@@ -104,8 +106,8 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
         }}
       >
         <DialogPrimitive.Title className="sr-only">명령 팔레트</DialogPrimitive.Title>
-        <Command shouldFilter={false} loop value={selected} onValueChange={setSelected} label="명령 찾기" className="rounded-lg bg-transparent">
-          <div className="flex items-center border-b pr-3 [&>div]:flex-1 [&>div]:border-b-0">
+        <Command shouldFilter={false} loop value={selected} onValueChange={setSelected} label="명령 찾기" className="rounded-none bg-transparent text-card-foreground">
+          <div className="flex h-12 items-center gap-1.5 border-b pr-4 [&>div]:h-12 [&>div]:flex-1 [&>div]:gap-2.5 [&>div]:border-b-0 [&>div]:pl-4 [&>div>svg]:text-muted-foreground [&>div>svg]:opacity-100">
             <CommandInput
               ref={input}
               value={query}
@@ -115,7 +117,7 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
                 if (e.key === 'Backspace' && !query && group && !e.nativeEvent.isComposing) setGroup(undefined);
               }}
               placeholder={only?.placeholder ?? '명령이나 파일 이름을 입력해요'}
-              className="h-11"
+              className="h-12 text-[15px]"
             />
             {only && (
               // A real button, so keyboard and screen reader users can widen the search too (#216 review).
@@ -128,27 +130,30 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
                   setGroup(undefined);
                   input.current?.focus();
                 }}
-                className="mr-1.5 inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 forced-colors:focus-visible:outline-2 forced-colors:focus-visible:outline-solid forced-colors:focus-visible:outline-[Highlight]"
+                className="press inline-flex shrink-0 items-center gap-1 rounded-full bg-(--sunken) px-2 py-0.5 text-xs text-foreground outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 forced-colors:focus-visible:outline-2 forced-colors:focus-visible:outline-solid forced-colors:focus-visible:outline-[Highlight]"
               >
                 {only.chip}
                 <X aria-hidden className="size-3" />
               </button>
             )}
             {scope && (
-              <span data-slot="scope-chip" title={`범위: ${scope.name} 프로젝트`} className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded-md border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+              <span data-slot="scope-chip" title={`범위: ${scope.name} 프로젝트`} className="inline-flex max-w-40 shrink-0 items-center gap-1 rounded-full bg-(--sunken) px-2 py-0.5 text-xs text-muted-foreground">
                 <FolderClosed aria-hidden className="size-3 shrink-0" />
                 <span className="sr-only">범위:</span>
                 <span className="truncate">{scope.name}</span>
               </span>
             )}
+            <Kbd aria-hidden className="h-auto rounded-sm border-0 bg-transparent px-1.5 py-px text-xs font-normal shadow-[inset_0_0_0_1px_var(--line-strong)] max-sm:hidden">
+              esc
+            </Kbd>
           </div>
-          <CommandList className="max-h-[min(400px,60vh)] max-sm:max-h-[min(480px,70dvh)]">
+          <CommandList className="max-h-[min(400px,60vh)] p-1.5 max-sm:max-h-[min(480px,70dvh)]">
             <CommandEmpty>{only?.empty ?? '맞는 명령이 없어요'}</CommandEmpty>
             {groups.map((g) => (
               <CommandPrimitive.Group
                 key={g.id}
                 heading={g.label}
-                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+                className="[&+&]:mt-1.5 [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-muted-foreground"
               >
                 {g.items.map((c) => {
                   const Icon = c.icon;
@@ -159,14 +164,12 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
                       disabled={c.disabled}
                       onSelect={() => run(c)}
                       data-cmd={c.id}
-                      className="h-8 cursor-pointer rounded-md py-0 max-sm:h-11 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+                      className="h-9 cursor-pointer gap-2.5 rounded-control px-2.5 py-0 max-sm:h-11 data-[selected=true]:bg-(--sunken) data-[selected=true]:text-foreground"
                     >
                       {Icon && <Icon className="size-4 text-muted-foreground" />}
-                      <span className="min-w-0 flex-1 truncate">
-                        {c.title}
-                        {c.hint && <span className="ml-2 text-xs text-muted-foreground">{c.hint}</span>}
-                      </span>
-                      {c.keys && <CommandShortcut className="tracking-normal">{c.keys}</CommandShortcut>}
+                      <span className="min-w-0 flex-1 truncate">{c.title}</span>
+                      {c.hint && <span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground tabular-nums">{c.hint}</span>}
+                      {c.keys && <CommandShortcut className="ml-0 tracking-normal tabular-nums">{c.keys}</CommandShortcut>}
                     </CommandItem>
                   );
                 })}
@@ -174,17 +177,9 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
             ))}
           </CommandList>
         </Command>
-        <div className="flex h-8 items-center gap-3 border-t px-3 text-xs text-muted-foreground max-sm:hidden" aria-hidden>
-          <span className="flex items-center gap-1">
-            <Kbd>↑</Kbd>
-            <Kbd>↓</Kbd> 이동
-          </span>
-          <span className="flex items-center gap-1">
-            <Kbd>↵</Kbd> 열기
-          </span>
-          <span className="flex items-center gap-1">
-            <Kbd>esc</Kbd> 닫기
-          </span>
+        <div className="flex items-center gap-4 border-t px-4 py-2.5 text-xs text-muted-foreground max-sm:hidden" aria-hidden>
+          <span>↑↓ 고르기</span>
+          <span>↵ 열기</span>
         </div>
       </DialogContent>
     </DialogPrimitive.Root>

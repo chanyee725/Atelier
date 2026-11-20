@@ -107,7 +107,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
       {off && <OffNote id={offId} status={load.status} />}
       {shown && (
         <form ref={formRef} noValidate onSubmit={(e) => void submit(e)} aria-label={title} className="flex flex-col gap-4">
-          <fieldset disabled={off} aria-describedby={off ? offId : undefined} className="flex min-w-0 flex-col gap-3 disabled:opacity-60">
+          <fieldset disabled={off} aria-describedby={off ? offId : undefined} className="flex min-w-0 flex-col gap-3 disabled:opacity-60 [&>.settings-row+.settings-row]:-mt-3">
             {numbers.map((f) => {
               const id = `${section}-${f.id}`;
               const err = errors[f.id];
@@ -130,7 +130,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
                     aria-describedby={err ? `${id}-hint ${id}-error` : `${id}-hint`}
                     value={form.texts[f.id]}
                     onChange={(e) => setNumber(f.id, e.target.value)}
-                    className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums aria-invalid:border-destructive max-md:h-11"
+                    className="h-8 w-28 rounded-control border border-(--line-strong) bg-card px-2 text-sm tabular-nums aria-invalid:border-destructive max-md:h-11"
                   />
                   <span id={`${id}-hint`} className="text-xs text-muted-foreground">
                     {f.hint} {f.decimal ? `0 또는 ${f.min}~${f.max}` : `${f.min}~${f.max}`} 사이
@@ -146,7 +146,15 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
             {toggles.map((f) => {
               const id = `${section}-${f.id}`;
               return (
-                <div key={f.id} className="flex items-start gap-2">
+                <div key={f.id} className="settings-row">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <label htmlFor={id} className="text-sm font-medium">
+                      {f.label}
+                    </label>
+                    <span id={`${id}-hint`} className="text-xs text-muted-foreground">
+                      {f.hint} 기본값 {f.def ? '켜짐' : '꺼짐'}.
+                    </span>
+                  </div>
                   <input
                     id={id}
                     name={f.id}
@@ -155,16 +163,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
                     aria-describedby={`${id}-hint`}
                     checked={form.toggles[f.id]}
                     onChange={(e) => setToggle(f.id, e.target.checked)}
-                    className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
                   />
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <label htmlFor={id} className="text-sm">
-                      {f.label}
-                    </label>
-                    <span id={`${id}-hint`} className="text-xs text-muted-foreground">
-                      {f.hint} 기본값 {f.def ? '켜짐' : '꺼짐'}.
-                    </span>
-                  </div>
                 </div>
               );
             })}
@@ -175,7 +174,7 @@ export function TeamFieldsForm({ section, title, hint, testId }: { section: Team
                 {note.text}
               </p>
               <div className="flex flex-wrap justify-end gap-2">
-                <button type="button" onClick={resetAll} className={cn(BTN, 'border')}>
+                <button type="button" onClick={resetAll} className={cn(BTN, 'bg-card shadow-(--shadow-card)')}>
                   기본값으로
                 </button>
                 <button type="submit" disabled={saving} className={PRIMARY_BTN}>
