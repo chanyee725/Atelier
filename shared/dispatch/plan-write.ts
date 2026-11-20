@@ -31,7 +31,6 @@ export interface WritePlanInput {
   goal: string;
   steps: WritePlanStep[];
   risks?: string[];
-  asks?: string[];
 }
 
 type DocNode = { type: string; attrs?: Record<string, unknown>; content?: DocNode[] };
@@ -53,10 +52,9 @@ export function writePlanProblem(input: unknown): string | null {
   if (!line(input.goal)) return 'goal이 비어 있어요';
   if (!Array.isArray(input.steps) || input.steps.length === 0) return 'steps가 비어 있어요. 단계를 하나 이상 적어 주세요';
   if (input.steps.length > MAX_PLAN_STEPS) return `단계는 ${MAX_PLAN_STEPS}개까지예요`;
-  for (const k of ['risks', 'asks'] as const) {
-    const v = input[k];
-    if (v !== undefined && (!Array.isArray(v) || v.length > MAX_PLAN_LIST || !v.every((x) => typeof x === 'string'))) return `${k}는 문자열 ${MAX_PLAN_LIST}개까지의 배열이에요`;
-  }
+  const risks = input.risks;
+  if (risks !== undefined && (!Array.isArray(risks) || risks.length > MAX_PLAN_LIST || !risks.every((x) => typeof x === 'string'))) return `risks는 문자열 ${MAX_PLAN_LIST}개까지의 배열이에요`;
+  if (Array.isArray(input.asks) ? input.asks.length > 0 : input.asks !== undefined && input.asks !== null) return '질문은 계획 문서에 넣지 않아요. POST /api/file/discussions로 올려 주세요';
   const ids = new Set<string>();
   for (let i = 0; i < input.steps.length; i++) {
     const s: unknown = input.steps[i];
@@ -103,7 +101,7 @@ function stepTask(s: WritePlanStep): string {
 }
 
 /**
- * The file content for a checked write_plan input: document (goal, step list with the diagram, risks, asks),
+ * The file content for a checked write_plan input: document (goal, step list with the diagram, risks),
  * the flowchart block whose nodes are the steps, and the plan drawn in it. `previous` keeps a placed block's
  * position, size, layout and frame, so a revised plan does not jump on the canvas.
  */
@@ -128,7 +126,6 @@ export function buildPlanFile(input: WritePlanInput, previous?: Block | null): W
     return `${line(s.title)} (${s.id}) — ${who}${done}`;
   });
   const risks = (input.risks ?? []).map((r) => line(r)).filter(Boolean);
-  const asks = (input.asks ?? []).map((r) => line(r)).filter(Boolean);
   const content: DocNode[] = [
     heading('목표'),
     para(goal),
@@ -137,8 +134,6 @@ export function buildPlanFile(input: WritePlanInput, previous?: Block | null): W
     list('orderedList', rows),
     heading('위험'),
     risks.length ? list('bulletList', risks) : para('없어요.'),
-    heading('사용자에게 물어볼 것'),
-    asks.length ? list('bulletList', asks) : para('없어요.'),
   ];
   const plan: Plan = {
     v: 1,

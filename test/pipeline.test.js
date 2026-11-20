@@ -92,7 +92,10 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     // Only a lead may write a plan.
     assert.equal((await call('POST', '/api/pipeline/plan', { lead: 'nobody', goal: 'x', steps: STEPS })).status, 400);
 
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크로 로그인해요', steps: STEPS, risks: ['쿠키 이름이 바뀌어요'], asks: ['링크 유효 시간은 15분?'] });
+    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크로 로그인해요', steps: STEPS, risks: ['쿠키 이름이 바뀌어요'] });
+    const asked = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: 'x', steps: STEPS, asks: ['q?'] });
+    assert.equal(asked.status, 400);
+    assert.match(asked.body.error, /discussions/);
     assert.equal(w.status, 200, JSON.stringify(w.body));
     assert.equal(w.body.path, 'App/로그인-개편/계획.dpx.json');
     assert.equal(w.body.state, 'plan');
