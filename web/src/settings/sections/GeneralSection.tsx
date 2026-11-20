@@ -7,7 +7,7 @@ import { turnAlertsOff, turnAlertsOn, useAlertStatus } from '../../dispatch/lib/
 import { useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
 import { TOAST_CATEGORIES } from '../../activity/appEvents';
-import { setCategoryOn, useToastOff } from '../../activity/appToasts';
+import { setCategoryOn, useToastOff } from '../../activity/appInbox';
 import { useSettingsLoad } from '../context';
 import { LoadNote, OffNote, ThemeField } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
