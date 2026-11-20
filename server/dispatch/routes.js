@@ -142,6 +142,8 @@ export function routeTable(d) {
     // Open GitHub issues with their PRs (#776): { ok, issues: [{ number, title, url?, prs: [{ number, state, url?, branch? }] }] }
     // or { ok: false, reason }. Read-only.
     ["GET", /^\/api\/issues$/, async () => (d.issues ? d.issues() : { ok: false, reason: "disabled" })],
+    // The first lines of one issue's body for the start panel (#954): { ok, summary: string[] } or { ok: false, reason }.
+    ["GET", /^\/api\/issues\/(\d{1,7})\/summary$/, async ([n]) => (d.issues?.summary ? d.issues.summary(Number(n)) : { ok: false, reason: "disabled" })],
     // Sessions, models and account labels that worked on one issue (#747), plus the PR-comment summary line.
     // PRs come from the cached issue/PR list (branch, Closes, Refs), else pr-status per branch; ?pr=0 skips both.
     ["GET", /^\/api\/issues\/(\d{1,7})\/accounts$/, async ([n], __, url) => {
