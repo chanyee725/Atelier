@@ -53,7 +53,7 @@ test("checkLong: a long teammate's lead is told once to replace it", () => {
   hub.live.get("k").lastText = "또 끝";
   hub.reportToParent(kid);
   assert.doesNotMatch(hub.sentTo[1].text, /누적/, "only once");
-  assert.deepEqual(kid.longRun, { mtok: 20, sinceMs: 1000, noticed: true });
+  assert.deepEqual(kid.longRun, { mtok: 20, sinceMs: 1000, noticed: true, told: true });
 });
 
 test("checkLong: a running lead is told mid-turn to hand over; an idle one gets it with its next message", () => {
