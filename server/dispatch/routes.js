@@ -2,6 +2,7 @@
 // (so mcp.js, the skills and the hook keep working); only /api/events is shared, see index.js.
 import path from "node:path";
 import { agentsSummary } from "./agents-summary.js";
+import { createChatStore } from "./chat-store.js";
 import { branchGraph, diff } from "./git.js";
 import { issueAccounts } from "./ledger.js";
 import { ROLES } from "./roles.js";
@@ -63,6 +64,8 @@ export function adapt([method, path, fn]) {
  */
 export function routeTable(d) {
   const { root, store, hub, models, broadcast } = d;
+  let chatStore = d.chats ?? null;
+  const chats = () => (chatStore ??= createChatStore(root));
   const session = id => {
     const s = hub.get(id);
     if (!s) throw fail(404, "세션이 없어요");
@@ -208,6 +211,19 @@ export function routeTable(d) {
       d.setEnabled(id, true);
       await d.refreshProviders();
       return { ok: true, connected: !!d.providers()[id]?.connected };
+    }],
+    // Saved chat history (#968): .atelier/chat/, masked by chat-store.js before it reaches disk, never in git.
+    ["GET", /^\/api\/chats$/, async () => ({ chats: await chats().list() })],
+    ["GET", /^\/api\/chats\/([a-z0-9]+)$/, async ([id]) => {
+      const chat = await chats().read(id);
+      if (!chat) throw fail(404, "대화가 없어요");
+      return { chat };
+    }],
+    ["POST", /^\/api\/chats$/, async (_, b) => ({ chat: await chats().save(b || {}) })],
+    ["DELETE", /^\/api\/chats$/, async () => ({ removed: await chats().clear() })],
+    ["DELETE", /^\/api\/chats\/([a-z0-9]+)$/, async ([id]) => {
+      if (!(await chats().remove(id))) throw fail(404, "대화가 없어요");
+      return { ok: true };
     }],
     ["POST", /^\/api\/providers\/refresh$/, async () => { await d.refreshProviders(); return d.providers(); }],
   ];

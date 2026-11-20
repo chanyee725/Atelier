@@ -22,13 +22,17 @@ async function hasHead(dir) {
 // .gitignore. Only Atelier's own entries: the rest of .atelier/ (documents) is the user's to track.
 // `worktrees` is the folder new worktrees go in; a not-yet-moved .dispatch/ is excluded whole, as before.
 /** Atelier's own run files in the state folder (kept out of git, and out of the 작업 보기 diff, #906). */
+/** The chat history folder inside .atelier/ (chat-store.js). */
+export const CHAT_DIR = "chat";
 const STATE_FILES = ["state.json", "drawing.lock*", "server.port", "server.pid", "server.log"];
 
 export async function ensureExcluded(root, worktrees) {
   const rel = path.relative(root, worktrees).split(path.sep).join("/");
-  const lines = rel.startsWith(STATE_DIR + "/")
-    ? [`/${rel}/`, ...STATE_FILES.map(f => `/${STATE_DIR}/${f}`)]
-    : [`${rel.split("/")[0]}/`];
+  const lines = [
+    ...(rel.startsWith(STATE_DIR + "/") ? [`/${rel}/`, ...STATE_FILES.map(f => `/${STATE_DIR}/${f}`)] : [`${rel.split("/")[0]}/`]),
+    // Saved chat history (#968) is never tracked, whichever state folder the store uses.
+    `/${STATE_DIR}/${CHAT_DIR}/`,
+  ];
   const file = path.join(root, ".git", "info", "exclude");
   try {
     const cur = await readFile(file, "utf8").catch(() => "");
@@ -127,7 +131,7 @@ const keep = f => !NOISE.has(f.split("/")[0]);
 const isRunFile = f => {
   if (!f.startsWith(STATE_DIR + "/")) return false;
   const rest = f.slice(STATE_DIR.length + 1);
-  return rest.startsWith("worktrees/") || STATE_FILES.some(p => (p.endsWith("*") ? rest.startsWith(p.slice(0, -1)) : rest === p));
+  return rest.startsWith("worktrees/") || rest.startsWith(CHAT_DIR + "/") || STATE_FILES.some(p => (p.endsWith("*") ? rest.startsWith(p.slice(0, -1)) : rest === p));
 };
 const keepInDiff = f => keep(f) && !isRunFile(f);
 // Changed tracked files are always work. Only files git ignores may be noise at any depth
