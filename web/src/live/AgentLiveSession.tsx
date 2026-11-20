@@ -1,18 +1,20 @@
-// 대화 · 변경사항 · 정보 tabs of the agent live panel (#905). The panel shows these itself instead of opening a
+// 대화 · 변경사항 · 정보 · 조직도 tabs of the agent live panel (#905). The panel shows these itself instead of opening a
 // SessionSheet over it; the bodies are the SessionSheet's own (Chat, Composer, AnswerCard, DiffView, Info). Loaded
 // lazily with the panel's first visit to one of them. Transcripts come from the in-memory Dispatch store, never stored.
 import { useEffect, useRef, useState } from 'react';
 import { Alert } from '../components/ui/alert';
 import { AnswerCard, Chat, Composer, Info, type Report } from '../dispatch/SessionSheet';
 import { DiffView } from '../dispatch/DiffView';
+import { AgentOrgTree } from './AgentOrgTree';
 import { connect, loadTranscript, useDispatch } from '../dispatch/store';
 
-export type SessionTab = 'chat' | 'diff' | 'info';
+export type SessionTab = 'chat' | 'diff' | 'info' | 'org';
 
 export default function AgentLiveSession({ sid, tab }: { sid: string; tab: SessionTab }) {
   // The Dispatch store is fed only while one of these tabs is open.
   useEffect(() => connect(), []);
-  const s = useDispatch((st) => st.sessions.find((x) => x.id === sid));
+  const sessions = useDispatch((st) => st.sessions);
+  const s = sessions.find((x) => x.id === sid);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -38,6 +40,8 @@ export default function AgentLiveSession({ sid, tab }: { sid: string; tab: Sessi
           <div className="agent-live-session-scroll"><Chat s={s} report={report} /></div>
           <Composer s={s} text={draft} setText={setDraft} inputRef={input} report={report} />
         </>
+      ) : tab === 'org' ? (
+        <div className="agent-live-session-scroll agent-live-body"><AgentOrgTree sessions={sessions} sid={s.id} /></div>
       ) : (
         <div className="agent-live-session-scroll">{tab === 'diff' ? <DiffView s={s} /> : <Info s={s} />}</div>
       )}
