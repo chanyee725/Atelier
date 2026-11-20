@@ -1,12 +1,12 @@
 // Commit tree for 세션 보드 › 브랜치 (#877): the integration branch and every session branch as lanes, like a network
 // graph, with merge points. The tip row of each session branch carries its sessions, ahead/behind, PR and worktree
-// state. Lanes come from react-git-log (Apache-2.0, see NOTICE.md); rows and colours are ours. Metadata only.
+// state; the 브랜치 tab puts it in its 커밋 그래프 card (#889). Lanes come from react-git-log (Apache-2.0, see NOTICE.md); rows and colours are ours. Metadata only.
 import { useId, useMemo, type ReactNode } from 'react';
 import { GitLog, type Commit } from '@tomplum/react-git-log';
 import { GitBranch } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useTheme } from '../theme';
-import { ago } from './lib/format.ts';
+import { whenLabel } from '../lib/when';
 import { treeEntries, treeSummary, type BranchRow, type BranchTree, type TreeEntry } from './lib/liveBranches.ts';
 
 /** Lane colours: the base lane is quiet, session lanes take the role tokens in turn. */
@@ -57,7 +57,7 @@ export function BranchTreeView({
       role="region"
       aria-labelledby={label}
       data-branch-tree
-      className="max-w-full overflow-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_*]:font-[inherit]"
+      className="max-w-full overflow-auto rounded-control focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_*]:font-[inherit]"
     >
       <p id={label} className="sr-only">
         커밋 트리, {treeSummary(entries, tree.base)}
@@ -91,7 +91,7 @@ function TreeRow({ commit: c, base, now, renderTip }: { commit: Commit<TreeEntry
       // h-10 = the graph's fixed 40px row (react-git-log ROW_HEIGHT); a custom row gets no height from the library.
       className={cn('flex h-10 min-w-0 shrink-0 items-center gap-3 pr-3 text-foreground', row?.merged && 'opacity-50')}
     >
-      <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{c.at ? ago(c.at, now) : '—'}</span>
+      <span className="w-16 shrink-0 text-xs text-muted-foreground tabular-nums">{c.at ? whenLabel(c.at, now) : '—'}</span>
       {row ? (
         <span className="flex min-w-0 shrink-0 items-center gap-1.5">
           <GitBranch aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
