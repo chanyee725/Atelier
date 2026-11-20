@@ -10,7 +10,7 @@ import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { badgeText, chatTargets, helperBody, HELPER_KEY, replies, unread } from './lib/chatDock.ts';
+import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, unread } from './lib/chatDock.ts';
 import './chat-dock.css';
 
 const ChatPane = lazy(() => import('./ChatPane'));
@@ -35,12 +35,15 @@ export function ChatDock({ folder }: { folder: string | null }) {
   useEffect(() => (active ? connect() : undefined), [active]);
   const unavailable = useDispatch(st => st.unavailable);
   const sessions = useDispatch(st => st.sessions);
+  const providers = useDispatch(st => st.providers);
   const targets = useMemo(() => chatTargets(sessions, helperId), [sessions, helperId]);
   // A partner that ended drops out of the list; the helper takes its place.
   const target = targets.find(t => t.key === key) ?? targets[0]!;
   const sid = target.id;
   const s: Session | undefined = sid ? sessions.find(x => x.id === sid) : undefined;
   const entries = useDispatch(st => (sid ? st.transcripts[sid] : undefined));
+  // Claude not connected: say so before the first send instead of failing on it.
+  const offline = helperOffline(target, providers);
 
   useEffect(() => {
     if (sid && !getState().transcripts[sid]) loadTranscript(sid).catch((e: Error) => setError(e.message));
@@ -73,7 +76,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!text || busy || offline) return;
     setBusy(true);
     setError(null);
     try {
@@ -142,6 +145,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
               draft={draft}
               setDraft={setDraft}
               busy={busy}
+              notice={offline ? HELPER_OFFLINE : null}
               error={error}
               setError={setError}
               onSend={() => void send()}

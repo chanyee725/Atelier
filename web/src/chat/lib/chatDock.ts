@@ -50,3 +50,13 @@ export function helperBody(text: string, folder: string | null) {
 
 /** Enter sends; Shift+Enter (and Enter while an IME is composing) adds a line. */
 export const sendsOnEnter = (e: { key: string; shiftKey: boolean; isComposing?: boolean }) => e.key === 'Enter' && !e.shiftKey && !e.isComposing;
+
+/** Shown before the first send when the helper cannot be made yet: Claude is known and not connected here. */
+export const HELPER_OFFLINE = 'Claude가 연결되지 않았어요. 연결하기에서 Claude를 연결하면 도우미와 대화할 수 있어요.';
+
+/**
+ * Whether sending would fail for the helper that is not made yet: the provider list says Claude is not connected.
+ * An unknown state (list not loaded) does not block; the server still refuses and the error shows.
+ */
+export const helperOffline = (target: ChatTarget, providers: Record<string, { connected?: boolean } | undefined>) =>
+  target.key === HELPER_KEY && target.id === null && providers.claude?.connected === false;

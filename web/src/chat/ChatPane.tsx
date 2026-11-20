@@ -22,13 +22,15 @@ type Props = {
   draft: string;
   setDraft: (v: string) => void;
   busy: boolean;
+  /** Why the message cannot go yet (Claude not connected for the helper); replaces the empty-state hint. */
+  notice: string | null;
   error: string | null;
   setError: (v: string | null) => void;
   onSend: () => void;
   onClose: () => void;
 };
 
-export default function ChatPane({ titleId, open, targets, target, onPick, session: s, thinking, draft, setDraft, busy, error, setError, onSend, onClose }: Props) {
+export default function ChatPane({ titleId, open, targets, target, onPick, session: s, thinking, draft, setDraft, busy, notice, error, setError, onSend, onClose }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   // The message box takes focus when the window opens and when another partner is picked.
   useEffect(() => {
@@ -61,7 +63,7 @@ export default function ChatPane({ titleId, open, targets, target, onPick, sessi
         ) : (
           <div className="flex h-full flex-col justify-end gap-1 overlay-body-mid text-[13px] leading-[1.55]">
             <p className="m-0 font-medium">무엇이든 물어보세요</p>
-            <p className="m-0 text-muted-foreground">처음 보내면 이 프로젝트의 도우미 세션을 만들어요.</p>
+            <p role={notice ? 'note' : undefined} className="m-0 text-muted-foreground">{notice ?? '처음 보내면 이 프로젝트의 도우미 세션을 만들어요.'}</p>
           </div>
         )}
       </div>
@@ -85,7 +87,7 @@ export default function ChatPane({ titleId, open, targets, target, onPick, sessi
             className="max-h-32 min-h-10 resize-none rounded-[10px] px-3 py-2 text-[13px] leading-[1.55] md:text-[13px]"
             rows={1}
           />
-          <Button size="icon" onClick={onSend} disabled={!draft.trim() || busy} aria-label="보내기"><SendHorizontal /></Button>
+          <Button size="icon" onClick={onSend} disabled={!draft.trim() || busy || !!notice} aria-label="보내기"><SendHorizontal /></Button>
         </div>
       )}
     </div>

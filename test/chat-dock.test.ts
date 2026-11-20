@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badgeText, chatTargets, helperBody, sendsOnEnter, unread } from '../web/src/chat/lib/chatDock.ts';
+import { badgeText, chatTargets, helperBody, helperOffline, sendsOnEnter, unread } from '../web/src/chat/lib/chatDock.ts';
 import type { Entry, Session } from '../shared/dispatch/types.ts';
 
 const ses = (id: string, status: Session['status'], startedAt: number, name = id) =>
@@ -38,4 +38,15 @@ test('sendsOnEnter: Enter sends; Shift+Enter and IME composition do not', () => 
   assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: true }), false);
   assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: false, isComposing: true }), false);
   assert.equal(sendsOnEnter({ key: 'a', shiftKey: false }), false);
+});
+
+test('helperOffline: only the not-yet-made helper with Claude known as not connected', () => {
+  const [helper] = chatTargets([], null);
+  assert.equal(helperOffline(helper!, { claude: { connected: false } }), true);
+  assert.equal(helperOffline(helper!, { claude: { connected: true } }), false);
+  // Provider list not loaded yet: do not block; the server answers.
+  assert.equal(helperOffline(helper!, {}), false);
+  // A helper already made, or another session, is not blocked here.
+  assert.equal(helperOffline(chatTargets([], 'h')[0]!, { claude: { connected: false } }), false);
+  assert.equal(helperOffline({ key: 's1', id: 's1', label: 'x' }, { claude: { connected: false } }), false);
 });

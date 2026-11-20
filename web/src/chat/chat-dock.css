@@ -79,7 +79,11 @@
   transform-origin: bottom right;
   opacity: 0;
   scale: 0.97;
-  transition: opacity 200ms ease-out, scale 200ms ease-out, display 200ms allow-discrete, overlay 200ms allow-discrete;
+  transition-property: opacity, scale, display, overlay;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+  /* Kept out of the shorthand: older browsers drop a whole `transition` that names allow-discrete. */
+  transition-behavior: allow-discrete;
 }
 .chat-dock-window:popover-open {
   display: flex;
