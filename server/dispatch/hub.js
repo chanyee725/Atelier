@@ -519,9 +519,8 @@ export class Hub extends EventEmitter {
     if (this.autoClosing) return [];
     this.autoClosing = true;
     try {
-      const sessions = this.store.data.sessions || {};
-      const open = Object.values(this.store.data.tasks || {})
-        .filter(t => AUTO_CLOSE_STAGES.has(t.stage) && (!t.lead || sessions[t.lead]));
+      // Tasks of a removed lead are included: no one is left to close them, and they still pile up in the store.
+      const open = Object.values(this.store.data.tasks || {}).filter(t => AUTO_CLOSE_STAGES.has(t.stage));
       if (!open.length) return [];
       let prs = null;
       if (issues?.allPrs) {

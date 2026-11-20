@@ -144,7 +144,7 @@ test("auto close: commit on develop, merged PR, closed issue → done with evide
     f: task("f", { title: "#902 blocked", stage: "blocked", etaAt: null }),
     g: task("g", { title: "E3: fresh branch", commit: "feat/904-fresh", stage: "impl" }),
     h: task("h", { title: "E4: #902 후속", stage: "impl" }),
-    i: task("i", { title: "E5: merged branch", commit: "feat/905-done", stage: "impl" }),
+    i: task("i", { title: "E5: merged branch", commit: "feat/905-done", stage: "impl", lead: "gone" }),
     j: task("j", { title: "E6: hash in impl", commit: head, stage: "impl" }),
   };
   const events = [];
@@ -158,7 +158,7 @@ test("auto close: commit on develop, merged PR, closed issue → done with evide
   assert.match(t.a.mergeCheck.evidence, /커밋 [0-9a-f]{7}이 develop에 있어요/);
   assert.deepEqual([t.b.stage, t.b.mergeCheck.via, t.b.mergeCheck.evidence], ["done", "pr", "PR #950이 병합됐어요"]);
   assert.deepEqual([t.c.stage, t.c.mergeCheck.via, t.c.mergeCheck.evidence], ["done", "issue", "이슈 #902이 닫혔어요"]);
-  // A merged branch with its own commits closes.
+  // Merged branch with its own commits closes even when its lead session is gone.
   assert.deepEqual([t.i.stage, t.i.mergeCheck.via], ["done", "commit"]);
   // Fresh branch, a title that only mentions #902, and a hash named in impl stay open.
   for (const id of ["g", "h", "j"]) assert.equal(t[id].stage, "impl", id);
