@@ -989,6 +989,17 @@ export class Hub extends EventEmitter {
     this.touch(s, { perm });
   }
 
+  /**
+   * The short work summary a lead leaves on a session for its card (#912): one line, at most 80 characters; empty
+   * clears it. Metadata only, never taken from the transcript.
+   */
+  setSessionTask(id, text) {
+    const s = this.get(id);
+    if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
+    const task = String(text ?? "").replace(/\s+/g, " ").trim().slice(0, 80) || null;
+    this.touch(s, { task });
+  }
+
   // Attach a session to a lead after the fact (teams made before parents were set, or a lead replaced).
   // parent null detaches it.
   setParent(id, parent) {

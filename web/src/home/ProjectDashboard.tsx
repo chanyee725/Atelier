@@ -29,6 +29,8 @@ import { WorkTabsCard } from './WorkTabsCard';
 import { SessionRequestsCard } from './SessionRequestsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectState, useSessionBranches } from './projectFeeds';
 import { ActiveIssuesCard } from './ActiveIssuesCard';
+import { issueTitles, taskSummary, type TaskSummary } from './taskSummary';
+import { TaskSummaryLine } from './TaskSummaryLine';
 
 type Props = {
   project: ProjectInfo;
@@ -52,11 +54,17 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
   const prBranches = useMemo(() => openPrBranches(issues), [issues]);
   const branches = useBranches([...open.map((s) => s.branch), ...prBranches].join(','));
   const prs = usePrs(prBranches, tracking);
+  // What each session works on (#912): issue title, board task, branch, or the lead's own summary.
+  const summaries = useMemo(() => {
+    const titleOf = issueTitles(issues && issues !== 'failed' && issues.ok ? issues.issues : null);
+    const list = Array.isArray(sessions) ? sessions : [];
+    return new Map(list.map((s) => [s.id, taskSummary(s, titleOf, tasks)]));
+  }, [sessions, tasks, issues]);
 
   return (
     <DashGrid ratio="3fr 2fr" fill={fill}>
       <DashColumn label="진행 중인 작업" fill={fill}>
-        <SessionsCard agents={agents} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
+        <SessionsCard agents={agents} summaryOf={(sid) => summaries.get(sid) ?? null} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
         <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
@@ -79,7 +87,7 @@ function BoardLink({ folder, onBoard }: { folder: string; onBoard: (folder: stri
   );
 }
 
-function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard, fill }: { agents: AgentPresence[] | 'off' | 'failed' | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void; fill?: number }) {
+function SessionsCard({ agents, summaryOf, onRetry, titleOf, onOpen, folder, onBoard, fill }: { agents: AgentPresence[] | 'off' | 'failed' | null; summaryOf: (sid: string) => TaskSummary | null; onRetry: () => void; titleOf: (f: string) => string | undefined; onOpen: (p: string) => void; folder: string; onBoard: (folder: string) => void; fill?: number }) {
   const list = Array.isArray(agents) ? agents : [];
   // Filled (#819): a fixed share of the column, its cards scroll inside. Otherwise as tall as its cards (#784, #793).
   const empty = Array.isArray(agents) && list.length === 0;
@@ -119,7 +127,7 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard, fill 
       ) : (
         <SessionGrid label="실행 중인 세션">
           {list.map((a) => (
-            <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
+            <SessionCard key={a.sid} agent={a} summary={summaryOf(a.sid)} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
           ))}
         </SessionGrid>
       )}
@@ -143,13 +151,13 @@ function SessionGrid({ label, children }: { label: string; children: ReactNode }
 }
 
 /**
- * One live session per card (#785, #793, #889): name, role badge and run state (dot + word) on top; a second line with
- * the plan step or what it does now (else a quiet idle/working note); a track that sweeps while it works; then model
+ * One live session per card (#785, #793, #889): name, role badge and run state (dot + word) on top; right under it what
+ * the session works on (#912, when any source says); then a line with the plan step or what it does now (else a quiet idle/working note); a track that sweeps while it works; then model
  * left and time right. The pointer tag (the live cursor's look) shows only while the session edits a diagram
  * (isEditingDiagram); otherwise the name is plain. The card's body opens the session's live view; the file it holds
  * is its own link under the body (shown once, there).
  */
-function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
+function SessionCard({ agent: a, summary, title, onOpen }: { agent: AgentPresence; summary: TaskSummary | null; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
   const look = !busy && needsLook(a);
   const editing = isEditingDiagram(a);
@@ -175,17 +183,20 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
         onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
         className="press flex min-w-0 flex-col gap-2 rounded-card p-3 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        <span className="flex min-w-0 items-center gap-1.5">
-          {editing ? (
-            <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
-          ) : (
-            <span data-agent-name className="min-w-0 truncate text-[15px] leading-5 font-semibold tracking-[-0.01em] text-foreground">{a.name}</span>
-          )}
-          <RoleBadge agent={a} className="shrink-0" />
-          <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
-            <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, busy && 'is-on', !busy && !look && 'opacity-60')} />
-            {state}
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 items-center gap-1.5">
+            {editing ? (
+              <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
+            ) : (
+              <span data-agent-name className="min-w-0 truncate text-[15px] leading-5 font-semibold tracking-[-0.01em] text-foreground">{a.name}</span>
+            )}
+            <RoleBadge agent={a} className="shrink-0" />
+            <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
+              <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, busy && 'is-on', !busy && !look && 'opacity-60')} />
+              {state}
+            </span>
           </span>
+          {summary ? <TaskSummaryLine summary={summary} /> : null}
         </span>
         <span className={cn('min-w-0 truncate', detail ? 'text-foreground/80' : 'text-muted-foreground')} title={detail ?? undefined}>
           {detail ?? (busy ? '작업 중이에요' : '다음 지시를 기다려요')}

@@ -40,6 +40,9 @@ import { api, connect, useDispatch } from './store';
 import { usePrTracking, useStatusLine } from './usePrTracking';
 import type { Session } from './types';
 import { askConfirm } from '../appDialog';
+import { useIssues, usePrTracking as usePrTrackingOn } from '../home/projectFeeds';
+import { issueTitles, taskSummary, type TaskSummary } from '../home/taskSummary';
+import { TaskSummaryLine } from '../home/TaskSummaryLine';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
@@ -339,6 +342,14 @@ function SessionsCard({
   const { known, names } = useScope();
   const all = useDispatch((s) => s.sessions);
   const byId = useMemo(() => new Map(all.map((s) => [s.id, s])), [all]);
+  // What each session works on (#912): issue title (the issue feed, while PR tracking is on), board task, branch, or the
+  // lead's own summary.
+  const tasks = useDispatch((s) => s.tasks);
+  const issues = useIssues(usePrTrackingOn());
+  const summaries = useMemo(() => {
+    const titleOf = issueTitles(issues && issues !== 'failed' && issues.ok ? issues.issues : null);
+    return new Map(sessions.map((s) => [s.id, taskSummary(s, titleOf, tasks)]));
+  }, [sessions, tasks, issues]);
   const now = useNow(20_000);
   const groups = useMemo(() => boardGroups(sessions, { known, names, stateOf, byCwd }), [sessions, known, names, byCwd]);
   return (
@@ -365,7 +376,7 @@ function SessionsCard({
           <div className="@container/list">
             <div className="grid gap-y-5 @min-[560px]/list:grid-cols-[1.25rem_minmax(4rem,max-content)_minmax(4rem,max-content)_minmax(0,max-content)_minmax(0,1fr)_max-content_1rem] @min-[560px]/list:gap-x-3">
               {groups.map((g) => (
-                <Group key={g.key ?? '\0'} g={g} scoped={scope !== undefined} open={open} now={now} byId={byId} onOpen={onOpen} />
+                <Group key={g.key ?? '\0'} g={g} scoped={scope !== undefined} open={open} now={now} byId={byId} summaries={summaries} onOpen={onOpen} />
               ))}
             </div>
           </div>
@@ -383,6 +394,7 @@ function Group({
   open,
   now,
   byId,
+  summaries,
   onOpen,
 }: {
   g: BoardGroup<Session>;
@@ -390,6 +402,7 @@ function Group({
   open: string | null;
   now: number;
   byId: Map<string, Session>;
+  summaries: Map<string, TaskSummary | null>;
   onOpen: (id: string, from?: HTMLElement | null) => void;
 }) {
   const head = useId();
@@ -422,7 +435,7 @@ function Group({
       </div>
       <div id={body} className={cn('flex min-w-0 flex-col gap-1.5', SUBGRID, '@min-[560px]/list:gap-y-1.5')}>
         {shown.map((s) => (
-          <Row key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} now={now} expanded={open === s.id} onOpen={onOpen} />
+          <Row key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} summary={summaries.get(s.id) ?? null} now={now} expanded={open === s.id} onOpen={onOpen} />
         ))}
         {!(collapsed && !scoped) && g.done.length > 0 && (
           <button
@@ -452,7 +465,7 @@ function stepText(s: Session, now: number): ReactNode {
   return s.status === 'running' || s.status === 'starting' ? '지금 생각 중' : '—';
 }
 
-function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Session; now: number; expanded: boolean; onOpen: (id: string, from?: HTMLElement | null) => void }) {
+function Row({ s, parent, summary, now, expanded, onOpen }: { s: Session; parent?: Session; summary: TaskSummary | null; now: number; expanded: boolean; onOpen: (id: string, from?: HTMLElement | null) => void }) {
   const state = stateOf(s);
   const meta = STATE[state] ?? STATE.resting;
   const Icon = STATE_ICON[state];
@@ -490,7 +503,11 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
       </span>
       <span className="col-span-3 col-start-2 row-start-2 flex min-w-0 items-center gap-2 @min-[560px]/list:contents">
         <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} account={account} className="max-w-56 shrink-0" />
-        <span className={cn('min-w-0 truncate text-muted-foreground', (flag || failed) && 'text-foreground')}>{stepText(s, now)}</span>
+        {/* What it works on (#912) above what it does now; one line each. */}
+        <span className="flex min-w-0 flex-1 flex-col">
+          {summary ? <TaskSummaryLine summary={summary} /> : null}
+          <span className={cn('min-w-0 truncate text-muted-foreground', (flag || failed) && 'text-foreground', summary && 'text-xs')}>{stepText(s, now)}</span>
+        </span>
       </span>
       <span className={cn('col-start-4 row-start-1 text-xs whitespace-nowrap text-muted-foreground tabular-nums', wide)} title="이 상태가 된 뒤 지난 시간">
         {flag || failed ? `${meta.label} · ` : ''}
