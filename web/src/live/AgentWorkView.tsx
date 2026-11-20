@@ -2,7 +2,8 @@
 // - Writing a document: the held document (`agent.file`) drawn read-only, diagrams included; it reloads on the
 //   workspace `change` event of that file (the same event that reloads an open editor).
 // - Writing code: GET /api/sessions/:id/diff every few seconds while the panel is on screen and the tab is visible;
-//   the changed files with +/− counts, the newest one unfolded.
+//   the changed files with +/− counts, the newest one unfolded. A file link from 진행 (`reveal`, #905) switches to
+//   this view, unfolds that file and focuses its row; a file the session did not change has no diff to show.
 // File contents stay in memory only; nothing is stored or logged.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, FileText } from 'lucide-react';
@@ -15,7 +16,7 @@ import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import type { FileDiff } from '../dispatch/lib/patch.ts';
 import { middle } from './format';
-import { changedFiles, WORK_POLL_MS, workMode, type ChangedFile, type DiffAnswer } from './workView';
+import { changedFiles, samePath, WORK_POLL_MS, workMode, type ChangedFile, type DiffAnswer } from './workView';
 
 const stem = (p: string) => p.replace(/\.dpx(\.json)?$/i, '');
 
@@ -30,15 +31,17 @@ interface Props {
   /** The panel is on screen (not hidden under a session sheet). */
   shown: boolean;
   dark: boolean;
+  /** A code file a link asked to see: shows the code view with that file unfolded. */
+  reveal?: string | null;
   onOpenFile: (path: string) => void;
 }
 
 export function AgentWorkView(p: Props) {
-  const mode = workMode(p.file, p.fileAt, p.files);
+  const mode = p.reveal ? 'code' : workMode(p.file, p.fileAt, p.files);
   return mode === 'doc' && p.file ? (
     <DocWork path={p.file} dark={p.dark} onOpenFile={p.onOpenFile} />
   ) : (
-    <CodeWork sid={p.sid} files={p.files} shown={p.shown} step={p.step} statusLabel={p.statusLabel} />
+    <CodeWork sid={p.sid} files={p.files} shown={p.shown} step={p.step} statusLabel={p.statusLabel} reveal={p.reveal ?? null} />
   );
 }
 
@@ -144,14 +147,29 @@ function useSessionDiff(sid: string, shown: boolean) {
   return { diff, failed, retry };
 }
 
-function CodeWork({ sid, files, shown, step, statusLabel }: { sid: string; files: readonly LiveFile[]; shown: boolean; step?: string; statusLabel?: string }) {
+function CodeWork({ sid, files, shown, step, statusLabel, reveal }: { sid: string; files: readonly LiveFile[]; shown: boolean; step?: string; statusLabel?: string; reveal: string | null }) {
   const { diff, failed, retry } = useSessionDiff(sid, shown);
   const list = useMemo(() => (diff ? changedFiles(diff, files) : []), [diff, files]);
-  // The newest file is open unless folded by hand; any other opens on a click.
+  // The newest file (or the one a link asked for) is open unless folded by hand; any other opens on a click.
   const [toggled, setToggled] = useState<ReadonlyMap<string, boolean>>(new Map());
-  useEffect(() => setToggled(new Map()), [sid]);
-  const isOpen = (c: ChangedFile, i: number) => toggled.get(c.path) ?? i === 0;
+  useEffect(() => setToggled(new Map()), [sid, reveal]);
+  const target = reveal ? (list.find((c) => samePath(c.path, reveal))?.path ?? null) : null;
+  const isOpen = (c: ChangedFile, i: number) => toggled.get(c.path) ?? (reveal ? c.path === target : i === 0);
   const toggle = (c: ChangedFile, i: number) => setToggled((m) => new Map(m).set(c.path, !isOpen(c, i)));
+  const ul = useRef<HTMLUListElement>(null);
+  // Bring the asked-for file into view and put focus on its row once the diff has it.
+  useEffect(() => {
+    if (!target) return;
+    const li = [...(ul.current?.children ?? [])].find((el) => (el as HTMLElement).dataset.workFile === target);
+    const row = li?.querySelector('summary');
+    row?.focus({ preventScroll: true });
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [target]);
+  const missing = reveal && diff && !target ? (
+    <p className="agent-live-muted" role="status" data-work-missing>
+      {middle(reveal, 40)} 파일은 이 세션에서 바뀌지 않아서 보여 줄 변경이 없어요.
+    </p>
+  ) : null;
 
   if (failed && !diff) {
     return (
@@ -171,7 +189,7 @@ function CodeWork({ sid, files, shown, step, statusLabel }: { sid: string; files
             {statusLabel && <div><dt>지금</dt><dd className="truncate" title={statusLabel}>{statusLabel}</dd></div>}
           </dl>
         )}
-        <p className="agent-live-muted">아직 바뀐 파일이 없어요.</p>
+        {missing ?? <p className="agent-live-muted">아직 바뀐 파일이 없어요.</p>}
       </section>
     );
   }
@@ -184,7 +202,8 @@ function CodeWork({ sid, files, shown, step, statusLabel }: { sid: string; files
         <span className="agent-work-sum"><span className="text-ok">+{add}</span> <span className="text-destructive">−{del}</span></span>
       </h3>
       {failed && <p className="agent-live-muted" role="status">최신 변경을 불러오지 못했어요. 이전 내용이에요.</p>}
-      <ul className="agent-live-list agent-work-files">
+      {missing}
+      <ul ref={ul} className="agent-live-list agent-work-files">
         {list.map((c, i) => {
           const open = isOpen(c, i);
           return (

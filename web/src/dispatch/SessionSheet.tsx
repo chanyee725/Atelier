@@ -1,4 +1,5 @@
-// One session in a side sheet: 대화 / 변경사항 / 정보 tabs, permission and answer cards, message box.
+// One session in a side sheet: 대화 / 변경사항 / 정보 tabs, permission and answer cards, message box. The agent live
+// panel (#905) reuses Chat, Info, Composer and AnswerCard as its own tabs instead of opening this sheet.
 // Transcripts come from the in-memory store (never stored). Errors show inline as a destructive Alert.
 import { useEffect, useRef, useState, type Ref } from 'react';
 import { Activity, ChevronRight, GitBranch, MessageCircleQuestion, Power, SendHorizontal, ShieldAlert, Square, Trash2 } from 'lucide-react';
@@ -18,7 +19,7 @@ import type { Entry, Pending, Session } from './types';
 import { canRun, READ_ONLY_NOTICE } from './lib/runnable.ts';
 import { holdForSheet, openAgentLive } from '../live/store';
 
-type Report = (p: Promise<unknown>) => Promise<boolean>;
+export type Report = (p: Promise<unknown>) => Promise<boolean>;
 
 /** One-line title for a tool call (its description, command, path or pattern) plus the full input. */
 function toolSummary(text: string): { title: string; detail: string } {
@@ -172,7 +173,7 @@ function PermissionCard({ s, p, report }: { s: Session; p: Pending; report: Repo
  * Never hidden while the session waits: without any question it says so instead of showing nothing.
  * A choice fills the message box so the person can check it before sending.
  */
-function AnswerCard({ s, onPick }: { s: Session; onPick: (text: string) => void }) {
+export function AnswerCard({ s, onPick }: { s: Session; onPick: (text: string) => void }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   if (!awaitsAnswer(s)) return null;
   const q = answerQuestion(s, entries);
@@ -225,7 +226,7 @@ function ThinkingLine({ s }: { s: Session }) {
   );
 }
 
-function Chat({ s, report }: { s: Session; report: Report }) {
+export function Chat({ s, report }: { s: Session; report: Report }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -254,14 +255,13 @@ function Chat({ s, report }: { s: Session; report: Report }) {
   );
 }
 
-function Info({ s }: { s: Session }) {
+export function Info({ s }: { s: Session }) {
   const rows: [string, string][] = [
     ['세션 ID', s.id],
     ['CLI 세션', s.providerSessionId ?? '—'],
     ['모델', `${s.model}${s.effort ? ` (effort ${s.effort})` : ''}`],
     ['역할', `${s.roleName}${s.canSpawn ? ' · 다른 세션을 만들 수 있음' : ''}`],
     ['권한 모드', permLabel(s.perm)],
-    ['작업 폴더', s.cwd],
     ['컨텍스트', `${fmtK(s.ctx)} / ${fmtK(s.ctxWindow)} (${pct(s.ctxWindow ? s.ctx / s.ctxWindow : null)})`],
   ];
   const usage: [string, number][] = [['입력', s.usage.input], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite], ['출력', s.usage.output]];
@@ -296,7 +296,7 @@ function Info({ s }: { s: Session }) {
   );
 }
 
-function Composer({ s, text, setText, inputRef, report }: { s: Session; text: string; setText: (v: string) => void; inputRef: Ref<HTMLTextAreaElement>; report: Report }) {
+export function Composer({ s, text, setText, inputRef, report }: { s: Session; text: string; setText: (v: string) => void; inputRef: Ref<HTMLTextAreaElement>; report: Report }) {
   const [busy, setBusy] = useState(false);
   const send = async () => {
     const v = text.trim();

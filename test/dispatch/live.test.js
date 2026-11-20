@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Hub } from "../../server/dispatch/hub.js";
-import { commandTarget, LIVE_FILES, LIVE_RECENT, LiveTracker, liveOf, shownPath } from "../../server/dispatch/live.js";
+import { commandTarget, LIVE_FILES, LIVE_RECENT, LiveTracker, liveOf, shellReadFiles, shownPath } from "../../server/dispatch/live.js";
 import { applyLiveDelta } from "../../shared/dispatch/live.ts";
 
 const CWD = "/tmp/proj/.dispatch/wt/a";
@@ -37,7 +37,7 @@ test("liveOf: Codex shell and file_change, Gemini tools, MCP", () => {
 
 test("shownPath: documents are workspace-relative, outside paths keep only the basename, .env is dropped", () => {
   assert.deepEqual(shownPath(`${WS}/plans/p.dpx.json`, where), { path: "plans/p.dpx.json", doc: true });
-  assert.deepEqual(shownPath("/home/someone/.config/app/settings.json", where), { path: "settings.json", doc: false });
+  assert.deepEqual(shownPath("/home/someone/.config/app/settings.json", where), { path: "settings.json", doc: false, outside: true });
   assert.deepEqual(shownPath("./src/a.ts", where), { path: "src/a.ts", doc: false });
   assert.equal(shownPath(`${CWD}/.env`, where), null);
   assert.equal(shownPath(`${CWD}/server/.env.local`, where), null);
@@ -173,4 +173,34 @@ test("tracker: unknown ids (outside writers, removed sessions) get no state", ()
   ids.delete("a");
   tr.note({ id: "a", cwd: CWD }, { kind: "tool", id: 1, name: "Read", text: "{}" });
   assert.equal(tr.byId.has("a"), false);
+});
+
+test("tracker: a file read outside the session's folder is marked outside, inside ones are not", () => {
+  const { tr } = tracker(1000);
+  const s = { id: "a", cwd: CWD };
+  tr.note(s, { kind: "tool", id: 1, name: "Read", text: JSON.stringify({ file_path: "/etc/hosts" }), final: true });
+  tr.note(s, { kind: "tool", id: 2, name: "Read", text: JSON.stringify({ file_path: `${CWD}/src/a.ts` }), final: true });
+  const files = tr.snapshot("a").files;
+  assert.equal(files.find(f => f.path === "hosts")?.outside, true);
+  assert.equal("outside" in files.find(f => f.path === "src/a.ts"), false);
+});
+
+test("shellReadFiles: cat, sed -n, head and cd-prefixed reads name their files; globs, sed -i and other commands do not", () => {
+  const paths = cmd => shellReadFiles(cmd, where).map(f => f.path);
+  assert.deepEqual(paths("cat src/a.ts"), ["src/a.ts"]);
+  assert.deepEqual(paths("sed -n 1,20p web/x.tsx"), ["web/x.tsx"]);
+  assert.deepEqual(paths(`cd ${CWD} && sed -n 40,110p server/live.js`), ["server/live.js"]);
+  assert.deepEqual(paths("head -n 5 a.ts b.ts | wc -l"), ["a.ts", "b.ts"]);
+  assert.deepEqual(paths("sed -n p a.ts > out.txt"), ["a.ts"]);
+  assert.deepEqual(paths("cat *.ts"), []);
+  assert.deepEqual(paths("sed -i s/a/b/ a.ts"), []);
+  assert.deepEqual(paths("grep -n foo a.ts"), []);
+  assert.deepEqual(shellReadFiles("cat /etc/hosts", where), [{ path: "hosts", doc: false, outside: true, edited: false }]);
+  assert.deepEqual(paths(`cat ${CWD}/.env`), []);
+});
+
+test("liveOf: a shell read is a read of its first file, with the file in the list", () => {
+  const r = liveOf("Bash", JSON.stringify({ command: `cd ${CWD} && sed -n 1,9p web/a.tsx` }), where);
+  assert.deepEqual([r.kind, r.label, r.target, r.files], ["read", "코드 읽기", "web/a.tsx", [{ path: "web/a.tsx", doc: false, edited: false }]]);
+  assert.deepEqual(liveOf("Bash", JSON.stringify({ command: "ls src" }), where).files, []);
 });

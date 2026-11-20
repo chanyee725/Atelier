@@ -1,4 +1,4 @@
-// Compact "who and what now" block of the agent live view (E559, #728): name tag, role, model, status with time in
+// Compact "who and what now" block of the agent live view (E559, #728): name (a name tag in hover cards), role, model, status with time in
 // state, and the running tool with its target and own clock. The panel header uses LiveSummaryView with data it
 // already holds; #736's diagram hover card uses AgentLiveSummary, which loads its own. Never shows the session's
 // folder (cwd), prompt or any transcript text.
@@ -29,18 +29,26 @@ export interface SummaryData {
 
 const DOT: Record<string, string> = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-destructive', idle: 'bg-idle' };
 
-export function LiveSummaryView({ d, now, compact, titleId }: { d: SummaryData; now: number; compact?: boolean; titleId?: string }) {
+/** `plain`: the name as plain text instead of the cursor-shaped name tag (the panel header, #905). */
+export function LiveSummaryView({ d, now, compact, titleId, plain }: { d: SummaryData; now: number; compact?: boolean; titleId?: string; plain?: boolean }) {
   const state = d.state ?? 'resting';
   const tone = liveStateTone(state);
   const label = liveStateLabel(state, !!d.current);
   return (
     <div className={cn('grid min-w-0 gap-1', compact && 'text-[12px]')} data-live-summary={d.sid}>
       <div className="flex min-w-0 items-start gap-2">
-        <h2 id={titleId} className="m-0 flex min-w-0 items-start gap-2 text-[13px] font-normal">
-          <AgentTag agent={{ sid: d.sid, name: d.name, color: d.color }} size={compact ? 'sm' : 'md'} />
-          {d.role && <span className="mt-[7px] truncate text-xs leading-5 text-muted-foreground">{d.role}</span>}
-        </h2>
-        {d.provider && d.modelLabel && <ModelTag provider={d.provider} label={d.modelLabel} className="mt-[6px]" />}
+        {plain ? (
+          <h2 id={titleId} className="m-0 flex min-w-0 items-baseline gap-2 text-[13px] font-normal">
+            <span className="truncate text-sm font-semibold text-foreground" data-live-name>{d.name}</span>
+            {d.role && <span className="truncate text-xs text-muted-foreground">{d.role}</span>}
+          </h2>
+        ) : (
+          <h2 id={titleId} className="m-0 flex min-w-0 items-start gap-2 text-[13px] font-normal">
+            <AgentTag agent={{ sid: d.sid, name: d.name, color: d.color }} size={compact ? 'sm' : 'md'} />
+            {d.role && <span className="mt-[7px] truncate text-xs leading-5 text-muted-foreground">{d.role}</span>}
+          </h2>
+        )}
+        {d.provider && d.modelLabel && <ModelTag provider={d.provider} label={d.modelLabel} className={plain ? 'ml-auto shrink-0' : 'mt-[6px]'} />}
       </div>
       {/* Only the state label is a live region, so a state change is announced; the clock beside it ticks every
           second and stays outside it (aria-live off) so screen readers do not read it each second. */}
