@@ -8,7 +8,7 @@ import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
-import { badgeRect } from '../../../shared/render/badge.ts';
+import { BADGE_H, badgeRect } from '../../../shared/render/badge.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -318,8 +318,14 @@ export function pathData(points: readonly Point[]): string {
   return points.map((p, i) => `${i ? 'L' : 'M'}${Math.round(p.x * 10) / 10} ${Math.round(p.y * 10) / 10}`).join('');
 }
 
-/** Gap between a node and its marks, and the label text size (scene units). */
-export const MARK_PAD = 5;
+/**
+ * How far in from a node's left and right corners its marks sit (scene units). Every mark straddles the node's top
+ * edge inside its width (#971), so nothing reaches into the gap where the next node, an edge or a neighbour's marks are.
+ */
+export const MARK_INSET = 10;
+/** Agent badge radius and the step between overlapping badges (scene units). */
+export const BADGE_R = 9;
+export const BADGE_STEP = 13;
 export const MARK_FONT = 11;
 
 /** Rough text width for the label plate: Hangul and other wide characters about one em, the rest about 0.6 em. */
@@ -330,24 +336,33 @@ export function textWidth(s: string, size = MARK_FONT): number {
 }
 
 export interface StepMarks {
-  /** Glyph chip on the top-right corner, the same chip as a diagram node's `badge:` (shared/render/badge.ts). */
+  /** Glyph chip, the same chip as a diagram node's `badge:` (shared/render/badge.ts), on the top edge at the right. */
   chip: Rect;
-  /** "state · agent" chip under the node; none when labels are hidden (too small to read). */
+  /** "state · agent" chip in the chip's place; none when labels are hidden (too small to read) or it does not fit. */
   label?: Rect & { text: string };
   /** Running step: a thin line along the node's bottom edge, inside the box. */
   progress?: { x1: number; x2: number; y: number };
 }
 
+/** Width the agent badges take from the node's left inset (scene units). */
+export function badgeSpan(count: number): number {
+  return count > 0 ? BADGE_R * 2 + (count - 1) * BADGE_STEP : 0;
+}
+
 /**
  * What the run layer draws for a step (#935): only chips and a progress line, never a fill or a ring over the node,
  * so the node keeps the diagram's own look (eraser-diagrams rules) and the state never reshapes it.
+ * The chips sit on the node's top edge, inside its width (#971): the agent badges at the left (`lead` is their span),
+ * the state at the right. The label says "glyph state · agents" when that fits beside the badges, else the state
+ * word alone, else only the glyph chip shows.
  */
-export function stepMarks(n: Pick<OverlayNode, 'rect' | 'glyph' | 'text' | 'live'>, labels: boolean): StepMarks {
+export function stepMarks(n: Pick<OverlayNode, 'rect' | 'glyph' | 'text' | 'live'>, labels: boolean, lead = 0): StepMarks {
   const { x, y, w, h } = n.rect;
-  const chip = badgeRect(x + w + MARK_PAD, y - MARK_PAD, textWidth(n.glyph));
-  const text = `${n.glyph} ${n.text}`;
-  const tw = textWidth(text) + 12;
-  const label = labels ? { x: x + w / 2 - tw / 2, y: y + h + MARK_PAD + 4, w: tw, h: 18, text } : undefined;
+  const right = x + w - MARK_INSET;
+  const chip = badgeRect(right - BADGE_H / 2, y, textWidth(n.glyph));
+  const room = right - (x + MARK_INSET + lead + (lead ? 4 : 0));
+  const fit = labels ? [`${n.glyph} ${n.text}`, `${n.glyph} ${n.text.split(' · ')[0]}`].find((t) => textWidth(t) + 12 <= room) : undefined;
+  const label = fit ? { x: right - (textWidth(fit) + 12), y: y - BADGE_H / 2, w: textWidth(fit) + 12, h: BADGE_H, text: fit } : undefined;
   const inset = Math.min(6, w / 4);
   const progress = n.live ? { x1: x + inset, x2: x + w - inset, y: y + h - 2 } : undefined;
   return { chip, ...(label ? { label } : {}), ...(progress ? { progress } : {}) };

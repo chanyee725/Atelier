@@ -7,6 +7,7 @@ import type { Block, TreeNode } from './api';
 import { TEMPLATES } from './dsl/templates';
 import { docExtensions, documentError } from './doc/extensions';
 import { DiagramEmbedView, DocContext, typeLabel } from './doc/DiagramView';
+import type { PlanLook } from './canvas/planStyle';
 import { FrameEmbedView } from './doc/FrameView';
 import { SlashCommands } from './doc/SlashMenu';
 import { WikiLinks } from './doc/WikiMenu';
@@ -58,6 +59,8 @@ type Props = {
   onExportBlock: (block: Block, kind: ImageKind) => void;
   /** The editor once it exists, and null when the pane goes (the agent margin reads the blocks, E532). */
   onEditor?: (editor: Editor | null) => void;
+  /** The file's plan look (#971): the plan block is drawn with its steps' role icons and colours. */
+  look?: PlanLook | null;
 };
 
 /** Scroll to a heading by its link id (or by its place in the outline) and flash it. */
@@ -93,7 +96,7 @@ const newId = () => `b_${Math.random().toString(36).slice(2, 10)}`;
  * Remounted per file (App keys it), so it reads `document` only when it starts. A document the
  * editor cannot read is never saved over: the pane shows an error and stays read-only.
  */
-export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock, onEditor }: Props) {
+export const DocPane = memo(function DocPane({ document, live, onLiveFail, blocks, getBlocks, getCanvas, dark, path, tree, onOpenFile, jump, onDocument, onBlocks, onShow, frameScene, frameBlocks, onShowFrame, onExportBlock, onEditor, look = null }: Props) {
   const getBlocksRef = useRef(getBlocks);
   getBlocksRef.current = getBlocks;
   const onDocumentRef = useRef(onDocument);
@@ -261,7 +264,7 @@ export const DocPane = memo(function DocPane({ document, live, onLiveFail, block
   const [outlineOpen, setOutlineOpen] = useState(false);
   const outline = useEditorState({ editor, selector: (s) => (s.editor ? outlineOf(s.editor.getJSON()) : []) });
   const inTable = useEditorState({ editor, selector: (s) => !!s.editor?.isActive('table') });
-  const ctx = useMemo(() => ({ path, blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExport: onExportBlock }), [path, blocks, frameScene, frameBlocks, dark, onShow, onShowFrame, onExportBlock]);
+  const ctx = useMemo(() => ({ path, blocks, frameScene, frameBlocks, dark, look, onShow, onShowFrame, onExport: onExportBlock }), [path, blocks, frameScene, frameBlocks, dark, look, onShow, onShowFrame, onExportBlock]);
 
   const tableActions: [string, () => boolean][] = [
     ['행 추가', () => editor.chain().focus().addRowAfter().run()],

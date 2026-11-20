@@ -42,6 +42,7 @@ import { CodeBadges } from './CodeBadges';
 import { codeInfoCache, shapeCode, shapeLabel, targetAfterNodes, targetAfterSelection, withoutOrphans, type CodeEl, type CodeTarget } from './codeLinks';
 import { hitHandle, imageReason, layoutFrame, layoutHandles, toLayout, type LayoutFrame } from './layoutEdit';
 import { askConfirm } from '../appDialog';
+import { drawnBlock, lookKey, type PlanLook } from './planStyle';
 
 export type CanvasData = { elements: unknown[]; appState: Record<string, unknown> };
 /** Show (scroll to and select) this block's image; a new `n` is a new request. */
@@ -57,6 +58,8 @@ type Props = {
   handle?: { current: CanvasHandle | null };
   /** Workspace path of the open file: live agent cursors (E56) of this file are drawn. */
   path?: string;
+  /** The file's plan look (#971): the plan block is drawn with its steps' role icons and colours. */
+  look?: PlanLook | null;
 };
 
 const theme = (dark: boolean) => (dark ? 'dark' : 'light') as 'dark' | 'light';
@@ -84,6 +87,7 @@ const NO_EMBEDS = () => false;
 type Sess = { blockId: string; key: string; s: LayoutSession | { reason: string } };
 /** Layout edit mode for a block; `start` is the press that entered it on a node, continued as a drag. */
 type Edit = { blockId: string; start: EditStart | null };
+/** `b` is the block as drawn (`drawnBlock`), like the code its session was opened for. */
 const ready = (s: Sess | null, b: Block | undefined): LayoutSession | null => (s && b && s.blockId === b.id && s.key === sessionKey(b) && !('reason' in s.s) ? s.s : null);
 const withLayout = (cd: Record<string, unknown> | undefined, layout: BlockLayout | undefined) => {
   const { layout: _old, ...rest } = cd ?? {};
@@ -106,7 +110,12 @@ const bumped = (e: FitEl, patch: Partial<FitEl>) => newElementWith(e as unknown 
 /** Whether Excalidraw's copy of the clean font has loaded; until then text is measured with a fallback font. */
 const cleanFontLoaded = () => Array.from(document.fonts).some((f) => f.family.replace(/["']/g, '') === 'Liberation Sans' && f.status === 'loaded');
 
-export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange, handle, path }: Props) {
+export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange, handle, path, look = null }: Props) {
+  // Blocks are drawn and laid out with the plan look in their code (planStyle.ts); writes keep the saved code.
+  const lookRef = useRef(look);
+  lookRef.current = look;
+  const looks = lookKey(look);
+  const drawnOf = useCallback(<B extends Block>(b: B): B => drawnBlock(b, lookRef.current), []);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const editorRef = useRef<BlockEditorHandle>(null);
@@ -136,9 +145,11 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
         shownTheme.current = want;
         picCache.current.clear();
       }
-      return picturesFor(list, picCache.current, (b) => renderBlock(b, want));
+      return picturesFor(list.map(drawnOf), picCache.current, (b) => renderBlock(b, want));
     },
-    [want],
+    // A new look draws the plan block again (its drawn code changes, so its cache entry misses).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [want, looks, drawnOf],
   );
   // The run overlay reads pictures by the image's file id (a sharpened variant maps back to its base picture).
   const pictureOf = useCallback((fileId: string) => sizes.current.get(baseFileId(fileId)), []);
@@ -223,9 +234,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const pic = sizes.current.get(baseFileId(img.fileId ?? ''));
     const el = wrap.current;
     if (!pic || !el) return null;
-    let origin = pic.anchor && pic.anchor.key === hash(`${shownTheme.current}\n${b.type}\n${b.code}`) ? pic.anchor : null;
+    const d = drawnBlock(b, lookRef.current);
+    let origin = pic.anchor && pic.anchor.key === hash(`${shownTheme.current}\n${d.type}\n${d.code}`) ? pic.anchor : null;
     // A picture drawn with its layout left out (§4.2) has no anchor, but it is what the session composes for that layout.
-    const s = ready(sessRef.current, b);
+    const s = ready(sessRef.current, d);
     if (!pic.anchor && pic.layoutReset && s) origin = { key: '', ...(s.compose(b.layout).scene.origin ?? { x: 0, y: 0 }) };
     if (!origin) return null;
     const r = el.getBoundingClientRect();
@@ -312,7 +324,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     if (!xapi || !id || !b) return;
     const img = imageOf(xapi.getSceneElements(), id);
     const why = (img && imageReason(img)) ?? null;
-    const s = why ? null : await openLayoutSession(b);
+    const s = why ? null : await openLayoutSession(drawnOf(b));
     const reason = why ?? (s && 'reason' in s ? s.reason : null);
     if (reason) return setNotice({ blockId: id, text: reason });
     if (selRef.current === id) enterEdit(id, null);
@@ -328,7 +340,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const first = imageOf(xapi.getSceneElements(), id);
     const why = first && imageReason(first, 'freeform');
     if (why) return setNotice({ blockId: id, text: why });
-    const s = await openLayoutSession(b, 'freeform');
+    const s = await openLayoutSession(drawnOf(b), 'freeform');
     if ('reason' in s) return setNotice({ blockId: id, text: s.reason });
     const els = xapi.getSceneElementsIncludingDeleted();
     const img = imageOf(els, id);
@@ -346,11 +358,12 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const frameId = frameFor(img, els);
     const inFrame = frameId ? converted.map((e) => ({ ...e, frameId })) : converted;
     const made = bindArrows(inFrame, bindings);
-    const fresh = made.filter((e) => !(e as { containerId?: string }).containerId).map((e) => e.id);
     xapi.updateScene({
       // The shapes take the image's place in the stacking order (inside its frame, if any).
       elements: els.flatMap((e) => (e === img ? [newElementWith(img, { isDeleted: true }), ...made] : [e])),
-      appState: { selectedElementIds: Object.fromEntries(fresh.map((x) => [x, true])) },
+      // Nothing stays selected (#971): selecting every new shape drew a square selection outline over each rounded box
+      // and arrow (it read as double borders) and opened Excalidraw's style panel, which shows only on a selection.
+      appState: { selectedElementIds: {}, selectedGroupIds: {} },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     focusCanvas(wrap.current);
@@ -759,7 +772,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       if (x < img.x || x > img.x + img.width || y < img.y || y > img.y + img.height) return;
       // No session (still being made, or a block that cannot be laid out: sequence, ERD, an error): this press moves
       // the block, like before, and says nothing; the palette's try is where the reason shows.
-      const ls = ready(sessRef.current, b);
+      const ls = ready(sessRef.current, drawnOf(b));
       const f = ls && frameOf(img, st, b);
       if (!ls || !f) return;
       const scene = ls.compose(b.layout).scene;
@@ -793,7 +806,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
 
   // The session for the selected (or edited) block, opened ahead and again whenever its code changes.
   const sessId = edit?.blockId ?? selBlock;
-  const sessBlock = sessId ? blocks.find((b) => b.id === sessId) : undefined;
+  const sessFound = sessId ? blocks.find((b) => b.id === sessId) : undefined;
+  const sessBlock = sessFound && drawnBlock(sessFound, look);
   const sessFor = sessBlock ? sessionKey(sessBlock) : null;
   useEffect(() => {
     const b = sessBlock;
@@ -809,7 +823,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   // Edit mode ends when its block goes away or its code can no longer be laid out by hand (an error, another kind).
   // While that block's code panel is open an error is judged later: typing passes through broken code, so the last
   // picture stays (not editable) and the verdict comes when the panel closes.
-  const editBlock = edit ? blocks.find((b) => b.id === edit.blockId) : undefined;
+  const editFound = edit ? blocks.find((b) => b.id === edit.blockId) : undefined;
+  const editBlock = useMemo(() => editFound && drawnBlock(editFound, look), [editFound, look]);
   const editSess = ready(sess, editBlock);
   useEffect(() => {
     if (!edit) return;
@@ -887,7 +902,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           const bid = el.type === 'image' ? blockIdOf(el as unknown as SceneEl) : null;
           const b = bid === null ? undefined : byId.get(bid);
           if (!b) return el;
-          const p = await renderBlock(b, want);
+          const p = await renderBlock(drawnOf(b), want);
           pics.set(p.fileId, p);
           return { ...el, fileId: p.fileId as FileId } as ExcalidrawElement;
         }),

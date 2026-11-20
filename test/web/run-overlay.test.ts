@@ -232,10 +232,18 @@ test('step marks (#935): chips and a progress line only, never a fill or ring ov
   const rect = { x: 100, y: 50, w: 160, h: 52 };
   const idle = stepMarks({ rect, glyph: '○', text: '대기', live: false }, true);
   assert.deepEqual(Object.keys(idle).sort(), ['chip', 'label']);
-  assert.ok(idle.chip.x + idle.chip.w > rect.x + rect.w, 'corner chip reaches the top-right corner');
-  assert.ok(idle.chip.y < rect.y);
-  assert.ok(idle.label!.y > rect.y + rect.h, 'label chip under the node');
   assert.equal(idle.label!.text, '○ 대기');
+  // #971: every mark straddles the top edge inside the node's width, so none reaches the next node or its marks.
+  for (const r of [idle.chip, idle.label!]) {
+    assert.ok(r.x >= rect.x && r.x + r.w <= rect.x + rect.w, 'inside the node horizontally');
+    assert.ok(r.y < rect.y && r.y + r.h > rect.y, 'on the top edge');
+    assert.ok(r.y + r.h < rect.y + rect.h, 'never below the node');
+  }
+  // Beside two agent badges the long label falls back to the state word, then to the glyph chip alone.
+  const busy = { rect, glyph: '✓', text: '완료 · Juno · Tali · Oren · Pell', live: false };
+  assert.equal(stepMarks(busy, true, 31).label!.text, '✓ 완료');
+  assert.ok(stepMarks(busy, true, 31).label!.x >= rect.x + 10 + 31, 'clear of the badges');
+  assert.equal(stepMarks({ ...busy, rect: { ...rect, w: 60 } }, true, 31).label, undefined);
   const live = stepMarks({ rect, glyph: '▶', text: '진행 · Juno', live: true }, false);
   assert.equal(live.label, undefined, 'labels hidden when too small');
   const p = live.progress!;

@@ -6,11 +6,12 @@ import type { Block } from '../api';
 import type { Scene } from '../../../shared/render/index';
 import type { ImageKind } from '../export/actions';
 import { layoutSig } from '../canvas/sync';
+import { drawnBlock, lookKey, type PlanLook } from '../canvas/planStyle';
 import { renderBlock, type BlockPicture } from '../canvas/render';
 import { MorphLayer, willMorph } from '../canvas/MorphLayer';
 import { createCoalescer } from '../lib/liveMotion';
 import { DIAGRAM_TYPES } from '../dsl/templates';
-import { RunEta, RunLayer, RunLegend } from '../run/RunLayer';
+import { RunEta, RunLayer } from '../run/RunLayer';
 import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
@@ -26,6 +27,8 @@ export type DocCtx = {
   /** Diagram blocks that sit inside a canvas frame, with their canvas position (see App). */
   frameBlocks: Block[];
   dark: boolean;
+  /** The file's plan look (#971); the plan block is drawn with it, like on the canvas. */
+  look?: PlanLook | null;
   onShow: (blockId: string) => void;
   onShowFrame: (frameId: string) => void;
   onExport: (block: Block, kind: ImageKind) => void;
@@ -38,7 +41,7 @@ const lastShown = createShownMemory<BlockPicture>();
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
 function DiagramView({ node, selected }: ReactNodeViewProps) {
-  const { path, blocks, dark, onShow, onExport } = useContext(DocContext);
+  const { path, blocks, dark, look, onShow, onExport } = useContext(DocContext);
   const id = typeof node.attrs.blockId === 'string' ? node.attrs.blockId : '';
   const block = blocks.find((b) => b.id === id);
   const [pic, setPic] = useState<BlockPicture | null>(null);
@@ -84,7 +87,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   useEffect(() => {
     if (!block) return;
     let live = true;
-    void renderBlock(block, theme).then((p) => {
+    void renderBlock(drawnBlock(block, look), theme).then((p) => {
       if (!live) return;
       if (shown.current) settle.push('pic', p);
       else {
@@ -98,7 +101,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
     };
     // Redraw only when what the picture depends on changes, not when the block moves on the canvas.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [block?.id, block?.type, block?.code, layoutSig(block?.layout), theme]);
+  }, [block?.id, block?.type, block?.code, layoutSig(block?.layout), theme, block?.id === look?.block ? lookKey(look) : '']);
 
   // The progress board sits over the picture as the button's sibling (not inside it: a button holding another button
   // is invalid and its accessible name would swallow the step labels). It follows the img as the column resizes.
@@ -107,7 +110,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   const img = imgRef;
   const [box, setBox] = useState<{ left: number; top: number; scale: number } | null>(null);
   const scene = pic?.scene;
-  // The legend shows exactly when the board draws (a step links to a node), the same rule as on the canvas.
+  // The board draws only when a step links to a node, the same rule as on the canvas. No legend in the document (#971).
   const board = useMemo(() => (steps && scene && boardShown(scene, steps) ? { scene, steps } : null), [steps, scene]);
   useEffect(() => {
     const s = stage.current;
@@ -144,7 +147,6 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
         <p className="doc-diagram-gone">캔버스에서 지운 다이어그램이에요. 이 줄을 지워도 돼요.</p>
       )}
       {block && board && box && <RunEta steps={board.steps} />}
-      {block && board && box && <RunLegend steps={board.steps} />}
       {/* The block's head row (#889): its name, then the hint in muted text. */}
       <figcaption>
         <strong>{label}</strong>

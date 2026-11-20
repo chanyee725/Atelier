@@ -3,6 +3,7 @@ import type { Block } from './api';
 import type { CanvasData, CanvasFocus } from './canvas/ExcalidrawCanvas';
 import type { CanvasHandle } from './export/types';
 import { LazyBoundary } from './LazyBoundary';
+import type { PlanLook } from './canvas/planStyle';
 
 // Excalidraw is large; load it only when a canvas is shown.
 const ExcalidrawCanvas = lazy(() => import('./canvas/ExcalidrawCanvas'));
@@ -18,6 +19,8 @@ type Props = {
   handle?: { current: CanvasHandle | null };
   /** Called when the canvas chunk fails to load: save the open file. */
   onFail?: () => Promise<boolean | void> | boolean | void;
+  /** The file's plan look (#971). */
+  look?: PlanLook | null;
 };
 
 const asCanvas = (c: unknown): CanvasData => {
@@ -25,7 +28,7 @@ const asCanvas = (c: unknown): CanvasData => {
   return { elements: Array.isArray(o.elements) ? o.elements : [], appState: o.appState && typeof o.appState === 'object' ? o.appState : {} };
 };
 
-export function CanvasPane({ fileKey, canvas, blocks, focus, dark, onChange, handle, onFail }: Props) {
+export function CanvasPane({ fileKey, canvas, blocks, focus, dark, onChange, handle, onFail, look }: Props) {
   if (fileKey === null)
     return (
       <main className="flex h-full min-h-64 flex-1 items-center justify-center p-6" aria-label="캔버스">
@@ -44,7 +47,7 @@ export function CanvasPane({ fileKey, canvas, blocks, focus, dark, onChange, han
           </p>
         }
       >
-        <ExcalidrawCanvas key={fileKey} path={fileKey.slice(0, fileKey.lastIndexOf('#'))} canvas={asCanvas(canvas)} blocks={blocks} focus={focus} dark={dark} onChange={onChange} handle={handle} />
+        <ExcalidrawCanvas key={fileKey} path={fileKey.slice(0, fileKey.lastIndexOf('#'))} canvas={asCanvas(canvas)} blocks={blocks} focus={focus} dark={dark} onChange={onChange} handle={handle} look={look} />
       </Suspense>
       </LazyBoundary>
     </main>
