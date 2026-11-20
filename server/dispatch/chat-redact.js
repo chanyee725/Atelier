@@ -3,6 +3,12 @@
 // shapes it hides phone-like numbers, long random tokens, absolute and home paths and name-like
 // words in common contexts. It matches shapes, not known values, and leans to masking too much:
 // a false positive only hides a word in an old conversation.
+//
+// Trade-offs kept on purpose:
+// - Absolute paths with only two parts outside the system roots (/work/atelier, /api/file) stay:
+//   masking them would also hide every API route and short repo path mentioned in a chat.
+// - Names are found by context only (a title, a name field, an intro, a greeting, a surname before
+//   입니다/가); a bare name with no context stays. Inside a context the match is wide on purpose.
 import { MASK, redact } from "./redact.js";
 
 export { MASK };
@@ -12,6 +18,16 @@ export const IMAGE = "[이미지]";
 const P = "[^\\s'\"`<>()\\[\\]{},;:|]";
 // Common nouns that take 님/씨 in this app's copy and are not names.
 const NOT_NAMES = new Set(["사용자", "관리자", "고객", "회원", "선생", "리뷰어", "구현자", "팀원", "여러분", "작성자", "담당자", "개발자", "디자이너", "테스터", "팀장", "대표", "손님"]);
+
+// Common Korean surnames for "<surname><given>입니다/가" without a title.
+// Single-syllable surnames take a two-syllable given name only, so common two-syllable words (문서가, 정상입니다) stay.
+const SURNAMES_2 = "황보|남궁|제갈|선우|독고|사공";
+const SURNAMES = "김|이|박|최|정|강|조|윤|장|임|한|오|서|신|권|황|안|송|류|유|홍|전|고|문|양|손|배|백|허|남|심|노|하|곽|성|차|주|우|구|민|진|나|지|엄|채|원|천|방|공|현|함|변|염|여|추|도|소|석|선|설|마|길|연|위|표|명|기|반|왕|금|옥|육|인|맹|모|탁|국|어|은|편|용|예|경|봉|부";
+// A name of one to three words in any case (john smith) or two to four Hangul syllables.
+const ANY_NAME = "(?:[가-힣]{2,4}|[A-Za-z][\\w'-]*(?:\\s+[A-Za-z][\\w'-]*){0,2})";
+// Keys after which whatever follows is taken as a name, in any case: name: john smith, 담당: 김가짜.
+const NAME_KEYS = ["my name is", "full name", "name", "username", "user name", "author", "contact", "owner", "assignee", "reviewer", "co-authored-by", "signed-off-by", "reviewed-by", "reported-by"];
+const KO_NAME_KEYS = "제\\s*이름|이름|성함|담당자?|연락처?|문의|작성자|보낸\\s*사람|받는\\s*사람";
 
 /** `word` as a pattern that matches it in any case, while the name after it must still be capitalized. */
 function anyCase(word) {
@@ -55,7 +71,12 @@ const RULES = [
   // A name after a self-introduction or a name field: 제 이름은 X, 저는 X입니다, name: X, Author: X.
   [/((?:제\s*이름은|이름은|이름\s*[:=]|성함은|성함\s*[:=])\s*)([가-힣]{2,4}|[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*){0,2})/g, (_m, keep) => `${keep}${MASK}`],
   [/((?:저는|나는)\s*)([가-힣]{2,4})(?=이에요|예요|입니다|이고|이야|라고)/g, (_m, keep) => `${keep}${MASK}`],
-  [new RegExp(`(\\b(?:${["my name is", "i am", "i'm", "this is", "name", "full name", "username", "user", "author", "co-authored-by:", "signed-off-by:", "reviewed-by:", "reported-by:", "dear", "hi", "hello", "hey", "thanks", "thank you", "cc"].map(anyCase).join("|")})\\s*[:=]?\\s+)[A-Z][\\w'-]*(?:\\s+[A-Z][\\w'-]*){0,2}`, "g"),
+  // Name fields in any case, the value may be lowercase: name: john smith, "author": "x", 담당: 김가짜, Contact: x.
+  [new RegExp(`(\\b(?:${NAME_KEYS.map(anyCase).join("|")})["']?\\s*[:=]\\s*["']?|(?:my\\s+name\\s+is)\\s+)${ANY_NAME}`, "gi"), (_m, keep) => `${keep}${MASK}`],
+  [new RegExp(`((?<![가-힣])(?:${KO_NAME_KEYS})\\s*[:=]\\s*)${ANY_NAME}`, "g"), (_m, keep) => `${keep}${MASK}`],
+  // A surname plus a given name before 입니다, 이에요, 예요, 라고, 께서 or 가: 홍가짜입니다, 김가짜가.
+  [new RegExp(`(?<![가-힣])(?:(?:${SURNAMES_2})[가-힣]{1,2}|(?:${SURNAMES})[가-힣]{2})(?=입니다|이에요|예요|라고|(?:께서|가)(?![가-힣]))`, "g"), m => (NOT_NAMES.has(m) ? m : MASK)],
+  [new RegExp(`(\\b(?:${["my name is", "i am", "i'm", "this is", "name", "full name", "username", "user", "author", "co-authored-by:", "signed-off-by:", "reviewed-by:", "reported-by:", "contact", "dear", "hi", "hello", "hey", "thanks", "thank you", "cc", "by"].map(anyCase).join("|")})\\s*[:=]?\\s+)[A-Z][\\w'-]*(?:\\s+[A-Z][\\w'-]*){0,2}`, "g"),
     (_m, keep) => `${keep}${MASK}`],
   [/\b(Mr|Mrs|Ms|Miss|Dr|Prof|Sir|Madam)\.?\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*)?/g, MASK],
   // @handles (GitHub logins, chat mentions); scoped packages (@types/node) are kept.

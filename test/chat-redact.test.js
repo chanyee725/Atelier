@@ -82,6 +82,27 @@ test("name-like words: Korean titles, introductions, name fields, greetings, @ha
   masked("ping @fake-login and use @types/node", `ping ${MASK} and use @types/node`);
 });
 
+test("name rules: any-case name fields, Korean contact keys, by, surname before 입니다/가", () => {
+  masked("name: fake person", `name: ${MASK}`);
+  masked("NAME = fakeperson", `NAME = ${MASK}`);
+  masked('{"name": "fakeuser"}', `{"name": "${MASK}"}`);
+  masked("my name is fake person", `my name is ${MASK}`);
+  masked("Contact: fake person", `Contact: ${MASK}`);
+  masked("담당: 김가짜", `담당: ${MASK}`);
+  masked("연락: fake person", `연락: ${MASK}`);
+  masked("Written by Fake Person", `Written by ${MASK}`);
+  masked("홍가짜입니다", `${MASK}입니다`);
+  masked("김가짜가 말했어요", `${MASK}가 말했어요`);
+  masked("남궁짜가 왔어요", `${MASK}가 왔어요`);
+  // Ordinary words and phrases around the same contexts stay.
+  masked("by default it works", "by default it works");
+  masked("file name and size", "file name and size");
+  masked("구현자가 고쳤어요", "구현자가 고쳤어요");
+  masked("문서가 있어요, 정상입니다", "문서가 있어요, 정상입니다");
+  // Two-part absolute paths outside the system roots stay on purpose (see chat-redact.js).
+  masked("GET /api/file in /work/atelier", "GET /api/file in /work/atelier");
+});
+
 test("inline images become a placeholder", () => {
   masked("look data:image/png;base64,iVBORw0KGgoAAAA= here", `look ${IMAGE} here`);
 });
