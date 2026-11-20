@@ -1,0 +1,71 @@
+/* 최근 page (#889, Lists.dc.html): two cards on the page ground, edges drawn as a translucent ring. Existing tokens
+   only. Quiet by design: no standout besides the content; the filter chip pressed state is the only fill. */
+.recent-page { display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--background); }
+.recent-head {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px 6px 20px; flex-shrink: 0;
+}
+.recent-head h1 { margin: 0; flex-grow: 1; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.recent-body { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; padding: 4px 20px 20px; }
+.recent-card {
+  min-width: 0; display: flex; flex-direction: column; background: var(--card); color: var(--card-foreground);
+  border-radius: 10px; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.recent-main { flex: 999 1 480px; }
+.recent-side { flex: 1 1 320px; }
+.recent-card-head { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 16px 8px; }
+.recent-card-head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.recent-count { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+/* Kind filter: Radix toggle group, chips with a full radius; the pressed one gets a faint ink fill. */
+.recent-filter { margin-left: auto; gap: 2px; }
+.recent-filter [data-slot='toggle-group-item'] {
+  height: 24px; min-width: 0; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  color: var(--muted-foreground);
+}
+.recent-filter [data-slot='toggle-group-item'][aria-pressed='true'],
+.recent-filter [data-slot='toggle-group-item'][data-state='on'] {
+  color: var(--foreground); background: color-mix(in srgb, var(--foreground) 7%, transparent);
+}
+
+.recent-list { margin: 0; padding: 0; list-style: none; overflow-x: auto; }
+.recent-row,
+.recent-trash-row {
+  display: grid; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 16px;
+  border-top: 1px solid var(--border); font-size: 13px; text-align: left; color: var(--foreground);
+}
+.recent-row {
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 160px) 84px; min-width: 480px;
+  background: transparent; cursor: pointer; transition: background-color 150ms ease;
+}
+.recent-trash-row { grid-template-columns: minmax(0, 1fr) 84px; }
+@media (hover: hover) and (pointer: fine) {
+  .recent-row:hover { background: color-mix(in srgb, var(--foreground) 4%, transparent); }
+}
+.recent-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 6px; }
+.recent-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.recent-place { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
+.recent-when { font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.recent-kind {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 12px;
+  font-weight: 500; color: var(--muted-foreground); background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.recent-foot { margin: 0; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+.recent-none { margin: 0; padding: 24px 16px; border-top: 1px solid var(--border); font-size: 13px; color: var(--muted-foreground); }
+
+.recent-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 24px 56px; text-align: center;
+  border-top: 1px solid var(--border);
+}
+.recent-empty-mark { stroke: var(--input); stroke-width: 1.5; stroke-linejoin: round; }
+.recent-empty-title { margin: 0; font-size: 13px; font-weight: 600; }
+.recent-empty-text { margin: 0; max-width: 28ch; font-size: 13px; color: var(--muted-foreground); text-wrap: pretty; }
+
+/* Press feedback; hover colours stay with the Button primitive. */
+.recent-btn { transition: transform 140ms ease-out, background-color 150ms ease, border-color 150ms ease; }
+.recent-btn:active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .recent-btn:active { transform: none; }
+}
+@media (forced-colors: active) {
+  .recent-card { border: 1px solid CanvasText; }
+}
