@@ -2,13 +2,16 @@
 // relative imports, no desktop collapse (the sidebar is always shown from 768px; below that it is a Sheet drawer),
 // SidebarInset has two frames: `floating` (inset panel on the frame, layout B) and `attached` (flush, 1px left line,
 // layout A, used by the document screen). Sizes follow doc 6 §4.2: 264px wide, 30px rows, 44px rows in the drawer.
+// From 768px the width is the person's own (#934): SidebarResizeHandle on the right edge sets --sidebar-width, 200–480px.
 import * as React from 'react';
 import { Slot as SlotPrimitive } from 'radix-ui';
 import { cn } from '../../lib/utils';
 import { FOCUS_RING } from '../../lib/focus';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './sheet';
+import { keyWidth, useSidebarWidth, SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN } from '../../lib/sidebarWidth';
 
-const SIDEBAR_WIDTH = '264px';
+/** The drawer below 768px keeps the design width; only the desktop column is resizable. */
+const DRAWER_WIDTH = `${SIDEBAR_DEFAULT}px`;
 const MOBILE_QUERY = '(max-width: 767px)';
 
 // Sidebar colours. The shell and sidebar sit on --sidebar; the inset panel stays on --background.
@@ -24,7 +27,15 @@ const C = {
   border: 'border-sidebar-border',
 };
 
-type SidebarContextValue = { isMobile: boolean; openMobile: boolean; setOpenMobile: (open: boolean) => void; toggleSidebar: () => void };
+type SidebarContextValue = {
+  isMobile: boolean;
+  openMobile: boolean;
+  setOpenMobile: (open: boolean) => void;
+  toggleSidebar: () => void;
+  width: number;
+  previewWidth: (w: number) => void;
+  commitWidth: (w: number) => void;
+};
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
 
 export function useSidebar() {
@@ -58,12 +69,16 @@ function SidebarProvider({
   const openMobile = openProp ?? openState;
   const setOpenMobile = React.useCallback((o: boolean) => (onOpenMobileChange ? onOpenMobileChange(o) : setOpenState(o)), [onOpenMobileChange]);
   const toggleSidebar = React.useCallback(() => setOpenMobile(!openMobile), [setOpenMobile, openMobile]);
-  const value = React.useMemo(() => ({ isMobile, openMobile, setOpenMobile, toggleSidebar }), [isMobile, openMobile, toggleSidebar]);
+  const { width, preview: previewWidth, commit: commitWidth } = useSidebarWidth();
+  const value = React.useMemo(
+    () => ({ isMobile, openMobile, setOpenMobile, toggleSidebar, width, previewWidth, commitWidth }),
+    [isMobile, openMobile, setOpenMobile, toggleSidebar, width, previewWidth, commitWidth],
+  );
   return (
     <SidebarContext.Provider value={value}>
       <div
         data-slot="sidebar-wrapper"
-        style={{ '--sidebar-width': SIDEBAR_WIDTH, ...style } as React.CSSProperties}
+        style={{ '--sidebar-width': `${width}px`, ...style } as React.CSSProperties}
         className={cn('flex h-full w-full', C.bg, className)}
         {...props}
       >
@@ -77,8 +92,9 @@ function SidebarProvider({
 function Sidebar({ className, children, label, ...props }: React.ComponentProps<'nav'> & { label: string }) {
   const { isMobile, openMobile, setOpenMobile } = useSidebar();
   const nav = (
-    <nav data-slot="sidebar" aria-label={label} className={cn('flex h-full w-(--sidebar-width) shrink-0 flex-col', C.bg, className)} {...props}>
+    <nav data-slot="sidebar" aria-label={label} className={cn('relative flex h-full w-(--sidebar-width) shrink-0 flex-col', C.bg, className)} {...props}>
       {children}
+      {!isMobile && <SidebarResizeHandle />}
     </nav>
   );
   if (!isMobile) return nav;
@@ -87,7 +103,7 @@ function Sidebar({ className, children, label, ...props }: React.ComponentProps<
       {/* The sheet is portalled out of the wrapper, so it sets the width variable itself. */}
       <SheetContent
         side="left"
-        style={{ '--sidebar-width': SIDEBAR_WIDTH } as React.CSSProperties}
+        style={{ '--sidebar-width': DRAWER_WIDTH } as React.CSSProperties}
         className={cn('w-[min(var(--sidebar-width),85vw)] p-0', C.bg, C.border)}
         aria-describedby={undefined}
       >
@@ -96,6 +112,68 @@ function Sidebar({ className, children, label, ...props }: React.ComponentProps<
         {nav}
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * The sidebar's right edge (#934): drag, ←/→ (Shift for bigger steps) or Home to resize, double-click for the default.
+ * A WAI-ARIA window splitter: a focusable separator with its value. Quiet until hovered, focused or dragged,
+ * then a 1px line in the ring colour; the 8px hit area straddles the edge.
+ */
+function SidebarResizeHandle() {
+  const { width, previewWidth, commitWidth } = useSidebar();
+  const drag = React.useRef<{ x: number; from: number; to: number } | null>(null);
+  const [dragging, setDragging] = React.useState(false);
+  const end = () => {
+    const d = drag.current;
+    if (!d) return;
+    drag.current = null;
+    setDragging(false);
+    commitWidth(d.to);
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="사이드바 너비"
+      aria-valuemin={SIDEBAR_MIN}
+      aria-valuemax={SIDEBAR_MAX}
+      aria-valuenow={width}
+      aria-valuetext={`${width}px`}
+      tabIndex={0}
+      title="드래그하거나 ←/→로 너비를 바꿔요. 더블클릭하면 처음 너비로 돌아가요."
+      data-slot="sidebar-resize"
+      data-dragging={dragging ? '' : undefined}
+      className="group/resize absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none outline-none select-none"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault(); // no text selection while dragging
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { x: e.clientX, from: width, to: width };
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (!d) return;
+        d.to = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, d.from + e.clientX - d.x));
+        previewWidth(d.to);
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+      onLostPointerCapture={end}
+      onDoubleClick={() => commitWidth(SIDEBAR_DEFAULT)}
+      onKeyDown={(e) => {
+        const next = keyWidth(width, e.key, e.shiftKey);
+        if (next === null) return;
+        e.preventDefault();
+        commitWidth(next);
+      }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-transparent transition-colors duration-150 group-hover/resize:bg-foreground/20 group-focus-visible/resize:w-0.5 group-focus-visible/resize:bg-ring group-data-dragging/resize:bg-ring motion-reduce:transition-none forced-colors:group-focus-visible/resize:bg-[Highlight]"
+      />
+    </div>
   );
 }
 

@@ -97,7 +97,7 @@ test('new pipeline from the sidebar menu gets the template and the plan badge', 
   await row('Ship').waitFor();
   const badge = row('Ship').getByRole('img', { name: '파이프라인: 계획' });
   await badge.waitFor();
-  assert.equal(await badge.textContent(), '◐계획');
+  assert.equal(await badge.textContent(), '◐', 'the row shows the glyph only; the word is the tooltip and name (#934)');
   // Two plans carry it now (release/계획 from the menu, ops/ship); the plain file still has none.
   const badges = await nav.getByRole('img', { name: '파이프라인: 계획' }).evaluateAll((els) => els.map((e) => e.closest('[data-slot="sidebar-menu-button"]')?.textContent ?? ''));
   assert.equal(badges.length, 2, `badges: ${JSON.stringify(badges)}`);
