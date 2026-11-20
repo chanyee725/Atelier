@@ -3,7 +3,7 @@
 // agent swaps the content. Closes with ✕, Esc while focus is inside, or the same trigger again; focus then goes back
 // to the trigger (store.ts). Hidden while a SessionSheet (modal) is open and shown again when it closes.
 // Tabs (#905): 진행 (metadata only: tool labels, short targets, shown paths, numbers; the one exception is the redacted
-// question a waiting session asks, #886), 작업 보기, and the session's own 대화 · 변경사항 · 정보 (AgentLiveSession), so
+// question a waiting session asks, #886), 작업 보기, and the session's own 대화 · 변경사항 · 정보 · 조직도 (AgentLiveSession, #943), so
 // no SessionSheet opens over the panel. Touched files link: a document opens in the editor, a code file in 작업 보기.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -32,7 +32,7 @@ const AgentLiveSession = lazy(() => import('./AgentLiveSession'));
 const SessionActions = lazy(() => import('./SessionActions'));
 
 type Tab = 'progress' | 'work' | SessionTab;
-const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기'], ['chat', '대화'], ['diff', '변경사항'], ['info', '정보']];
+const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기'], ['chat', '대화'], ['diff', '변경사항'], ['info', '정보'], ['org', '조직도']];
 
 /** Mounted once in App.tsx. A SessionSheet opened elsewhere (세션 보드) still hides the panel while it is open. */
 export function AgentLiveHost({ onOpenFile, dark = false }: { onOpenFile: (path: string) => void; dark?: boolean }) {
@@ -185,7 +185,7 @@ function AgentLivePanel({ sid, hidden, closing, dark, onOpenFile }: { sid: strin
               onOpenFile={onOpenFile}
             />
           </TabsContent>
-          {(['chat', 'diff', 'info'] as const).map((v) => (
+          {(['chat', 'diff', 'info', 'org'] as const).map((v) => (
             <TabsContent key={v} value={v} className="agent-live-body agent-live-body-session">
               <Suspense fallback={<section><p className="agent-live-muted">불러오는 중이에요…</p></section>}>
                 <AgentLiveSession sid={sid} tab={v} />
