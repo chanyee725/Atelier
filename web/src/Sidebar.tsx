@@ -11,7 +11,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, FolderClosed, FolderInput, GitBranch, House, LayoutGrid, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
-import { Kbd } from './components/ui/kbd';
 import {
   Sidebar as SidebarRoot,
   SidebarContent,
@@ -345,7 +344,6 @@ export function Sidebar(p: Props) {
             {waiting}
           </SidebarMenuBadge>
         )}
-        <Kbd className={cn(v.id === 'all' && waiting > 0 ? 'ml-1' : 'ml-auto', 'opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden')}>{v.key}</Kbd>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -375,7 +373,6 @@ export function Sidebar(p: Props) {
             >
               <LayoutGrid aria-hidden />
               <span className="truncate">세션 보드</span>
-              <Kbd className="ml-auto opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden">S</Kbd>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
