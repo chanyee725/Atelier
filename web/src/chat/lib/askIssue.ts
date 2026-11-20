@@ -1,12 +1,12 @@
 // Ask the chat dock about one issue (#954). A tiny module store like live/issueStore.ts: an issue row (or the team
 // panel's 채팅으로 가기) calls askAboutIssue, the dock subscribes, opens, pins the issue card and, for an issue nobody
-// works on yet, sends the helper one message asking for a proposal. Nothing starts until the person presses 시작하기
+// works on yet, puts a proposal question in the box for the person to send (no model call on click). Nothing starts until the person presses 시작하기
 // under the answer. Metadata only (number, title, state label, URL); the issue body never enters the store.
 import { useSyncExternalStore } from 'react';
 
 export type AskedIssue = { number: number; title: string; state: string; url?: string };
 /**
- * `ask`: send the proposal question to the helper and offer 시작하기 under its answer. Without it the dock only opens
+ * `ask`: prefill the proposal question for the helper and offer 시작하기 under its answer once it is sent. Without it the dock only opens
  * with the card pinned, talking to `partner` (the team's lead) when given.
  * `seq` grows on every call so the same issue twice opens the dock again.
  */

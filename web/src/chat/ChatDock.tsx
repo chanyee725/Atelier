@@ -128,7 +128,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
     await deliver(text, sid);
   };
 
-  // An issue row asked about an issue: open on the helper (or the team's lead), pin the card, ask once.
+  // An issue row asked about an issue: open on the helper (or the team's lead), pin the card, prefill the question.
   useEffect(() => {
     if (!asked || asked.seq === handled.current) return;
     handled.current = asked.seq;
@@ -141,11 +141,9 @@ export function ChatDock({ folder }: { folder: string | null }) {
     // A partner not in the list (not loaded yet, or ended) falls back to the helper (see `target`).
     setKey(asked.partner ?? HELPER_KEY);
     if (!asked.ask) return;
-    const helper = targets[0]!;
-    const text = issueAskText(asked.issue.number);
-    // Claude not connected: leave the question in the box; the notice says why.
-    if (helperOffline(helper, providers)) setDraft(text);
-    else void deliver(text, helper.id);
+    // Opening an issue never calls the model by itself (2026-11-20): the proposal question waits in the box, and
+    // the person sends it (or edits it) when they want an answer.
+    setDraft(issueAskText(asked.issue.number));
     // Runs once per request (seq); the other values are read as they are at that moment.
   }, [asked]);
 
