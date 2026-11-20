@@ -358,11 +358,12 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const frameId = frameFor(img, els);
     const inFrame = frameId ? converted.map((e) => ({ ...e, frameId })) : converted;
     const made = bindArrows(inFrame, bindings);
-    const fresh = made.filter((e) => !(e as { containerId?: string }).containerId).map((e) => e.id);
     xapi.updateScene({
       // The shapes take the image's place in the stacking order (inside its frame, if any).
       elements: els.flatMap((e) => (e === img ? [newElementWith(img, { isDeleted: true }), ...made] : [e])),
-      appState: { selectedElementIds: Object.fromEntries(fresh.map((x) => [x, true])) },
+      // Nothing stays selected (#971): selecting every new shape drew a square selection outline over each rounded box
+      // and arrow (it read as double borders) and opened Excalidraw's style panel, which shows only on a selection.
+      appState: { selectedElementIds: {}, selectedGroupIds: {} },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     });
     focusCanvas(wrap.current);
