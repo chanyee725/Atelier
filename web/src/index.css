@@ -812,3 +812,17 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .session-track.is-on::after { animation: none; width: 100%; opacity: .5; }
 }
+
+/* A session that waits for a person (사람 기다림, permission or question): an amber ring that breathes, so it is seen
+   from across the dashboard. Reduced motion keeps a steady ring. */
+.session-look {
+  box-shadow: 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent);
+  animation: session-look 1.8s ease-in-out infinite;
+}
+@keyframes session-look {
+  0%, 100% { box-shadow: 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent); }
+  50% { box-shadow: 0 0 0 1.5px var(--warn), 0 0 0 7px color-mix(in oklch, var(--warn) 6%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .session-look { animation: none; }
+}
