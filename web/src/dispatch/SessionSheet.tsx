@@ -7,11 +7,12 @@ import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Markdown } from './Markdown';
 import { Textarea } from '../components/ui/textarea';
 import { cn } from '../lib/utils';
 import { DiffView } from './DiffView';
 import { ModelTag, StatusBadge } from './parts';
-import { fmtK, fmtUsd, pct, permLabel, providerName, stateOf } from './lib/format.ts';
+import { fmtK, fmtUsd, pct, permLabel, stateOf } from './lib/format.ts';
 import { answerQuestion } from './lib/question.ts';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
@@ -67,22 +68,22 @@ function EntryView({ m, agent }: { m: Entry; agent: string }) {
   switch (m.kind) {
     case 'user':
       return (
-        <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground">
-          {m.label && <div className="mb-1 text-xs text-primary-foreground/60">{m.label}</div>}
-          <div className="whitespace-pre-wrap">{m.text}</div>
+        <div className="ml-auto max-w-[85%] rounded-[10px] bg-muted px-3 py-2 text-foreground">
+          {m.label && <div className="mb-1 text-xs text-muted-foreground">{m.label}</div>}
+          <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.text}</div>
         </div>
       );
     case 'assistant':
       return (
-        <div className="max-w-[92%] text-sm leading-6">
-          <div className="mb-1 text-xs text-muted-foreground">{agent}</div>
-          <div className="whitespace-pre-wrap">{m.text}</div>
+        <div className="max-w-[92%]">
+          <div className="mb-1 truncate text-xs text-muted-foreground">{agent}</div>
+          <Markdown text={m.text} />
         </div>
       );
     case 'tool': {
       const { title, detail } = toolSummary(m.text);
       return (
-        <details className="group rounded-lg border bg-muted/40 text-xs text-muted-foreground open:bg-muted/60">
+        <details className="group rounded-[10px] border bg-muted/40 text-xs text-muted-foreground open:bg-muted/60">
           <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 [&::-webkit-details-marker]:hidden">
             <span className="shrink-0 font-semibold text-foreground">{m.name}</span>
             <span className="min-w-0 truncate">{title}</span>
@@ -106,9 +107,9 @@ function EntryView({ m, agent }: { m: Entry; agent: string }) {
         </div>
       );
     case 'error':
-      return <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">{m.text}</div>;
+      return <div className="rounded-[10px] border border-destructive/40 bg-destructive/5 px-3 py-2 text-destructive">{m.text}</div>;
     default:
-      return <div className="text-xs text-muted-foreground">{m.text}</div>;
+      return <div className="border-t pt-2 text-xs text-muted-foreground">{m.text}</div>;
   }
 }
 
@@ -134,7 +135,7 @@ function ToolRun({ items, agent }: { items: Indexed[]; agent: string }) {
   for (const c of calls) { const n = c.e.name ?? '도구'; names.set(n, (names.get(n) ?? 0) + 1); }
   const failed = items.some(x => x.e.kind === 'tool_result' && x.e.error);
   return (
-    <details className="group rounded-lg border bg-muted/30 text-xs text-muted-foreground">
+    <details className="group rounded-[10px] border bg-muted/30 text-xs text-muted-foreground">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 hover:bg-muted/60 [&::-webkit-details-marker]:hidden">
         <span className="shrink-0 font-semibold text-foreground tabular-nums">도구 호출 {calls.length}개</span>
         <span className="min-w-0 truncate">{[...names].map(([n, c]) => (c > 1 ? `${n} ${c}` : n)).join(', ')}</span>
@@ -234,17 +235,17 @@ export function Chat({ s, report }: { s: Session; report: Report }) {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [entries, s.pending.length]);
-  const agent = providerName(s.provider);
+  const agent = s.name;
   const runnable = canRun(s);
   return (
     <div
       ref={box}
       onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
-      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body-mid [&>*]:shrink-0"
+      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body-mid text-[13px] leading-[1.55] [&>*]:shrink-0"
     >
-      {!entries && <p className="text-sm text-muted-foreground">대화를 불러오는 중이에요…</p>}
+      {!entries && <p className="text-muted-foreground">대화를 불러오는 중이에요…</p>}
       {entries?.length === 0 && (
-        <p className="text-sm text-muted-foreground">이번 서버 실행 중에 주고받은 대화가 없어요.{runnable && ' 메시지를 보내면 이전 세션을 이어서 실행해요.'}</p>
+        <p className="text-muted-foreground">이번 서버 실행 중에 주고받은 대화가 없어요.{runnable && ' 메시지를 보내면 이전 세션을 이어서 실행해요.'}</p>
       )}
       {entries && groupTools(entries).map(g => (g.length === 1 && g[0]!.e.kind !== 'tool'
         ? <EntryView key={g[0]!.i} m={g[0]!.e} agent={agent} />
@@ -305,7 +306,7 @@ export function Composer({ s, text, setText, inputRef, report }: { s: Session; t
     if (await report(api('POST', `/api/sessions/${encodeURIComponent(s.id)}/message`, { text: v }))) setText('');
     setBusy(false);
   };
-  if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-sm text-muted-foreground">{READ_ONLY_NOTICE}</p>;
+  if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-[13px] leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>;
   return (
     <div className="overlay-foot flex items-end gap-2 border-t">
       <Textarea
@@ -315,7 +316,7 @@ export function Composer({ s, text, setText, inputRef, report }: { s: Session; t
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void send(); } }}
         placeholder={`${s.name}에게 메시지 보내기`}
         aria-label="메시지"
-        className="max-h-40 min-h-11 resize-none"
+        className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-[13px] leading-[1.55] md:text-[13px]"
         rows={1}
       />
       <Button size="icon" onClick={() => void send()} disabled={!text.trim() || busy} aria-label="보내기"><SendHorizontal /></Button>

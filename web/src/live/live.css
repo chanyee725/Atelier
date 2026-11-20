@@ -389,17 +389,6 @@
   flex: 1;
   min-height: 0;
 }
-.agent-live-controls {
-  display: flex;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.agent-live-controls .agent-live-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
 .agent-live-danger {
   color: var(--destructive);
 }
