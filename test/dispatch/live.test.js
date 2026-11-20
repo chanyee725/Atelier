@@ -37,7 +37,7 @@ test("liveOf: Codex shell and file_change, Gemini tools, MCP", () => {
 
 test("shownPath: documents are workspace-relative, outside paths keep only the basename, .env is dropped", () => {
   assert.deepEqual(shownPath(`${WS}/plans/p.dpx.json`, where), { path: "plans/p.dpx.json", doc: true });
-  assert.deepEqual(shownPath("/home/someone/.config/app/settings.json", where), { path: "settings.json", doc: false });
+  assert.deepEqual(shownPath("/home/someone/.config/app/settings.json", where), { path: "settings.json", doc: false, outside: true });
   assert.deepEqual(shownPath("./src/a.ts", where), { path: "src/a.ts", doc: false });
   assert.equal(shownPath(`${CWD}/.env`, where), null);
   assert.equal(shownPath(`${CWD}/server/.env.local`, where), null);
@@ -173,4 +173,14 @@ test("tracker: unknown ids (outside writers, removed sessions) get no state", ()
   ids.delete("a");
   tr.note({ id: "a", cwd: CWD }, { kind: "tool", id: 1, name: "Read", text: "{}" });
   assert.equal(tr.byId.has("a"), false);
+});
+
+test("tracker: a file read outside the session's folder is marked outside, inside ones are not", () => {
+  const { tr } = tracker(1000);
+  const s = { id: "a", cwd: CWD };
+  tr.note(s, { kind: "tool", id: 1, name: "Read", text: JSON.stringify({ file_path: "/etc/hosts" }), final: true });
+  tr.note(s, { kind: "tool", id: 2, name: "Read", text: JSON.stringify({ file_path: `${CWD}/src/a.ts` }), final: true });
+  const files = tr.snapshot("a").files;
+  assert.equal(files.find(f => f.path === "hosts")?.outside, true);
+  assert.equal("outside" in files.find(f => f.path === "src/a.ts"), false);
 });

@@ -49,8 +49,8 @@ function field(text, obj, keys) {
 /**
  * A path as the view may show it, `{ path, doc }` or null: a Drawing document inside the workspace is
  * workspace-relative (it opens in the app), anything else inside the session's folder is relative to it, and a
- * path outside both keeps only its basename, so home folders and user names never reach the UI. `.env` files are
- * dropped.
+ * path outside both keeps only its basename (marked `outside`, so the view never links it), so home folders and user
+ * names never reach the UI. `.env` files are dropped.
  */
 export function shownPath(p, { cwd = null, workspaceDir = null } = {}) {
   if (!p || typeof p !== "string") return null;
@@ -67,7 +67,7 @@ export function shownPath(p, { cwd = null, workspaceDir = null } = {}) {
   const rel = inside(cwd) ?? (abs ? null : path.normalize(p).replace(/^(\.\/)+/, ""));
   if (rel) return { path: rel, doc: false };
   const base = path.basename(p);
-  return base ? { path: base, doc: false } : null;
+  return base ? { path: base, doc: false, outside: true } : null;
 }
 
 const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -209,6 +209,8 @@ export class LiveTracker {
     const prev = st.files.get(f.path);
     // An edit stays an edit: a later read of the same file does not hide that it was changed.
     const file = { path: f.path, edited: !!(prev?.edited || f.edited), at, doc: !!(prev?.doc || f.doc) };
+    // A basename that was ever outside the session's folder stays unlinked.
+    if (prev?.outside || f.outside) file.outside = true;
     st.files.delete(f.path);
     st.files.set(f.path, file);
     st.dirty.files.add(f.path);

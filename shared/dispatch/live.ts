@@ -28,6 +28,8 @@ export interface LiveFile {
   at: number;
   /** A workspace document (`.dpx.json`) that opens in Drawing. */
   doc: boolean;
+  /** Outside the workspace and the session's folder (only its basename is kept): shown, never linked. */
+  outside?: boolean;
 }
 
 export interface AgentLive {
