@@ -40,6 +40,25 @@ export function StatusBadge({ state, className }: { state: SessionState; classNa
   );
 }
 
+/**
+ * Refresh chip (#897): neutral ground with a small dot in the tone colour; the label carries the meaning, so it reads
+ * without colour. The 세션 보드 uses it for state and 확인 필요 marks; StatusBadge stays for the other screens.
+ */
+export function DotChip({ tone, label, state, className }: { tone: Tone | 'none'; label: string; state?: string; className?: string }) {
+  return (
+    <span data-state={state} className={cn('inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full bg-foreground/[0.06] px-2 text-xs font-medium whitespace-nowrap text-foreground/80', className)}>
+      <span aria-hidden className={cn('size-[5px] shrink-0 rounded-full bg-current forced-colors:bg-[CanvasText]', TONE_TEXT[tone])} />
+      {label}
+    </span>
+  );
+}
+
+/** DotChip for a session state. */
+export function StateChip({ state, className }: { state: SessionState; className?: string }) {
+  const s = STATE[state] ?? STATE.resting;
+  return <DotChip tone={s.tone} label={s.label} state={state} className={className} />;
+}
+
 const FILL: Record<Tone | 'none', string> = {
   ok: '[&>[data-slot=progress-indicator]]:bg-ok',
   warn: '[&>[data-slot=progress-indicator]]:bg-warn',

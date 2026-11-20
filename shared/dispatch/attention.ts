@@ -7,6 +7,8 @@ export interface MergeCheck { ok: boolean | null; commit: string | null; base: s
 export interface AttentionTask {
   id: string; lead: string | null; title: string; stage: string; owner: string | null;
   etaAt: number | null; mergeCheck?: MergeCheck | null;
+  /** Last change the lead made (server/dispatch/hub.js setTask); older servers may leave it out. */
+  updatedAt?: number;
   /** Server's flag (server/state.js taskStuck); absent or null while the task looks fine. */
   stuck?: TaskStuck | null;
 }
@@ -50,6 +52,8 @@ export interface AttentionItem {
 export const LIMIT_WARN = 0.75;
 /** Used when no guard settings are loaded; the server's defaults. */
 export const DEFAULT_GUARD: LimitGuard = { five: 0.9, seven: 0.85 };
+/** A task row nobody has touched for this long, with no one working on it, no longer says what is going on (#897). */
+export const STALE_TASK_MS = 12 * 3600_000;
 const pct = (x: number) => Math.round(x * 100);
 const ACTIVE: SessionState[] = ["failed", "waiting", "stuck"];
 
@@ -67,6 +71,19 @@ function ownerSession(owner: string | null, sessions: Session[]) {
   if (!owner) return null;
   const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return sessions.find(s => s.status !== "done" && new RegExp(`(^|[^\\p{L}\\d])${esc(s.name)}($|[^\\p{L}\\d])`, "u").test(owner)) ?? null;
+}
+
+const busy = (s: Session | null | undefined) => s?.status === "running" || s?.status === "starting";
+
+/**
+ * Whether a task's late or merge row no longer matches what is going on (#897): its lead has ended (done or error,
+ * so no one is left to close it), or nobody changed it for STALE_TASK_MS while neither its lead nor its owner works.
+ * Such rows sat in the strip for days ("17시간 지연" on work merged long ago). The 작업 보드 still lists the task.
+ */
+export function staleTask(t: AttentionTask, lead: Session | null | undefined, owner: Session | null, now: number) {
+  if (lead && (lead.status === "done" || lead.status === "error")) return true;
+  const last = Math.max(t.updatedAt ?? 0, t.mergeCheck?.at ?? 0);
+  return last > 0 && now - last > STALE_TASK_MS && !busy(lead) && !busy(owner);
 }
 
 /**
@@ -93,6 +110,7 @@ export function attentionItems(
   for (const t of tasks) {
     if (t.stage === "done") continue;
     const owner = ownerSession(t.owner, sessions);
+    if (staleTask(t, t.lead ? sessions.find(s => s.id === t.lead) : null, owner, now)) continue;
     const target = owner?.id ?? t.lead;
     if (t.mergeCheck?.ok === false) {
       out.push({ key: `m:${t.id}`, kind: "merge", level: "bad", who: t.title, reason: t.mergeCheck.reason || "병합을 확인하지 못했어요", since: t.mergeCheck.at, sessionId: t.lead ?? target });

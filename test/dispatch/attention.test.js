@@ -145,3 +145,24 @@ test("elapsed", () => {
   assert.equal(elapsed(NOW - 72 * MIN, NOW), "1시간 12분");
   assert.equal(elapsed(NOW - 3 * 1440 * MIN, NOW), "3일");
 });
+
+test("stale late and merge rows drop out: ended lead, or untouched for 12h with no one working (#897)", () => {
+  const H = 60 * MIN;
+  const task = (o) => ({ id: "t", lead: "L", title: "로그인", stage: "merge", owner: "Remy", etaAt: NOW - 17 * H, updatedAt: NOW - 17 * H, ...o });
+  const lead = (status) => ses({ id: "L", name: "Faye", status, attention: null });
+  const remy = (status) => ses({ id: "r", name: "Remy", status, attention: null });
+  const kinds = (o) => run(o).map(i => i.kind);
+  // Untouched for 17 hours, lead and owner idle: gone.
+  assert.deepEqual(kinds({ sessions: [lead("idle"), remy("idle")], tasks: [task()] }), []);
+  // A failed merge check from 17 hours ago with no one on it: gone too.
+  const mc = { ok: false, commit: "abc", base: "develop", reason: "아직 develop에 없어요", at: NOW - 17 * H };
+  assert.deepEqual(kinds({ sessions: [lead("idle")], tasks: [task({ owner: null, etaAt: null, mergeCheck: mc })] }), []);
+  // Same age but the owner is working on it: still shown.
+  assert.deepEqual(kinds({ sessions: [lead("idle"), remy("running")], tasks: [task()] }), ["late"]);
+  // Recently touched: still shown.
+  assert.deepEqual(kinds({ sessions: [lead("idle"), remy("idle")], tasks: [task({ updatedAt: NOW - H })] }), ["late"]);
+  // The lead has ended: nothing can close it, so the row goes even when fresh.
+  assert.deepEqual(kinds({ sessions: [lead("done"), remy("idle")], tasks: [task({ updatedAt: NOW - H })] }), []);
+  // Older servers without updatedAt keep the old behaviour.
+  assert.deepEqual(kinds({ sessions: [lead("idle")], tasks: [task({ updatedAt: undefined })] }), ["late"]);
+});

@@ -17,32 +17,13 @@ import { useUsage } from './lib/usage';
 import { events } from './lib/events';
 import { lastValue } from './lib/lastValue';
 import type { ProviderMeta } from './modelConnect';
-import { guardValue, type GuardField, type UsageGroup, type UsageWindow } from './settings/model';
+import { cardRows, type CardRow } from './lib/usageCardRows';
+import type { UsageGroup } from './settings/model';
 
 /** Hover delays, like the default interest delay but shorter: open after a short rest, close after a grace period. */
 const OPEN_MS = 250;
 const CLOSE_MS = 150;
 const GAP = 8;
-
-/** Claude's windows, always listed in this order (missing ones say there is no data yet). */
-const CLAUDE_WINDOWS = ['5시간', '주간', 'Fable 주간'];
-/** The guard field holding each window's block threshold. */
-const GUARD_OF: Record<string, Record<string, GuardField['id']>> = {
-  claude: { '5시간': 'five', 주간: 'seven', 'Fable 주간': 'fable' },
-  openai: { '5시간': 'codexFive', 주간: 'codexSeven' },
-};
-
-export type CardRow = { label: string; used: number | null; reset: number | null; limit: number | null };
-
-/** The rows the card shows for a provider: Claude's three windows in order, else the windows the provider reported. */
-export function cardRows(id: string, group: UsageGroup | undefined, settings: DispatchSettings | null): CardRow[] {
-  const windows: (UsageWindow | { label: string; used: null; reset: null })[] =
-    id === 'claude' ? CLAUDE_WINDOWS.map((label) => group?.windows.find((w) => w.label === label) ?? { label, used: null, reset: null }) : (group?.windows ?? []);
-  return windows.map((w) => {
-    const field = GUARD_OF[id]?.[w.label];
-    return { label: w.label, used: w.used ?? null, reset: w.reset ?? null, limit: field && settings ? guardValue(field, settings) : null };
-  });
-}
 
 const keptSettings = lastValue<DispatchSettings>();
 const settingsOf = () => {

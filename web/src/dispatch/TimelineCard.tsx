@@ -1,5 +1,5 @@
 // 타임라인 card of the 세션 board (E29, #879): one row per session of the picked project in role lanes, the last two hours across, each stretch
-// drawn by state. Shape tells states apart without colour: active states fill the row, stuck is hatched, resting is
+// drawn by state on a sunken, rounded track (refresh, #897). Shape tells states apart without colour: active states fill the row, stuck is hatched, resting is
 // a low solid bar (no fade, so it keeps 3:1 against the track), done a thin faded line, a failure a red tick. History is state and time only (GET /api/timeline).
 // Forced-colors mode drops author backgrounds and gradients, so every mark also gets a system-colour border there
 // (stuck dashed, failures in Highlight); the shapes still tell states apart.
@@ -10,7 +10,7 @@ import { roleColor } from '../run/overlayModel';
 import { windowSpans, WINDOW_MS, type Entry } from '../../../shared/dispatch/timeline.js';
 import { STATE, TONE_COLOR, stateOf } from './lib/format.ts';
 import { rowHistory } from './lib/usage.ts';
-import { StatusBadge } from './parts';
+import { StateChip } from './parts';
 import { api, useDispatch } from './store';
 import { useScope } from './scope';
 import type { Scope } from './lib/folder.ts';
@@ -49,7 +49,7 @@ function barStyle(state: SessionState) {
 function Swatch({ state }: { state: SessionState }) {
   return (
     <span aria-hidden className="flex h-3 w-4 shrink-0 items-center">
-      <span className={cn('w-full rounded-[2px]', SHAPE[state].h, forcedMark(state))} style={barStyle(state)} />
+      <span className={cn('w-full rounded-full', SHAPE[state].h, forcedMark(state))} style={barStyle(state)} />
     </span>
   );
 }
@@ -67,21 +67,21 @@ function Row({ s, history, now, windowMs, onOpen }: { s: Session; history: Entry
       onClick={onOpen}
       data-row={s.name}
       aria-label={`${s.name}, 지금 ${STATE[state].label}. ${summary}${fails.length ? `. 실패 ${fails.length}번` : ''}`}
-      className="grid w-full grid-cols-[200px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @max-[560px]:grid-cols-1 @max-[560px]:gap-1.5"
+      className="grid w-full grid-cols-[200px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @max-[560px]:grid-cols-1 @max-[560px]:gap-1.5"
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate text-sm font-medium">{s.name}</span>
-        <StatusBadge state={state} className="ml-auto" />
+        <StateChip state={state} className="ml-auto" />
       </span>
-      <span aria-hidden className="relative block h-5 overflow-hidden rounded-sm bg-muted/50">
+      <span aria-hidden className="relative block h-3 overflow-hidden rounded-full bg-sunken">
         {spans.map(p => (
           <span key={p.from} data-span={p.state} title={`${STATE[known(p.state)].label} · ${hhmm(p.from)}–${hhmm(p.to)} (${mins(p.to - p.from)})`}
             className="absolute inset-y-0 flex min-w-0.5 items-center" style={{ left: x(p.from), width: w(p.from, p.to) }}>
-            <span className={cn('w-full', SHAPE[known(p.state)].h, forcedMark(known(p.state)))} style={barStyle(known(p.state))} />
+            <span className={cn('w-full rounded-full', SHAPE[known(p.state)].h, forcedMark(known(p.state)))} style={barStyle(known(p.state))} />
           </span>
         ))}
         {fails.map(t => (
-          <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[3px] -translate-x-1/2 bg-destructive ring-1 ring-card', FORCED_FAIL)} style={{ left: x(t) }} />
+          <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[3px] -translate-x-1/2 bg-destructive ring-1 ring-sunken', FORCED_FAIL)} style={{ left: x(t) }} />
         ))}
       </span>
     </button>
