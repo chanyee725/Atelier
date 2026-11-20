@@ -14,6 +14,7 @@ import { plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } 
 import { isFindKey } from './dashboardRows';
 import { PlanAreas } from './PlanList';
 import { ApprovalCard } from './ApprovalCard';
+import { RecentPage } from './RecentPage';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
 export type HomeProps = {
@@ -36,6 +37,10 @@ export type HomeProps = {
   narrow?: boolean;
   /** The 알림함 bell, alone on the right of the header (#786, #793). */
   bell?: React.ReactNode;
+  /** Show the 최근 page (#889) instead of the dashboard. */
+  recent?: boolean;
+  /** Opens the 보관함 dialog, from the 최근 page's 보관함 card. */
+  onArchive?: () => void;
 };
 
 
@@ -111,6 +116,11 @@ export function Home(props: HomeProps) {
       이 프로젝트를 찾지 못했어요.{' '}
       <Button variant="link" className="h-auto p-0" onClick={() => props.onProject(null)}>대시보드로 가기</Button>
     </Empty>
+  );
+  if (props.recent && !props.project) return (
+    <main className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <RecentPage data={data} version={props.version} narrow={props.narrow} bell={props.bell} onOpen={props.onOpen} onNewDoc={() => props.onCreate('doc', null)} onArchive={props.onArchive} />
+    </main>
   );
   return (
     <main className="flex min-h-0 flex-1 scroll-pt-[39px] flex-col overflow-auto" data-screen={project ? 'project' : 'dashboard'}>

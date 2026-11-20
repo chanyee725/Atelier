@@ -1007,6 +1007,8 @@ export function App() {
               narrow={narrow}
               bell={bell}
               project={homeProject}
+              recent={homeSection.kind === 'recent'}
+              onArchive={() => setTrashOpen(true)}
               version={tree}
               onProject={goProject}
               onOpen={openFile}
