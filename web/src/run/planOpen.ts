@@ -1,6 +1,7 @@
 // The two requests behind the plan strip's 시작하기 (E20), outside React so tests drive them with a real FileSession:
 // open (save first, then read what the server holds) and start (approve exactly the revision the dialog showed).
 import type { FileSession } from '../fileSession';
+import type { StepOverrides } from '../../../shared/dispatch/plan-overrides.ts';
 import { startBody, type PipelineStatus, type PlanSnapshot } from './planStripModel.ts';
 
 /** Shown when the person's edits did not reach the server, so the server's plan is not the one they see. */
@@ -24,11 +25,11 @@ export async function openPlanConfirm(
   return { kind: 'open', status: st };
 }
 
-export async function requestStart(path: string, shown: Pick<PlanSnapshot, 'revision'>, fetchFn: typeof fetch = fetch) {
+export async function requestStart(path: string, shown: Pick<PlanSnapshot, 'revision'>, fetchFn: typeof fetch = fetch, overrides?: StepOverrides) {
   const res = await fetchFn('/api/pipeline/start', {
     method: 'POST',
     headers: { 'x-drawing': '1', 'content-type': 'application/json' },
-    body: JSON.stringify(startBody(path, shown)),
+    body: JSON.stringify(startBody(path, shown, overrides)),
   });
   const body = (await res.json().catch(() => ({}))) as { error?: string; blockers?: string[]; revision?: number };
   return { res, body };

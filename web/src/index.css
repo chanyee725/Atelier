@@ -863,3 +863,14 @@ body {
   animation: none;
   box-shadow: inset 0 0 0 2px var(--origin-ring), 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent);
 }
+
+/* The 시작하기 confirm's team (#972): one quiet row per step; the one standout is the start button. */
+.start-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.7fr); gap: 6px; align-items: center; font-size: 12px; }
+.start-row-name { display: flex; min-width: 0; flex-direction: column; }
+.start-row [data-slot="native-select"] { display: flex; }
+@media (max-width: 640px) { .start-row { grid-template-columns: 1fr 1fr; } .start-row-name { grid-column: 1 / -1; } }
+.start-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 12px; }
+.start-meter { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.start-meter-bar { width: 72px; height: 4px; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
+.start-meter-bar > span { display: block; height: 100%; background: var(--muted-foreground); }
+.start-meter-bar > span[data-high] { background: var(--destructive); }

@@ -6,7 +6,7 @@
 import { toastResult } from '../activity/actionToast';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useId, useRef, useState } from 'react';
 import type { FileSession } from '../fileSession';
 import { useSession } from '../useSession';
 import { PLAN_CHANGED_NOTICE, confirmSnapshot, isPlanChanged, limitLine, startError, unansweredAsks, type PipelineStatus, type PlanSnapshot } from './planStripModel';
@@ -18,6 +18,8 @@ import { planApproval, type PlanApproval } from './planApprovalModel';
 import { StatusDot } from '../home/dash';
 import { whenLabel } from '../lib/when';
 import { clearPlanGate, setPlanGate } from './planGate';
+import { StartConfig, type StartChoice } from './StartConfig';
+import { nodeLabels } from '../../../shared/dispatch/run-summary.ts';
 
 const CHIP_TONE = { waiting: 'warn', revised: 'warn', approved: 'ok', unknown: 'idle' } as const;
 
@@ -43,6 +45,8 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
   const document = useSession(session, (s) => s.file?.document);
   const planBlock = useSession(session, (s) => s.file?.plan?.block ?? null);
+  const plan = useSession(session, (s) => s.file?.plan ?? null);
+  const blocks = useSession(session, (s) => s.file?.blocks);
   const [modelsOpen, setModelsOpen] = useState(false);
   const modelsId = useId();
   const [status, setStatus] = useState<PipelineStatus | null>(null);
@@ -54,6 +58,10 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
   // The plan the dialog shows; 시작하기 sends this revision, never a later one.
   const [shown, setShown] = useState<PlanSnapshot | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The team the dialog proposes, as edited; sent with 시작하기 as per-step overrides (#972).
+  const [choice, setChoice] = useState<StartChoice | null>(null);
+  const planCode = blocks?.find((b) => b.id === planBlock)?.code;
+  const labels = useMemo(() => nodeLabels(planCode), [planCode]);
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const noticeId = useId();
@@ -168,6 +176,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
       setStatus(st);
       setShown(confirmSnapshot(st));
       setNotice(null);
+      setChoice(null);
       setConfirming(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : '시작하지 못했어요');
@@ -183,7 +192,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
     setBusy(true);
     setError(null);
     try {
-      const { res, body } = await requestStart(path, shown);
+      const { res, body } = await requestStart(path, shown, undefined, choice?.overrides);
       if (!res.ok) {
         if (isPlanChanged(res.status, body)) {
           // Stay in the dialog with the new plan, so the person confirms what will really run.
@@ -272,15 +281,19 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
       ref={dialog}
       aria-labelledby={titleId}
       onClose={() => setConfirming(false)}
-      className="m-auto w-[min(28rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
+      className="m-auto w-[min(46rem,calc(100%-2rem))] overscroll-contain rounded-lg border bg-background p-0 text-sm text-foreground shadow-md backdrop:overflow-hidden backdrop:overscroll-contain backdrop:bg-black/40"
     >
       <h2 id={titleId} className="overlay-head border-b text-sm font-semibold">
         이 계획으로 시작할까요?
       </h2>
       <div className="flex flex-col gap-1.5 px-(--overlay-x) py-(--overlay-y)">
-        <p>
-          세션 {view.sessions}개{viewLimits ? ` · ${viewLimits}` : ''}
-        </p>
+        {/* The plan as the server read it when the dialog opened; remounted on a new revision so the rows follow it. */}
+        {confirming && plan && shown && <StartConfig key={shown.revision} plan={plan} labels={labels} limits={view.limits} onChange={setChoice} />}
+        {!plan && (
+          <p>
+            세션 {view.sessions}개{viewLimits ? ` · ${viewLimits}` : ''}
+          </p>
+        )}
         <p>바뀐 점: {view.changes.length ? view.changes.join(', ') : '없어요'}</p>
         {/* Space is reserved (visibility, not display) so the buttons do not move under the pointer. */}
         <p id={noticeId} role="alert" className="text-destructive" style={{ visibility: notice ? 'visible' : 'hidden' }}>
@@ -299,7 +312,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
           className="px-3 text-sm aria-disabled:hover:bg-primary"
           onClick={() => void start()}
         >
-          시작하기
+          이대로 시작
         </Button>
       </form>
     </dialog>
