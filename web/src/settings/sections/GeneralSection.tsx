@@ -9,6 +9,7 @@ import { cn } from '../../lib/utils';
 import { TOAST_CATEGORIES } from '../../activity/appEvents';
 import { setCategoryOn, useToastOff } from '../../activity/appNotify';
 import { useSettingsLoad } from '../context';
+import { ChatHistoryField } from '../ChatHistoryField';
 import { LoadNote, OffNote, ThemeField } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
 import { TEAM_TOGGLES } from '../model';
@@ -121,6 +122,7 @@ export default function GeneralSection() {
           {note.text}
         </p>
       </div>
+      <ChatHistoryField />
       <UserDefaultsForm />
     </SectionFrame>
   );
