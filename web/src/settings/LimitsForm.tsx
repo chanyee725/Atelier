@@ -97,8 +97,9 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
       {(load.kind === 'ok' || off) &&
         // A provider's group shows once that provider is connected (#676); with Dispatch off every group shows read-only.
         GUARD_FIELDS.filter((g) => !g.provider || off || (providers as Record<string, { connected?: boolean } | undefined>)[g.provider]?.connected).map((g) => (
-          <fieldset key={g.title} disabled={off} aria-describedby={off ? offId : undefined} data-provider={g.provider} className="flex flex-col gap-2 disabled:opacity-60">
-            <legend className="text-sm font-medium">{g.title}</legend>
+          <fieldset key={g.title} disabled={off} aria-describedby={off ? offId : undefined} data-provider={g.provider} className="flex min-w-0 flex-col gap-2 rounded-card bg-background px-4 py-3.5 disabled:opacity-60">
+            {/* A legend inside a padded fieldset sits on its border; float it so it stays in the card (#889). */}
+            <legend className="float-left w-full text-sm font-medium">{g.title}</legend>
             <p className="text-xs text-muted-foreground">{g.hint}</p>
             {g.fields.length > 0 && <ul className="flex flex-col gap-2">
               {g.fields.map((f) => (
@@ -116,9 +117,9 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
                       min={f.min}
                       max={f.max}
                       required={f.id !== 'fable'}
-                                            value={texts[f.id]}
+                      value={texts[f.id]}
                       onChange={(e) => set(f.id, e.target.value)}
-                      className="h-8 w-28 rounded-md border bg-transparent px-2 text-sm tabular-nums max-md:h-11"
+                      className="h-8 w-28 rounded-control border border-(--line-strong) bg-card px-2 text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-11"
                     />
                   </div>
                   <button
@@ -143,7 +144,7 @@ export function LimitsForm({ load, onRetry, labelledBy, className }: { load: Set
       </p>
       {load.kind === 'ok' && (
         <div className="flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={resetAll} className={cn(BTN, 'border')}>
+          <button type="button" onClick={resetAll} className={cn(BTN, 'bg-card shadow-(--shadow-card)')}>
             모두 기본값으로
           </button>
           <button type="submit" disabled={saving} className={PRIMARY_BTN}>
