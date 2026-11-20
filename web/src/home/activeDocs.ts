@@ -43,7 +43,7 @@ export function activeDocs(
 ): ActiveDoc[] {
   const byPath = new Map(docs.map((d) => [d.path, d]));
   const writers = new Map<string, AgentPresence[]>();
-  for (const a of agents) if (a.file && !a.outside) writers.set(a.file, [...(writers.get(a.file) ?? []), a]);
+  for (const a of agents) if (a.file) writers.set(a.file, [...(writers.get(a.file) ?? []), a]);
   const paths = new Set<string>([...writers.keys(), ...docs.filter((d) => d.plan === 'running').map((d) => d.path)]);
   const out: ActiveDoc[] = [];
   for (const path of paths) {

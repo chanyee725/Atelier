@@ -26,9 +26,9 @@ test('presence files and running plans merge into one row per file, newest first
   assert.equal(list[1].progress, null);
 });
 
-test('a running plan with no writer still shows; outside writers and unknown files are handled', () => {
+test('a running plan with no writer still shows; outside writers count and unknown files fall back to the file name', () => {
   const list = activeDocs([agent('outside:x', '/p/gone.dpx.json', { outside: true }), agent('s1', '/p/gone.dpx.json')], [doc('/p/r', 5, 'running')], new Map(), '/p');
-  assert.deepEqual(list.map((x) => [x.path, x.title, x.agents.length]), [['/p/r', 'T /p/r', 0], ['/p/gone.dpx.json', 'gone', 1]]);
+  assert.deepEqual(list.map((x) => [x.path, x.title, x.agents.length]), [['/p/r', 'T /p/r', 0], ['/p/gone.dpx.json', 'gone', 2]]);
 });
 
 test('nothing writing and no running plan is an empty list', () => {
