@@ -58,8 +58,8 @@ function Row({ item, now, onClick }: { item: AttentionItem; now: number; onClick
         <span className="flex min-w-0"><Mark item={item} /></span>
         <span className="min-w-0 truncate font-medium" title={item.who}>{item.who}</span>
         <span className="shrink-0 text-right text-xs text-muted-foreground tabular-nums">{time}</span>
-        <span data-reason className="col-span-2 col-start-2 min-w-0 truncate text-xs text-muted-foreground" title={item.reason}>{item.reason}</span>
-        <span data-go className={cn('inline-flex shrink-0 items-center justify-end gap-0.5 text-xs text-muted-foreground', onClick ? 'group-hover/row:text-foreground' : 'invisible')}>
+        <span data-reason className="col-start-2 min-w-0 truncate text-xs text-muted-foreground" title={item.reason}>{item.reason}</span>
+        <span data-go className={cn('col-start-3 inline-flex shrink-0 items-center justify-end gap-0.5 text-xs text-muted-foreground', onClick ? 'group-hover/row:text-foreground' : 'invisible')}>
           {ACTION[item.kind]}
           <ChevronRight aria-hidden className="size-3.5" />
         </span>
