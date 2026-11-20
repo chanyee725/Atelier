@@ -22,7 +22,6 @@ import {
   type BranchRow,
   type BranchSession,
   type BranchState,
-  type PrPhase,
 } from './lib/liveBranches.ts';
 import { useScoped } from './scope';
 import { useNow } from './AttentionStrip';
@@ -97,26 +96,6 @@ function StateChip({ state, title, children }: { state: BranchState; title?: str
   );
 }
 
-/** Short PR word for the table chip: "#882 리뷰", "#884 통과", "#883 머지"; "PR 없음" without a PR. */
-const PR_SHORT: Record<PrPhase, string> = { draft: '초안', review: '리뷰', mergeable: '통과', conflict: '충돌', merged: '머지', closed: '닫힘' };
-
-function PrStateCell({ row }: { row: BranchRow }) {
-  const state = branchState(row);
-  const pr = row.pr;
-  const chip = (
-    <StateChip state={state} title={BRANCH_STATE[state]}>
-      {pr ? `#${pr.number} ${row.merged ? PR_SHORT.merged : PR_SHORT[pr.phase]}` : row.merged ? BRANCH_STATE.merged : 'PR 없음'}
-    </StateChip>
-  );
-  return pr?.url ? (
-    <a href={pr.url} target="_blank" rel="noreferrer" className="press inline-flex rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none hover:[&>span]:bg-foreground/10">
-      {chip}
-    </a>
-  ) : (
-    chip
-  );
-}
-
 /** 실시간 chip: the data refreshes on its own. The dot breathes only when motion is welcome. */
 function LiveChip() {
   return (
@@ -126,9 +105,6 @@ function LiveChip() {
     </span>
   );
 }
-
-const COLS = ['브랜치', '세션', '앞 / 뒤', 'PR', '마지막 커밋', '시각'] as const;
-
 
 /**
  * 세션 보드 › 브랜치 (Branches.dc.html, #889): a live line (실시간, counts, last commit), the commit tree of the board's

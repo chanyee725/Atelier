@@ -12,7 +12,7 @@
 // while an issue has an open session or PR. Live sessions show as small cards, 4 a row (#799, #875).
 import { useMemo, type ReactNode } from 'react';
 import { boardHash, plainClick } from '../projectNav';
-import { ArrowRight, FileText, LoaderCircle, RotateCw } from 'lucide-react';
+import { ArrowRight, FileText, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
 import { Button } from '../components/ui/button';
 import { ProviderIcon } from '../ProviderIcon';
@@ -143,11 +143,11 @@ function SessionGrid({ label, children }: { label: string; children: ReactNode }
 }
 
 /**
- * One live session per card (#785, #793): name and run state on top, role badge and model below, then the step it is on
- * and the file it holds. Both lines are split left and right so the card's width is used evenly. The pointer tag (the
- * live cursor's look) shows only while the session edits a diagram (isEditingDiagram); otherwise the name is plain.
- * The card's top part opens the session's live view; the file line opens the document. In a narrow card the state
- * keeps only its icon (under 11rem) and the model moves under the role (under 12rem).
+ * One live session per card (#785, #793, #889): name, role badge and run state (dot + word) on top; a second line with
+ * the plan step or what it does now (else a quiet idle/working note); a track that sweeps while it works; then model
+ * left and time right. The pointer tag (the live cursor's look) shows only while the session edits a diagram
+ * (isEditingDiagram); otherwise the name is plain. The card's body opens the session's live view; the file it holds
+ * is its own link under the body (shown once, there).
  */
 function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
@@ -157,7 +157,9 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
   const state = agentStateLabel(a);
   // Second line (refresh mock, #889): the plan step, else what it does now, else the file it holds.
   const detail = a.step || a.statusLabel || null;
-  const tone = busy ? 'text-ok' : look ? 'text-warn' : 'text-muted-foreground';
+  // Only the dot carries the working colour: 12px text-ok misses contrast on the light theme.
+  const tone = busy ? 'text-foreground' : look ? 'text-warn' : 'text-muted-foreground';
+  const dotTone = busy ? 'bg-ok' : look ? 'bg-warn' : 'bg-muted-foreground';
   return (
     <li
       data-agent={a.sid}
@@ -181,12 +183,12 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
           )}
           <RoleBadge agent={a} className="shrink-0" />
           <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
-            <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full bg-current', busy && 'is-on', !busy && !look && 'opacity-60')} />
+            <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, busy && 'is-on', !busy && !look && 'opacity-60')} />
             {state}
           </span>
         </span>
         <span className={cn('min-w-0 truncate', detail ? 'text-foreground/80' : 'text-muted-foreground')} title={detail ?? undefined}>
-          {detail ?? (a.file && title ? title : busy ? '작업 중이에요' : '다음 지시를 기다려요')}
+          {detail ?? (busy ? '작업 중이에요' : '다음 지시를 기다려요')}
         </span>
         {/* Working: a sliver sweeps the track (the one moving thing on the dashboard); idle: a quiet line. */}
         <span aria-hidden className={cn('session-track', busy && 'is-on')} />
