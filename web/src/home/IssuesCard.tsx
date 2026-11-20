@@ -8,10 +8,11 @@
 import { useId, useRef, useState } from 'react';
 import { ChevronRight, ExternalLink, GitBranch, GitPullRequest } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { STATE, stateOf } from '../dispatch/lib/format.ts';
+import { STATE, isOpen, stateOf } from '../dispatch/lib/format.ts';
 import { useAccountLabels } from '../accountLabels';
 import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
+import { RunningMark } from './ActiveDocsList';
 import { PrIssueSessions } from './IssueSessionList';
 import { Pager, useBoxRows, usePaging } from './Pager';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
@@ -164,6 +165,7 @@ function IssueLine({ row: r, sessions, branches, prs, panelOpen }: { row: IssueR
         >
           {title}
         </button>
+        {(r.sessions.some(isOpen) || r.prs.some((p) => p.state === 'open')) && <RunningMark />}
         <Owners sessions={owners} />
         {pr && (
           <a

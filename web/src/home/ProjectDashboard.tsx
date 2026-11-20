@@ -66,7 +66,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession, ap
     <DashGrid ratio="3fr 2fr" fill={fill}>
       <DashColumn label="진행 중인 작업" fill={fill}>
         <SessionsCard agents={agents} summaryOf={(sid) => summaries.get(sid) ?? null} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
+        <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} project={project} agents={agents} onOpen={onOpen} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
         {/* The team panel of the issue rows above (#954); other issue rows go to the chat dock. */}
         <IssuePanel issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
