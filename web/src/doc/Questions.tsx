@@ -1,6 +1,5 @@
 // In-document questions (#738): what agents asked the user in this document, answered in place. Open questions are
-// cards at the top of the document (the screen's one accent: a blocked-colour edge, as their pipeline step is blocked
-// while they wait); answered ones fold into a quiet list ("답변됨 · 세션 이름/사용자"). An answer is a picked choice or
+// cards at the top of the document (the dashboard's card surface: 10px corners, the ink ring, 13px text, an amber status dot while they wait); answered ones fold into a quiet list ("답변됨 · 세션 이름/사용자"). An answer is a picked choice or
 // typed text, sent to the asking session by the server. Questions show at document level: an anchor (block, text
 // range, diagram node) is named on the card, not highlighted in the text yet.
 import { useId, useState, type KeyboardEvent } from 'react';
@@ -10,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Textarea } from '../components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
 import type { FileSession } from '../fileSession';
+import { StatusDot } from '../home/dash';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { useSession } from '../useSession';
@@ -75,7 +75,7 @@ export function Questions({ session }: Props) {
             <ChevronRight className={cn('transition-transform', showAnswered && 'rotate-90')} aria-hidden />
             답한 질문 <span className="num tabular-nums">{answered.length}</span>
           </Button>
-          <ul id={answeredId} hidden={!showAnswered} className="mt-1 flex flex-col divide-y rounded-md border">
+          <ul id={answeredId} hidden={!showAnswered} className="card-surface mt-1 flex flex-col divide-y">
             {answered.map((q) => (
               <AnsweredRow key={q.id} q={q} />
             ))}
@@ -89,6 +89,8 @@ export function Questions({ session }: Props) {
 function Meta({ q, plan }: { q: Discussion; plan?: Plan }) {
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+      {/* The status dot the dashboard and session panel use: amber while the question waits (#972). */}
+      {q.status === 'open' && <StatusDot tone="warn" />}
       <span className="font-medium text-foreground">{whoLabel(q.askedBy)}</span>
       <span aria-hidden>·</span>
       <span>{anchorLabel(q.anchor)}</span>
@@ -130,10 +132,10 @@ function QuestionCard({ q, plan, onSend }: { q: Discussion; plan: Plan | undefin
     <article
       data-question={q.id}
       aria-label={`${whoLabel(q.askedBy)}의 질문`}
-      className="rounded-md border border-l-2 border-l-[var(--step-blocked)] bg-card px-4 py-3 text-card-foreground"
+      className="card-surface px-4 py-3 text-[13px]"
     >
       <Meta q={q} plan={plan} />
-      <p className="mt-1 text-sm leading-6 whitespace-pre-wrap">{q.question}</p>
+      <p className="mt-1.5 text-[13px] leading-5 whitespace-pre-wrap">{q.question}</p>
       {q.choices && q.choices.length > 0 && (
         <ToggleGroup
           variant="outline"
@@ -190,12 +192,12 @@ function QuestionCard({ q, plan, onSend }: { q: Discussion; plan: Plan | undefin
 
 function AnsweredRow({ q }: { q: Discussion }) {
   return (
-    <li data-question={q.id} data-answered="" className="px-4 py-2.5">
+    <li data-question={q.id} data-answered="" className="px-4 py-2.5 text-[13px]">
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground whitespace-pre-wrap">{q.question}</p>
+        <p className="min-w-0 flex-1 text-[13px] text-muted-foreground whitespace-pre-wrap">{q.question}</p>
         <span className="shrink-0 rounded-sm border px-1.5 text-[11px] leading-5 text-muted-foreground">{answeredLine(q)}</span>
       </div>
-      <p className="mt-0.5 text-sm whitespace-pre-wrap">{q.answer}</p>
+      <p className="mt-0.5 text-[13px] whitespace-pre-wrap">{q.answer}</p>
       <div className="mt-0.5">
         <Meta q={q} />
       </div>

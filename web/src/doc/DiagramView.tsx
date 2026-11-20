@@ -6,6 +6,7 @@ import type { Block } from '../api';
 import type { Scene } from '../../../shared/render/index';
 import type { ImageKind } from '../export/actions';
 import { layoutSig } from '../canvas/sync';
+import { askPlanStart, usePlanGate, type PlanGate } from '../run/planGate';
 import { drawnBlock, lookKey, type PlanLook } from '../canvas/planStyle';
 import { renderBlock, type BlockPicture } from '../canvas/render';
 import { MorphLayer, willMorph } from '../canvas/MorphLayer';
@@ -40,9 +41,36 @@ const lastShown = createShownMemory<BlockPicture>();
 
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
+/** 시작하기 at the end of the plan diagram's head row: the same confirm dialog the 알림함 opens. Blocked, it stays
+    focusable (aria-disabled) and says why in its tooltip and in the line beside it. */
+function PlanStartButton({ gate, path }: { gate: PlanGate; path: string }) {
+  const blocked = gate.blockers.length > 0;
+  const why = gate.error ?? (blocked ? gate.blockers.join(' · ') : null);
+  return (
+    <>
+      {why && <span className="doc-diagram-note" role="status" title={why}>{why}</span>}
+      <button
+        type="button"
+        className="doc-diagram-start"
+        data-testid="plan-start"
+        disabled={gate.busy}
+        aria-disabled={blocked || undefined}
+        title={blocked ? gate.blockers.join('\n') : undefined}
+        onClick={() => {
+          if (!blocked) askPlanStart(path);
+        }}
+      >
+        시작하기
+      </button>
+    </>
+  );
+}
+
 function DiagramView({ node, selected }: ReactNodeViewProps) {
   const { path, blocks, dark, look, onShow, onExport } = useContext(DocContext);
   const id = typeof node.attrs.blockId === 'string' ? node.attrs.blockId : '';
+  // Only the plan's own diagram, and only while the file is a plan waiting for 시작하기 (#972).
+  const gate = usePlanGate(path, id);
   const block = blocks.find((b) => b.id === id);
   const [pic, setPic] = useState<BlockPicture | null>(null);
   const theme = dark ? 'dark' : 'light';
@@ -166,6 +194,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
               {text}
             </button>
           ))}
+          {gate && <PlanStartButton gate={gate} path={path} />}
         </div>
       )}
     </NodeViewWrapper>

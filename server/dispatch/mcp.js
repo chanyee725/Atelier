@@ -205,7 +205,7 @@ const LEAD_TOOLS = [
           },
         },
         risks: { type: "array", items: { type: "string" } },
-        asks: { type: "array", items: { type: "string" }, description: "사용자에게 물어볼 것" },
+        asks: { type: "array", items: { type: "string" }, description: "쓰지 않아요. 질문은 POST /api/file/discussions로 올려요 (계획 문서에는 넣지 않아요)" },
         autostart: { type: "boolean", description: "단계가 하나일 때만: 승인 없이 바로 시작" },
         lane: LANE_PROP,
       },

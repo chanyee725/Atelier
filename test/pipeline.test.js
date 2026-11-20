@@ -92,7 +92,10 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     // Only a lead may write a plan.
     assert.equal((await call('POST', '/api/pipeline/plan', { lead: 'nobody', goal: 'x', steps: STEPS })).status, 400);
 
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크로 로그인해요', steps: STEPS, risks: ['쿠키 이름이 바뀌어요'], asks: ['링크 유효 시간은 15분?'] });
+    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크로 로그인해요', steps: STEPS, risks: ['쿠키 이름이 바뀌어요'] });
+    const asked = await call('POST', '/api/pipeline/plan', { lead: lead.id, goal: 'x', steps: STEPS, asks: ['q?'] });
+    assert.equal(asked.status, 400);
+    assert.match(asked.body.error, /discussions/);
     assert.equal(w.status, 200, JSON.stringify(w.body));
     assert.equal(w.body.path, 'App/로그인-개편/계획.dpx.json');
     assert.equal(w.body.state, 'plan');
@@ -852,6 +855,36 @@ test('완료: closing every step ends the run done, writes the summary block onc
     assert.doesNotMatch(JSON.stringify(rec2), new RegExp(head));
     assert.equal((await call('POST', '/api/pipeline/duplicate', { path: 'nope.dpx.json' })).status, 404);
     assert.equal((await call('POST', '/api/pipeline/duplicate', {})).status, 400);
+  } finally {
+    await t.stop();
+  }
+});
+
+test('시작하기 takes per-step overrides for this run only (#972)', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, d, lead } = t;
+    const w = (await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '덮어쓰기', goal: 'x', steps: STEPS })).body;
+    const go = (overrides) => call('POST', '/api/pipeline/start', { path: w.path, revision: w.revision, overrides });
+    // Bad shapes and unknown steps are refused and start nothing.
+    assert.equal((await go({ nope: { n: 2 } })).status, 400);
+    assert.equal((await go({ ui: { n: 9 } })).status, 400);
+    assert.equal((await go({ ui: { perm: 'bypassPermissions' } })).status, 400);
+    assert.equal((await go({ ui: { color: 'red' } })).status, 400);
+    assert.equal((await go('x')).status, 400);
+    // A model of a provider that is not connected blocks like a plan with that model would.
+    const blocked = await go({ ui: { model: 'gpt-5' } });
+    assert.equal(blocked.status, 409);
+    assert.equal((await call('GET', `/api/pipeline?path=${encodeURIComponent(w.path)}`)).body.state, 'plan');
+    // Accepted: the lead is told what changed; the file keeps the approved plan.
+    const ok = await go({ review: { model: 'claude-sonnet-5-5', n: 2 }, ui: { effort: 'low' } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.ok(ok.body.overrides.some((c) => /review/.test(c)));
+    const told = d.hub.transcript(lead.id).filter((m) => m.kind === 'user').map((m) => m.text).join('\n');
+    assert.match(told, /시작 창에서 사용자가 이번 실행만 바꾼 구성/);
+    assert.match(told, /단계 review 모델 claude-fable-5-2 → claude-sonnet-5-5/);
+    const file = (await call('GET', `/api/file?path=${encodeURIComponent(w.path)}`)).body;
+    assert.equal(file.plan.steps.find((s) => s.id === 'review').model, 'claude-fable-5-2');
   } finally {
     await t.stop();
   }

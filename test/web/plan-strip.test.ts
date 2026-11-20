@@ -3,7 +3,17 @@ import assert from 'node:assert/strict';
 import { buildPlanFile } from '../../shared/dispatch/plan-write.ts';
 import { confirmSnapshot, isPlanChanged, limitLine, startBody, startError, unansweredAsks } from '../../web/src/run/planStripModel.ts';
 
-const doc = (asks: string[]) => buildPlanFile({ goal: 'g', steps: [{ title: 't', role: 'r' }], asks }).document;
+// Plans written before #972 still carry a "사용자에게 물어볼 것" section; build one by hand.
+const doc = (asks: string[]) => {
+  const d = buildPlanFile({ goal: 'g', steps: [{ title: 't', role: 'r' }] }).document;
+  const text = (t: string) => [{ type: 'text', text: t }];
+  const item = (t: string) => ({ type: 'listItem', content: [{ type: 'paragraph', content: text(t) }] });
+  d.content.push(
+    { type: 'heading', attrs: { level: 2 }, content: text('사용자에게 물어볼 것') },
+    asks.length ? { type: 'bulletList', content: asks.map(item) } : { type: 'paragraph', content: text('없어요.') },
+  );
+  return d;
+};
 
 test('unansweredAsks counts the open questions write_plan wrote', () => {
   assert.equal(unansweredAsks(doc([])), 0);

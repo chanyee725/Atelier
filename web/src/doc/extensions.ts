@@ -2,6 +2,7 @@
 import { Extension, Node, mergeAttributes, type AnyExtension } from '@tiptap/core';
 import { Node as PMNode, type Schema } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import StarterKit from '@tiptap/starter-kit';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
@@ -140,6 +141,51 @@ export const FrameEmbed = Node.create({
   },
 });
 
+/** Class of a heading and its "없어요." line that the view hides (#972). */
+export const EMPTY_SECTION_CLASS = 'doc-empty-section';
+
+/**
+ * Positions of `[from, to)` ranges (heading + body) of sections whose whole body is the one line "없어요.".
+ * Old plans carry such sections ("위험 / 없어요.", "사용자에게 물어볼 것 / 없어요."); the file keeps them, the view hides them.
+ */
+export function emptySectionRanges(doc: PMNode): [number, number][] {
+  const out: [number, number][] = [];
+  const kids: { node: PMNode; pos: number }[] = [];
+  doc.forEach((node, pos) => kids.push({ node, pos }));
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i].node.type.name !== 'heading') continue;
+    let j = i + 1;
+    while (j < kids.length && kids[j].node.type.name !== 'heading') j++;
+    const body = kids.slice(i + 1, j);
+    if (body.length === 1 && body[0].node.type.name === 'paragraph' && body[0].node.textContent.trim() === '없어요.') {
+      out.push([kids[i].pos, body[0].pos + body[0].node.nodeSize]);
+    }
+  }
+  return out;
+}
+
+const emptySections = Extension.create({
+  name: 'emptySections',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: new PluginKey('emptySections'),
+        props: {
+          decorations: (state) => {
+            const ranges = emptySectionRanges(state.doc);
+            if (!ranges.length) return null;
+            const deco: Decoration[] = [];
+            state.doc.forEach((node, pos) => {
+              if (ranges.some(([from, to]) => pos >= from && pos < to)) deco.push(Decoration.node(pos, pos + node.nodeSize, { class: EMPTY_SECTION_CLASS }));
+            });
+            return DecorationSet.create(state.doc, deco);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 /** Everything the document supports. `diagram` replaces DiagramEmbed (the web adds its node view). */
 export function docExtensions(diagram: AnyExtension = DiagramEmbed, frame: AnyExtension = FrameEmbed): AnyExtension[] {
   return [
@@ -151,6 +197,7 @@ export function docExtensions(diagram: AnyExtension = DiagramEmbed, frame: AnyEx
     HeadingId,
     // Animation classes for outside changes applied live (liveApply.ts).
     Extension.create({ name: 'liveApply', addProseMirrorPlugins: () => [liveApplyPlugin()] }),
+    emptySections,
     Wikilink,
     TaskList,
     TaskItem.configure({ nested: true }),

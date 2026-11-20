@@ -10,7 +10,7 @@ import { providerName } from '../dispatch/lib/format.ts';
 import { ProviderIcon } from '../ProviderIcon';
 import { patchStepModel, stepModelRows, type ModelCatalog } from './stepModels';
 
-async function readCatalog(): Promise<ModelCatalog | null> {
+export async function readCatalog(): Promise<ModelCatalog | null> {
   const res = await fetch('/api/state');
   if (!res.ok) return null;
   const s = (await res.json()) as Partial<ModelCatalog>;

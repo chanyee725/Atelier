@@ -20,7 +20,7 @@ test('writePlanProblem names what is wrong', () => {
     [{ goal: ' ', steps: STEPS }, /goal/],
     [{ goal: 'g', steps: [] }, /steps/],
     [{ goal: 'g', steps: STEPS, risks: 'x' }, /risks/],
-    [{ goal: 'g', steps: STEPS, asks: Array(MAX_PLAN_LIST + 1).fill('q') }, /asks/],
+    [{ goal: 'g', steps: STEPS, asks: ['q'] }, /discussions/],
     [{ goal: 'g', steps: [1] }, /steps\[0\]/],
     [{ goal: 'g', steps: [{ id: 'a b', title: 't', role: 'r' }] }, /id/],
     [{ goal: 'g', steps: [{ id: 'a', title: 't', role: 'r' }, { id: 'a', title: 't', role: 'r' }] }, /두 번/],
@@ -38,7 +38,7 @@ test('writePlanProblem names what is wrong', () => {
 });
 
 test('buildPlanFile makes a valid plan, a parseable flowchart and the document sections', () => {
-  const out = buildPlanFile({ title: '로그인 개편', goal: '매직 링크', steps: STEPS, risks: ['쿠키'], asks: ['15분?'] });
+  const out = buildPlanFile({ title: '로그인 개편', goal: '매직 링크', steps: STEPS, risks: ['쿠키'] });
   assert.equal(out.title, '로그인 개편');
   assert.equal(out.block.id, PLAN_BLOCK_ID);
   assert.equal(out.plan.block, PLAN_BLOCK_ID);
@@ -54,7 +54,7 @@ test('buildPlanFile makes a valid plan, a parseable flowchart and the document s
   assert.ok(ast);
   assert.equal(errors?.length ?? 0, 0);
   const headings = out.document.content.filter((n) => n.type === 'heading').map((n) => (n.content?.[0] as { text?: string })?.text);
-  assert.deepEqual(headings, ['목표', '단계', '위험', '사용자에게 물어볼 것']);
+  assert.deepEqual(headings, ['목표', '단계', '위험']);
   assert.ok(out.document.content.some((n) => n.type === 'diagram' && n.attrs?.blockId === PLAN_BLOCK_ID));
 });
 
@@ -66,7 +66,7 @@ test('buildPlanFile falls back to the goal for a title and keeps a placed block'
   assert.equal(out.plan.block, 'b9');
   assert.equal(out.plan.steps[0].id, 's1');
   const empty = out.document.content.filter((n) => n.type === 'paragraph').map((n) => (n.content?.[0] as { text?: string })?.text);
-  assert.ok(empty.filter((t) => t === '없어요.').length === 2);
+  assert.ok(empty.filter((t) => t === '없어요.').length === 1);
 });
 
 test('planChanges lists what changed by step id', () => {

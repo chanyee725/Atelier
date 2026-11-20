@@ -11,7 +11,7 @@ A plan is a `.dpx.json` file with a goal, steps and a diagram block; its `plan` 
 
 1. Split the work into steps. Each step has a title, a role, the files it touches and a done-when. Two steps never share a file. Order them with `after`.
    Done when: every step fits in one line and has a checkable done-when (for example `auth.test 통과`).
-2. Write the plan. A lead calls the MCP tool `write_plan` with `goal`, `steps`, and `risks` / `asks` when there are any. Pass `path: "<Area>/<feature>/계획.dpx.json"` (areas come from the project's code structure; run `atelier-organize` first when the workspace has none). It writes the document and the step diagram there. Call it again without `path` to revise the same draft.
+2. Write the plan. A lead calls the MCP tool `write_plan` with `goal`, `steps`, and `risks` when there are any. The document has no questions section: a plan is already settled. A question for the user goes to `POST /api/file/discussions?path=<file>` (headers `x-drawing: 1`, `x-drawing-session: $DRAWING_SESSION`; body in `docs/workspace-api.md` → "Questions in a document"); it shows as a card at the top of the plan. `write_plan` refuses `asks`. Pass `path: "<Area>/<feature>/계획.dpx.json"` (areas come from the project's code structure; run `atelier-organize` first when the workspace has none). It writes the document and the step diagram there. Call it again without `path` to revise the same draft.
    Done when: the tool returns the file path.
 3. Ask for approval. End the turn with the path and one line: "검토 후 시작하기를 눌러 주세요". `create_sessions` is refused until the user presses 시작하기.
    Done when: `GET /api/pipeline?path=<file>` shows the plan running.

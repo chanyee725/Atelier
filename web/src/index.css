@@ -457,12 +457,16 @@ body {
   white-space: nowrap;
 }
 .doc-diagram > figcaption strong { color: var(--foreground); font-weight: 600; }
-.doc-diagram-actions { display: flex; gap: 2px; padding: 0 8px; }
+.doc-diagram-actions { display: flex; align-items: center; gap: 2px; padding: 0 8px; min-width: 0; }
 .doc-diagram-actions button {
-  height: 24px; padding: 0 8px; border-radius: var(--radius-control); font-size: 12px; font-weight: 500;
+  height: 24px; padding: 0 8px; border-radius: var(--radius-control); font-size: 12px; font-weight: 500; flex: none; white-space: nowrap;
   color: var(--muted-foreground); transition: background-color 150ms ease, color 150ms ease;
 }
 @media (hover: hover) { .doc-diagram-actions button:hover { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 5%, transparent); } }
+.doc-diagram-actions .doc-diagram-start { margin-left: 6px; color: var(--primary-foreground); background: var(--primary); }
+@media (hover: hover) { .doc-diagram-actions .doc-diagram-start:hover { color: var(--primary-foreground); background: color-mix(in srgb, var(--primary) 88%, var(--foreground)); } }
+.doc-diagram-actions .doc-diagram-start[aria-disabled], .doc-diagram-actions .doc-diagram-start:disabled { opacity: 0.5; cursor: not-allowed; }
+.doc-diagram-note { align-self: center; flex: 0 1 auto; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
 .doc-diagram-actions button:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
 /* The head row's rule: drawn on the row under it, so it spans both head cells. */
 .doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic, .doc-diagram-gone) { border-top: 1px solid var(--border); }
@@ -555,6 +559,7 @@ body {
 @keyframes doc-h-flash { from { background: var(--muted); } to { background: transparent; } }
 .doc-wikilink { color: var(--foreground); background: var(--muted); border-radius: 4px; padding: 0 4px; cursor: pointer; text-decoration: none; }
 @media (hover: hover) { .doc-wikilink:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 8%); } }
+.doc-editor .doc-empty-section { display: none; }
 .doc-wikilink.ProseMirror-selectednode { outline: 2px solid var(--primary); }
 
 /* The canvas `/` insert menu: the document's slash list with a search field on top. */
@@ -859,3 +864,14 @@ body {
   animation: none;
   box-shadow: inset 0 0 0 2px var(--origin-ring), 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent);
 }
+
+/* The 시작하기 confirm's team (#972): one quiet row per step; the one standout is the start button. */
+.start-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.7fr); gap: 6px; align-items: center; font-size: 12px; }
+.start-row-name { display: flex; min-width: 0; flex-direction: column; }
+.start-row [data-slot="native-select"] { display: flex; }
+@media (max-width: 640px) { .start-row { grid-template-columns: 1fr 1fr; } .start-row-name { grid-column: 1 / -1; } }
+.start-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 12px; }
+.start-meter { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+.start-meter-bar { width: 72px; height: 4px; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
+.start-meter-bar > span { display: block; height: 100%; background: var(--muted-foreground); }
+.start-meter-bar > span[data-high] { background: var(--destructive); }

@@ -1,6 +1,8 @@
 // Pure parts of the plan strip (E20): the GET /api/pipeline shape, the asks without an answer, and the
 // limit line in the start confirm. See docs/design/dispatch-integration/3-ux-flow.md §3.
 
+import type { StepOverrides } from '../../../shared/dispatch/plan-overrides.ts';
+
 export type PipelineStatus = {
   path: string;
   revision: number;
@@ -82,8 +84,9 @@ export function confirmSnapshot(status: PlanSnapshot): PlanSnapshot {
 }
 
 /** The start request for the plan the person saw. */
-export function startBody(path: string, shown: Pick<PlanSnapshot, 'revision'>): { path: string; revision: number } {
-  return { path, revision: shown.revision };
+export function startBody(path: string, shown: Pick<PlanSnapshot, 'revision'>, overrides?: StepOverrides): { path: string; revision: number; overrides?: StepOverrides } {
+  // Only what the person changed goes along (#972); nothing changed is the plain request an older server knows.
+  return overrides && Object.keys(overrides).length ? { path, revision: shown.revision, overrides } : { path, revision: shown.revision };
 }
 
 /** The server refused because the plan moved on since the dialog opened (409 with the current revision). */

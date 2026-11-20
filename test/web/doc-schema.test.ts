@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { getSchema } from '@tiptap/core';
 import { Node as PMNode } from '@tiptap/pm/model';
-import { docExtensions, documentError } from '../../web/src/doc/extensions.ts';
+import { docExtensions, documentError, emptySectionRanges } from '../../web/src/doc/extensions.ts';
 import { embeddedBlockIds, migrateDocument } from '../../web/src/doc/model.ts';
 
 const schema = getSchema(docExtensions());
@@ -52,4 +52,16 @@ test('broken documents are reported, so the editor opens them read-only instead 
   assert.ok(documentError({ type: 'page', content: [] }, schema));
   assert.ok(documentError({ type: 'doc', content: {} }, schema));
   assert.ok(documentError({ type: 'doc', content: [{ type: 'text', text: 'loose' }] }, schema));
+});
+
+test('emptySectionRanges finds sections whose whole body is "없어요." (#972)', () => {
+  const h = (t: string) => ({ type: 'heading', attrs: { level: 2 }, content: [text(t)] });
+  const doc = PMNode.fromJSON(schema, {
+    type: 'doc',
+    content: [h('목표'), p(text('g')), h('위험'), p(text('없어요.')), h('사용자에게 물어볼 것'), p(text('없어요.')), p(text('덧붙임')), h('끝'), p(text('없어요.'))],
+  });
+  const heads = [] as string[];
+  for (const [from] of emptySectionRanges(doc)) heads.push(doc.nodeAt(from)!.textContent);
+  // A section with more than that one line stays; so does one with real text.
+  assert.deepEqual(heads, ['위험', '끝']);
 });
