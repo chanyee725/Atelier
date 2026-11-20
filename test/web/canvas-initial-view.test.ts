@@ -118,3 +118,22 @@ test('a view the user moved to after an empty open is kept', () => {
   rememberView('a.dpx.json', moved);
   assert.deepEqual(rememberedView('a.dpx.json'), moved);
 });
+
+test('fitView with a pixel margin leaves 48px each side and may enlarge a small drawing', async () => {
+  const { PANE_FIT, refitView } = await import('../../web/src/canvas/initialView.ts');
+  const v = fitView([0, 0, 200, 100], 1000, 600, PANE_FIT)!;
+  assert.equal(v.zoom, 2);
+  assert.equal(fitView([0, 0, 200, 100], 1000, 600)!.zoom, 1);
+  const big = fitView([0, 0, 2000, 1000], 1000, 600, PANE_FIT)!;
+  assert.ok(2000 * big.zoom <= 1000 - 96 + 1e-6 && 1000 * big.zoom <= 600 - 96 + 1e-6);
+  // refit: follows a resize until the user moves the view, then keeps it
+  forgetViews();
+  const first = openingView('a.dpx.json', [0, 0, 2000, 1000], 1000, 600, PANE_FIT)!;
+  const wider = refitView('a.dpx.json', [0, 0, 2000, 1000], 1600, 900, first, PANE_FIT);
+  assert.ok(wider && wider.zoom > first.zoom);
+  assert.equal(refitView('a.dpx.json', [0, 0, 2000, 1000], 1600, 900, wider!, PANE_FIT), null);
+  rememberView('a.dpx.json', wider!); // the view the fit reported (not a move)
+  rememberView('a.dpx.json', { ...wider!, zoom: 0.5 }); // the user zooms
+  assert.equal(refitView('a.dpx.json', [0, 0, 2000, 1000], 1000, 600, { ...wider!, zoom: 0.5 }, PANE_FIT), null);
+  forgetViews();
+});

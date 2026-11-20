@@ -57,7 +57,10 @@ export function Splitter({ ratio, onRatio, onReset, left, right }: Props) {
         // line is a CanvasText border and keyboard focus is a Highlight outline.
         className="relative z-10 w-1.5 shrink-0 cursor-col-resize touch-none outline-none before:absolute before:inset-y-0 before:right-0 before:w-px before:bg-border before:transition-colors before:content-[''] hover:before:bg-ring focus-visible:before:bg-ring focus-visible:before:shadow-[0_0_0_1px_var(--ring)] forced-colors:before:border-l forced-colors:before:border-[CanvasText] forced-colors:focus-visible:outline-2 forced-colors:focus-visible:outline-offset-1 forced-colors:focus-visible:outline-solid forced-colors:focus-visible:outline-[Highlight]"
       />
-      <div className="min-w-0 flex-1 overflow-auto">{right}</div>
+      {/* data-split-canvas: the canvas fits its content to this pane (canvas/ExcalidrawCanvas.tsx, #976). */}
+      <div data-split-canvas className="min-w-0 flex-1 overflow-auto">
+        {right}
+      </div>
     </div>
   );
 }

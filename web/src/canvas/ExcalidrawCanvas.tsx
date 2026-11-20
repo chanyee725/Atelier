@@ -33,7 +33,7 @@ import { diagramChildren, parse } from '../../../shared/dsl/index.ts';
 import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
-import { openingView, rememberView } from './initialView';
+import { PANE_FIT, openingView, refitView, rememberView } from './initialView';
 import { refitTexts, type FitEl } from './refit';
 import { RefitQueue } from './refitQueue';
 import './clean.css';
@@ -154,6 +154,8 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   // The run overlay reads pictures by the image's file id (a sharpened variant maps back to its base picture).
   const pictureOf = useCallback((fileId: string) => sizes.current.get(baseFileId(fileId)), []);
   const wrap = useRef<HTMLDivElement>(null);
+  // In the 둘 다 view the canvas sits in the split's right pane (#976): it fits content with a 48px margin.
+  const inSplit = () => !!wrap.current?.closest('[data-split-canvas]');
   const blocksRef = useRef(blocks);
   const canvasRef = useRef(canvas);
   const onChangeRef = useRef(onChange);
@@ -424,7 +426,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       // First open fits everything (at most 100%); a view the user left the file at is kept (E494).
       const live = elements.filter((e) => !e.isDeleted);
       const box = wrap.current?.getBoundingClientRect();
-      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0);
+      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0, inSplit() ? PANE_FIT : undefined);
       const files = Object.fromEntries(pics.map((p) => [p.fileId, fileData(p)]));
       if (!view) return { elements, files, appState: CLEAN_APP_STATE, scrollToContent: true };
       return { elements, files, appState: { ...CLEAN_APP_STATE, scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom as NormalizedZoomValue } } };
@@ -593,6 +595,30 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       if (sharpenTimer.current) clearTimeout(sharpenTimer.current);
     };
   }, [scheduleSharpen]);
+
+  // The pane's size changed (divider dragged, window resized): fit again, unless the user has zoomed or panned.
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el || !api || typeof ResizeObserver === 'undefined' || !el.closest('[data-split-canvas]')) return;
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const live = api.getSceneElements().filter((e) => !e.isDeleted);
+      if (!live.length) return;
+      const box = el.getBoundingClientRect();
+      const st = api.getAppState();
+      const next = refitView(pathRef.current, getCommonBounds(live), box.width, box.height, { scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom.value }, PANE_FIT);
+      if (next) api.updateScene({ appState: { scrollX: next.scrollX, scrollY: next.scrollY, zoom: { value: next.zoom as NormalizedZoomValue } }, captureUpdate: CaptureUpdateAction.NEVER });
+    };
+    const ro = new ResizeObserver(() => {
+      if (!raf) raf = requestAnimationFrame(run);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [api]);
 
   const handleChange = useCallback((sceneEls: readonly ExcalidrawElement[], appState: AppState) => {
     // The view is kept for the file's next open; not while the scene is still loading (Excalidraw's default view).
