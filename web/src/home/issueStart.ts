@@ -1,7 +1,7 @@
-// Pure parts of the issue start panel (#954): which leads can take an issue, the work message a lead gets, and the
-// body that creates a new lead for it. Pressing 시작하기 is the user's approval, so the lead skips the plan document
-// and creates its teammates at once (lane normal, the issue number on each). Metadata only: the issue number and
-// title, model ids; no body text leaves the panel.
+// Pure parts of starting an issue from the chat dock (#954): whether an issue row already has a team, which leads
+// can take an issue, the work message a lead gets, and the body that creates a new lead for it. Pressing 시작하기 under
+// the helper's proposal is the user's approval, so the lead skips the plan document and creates its teammates at once
+// (lane normal, the issue number on each). Metadata only: the issue number and title, model ids; no body text.
 import { isOpen } from '../dispatch/lib/format.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
@@ -15,6 +15,11 @@ export const NEW_LEAD = '';
 
 export type TeamPick = { impl: string; review: string };
 export type IssueRef = { number: number; title: string };
+
+/** A team has the issue: an open session on it or an open PR (the 진행 중인 이슈 card's rule, activeIssues). */
+export function hasTeam(row: { sessions: readonly Session[]; prs: readonly { state: string }[] }): boolean {
+  return row.sessions.some(isOpen) || row.prs.some((p) => p.state === 'open');
+}
 
 /** Leads that are still alive (not done or failed), newest first. */
 export function liveLeads(sessions: readonly Session[]): Session[] {

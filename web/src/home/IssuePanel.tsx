@@ -1,8 +1,7 @@
-// The dashboard's one issue panel (#954): whichever issue row was pressed (진행 중인 이슈 or 이슈 card), this shows its
-// right panel. An issue a team works on now gets the team panel (#925); any other open issue gets the start panel.
+// The dashboard's one issue panel (#954): an issue row a team works on (진행 중인 이슈 or 이슈 card) opens its team
+// panel (#925) here. Any other issue row goes to the chat dock instead (askAboutIssue), so nothing starts from a panel.
 // Kept mounted for the 160ms slide-out after closing (#942). Reads the dashboard's feeds; no request of its own.
 import { useMemo } from 'react';
-import { IssueStartPanel } from '../live/IssueStartPanel';
 import { IssueTeamPanel } from '../live/IssueTeamPanel';
 import { useIssueTeamTarget } from '../live/issueStore';
 import { usePanelExit } from '../live/usePanelExit';
@@ -37,17 +36,13 @@ export function useActiveIssueList({ issues, sessions, tasks, prs }: IssueFeeds)
   return { rows, list, answerOf };
 }
 
-export function IssuePanel({ folder, now = Date.now(), ...feeds }: IssueFeeds & { folder?: string | null; now?: number }) {
+export function IssuePanel({ now = Date.now(), ...feeds }: IssueFeeds & { now?: number }) {
   const { rows, list, answerOf } = useActiveIssueList(feeds);
   const open = useIssueTeamTarget();
   const exit = usePanelExit(open);
   if (exit.shown == null) return null;
   const row = rows.find((r) => r.number === exit.shown);
-  if (!row) return null;
-  const active = list.find((x) => x.number === row.number);
-  return active ? (
-    <IssueTeamPanel key={`team-${row.number}`} issue={active} row={row} tasks={feeds.tasks} answerOf={answerOf} now={now} closing={exit.closing} />
-  ) : (
-    <IssueStartPanel key={`start-${row.number}`} row={row} sessions={Array.isArray(feeds.sessions) ? feeds.sessions : []} folder={folder} closing={exit.closing} />
-  );
+  const active = row && list.find((x) => x.number === row.number);
+  if (!row || !active) return null;
+  return <IssueTeamPanel key={`team-${row.number}`} issue={active} row={row} tasks={feeds.tasks} answerOf={answerOf} now={now} closing={exit.closing} />;
 }

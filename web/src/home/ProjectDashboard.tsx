@@ -65,8 +65,8 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
         <SessionsCard agents={agents} summaryOf={(sid) => summaries.get(sid) ?? null} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
         <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
-        {/* The one right panel of the issue rows above (#954): team panel or start panel. */}
-        <IssuePanel issues={issues} sessions={sessions} tasks={tasks} prs={prs} folder={project.path} />
+        {/* The team panel of the issue rows above (#954); other issue rows go to the chat dock. */}
+        <IssuePanel issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
         <SessionRequestsCard sessions={sessions} folder={project.path} onOpen={onOpen} onSession={onSession} />
