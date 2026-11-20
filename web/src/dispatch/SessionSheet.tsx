@@ -18,6 +18,7 @@ import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
 import { canRun, READ_ONLY_NOTICE } from './lib/runnable.ts';
+import { PROMPT_CLEARED, shownPrompt } from './lib/rolePrompt.ts';
 import { holdForSheet, openAgentLive } from '../live/store';
 
 export type Report = (p: Promise<unknown>) => Promise<boolean>;
@@ -258,6 +259,8 @@ export function Chat({ s, report, thinking = true }: { s: Session; report: Repor
 }
 
 export function Info({ s }: { s: Session }) {
+  const roles = useDispatch(st => st.roles);
+  const prompt = shownPrompt(s, roles);
   // One type family (Pretendard) throughout, ids included; numbers tabular. Grouped panels instead of one long list.
   const rows: [string, string][] = [
     ['모델', `${s.modelLabel || s.model}${s.effort ? ` · effort ${s.effort}` : ''}`],
@@ -312,12 +315,17 @@ export function Info({ s }: { s: Session }) {
       </section>
 
       <details className="group rounded-[10px] bg-muted/40 px-4 py-3">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-semibold marker:hidden">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px] font-semibold marker:hidden">
           역할 프롬프트
           <span className="text-xs font-normal text-muted-foreground group-open:hidden">펼치기</span>
           <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">접기</span>
+          {/* Visible while folded too: says why the role default shows instead of the session's own task (#943). */}
+          {prompt.fallback && <span data-prompt-cleared className="order-last basis-full text-xs font-normal text-muted-foreground">{PROMPT_CLEARED}</span>}
         </summary>
-        <p className="m-0 mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap text-muted-foreground">{s.prompt || '—'}</p>
+        <p className="m-0 mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap text-muted-foreground" data-prompt-fallback={prompt.fallback || undefined}>
+          {prompt.fallback && prompt.text !== '—' && <span className="mb-1 block text-xs font-medium text-foreground/80">{s.roleName} 기본 프롬프트</span>}
+          {prompt.text}
+        </p>
       </details>
     </div>
   );
