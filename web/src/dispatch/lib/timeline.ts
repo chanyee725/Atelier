@@ -110,16 +110,19 @@ export function axisTicks(now: number, windowMs: number, width: number, step = 3
 }
 
 /**
- * The interval picker (#936): the bucket a bar is drawn at, the stretch of time shown, how often the axis has a tick
- * and how often a tick gets a time label. 5분 keeps the card's first look: the last two hours.
+ * The interval picker (#936, #944): the bucket a bar is drawn at, how often the axis has a tick and how often a tick
+ * gets a time label. The stretch shown is always the last 30 minutes (WINDOW_MS); the interval only changes the grain.
  */
 export type IntervalId = '30s' | '1m' | '5m';
-export type Interval = { id: IntervalId; label: string; bucketMs: number; windowMs: number; labelMs: number; hint: string };
+export type Interval = { id: IntervalId; label: string; bucketMs: number; labelMs: number; hint: string };
 const MIN = 60_000;
+/** The one stretch of time every interval shows (#944). */
+export const WINDOW_MS = 30 * MIN;
+const hint = (label: string) => `최근 30분 · ${label} 간격`;
 export const INTERVALS: readonly Interval[] = [
-  { id: '30s', label: '30초', bucketMs: MIN / 2, windowMs: 15 * MIN, labelMs: 5 * MIN, hint: '최근 15분' },
-  { id: '1m', label: '1분', bucketMs: MIN, windowMs: 30 * MIN, labelMs: 10 * MIN, hint: '최근 30분' },
-  { id: '5m', label: '5분', bucketMs: 5 * MIN, windowMs: 120 * MIN, labelMs: 30 * MIN, hint: '최근 2시간' },
+  { id: '30s', label: '30초', bucketMs: MIN / 2, labelMs: 5 * MIN, hint: hint('30초') },
+  { id: '1m', label: '1분', bucketMs: MIN, labelMs: 5 * MIN, hint: hint('1분') },
+  { id: '5m', label: '5분', bucketMs: 5 * MIN, labelMs: 10 * MIN, hint: hint('5분') },
 ];
 export const DEFAULT_INTERVAL: IntervalId = '5m';
 export const intervalOf = (id: string | null | undefined): Interval =>
@@ -175,4 +178,15 @@ export function gridTicks(now: number, windowMs: number, width: number, stepMs: 
     if (x > 0 && x < width) out.push(x);
   }
   return out;
+}
+
+/** How often the card polls /api/timeline and recounts 최근 업데이트 while the page is visible (#944). */
+export const REFRESH_MS = 5_000;
+
+/** 최근 업데이트 text for an update `ms` ago: 방금 under 5s, then whole seconds, then whole minutes. */
+export function agoLabel(ms: number): string {
+  const sec = Math.floor(Math.max(0, ms) / 1000);
+  if (sec < 5) return '최근 업데이트 방금';
+  if (sec < 60) return `최근 업데이트 ${sec}초 전`;
+  return `최근 업데이트 ${Math.floor(sec / 60)}분 전`;
 }
