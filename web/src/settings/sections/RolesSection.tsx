@@ -34,8 +34,8 @@ import {
 } from './modeProfiles';
 
 const FOCUS = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
-const CONTROL = cn('h-8 w-full min-w-0 text-sm max-md:h-11 aria-invalid:border-warn', FOCUS);
-const SECONDARY_BTN = cn('h-8 rounded-md border bg-background px-3 text-sm hover:bg-accent disabled:opacity-50 max-md:h-11', FOCUS);
+const CONTROL = cn('h-8 w-full min-w-0 bg-card text-sm max-md:h-11 aria-invalid:border-warn', FOCUS);
+const SECONDARY_BTN = cn('press h-8 rounded-control bg-card px-3 text-sm shadow-(--shadow-card) hover:bg-accent disabled:opacity-50 max-md:h-11', FOCUS);
 const DEFAULT_MODE = 'impl';
 
 const MODE_TEXT: Record<string, string> = {
@@ -308,9 +308,9 @@ export default function RolesSection() {
                                 setHintEdits((h) => ({ ...h, [key]: v }));
                                 setNote({ text: '' });
                               }}
-                              className={cn('h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm max-md:h-11', FOCUS)}
+                              className={cn('h-8 min-w-0 flex-1 rounded-control border border-(--line-strong) bg-card px-2 text-sm max-md:h-11', FOCUS)}
                             />
-                            {custom && <span className="shrink-0 rounded border px-1.5 text-[11px] text-muted-foreground">직접 씀</span>}
+                            {custom && <span className="shrink-0 rounded-full bg-(--sunken) px-2 text-[11px] text-muted-foreground">직접 씀</span>}
                           </div>
                         </fieldset>
                       );
@@ -322,7 +322,7 @@ export default function RolesSection() {
           </fieldset>
           {ready && (
             // Sticky to the body's bottom edge, over its bottom padding, so rows never show below it.
-            <div className="sticky bottom-[calc(var(--overlay-end)*-1)] z-10 -mb-[var(--overlay-end)] flex items-center justify-end gap-2 border-t bg-background pt-3 pb-[var(--overlay-end)]">
+            <div className="sticky bottom-[calc(var(--overlay-end)*-1)] z-10 -mb-[var(--overlay-end)] flex items-center justify-end gap-2 border-t bg-card pt-3 pb-[var(--overlay-end)]">
               <p role="status" className={cn('mr-auto min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>
                 {status}
               </p>
