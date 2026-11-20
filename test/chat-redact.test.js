@@ -34,6 +34,14 @@ test("tokens and API keys: known prefixes, JWTs, PEM, assignments and unprefixed
   masked("Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345", `Authorization: Bearer ${MASK}`);
   masked("client_secret=abcd1234", `client_secret=${MASK}`);
   masked("cookie: sid-fake-value", `cookie: ${MASK}`);
+  // Short values after a secret-like key, any length; the key name stays.
+  masked("password: fake1", `password: ${MASK}`);
+  masked("secret: abcd", `secret: ${MASK}`);
+  masked("token=abc123", `token=${MASK}`);
+  masked("Passwd=x and pwd: ab", `Passwd=${MASK} and pwd: ${MASK}`);
+  masked("api key: zz", `api key: ${MASK}`);
+  masked('{"api_key": "ab"}', `{"api_key": "${MASK}"}`);
+  masked("tokens: 12", "tokens: 12");
   masked(`-----BEGIN ${"PRIVATE"} KEY-----\nAAAA\n-----END ${"PRIVATE"} KEY-----`, MASK);
   masked("tok Zx9aB3kq7Lm2Pq8Rt5Wv", `tok ${MASK}`);
   masked("sha 0123456789abcdef0123456789abcdef01234567", `sha ${MASK}`);
