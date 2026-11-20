@@ -229,7 +229,8 @@ function DetailView({ tab, scope, onRoute, bell, narrow }: { tab: 'usage' | 'bra
           </Button>
         }
       />
-      <div data-card={tab} className="min-w-0">{tab === 'usage' ? <UsagePage /> : <BranchesPage />}</div>
+      {/* 브랜치 fills the pane below the header (its two columns scroll inside), so the page itself never scrolls. */}
+      <div data-card={tab} className={cn('min-w-0', tab === 'branches' && 'flex min-h-0 flex-1 flex-col')}>{tab === 'usage' ? <UsagePage /> : <BranchesPage />}</div>
     </div>
   );
 }
