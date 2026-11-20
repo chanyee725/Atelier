@@ -12,7 +12,7 @@ import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
+import { badgeText, mainTarget, helperBody, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
 import { answeredAsk, issueAskText, runStart, startGate, useAskRequest, type AskRequest, type StartState } from './lib/askIssue.ts';
 import { issueTask, newLeadBody, type TeamPick } from '../home/issueStart.ts';
 import { IssueStartBar } from './IssueAsk';
@@ -24,10 +24,9 @@ const ChatPane = lazy(() => import('./ChatPane'));
 export function ChatDock({ folder }: { folder: string | null }) {
   const [open, setOpen] = useState(false);
   const [opened, setOpened] = useState(false);
-  // Memory only: the helper's id, the picked partner, the draft and how many replies were seen per session.
+  // Memory only: the helper's id, the draft and how many replies were seen per session.
   const [helperId, setHelperId] = useState<string | null>(null);
-  const [key, setKey] = useState(HELPER_KEY);
-  const [draft, setDraft] = useState('');
+    const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seen, setSeen] = useState<Record<string, number>>({});
@@ -44,14 +43,12 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const titleId = useId();
 
   // The store is fed only once the dock is used (opened or a conversation started), not on every page.
-  const active = open || helperId !== null || key !== HELPER_KEY;
+  const active = open || helperId !== null;
   useEffect(() => (active ? connect() : undefined), [active]);
   const unavailable = useDispatch(st => st.unavailable);
   const sessions = useDispatch(st => st.sessions);
   const providers = useDispatch(st => st.providers);
-  const targets = useMemo(() => chatTargets(sessions, helperId), [sessions, helperId]);
-  // A partner that ended drops out of the list; the helper takes its place.
-  const target = targets.find(t => t.key === key) ?? targets[0]!;
+  const target = useMemo(() => mainTarget(sessions, helperId), [sessions, helperId]);
   const sid = target.id;
   const s: Session | undefined = sid ? sessions.find(x => x.id === sid) : undefined;
   const entries = useDispatch(st => (sid ? st.transcripts[sid] : undefined));
@@ -103,7 +100,6 @@ export function ChatDock({ folder }: { folder: string | null }) {
           const made = res.sessions[0]?.id;
           if (made) {
             setHelperId(made);
-            setKey(HELPER_KEY);
             loadTranscript(made).catch(() => {});
           }
         }
@@ -138,8 +134,6 @@ export function ChatDock({ folder }: { folder: string | null }) {
     setError(null);
     setOpened(true);
     setOpen(true);
-    // A partner not in the list (not loaded yet, or ended) falls back to the helper (see `target`).
-    setKey(asked.partner ?? HELPER_KEY);
     if (!asked.ask) return;
     // Opening an issue never calls the model by itself (2026-11-20): the proposal question waits in the box, and
     // the person sends it (or edits it) when they want an answer.
@@ -164,9 +158,9 @@ export function ChatDock({ folder }: { folder: string | null }) {
 
   if (unavailable) return null;
   // Waiting for the answer: our request in flight, a helper that is being made, or the session's turn running.
-  const thinking = busy || (helperId !== null && key === HELPER_KEY && !s) || s?.status === 'running' || s?.status === 'starting';
+  const thinking = busy || (helperId !== null && !s) || s?.status === 'running' || s?.status === 'starting';
   // The 시작하기 bar: under the helper's answer to the ask, while the helper is not mid-turn (kept once pressed).
-  const showBar = !!pin?.ask && key === HELPER_KEY && !!s && (start.state !== 'idle' || (!thinking && answeredAsk(entries, pin.issue.number)));
+  const showBar = !!pin?.ask && !!s && (start.state !== 'idle' || (!thinking && answeredAsk(entries, pin.issue.number)));
   const label = badge ? `채팅 열기, 읽지 않은 답 ${badge}개` : '채팅 열기';
 
   return (
@@ -200,9 +194,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
             <ChatPane
               titleId={titleId}
               open={open}
-              targets={targets}
               target={target}
-              onPick={k => { setKey(k); setError(null); }}
               session={s}
               thinking={thinking}
               draft={draft}

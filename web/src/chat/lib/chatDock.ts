@@ -1,4 +1,4 @@
-// Pure parts of the chat dock (#937): who the person can talk to, the unread count, and the body that creates the
+// Pure parts of the chat dock (#937): who the person talks to (the main session), the unread count, and the body that creates the
 // 도우미 (helper). The conversation itself stays in the Dispatch store's memory; nothing here touches storage.
 import type { Entry, Session } from '../../../../shared/dispatch/types.ts';
 
@@ -15,18 +15,14 @@ const ENDED = new Set(['done', 'error']);
 export const isAlive = (s: Pick<Session, 'status'>) => !ENDED.has(s.status);
 
 /**
- * The 대화 상대 list: the helper first (its session when it is alive), then every other live session, newest first.
- * A helper that ended shows as not-made-yet, so the next message makes a new one.
+ * The one partner (#968): this project's main session, the 도우미. Its session while it is alive; a helper that ended
+ * shows as not-made-yet, so the next message makes a new one. There is no partner list.
  */
-export function chatTargets(sessions: Session[], helperId: string | null): ChatTarget[] {
+export function mainTarget(sessions: Session[], helperId: string | null): ChatTarget {
   // A helper just made may not be in the list yet: keep its id, so a second send does not make another one.
   const found = helperId ? sessions.find(s => s.id === helperId) : undefined;
   const id = !helperId ? null : !found ? helperId : isAlive(found) ? found.id : null;
-  const others = sessions
-    .filter(s => s.id !== helperId && isAlive(s))
-    .sort((a, b) => b.startedAt - a.startedAt)
-    .map(s => ({ key: s.id, id: s.id, label: `${s.name} · ${s.roleName}` }));
-  return [{ key: HELPER_KEY, id, label: '도우미' }, ...others];
+  return { key: HELPER_KEY, id, label: '도우미' };
 }
 
 /** Replies (assistant messages) in a transcript. */

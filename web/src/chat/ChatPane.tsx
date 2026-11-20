@@ -1,4 +1,4 @@
-// Inside of the chat dock window (#937), loaded on its first open: 대화 상대 picker, the conversation (the #915 bubbles
+// Inside of the chat dock window (#937), loaded on its first open: the conversation (the #915 bubbles
 // and markdown reader via SessionSheet's Chat), 생각 중…, and the message box (Enter sends, Shift+Enter adds a line).
 // #954: an issue asked about from the dashboard is pinned under the header, and the 시작하기 bar sits under the
 // helper's proposal.
@@ -6,7 +6,6 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { SendHorizontal, X } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
-import { NativeSelect } from '../components/ui/native-select';
 import { Textarea } from '../components/ui/textarea';
 import { Chat, type Report } from '../dispatch/SessionSheet';
 import { canRun, READ_ONLY_NOTICE } from '../dispatch/lib/runnable.ts';
@@ -18,9 +17,7 @@ import type { AskedIssue } from './lib/askIssue';
 type Props = {
   titleId: string;
   open: boolean;
-  targets: ChatTarget[];
   target: ChatTarget;
-  onPick: (key: string) => void;
   session: Session | undefined;
   thinking: boolean;
   draft: string;
@@ -38,28 +35,20 @@ type Props = {
   after?: (focusInput: () => void) => ReactNode;
 };
 
-export default function ChatPane({ titleId, open, targets, target, onPick, session: s, thinking, draft, setDraft, busy, notice, error, setError, onSend, onClose, issue, after }: Props) {
+export default function ChatPane({ titleId, open, target, session: s, thinking, draft, setDraft, busy, notice, error, setError, onSend, onClose, issue, after }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
-  // The message box takes focus when the window opens and when another partner is picked.
+  // The message box takes focus when the window opens.
   useEffect(() => {
     if (open) input.current?.focus({ preventScroll: true });
-  }, [open, target.key]);
+  }, [open]);
   const report: Report = p => p.then(() => { setError(null); return true; }, (e: Error) => { setError(e.message); return false; });
   const readOnly = !!s && !canRun(s);
-  const name = target.id ? target.label.split(' · ')[0] : '도우미';
+  const name = target.label;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center gap-2 border-b py-2.5 pr-2.5 pl-4">
         <h2 id={titleId} className="m-0 shrink-0 text-[13px] font-semibold">채팅</h2>
-        <NativeSelect
-          aria-label="대화 상대"
-          value={target.key}
-          onChange={e => onPick(e.target.value)}
-          className="max-w-[220px] truncate"
-        >
-          {targets.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-        </NativeSelect>
         <Button size="icon-sm" variant="ghost" className="ml-auto text-muted-foreground" aria-label="채팅 닫기" onClick={onClose}>
           <X />
         </Button>

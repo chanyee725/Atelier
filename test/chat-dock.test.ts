@@ -1,19 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badgeText, chatTargets, helperBody, helperOffline, sendOnce, sendsOnEnter, sessionGone, unread } from '../web/src/chat/lib/chatDock.ts';
+import { badgeText, mainTarget, helperBody, helperOffline, sendOnce, sendsOnEnter, sessionGone, unread } from '../web/src/chat/lib/chatDock.ts';
 import type { Entry, Session } from '../shared/dispatch/types.ts';
 
 const ses = (id: string, status: Session['status'], startedAt: number, name = id) =>
   ({ id, status, startedAt, name, roleName: '팀원' }) as Session;
 
-test('chatTargets: helper first, then live sessions newest first; ended ones drop out', () => {
-  const list = [ses('a', 'running', 1), ses('b', 'done', 3), ses('c', 'idle', 2), ses('h', 'waiting', 0)];
-  assert.deepEqual(chatTargets(list, 'h').map(t => [t.key, t.id]), [['helper', 'h'], ['c', 'c'], ['a', 'a']]);
-  // No helper yet, or the helper ended: the helper entry has no id, so the next send makes a new one.
-  assert.equal(chatTargets(list, null)[0]!.id, null);
-  assert.equal(chatTargets([ses('h', 'done', 0)], 'h')[0]!.id, null);
+test('mainTarget: always the helper; its id only while alive', () => {
+  const list = [ses('a', 'running', 1), ses('h', 'waiting', 0)];
+  assert.deepEqual([mainTarget(list, 'h').key, mainTarget(list, 'h').id], ['helper', 'h']);
+  // No helper yet, or the helper ended: no id, so the next send makes a new one.
+  assert.equal(mainTarget(list, null).id, null);
+  assert.equal(mainTarget([ses('h', 'done', 0)], 'h').id, null);
   // Just made, not in the list yet: keep its id so a second send does not make another helper.
-  assert.equal(chatTargets([], 'h')[0]!.id, 'h');
+  assert.equal(mainTarget([], 'h').id, 'h');
 });
 
 test('unread counts replies after the last seen count; badge caps at 9+', () => {
@@ -45,13 +45,13 @@ test('sendsOnEnter: Enter sends; Shift+Enter and IME composition do not', () => 
 });
 
 test('helperOffline: only the not-yet-made helper with Claude known as not connected', () => {
-  const [helper] = chatTargets([], null);
-  assert.equal(helperOffline(helper!, { claude: { connected: false } }), true);
-  assert.equal(helperOffline(helper!, { claude: { connected: true } }), false);
+  const helper = mainTarget([], null);
+  assert.equal(helperOffline(helper, { claude: { connected: false } }), true);
+  assert.equal(helperOffline(helper, { claude: { connected: true } }), false);
   // Provider list not loaded yet: do not block; the server answers.
-  assert.equal(helperOffline(helper!, {}), false);
+  assert.equal(helperOffline(helper, {}), false);
   // A helper already made, or another session, is not blocked here.
-  assert.equal(helperOffline(chatTargets([], 'h')[0]!, { claude: { connected: false } }), false);
+  assert.equal(helperOffline(mainTarget([], 'h'), { claude: { connected: false } }), false);
   assert.equal(helperOffline({ key: 's1', id: 's1', label: 'x' }, { claude: { connected: false } }), false);
 });
 
