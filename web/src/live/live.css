@@ -360,6 +360,11 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
+/* box-shadow: none above drops the trigger's ring, so keyboard focus gets an inset outline instead. */
+.agent-live-tab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
 .agent-live-tab[aria-selected='true'] {
   color: var(--foreground);
 }
