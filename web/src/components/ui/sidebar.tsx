@@ -122,7 +122,7 @@ const SidebarContent = ({ className, ...props }: React.ComponentProps<'div'>) =>
   <div data-slot="sidebar-content" className={cn('flex min-h-0 flex-1 flex-col gap-1 overflow-auto px-2', className)} {...props} />
 );
 const SidebarFooter = ({ className, ...props }: React.ComponentProps<'div'>) => (
-  <div data-slot="sidebar-footer" className={cn('mx-2 mb-2 flex flex-col gap-0.5 border-t pt-2', C.border, className)} {...props} />
+  <div data-slot="sidebar-footer" className={cn('mx-2 mb-2 flex flex-col gap-0.5 pt-2', className)} {...props} />
 );
 const SidebarGroup = ({ className, ...props }: React.ComponentProps<'div'>) => <div data-slot="sidebar-group" className={cn('relative flex flex-col', className)} {...props} />;
 const SidebarGroupLabel = ({ className, ...props }: React.ComponentProps<'div'>) => (
