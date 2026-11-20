@@ -1,19 +1,19 @@
-// Plan diagram look (#971): a plan block is a plain flowchart, so it has no icons or colours of its own. When it is
-// drawn (canvas and document), each step node gets its role's icon and colour and every node a flat box
+// Plan diagram look (#971): a plan block is a plain flowchart, so it has no icons of its own. When it is
+// drawn (canvas and document), each step node gets its role's icon (grey, white fill) and every node a flat box
 // (`styleMode: plain`), like the #945 preview. Only the drawn code changes; the saved code stays as written.
 // Pure, so it runs under `node --test`.
 import { parse, type GraphChild, type GraphDiagram } from '../../../shared/dsl/index.ts';
 import type { Plan } from '../../../shared/dispatch/plan.ts';
 
-/** Role → bundled Lucide icon and the DSL palette name closest to the role's `--role-*` token. */
-export const ROLE_LOOK: Readonly<Record<string, { icon: string; color: string }>> = {
-  lead: { icon: 'compass', color: 'purple' },
-  impl: { icon: 'code-xml', color: 'blue' },
-  review: { icon: 'eye', color: 'orange' },
-  test: { icon: 'flask-conical', color: 'green' },
-  design: { icon: 'palette', color: 'pink' },
-  docs: { icon: 'file-text', color: 'gray' },
-  merge: { icon: 'git-merge', color: 'cyan' },
+/** Role → bundled Lucide icon. Nodes stay white (#984): the role shows as the icon, the chip and the badge only. */
+export const ROLE_LOOK: Readonly<Record<string, { icon: string }>> = {
+  lead: { icon: 'compass' },
+  impl: { icon: 'code-xml' },
+  review: { icon: 'eye' },
+  test: { icon: 'flask-conical' },
+  design: { icon: 'palette' },
+  docs: { icon: 'file-text' },
+  merge: { icon: 'git-merge' },
 };
 
 /** Node name → role, for the steps of `plan` (a step's role, else the plan default). */
@@ -57,7 +57,6 @@ export function decorateCode(code: string, type: string, roles: Readonly<Record<
     const look = Object.hasOwn(roles, n.name) ? ROLE_LOOK[roles[n.name]!] : undefined;
     const add: string[] = [];
     if (look && n.attrs.icon === undefined) add.push(`icon: ${look.icon}`);
-    if (look && n.attrs.color === undefined) add.push(`color: ${look.color}`);
     if (n.attrs.styleMode === undefined) add.push('styleMode: plain');
     if (!add.length) continue;
     const text = lines[n.span.line - 1];

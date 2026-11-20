@@ -241,7 +241,7 @@ function contrast(a: string, b: string): number {
 
 function iconMarkup(ic: SceneIcon, { theme, t, c }: Ctx): string {
   const icon = iconFor(ic.name);
-  let color = ic.paint.color ? strokeOf(ic.paint.color, theme) : t.text;
+  let color = ic.paint.color ? strokeOf(ic.paint.color, theme) : icon.fill ? t.text : t.icon;
   if (ic.inside && ic.paint.mode === 'bold') color = resolvePaint(ic.paint, theme).text;
   // Logos keep their brand colour unless a colour was asked for, they sit on a bold fill, or the
   // brand colour would vanish into the background (black logos on the dark theme).
@@ -254,7 +254,7 @@ function iconMarkup(ic: SceneIcon, { theme, t, c }: Ctx): string {
   const dash = icon.set === 'own' && icon.key === 'placeholder' ? ' stroke-dasharray="3 2.5"' : '';
   return (
     open +
-    `<path d="${icon.d}" fill="none" stroke="${color}" stroke-width="${n(1.6 / Math.max(s, 0.5))}" stroke-linecap="round" stroke-linejoin="round"${dash}/></g>`
+    `<path d="${icon.d}" fill="none" stroke="${color}" stroke-width="${n(1.5 / Math.max(s, 0.5))}" stroke-linecap="round" stroke-linejoin="round"${dash}/></g>`
   );
 }
 

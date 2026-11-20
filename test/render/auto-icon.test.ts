@@ -42,35 +42,36 @@ test('plain labels and everyday words stay without an icon', async () => {
   }
 });
 
-test('generic kind words get a Lucide glyph and a pale colour; sentences and plain words get none (#935)', () => {
-  const want: [string, string, string][] = [
-    ['API Gateway', 'network', 'purple'],
-    ['Orders DB', 'database', 'blue'],
-    ['Database', 'database', 'blue'],
-    ['Session cache', 'zap', 'red'],
-    ['Job queue', 'inbox', 'orange'],
-    ['Payment service', 'server', 'green'],
-    ['Client', 'monitor', 'gray'],
-    ['Web App', 'monitor', 'gray'],
-    ['Users', 'user', 'gray'],
-    ['Auth', 'lock', 'indigo'],
+test('generic kind words get a Lucide glyph and no colour; sentences and plain words get none (#935)', () => {
+  const want: [string, string][] = [
+    ['API Gateway', 'network'],
+    ['Orders DB', 'database'],
+    ['Database', 'database'],
+    ['Session cache', 'zap'],
+    ['Job queue', 'inbox'],
+    ['Payment service', 'server'],
+    ['Client', 'monitor'],
+    ['Web App', 'monitor'],
+    ['Users', 'user'],
+    ['Auth', 'lock'],
   ];
-  for (const [label, icon, color] of want) assert.deepEqual(kindOf(label), { icon, color }, label);
+  for (const [label, icon] of want) assert.deepEqual(kindOf(label), { icon }, label);
   for (const label of ['Next step', 'Go', 'Box', 'Payments', 'Start', 'Check order status', 'Send the order to the queue now', '']) {
     assert.equal(kindOf(label), undefined, label);
   }
 });
 
-test('kind icons and colours: product logo first, explicit icon:/color: win, autoIcons off turns both off', async () => {
+test('kind icons keep the white fill; only an explicit color: paints; autoIcons off turns the icons off (#984)', async () => {
   const fills = (svg: string): string[] => [...svg.matchAll(/<rect[^>]*fill="(#[0-9a-f]{6})"[^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => `${m[1]}/${m[2]}`);
   const on = await renderDiagram('API Gateway\nRedis cache\nOrders DB [icon: box]\nClient [color: green]', { type: 'cloud-architecture' });
   assert.deepEqual(icons(on.svg).sort(), ['box:lucide', 'monitor:lucide', 'network:lucide', 'redis:simple-icons']);
-  const f = fills(on.svg).join(' ');
-  assert.match(f, /#f4f3ff\/#6938ef/, 'gateway: pale purple');
-  assert.match(f, /#fef3f2\/#d92d20/, 'cache: pale red');
-  assert.match(f, /#eff8ff\/#2e90fa/, 'db keeps its kind colour under icon: box');
-  assert.match(f, /#ecfdf3\/#079455/, 'color: green wins over gray');
-  assert.doesNotMatch(f, /#f2f4f7\/#98a2b3/, 'no gray client');
+  const f = fills(on.svg);
+  assert.equal(f.filter((x) => x.startsWith('#ffffff/')).length, 3, 'three default nodes keep the white fill');
+  const plain = await renderDiagram('styleMode plain\nAPI Gateway', { type: 'cloud-architecture' });
+  assert.deepEqual(fills(plain.svg), ['#ffffff/#d0d5dd'], 'plain: white fill, #D0D5DD border');
+  assert.ok(f.includes('#ecfdf3/#079455'), 'color: green still paints its node');
+  assert.doesNotMatch(on.svg, /#f4f3ff|#fef3f2|#eff8ff|#f2f4f7\/#98a2b3/, 'no pale kind fill');
+  assert.match(on.svg, /data-icon="network"[^>]*><path[^>]*stroke="#475467"/, "default icon is grey #475467");
   const off = await renderDiagram('autoIcons off\nAPI Gateway\nOrders DB', { type: 'cloud-architecture' });
   assert.deepEqual(icons(off.svg), []);
   assert.doesNotMatch(off.svg, /#f4f3ff|#eff8ff/);
