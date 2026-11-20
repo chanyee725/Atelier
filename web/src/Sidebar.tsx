@@ -30,6 +30,7 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
+import { SidebarHistory } from './shell/SidebarHistory';
 import { ThemeSwitch } from './ThemeSwitch';
 import { ProjectName } from './ProjectName';
 import type { Theme, ThemePref } from './theme';
@@ -417,6 +418,7 @@ export function Sidebar(p: Props) {
             </SidebarMenu>
           )}
         </SidebarGroup>
+        <SidebarHistory />
       </SidebarContent>
       <p aria-live="polite" className="sr-only">
         {said}
