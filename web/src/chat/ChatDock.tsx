@@ -10,7 +10,7 @@ import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, unread } from './lib/chatDock.ts';
+import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
 import './chat-dock.css';
 
 const ChatPane = lazy(() => import('./ChatPane'));
@@ -26,6 +26,8 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seen, setSeen] = useState<Record<string, number>>({});
+  // One send at a time, checked synchronously (sendOnce); `busy` only drives the UI.
+  const sending = useRef(false);
   const ref = useRef<HTMLDialogElement>(null);
   const fab = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -76,29 +78,33 @@ export function ChatDock({ folder }: { folder: string | null }) {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || busy || offline) return;
-    setBusy(true);
-    setError(null);
-    try {
-      if (sid) {
-        await api('POST', `/api/sessions/${encodeURIComponent(sid)}/message`, { text });
-      } else {
-        const res = await api<{ sessions: Session[] }>('POST', '/api/sessions', helperBody(text, folder));
-        const made = res.sessions[0]?.id;
-        if (made) {
-          setHelperId(made);
-          setKey(HELPER_KEY);
-          loadTranscript(made).catch(() => {});
-        }
-      }
+    if (!text || offline) return;
+    await sendOnce(sending, async () => {
+      setBusy(true);
+      setError(null);
+      // The box clears at once; a failed send puts the text back.
       setDraft('');
-    } catch (e) {
-      setError((e as Error).message);
-      // A helper that is gone (removed elsewhere) is made again on the next send.
-      if (sid && sid === helperId) setHelperId(null);
-    } finally {
-      setBusy(false);
-    }
+      try {
+        if (sid) {
+          await api('POST', `/api/sessions/${encodeURIComponent(sid)}/message`, { text });
+        } else {
+          const res = await api<{ sessions: Session[] }>('POST', '/api/sessions', helperBody(text, folder));
+          const made = res.sessions[0]?.id;
+          if (made) {
+            setHelperId(made);
+            setKey(HELPER_KEY);
+            loadTranscript(made).catch(() => {});
+          }
+        }
+      } catch (e) {
+        setDraft(text);
+        setError((e as Error).message);
+        // A helper that is gone (removed elsewhere) is made again on the next send; a passing error keeps it.
+        if (sid && sid === helperId && sessionGone(e)) setHelperId(null);
+      } finally {
+        setBusy(false);
+      }
+    });
   };
 
   if (unavailable) return null;

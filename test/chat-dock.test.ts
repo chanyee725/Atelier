@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { badgeText, chatTargets, helperBody, helperOffline, sendsOnEnter, unread } from '../web/src/chat/lib/chatDock.ts';
+import { badgeText, chatTargets, helperBody, helperOffline, sendOnce, sendsOnEnter, sessionGone, unread } from '../web/src/chat/lib/chatDock.ts';
 import type { Entry, Session } from '../shared/dispatch/types.ts';
 
 const ses = (id: string, status: Session['status'], startedAt: number, name = id) =>
@@ -38,6 +38,10 @@ test('sendsOnEnter: Enter sends; Shift+Enter and IME composition do not', () => 
   assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: true }), false);
   assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: false, isComposing: true }), false);
   assert.equal(sendsOnEnter({ key: 'a', shiftKey: false }), false);
+  // A Korean IME's committing Enter (keyCode 229) and a held key (repeat) do not send either (#950).
+  assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: false, keyCode: 229 }), false);
+  assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: false, keyCode: 13, repeat: true }), false);
+  assert.equal(sendsOnEnter({ key: 'Enter', shiftKey: false, keyCode: 13, repeat: false }), true);
 });
 
 test('helperOffline: only the not-yet-made helper with Claude known as not connected', () => {
@@ -49,4 +53,26 @@ test('helperOffline: only the not-yet-made helper with Claude known as not conne
   // A helper already made, or another session, is not blocked here.
   assert.equal(helperOffline(chatTargets([], 'h')[0]!, { claude: { connected: false } }), false);
   assert.equal(helperOffline({ key: 's1', id: 's1', label: 'x' }, { claude: { connected: false } }), false);
+});
+
+test('sendOnce: two Enters before a re-render run the send once; the lock opens again after, also on failure', async () => {
+  const lock = { current: false };
+  let runs = 0;
+  let finish!: () => void;
+  const run = () => { runs++; return new Promise<void>(r => { finish = r; }); };
+  const first = sendOnce(lock, run);
+  const second = sendOnce(lock, run);
+  assert.equal(await second, false);
+  finish();
+  assert.equal(await first, true);
+  assert.equal(runs, 1);
+  await assert.rejects(sendOnce(lock, async () => { throw new Error('x'); }));
+  assert.equal(lock.current, false);
+  assert.equal(await sendOnce(lock, async () => {}), true);
+});
+
+test('sessionGone: only a 404 forgets the helper', () => {
+  assert.equal(sessionGone(Object.assign(new Error('세션이 없어요'), { status: 404 })), true);
+  assert.equal(sessionGone(Object.assign(new Error('HTTP 500'), { status: 500 })), false);
+  assert.equal(sessionGone(new TypeError('Failed to fetch')), false);
 });

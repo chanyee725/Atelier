@@ -49,7 +49,27 @@ export function helperBody(text: string, folder: string | null) {
 }
 
 /** Enter sends; Shift+Enter (and Enter while an IME is composing) adds a line. */
-export const sendsOnEnter = (e: { key: string; shiftKey: boolean; isComposing?: boolean }) => e.key === 'Enter' && !e.shiftKey && !e.isComposing;
+export const sendsOnEnter = (e: { key: string; shiftKey: boolean; isComposing?: boolean; keyCode?: number; repeat?: boolean }) =>
+  e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !e.repeat;
+
+/**
+ * Runs `run` unless a send is already in flight, checked synchronously: a Korean IME can deliver the committing Enter
+ * twice before React re-renders `busy`, which sent twice and made two helpers (#937, same bug as #950).
+ * Returns whether this call ran.
+ */
+export async function sendOnce(lock: { current: boolean }, run: () => Promise<void>): Promise<boolean> {
+  if (lock.current) return false;
+  lock.current = true;
+  try {
+    await run();
+  } finally {
+    lock.current = false;
+  }
+  return true;
+}
+
+/** The session is gone (404): only then does the dock forget its helper; a passing error keeps it. */
+export const sessionGone = (e: unknown) => (e as { status?: number } | null)?.status === 404;
 
 /** Shown before the first send when the helper cannot be made yet: Claude is known and not connected here. */
 export const HELPER_OFFLINE = 'Claude가 연결되지 않았어요. 연결하기에서 Claude를 연결하면 도우미와 대화할 수 있어요.';

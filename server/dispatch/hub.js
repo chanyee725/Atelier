@@ -753,7 +753,7 @@ export class Hub extends EventEmitter {
 
   send(id, text, { force = false } = {}) {
     const s = this.get(id);
-    if (!s) throw new Error("세션이 없어요");
+    if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
     if (s.provider === "openai") void this.refreshCodex(); // fresh windows for the next turn's hold check
     const blocked = this.runBlock(s); // before anything is recorded or started

@@ -77,7 +77,7 @@ export default function ChatPane({ titleId, open, targets, target, onPick, sessi
             value={draft}
             onChange={e => setDraft(e.target.value)}
             onKeyDown={e => {
-              if (sendsOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing })) {
+              if (sendsOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode, repeat: e.repeat })) {
                 e.preventDefault();
                 onSend();
               }

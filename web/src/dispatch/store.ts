@@ -39,7 +39,8 @@ export async function api<T = unknown>(method: string, url: string, body?: unkno
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error || `HTTP ${res.status}`);
+  // `status` lets a caller tell a missing session (404) from a passing failure.
+  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error || `HTTP ${res.status}`), { status: res.status });
   return data as T;
 }
 
