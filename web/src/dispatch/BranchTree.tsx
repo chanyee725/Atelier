@@ -74,7 +74,7 @@ export function BranchTreeView({
         enableSelectedCommitStyling={false}
         classes={{ containerClass: 'min-w-[44rem] py-2 text-sm' }}
       >
-        <GitLog.GraphHTMLGrid nodeSize={10} nodeTheme="plain" showCommitNodeTooltips={false} />
+        <GitLog.GraphCanvas2D nodeSize={10} nodeTheme="plain" />
         <GitLog.Table row={({ commit }) => <TreeRow commit={commit as Commit<TreeEntry>} base={tree.base} now={now} renderTip={renderTip} />} />
       </GitLog>
     </div>
