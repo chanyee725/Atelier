@@ -15,6 +15,7 @@ import { StepModels } from './StepModels';
 import { onPlanConfirmRequest, samePlan, takePlanConfirm } from './planConfirmRequest';
 import { planApproval, type PlanApproval } from './planApprovalModel';
 import { StatusDot } from '../home/dash';
+import { fullTimeLabel, timeLabel as whenLabel } from '../lib/timeLabel'; // TODO(#889): lib/when.ts whenLabel once Vera's PR merges
 
 const CHIP_TONE = { waiting: 'warn', revised: 'warn', approved: 'ok', unknown: 'idle' } as const;
 
@@ -27,9 +28,6 @@ function ApprovalChip({ a }: { a: PlanApproval }) {
     </span>
   );
 }
-
-const approvedWhen = (at: number | null) =>
-  at === null ? null : new Date(at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 async function readStatus(path: string): Promise<PipelineStatus | null> {
   const res = await fetch(`/api/pipeline?path=${encodeURIComponent(path)}`);
@@ -103,6 +101,21 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
 
   const approval = path && hasPlan ? planApproval(status, unread) : null;
   if (path && hasPlan && unread && !status) {
+    if (inTab && approval)
+      return (
+        <div role="status" className="plan-bar" data-testid="plan-strip">
+          <div className="plan-bar-text">
+            <div className="plan-bar-head"><ApprovalChip a={approval} /></div>
+            <span className="plan-bar-meta">시작할 수 있는지 확인하지 못했어요.</span>
+          </div>
+          <Button size="sm" variant="ghost" className="px-2 text-sm" onClick={() => void refresh()}>
+            다시 확인
+          </Button>
+          <Button size="sm" aria-disabled className="px-3 text-sm aria-disabled:hover:bg-primary">
+            시작하기
+          </Button>
+        </div>
+      );
     return (
       <Alert role="status" className="bg-muted" data-testid="plan-strip">
         {inTab && approval ? <ApprovalChip a={approval} /> : <span aria-hidden="true">◐</span>}
@@ -118,15 +131,20 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
   }
   // Started: the tab still says it was approved, and which revision; the strip above hides (E22's strip shows).
   if (inTab && path && approval?.kind === 'approved') {
-    const when = approvedWhen(approval.at);
     return (
-      <Alert role="status" className="bg-muted" data-testid="plan-strip">
-        <ApprovalChip a={approval} />
-        <span className="mr-auto text-muted-foreground">
-          {approval.text}
-          {when && <> · {when}에 시작했어요</>}
-        </span>
-      </Alert>
+      <div role="status" className="plan-bar" data-testid="plan-strip">
+        <div className="plan-bar-text">
+          <div className="plan-bar-head">
+            <ApprovalChip a={approval} />
+            <span className="font-normal">{approval.text}</span>
+          </div>
+          {approval.at !== null && (
+            <time className="plan-bar-meta" dateTime={new Date(approval.at).toISOString()} title={fullTimeLabel(approval.at)}>
+              {whenLabel(approval.at)} 시작했어요
+            </time>
+          )}
+        </div>
+      </div>
     );
   }
   if (!path || !status || status.state !== 'plan') return null;
@@ -189,11 +207,8 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
     }
   };
 
-  return (
+  const message = (
     <>
-    <Alert role="status" className="bg-muted" data-testid="plan-strip">
-      {inTab && approval ? <ApprovalChip a={approval} /> : <span aria-hidden="true">◐</span>}
-      <span className="mr-auto">
         {error && <span className="text-destructive">{error} </span>}
         {/* Every blocker in words, also after an error, so a blocked 시작하기 never goes unexplained (#788). */}
         {blocked ? (
@@ -203,8 +218,10 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
         ) : (
           !error && <>{(approval?.kind === 'revised' || inTab) ? approval?.text : '계획이에요. 고칠 곳을 고친 뒤 시작해 주세요.'}</>
         )}
-      </span>
-      <span className="text-muted-foreground">예상 {status.sessions}세션</span>
+    </>
+  );
+  const buttons = (
+    <>
       <Button size="sm" variant="ghost" aria-expanded={modelsOpen} aria-controls={modelsId} className="px-2 text-sm" onClick={() => setModelsOpen((v) => !v)}>
         단계 모델
       </Button>
@@ -215,7 +232,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
           disabled={busy}
           aria-disabled={blocked || undefined}
           aria-describedby={blocked ? blockersId : undefined}
-          className="px-3 text-sm aria-disabled:hover:bg-primary"
+          className={inTab ? 'h-9 px-4 text-sm aria-disabled:hover:bg-primary' : 'px-3 text-sm aria-disabled:hover:bg-primary'}
           onClick={() => {
             if (blocked) return;
             void open();
@@ -224,7 +241,32 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
           시작하기
         </Button>
       </span>
+    </>
+  );
+
+  return (
+    <>
+    {inTab && approval ? (
+      <div role="status" className="plan-bar" data-testid="plan-strip">
+        <div className="plan-bar-text">
+          <div className="plan-bar-head">
+            <ApprovalChip a={approval} />
+            <span className="font-normal">{message}</span>
+          </div>
+          <span className="plan-bar-meta">
+            세션 {status.sessions}개{limitLine(status.limits) ? ` · ${limitLine(status.limits)}` : ''} · 한 번 시작하면 머지까지 이어서 해요
+          </span>
+        </div>
+        {buttons}
+      </div>
+    ) : (
+    <Alert role="status" className="bg-muted" data-testid="plan-strip">
+      <span aria-hidden="true">◐</span>
+      <span className="mr-auto">{message}</span>
+      <span className="text-muted-foreground">예상 {status.sessions}세션</span>
+      {buttons}
     </Alert>
+    )}
     {/* Outside the live region: picking a model must not re-read the strip. */}
     {modelsOpen && <StepModels id={modelsId} session={session} path={path} />}
     {/* Outside the live region too, so the open dialog and its role="alert" are not nested live regions. */}
