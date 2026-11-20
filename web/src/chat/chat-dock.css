@@ -169,6 +169,7 @@
   right: var(--overlay-x);
   bottom: calc(100% + 4px);
   z-index: 1;
+  width: auto;
   height: auto;
   border-radius: 10px;
   background: var(--popover);
