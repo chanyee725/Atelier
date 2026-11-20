@@ -101,3 +101,46 @@ export const treeSummary = (entries: readonly TreeEntry[], base: string | null) 
   const branches = new Set(entries.map((e) => e.branch));
   return `${base ?? '기준 브랜치'} 기준, 세션 브랜치 ${Math.max(0, branches.size - (base && branches.has(base) ? 1 : 0))}개, 커밋 ${entries.length}개`;
 };
+
+/**
+ * A branch's state for the 브랜치 tab's chips and legend (#889, Branches.dc.html): 작업 중 (no PR or a draft), PR 리뷰,
+ * 체크 통과 (mergeable), 머지됨; 충돌 and 닫힘 sit outside the legend. `label` is the table chip text.
+ */
+export type BranchState = 'working' | 'review' | 'passed' | 'merged' | 'conflict' | 'closed';
+export const BRANCH_STATE: Record<BranchState, string> = {
+  working: '작업 중',
+  review: 'PR 리뷰',
+  passed: '체크 통과',
+  merged: '머지됨',
+  conflict: '충돌',
+  closed: '닫힘',
+};
+/** The four legend states, in the design's order. */
+export const LEGEND_STATES: readonly BranchState[] = ['working', 'review', 'passed', 'merged'];
+
+export function branchState(r: Pick<BranchRow, 'merged' | 'pr'>): BranchState {
+  if (r.merged || r.pr?.phase === 'merged') return 'merged';
+  switch (r.pr?.phase) {
+    case 'review':
+      return 'review';
+    case 'mergeable':
+      return 'passed';
+    case 'conflict':
+      return 'conflict';
+    case 'closed':
+      return 'closed';
+    default:
+      return 'working';
+  }
+}
+
+/** Header line numbers: shown branches, open PRs among them, and the newest commit time (null when none). */
+export function branchSummary(rows: readonly BranchRow[]): { branches: number; openPrs: number; lastAt: number | null } {
+  let openPrs = 0;
+  let lastAt: number | null = null;
+  for (const r of rows) {
+    if (r.pr && !r.merged && r.pr.phase !== 'merged' && r.pr.phase !== 'closed') openPrs++;
+    if (r.lastAt != null && (lastAt == null || r.lastAt > lastAt)) lastAt = r.lastAt;
+  }
+  return { branches: rows.length, openPrs, lastAt };
+}
