@@ -1,8 +1,7 @@
-// Agent activity feed of the app (E537, issue #654): the server's activity log (shared/dispatch/agent-activity.ts)
-// as the page shows it — the bell's unread count and feed, and browser notifications while the page is hidden (no
-// toasts since #811: the 알림함 is the one place). Pure (no React or DOM), so it runs under `node --test`. Metadata only: who, which file, when.
-import { whenLabel } from '../lib/when.ts';
-import { activitySentence, ACTIVITY_MAX, isActivityEvent, type ActivityEvent, type ActivityLog } from '../../../shared/dispatch/agent-activity.ts';
+// Agent activity of the app (E537, issue #654): the server's activity log (shared/dispatch/agent-activity.ts) as the
+// page keeps it, and when a new event goes out as a browser notification (page hidden, notifications on; no pop-ups
+// on the page itself). Pure (no React or DOM), so it runs under `node --test`. Metadata only: who, which file, when.
+import { ACTIVITY_MAX, isActivityEvent, type ActivityEvent, type ActivityLog } from '../../../shared/dispatch/agent-activity.ts';
 
 export type { ActivityEvent, ActivityLog };
 
@@ -17,52 +16,12 @@ export function addEvent(log: ActivityLog, e: unknown): ActivityLog {
 export const markRead = (log: ActivityLog, readAt: unknown): ActivityLog =>
   typeof readAt === 'number' && Number.isFinite(readAt) && readAt > log.readAt ? { ...log, readAt } : log;
 
-/** Unread events. */
-export const unreadCount = (log: ActivityLog) => log.events.reduce((n, e) => n + (e.at > log.readAt ? 1 : 0), 0);
-
-/** The badge text: up to 99, then "99+"; '' with nothing unread. */
-export const badgeText = (n: number) => (n <= 0 ? '' : n > 99 ? '99+' : String(n));
-
-/** Progress events come often (one per section): they stay in the feed and never pop up. */
+/** Progress events come often (one per section): they never go out as a notification. */
 export const alerts = (e: Pick<ActivityEvent, 'kind'>) => e.kind !== 'progress';
 
-/** How to tell the user about a new event beyond the 알림함: a browser notification when the page is hidden and they
- * are turned on, else nothing (no toasts, #811). */
+/** How to tell the user about a new event on the page: a browser notification when the page is hidden and they
+ * are turned on, else nothing . */
 export function alertRoute(e: Pick<ActivityEvent, 'kind'>, page: { visible: boolean; notify: boolean }): 'notification' | null {
   if (!alerts(e) || page.visible) return null;
   return page.notify ? 'notification' : null;
-}
-
-export type FeedItem = { id: string; text: string; when: string; unread: boolean; file: string; color?: string; kind: ActivityEvent['kind'] };
-
-/** The app's time label (lib/when.ts) for an event `ms` old that happened at `at`. */
-export function whenText(ms: number, at: number): string {
-  return whenLabel(at, at + Math.max(ms, 0));
-}
-
-/** The feed, newest first. */
-export function feedOf(log: ActivityLog, now: number): FeedItem[] {
-  return [...log.events].reverse().map((e) => ({
-    id: e.id,
-    text: activitySentence(e),
-    when: whenText(now - e.at, e.at),
-    unread: e.at > log.readAt,
-    file: e.file,
-    kind: e.kind,
-    ...(e.color && /^#[0-9a-f]{6}$/i.test(e.color) ? { color: e.color } : {}),
-  }));
-}
-
-const GAP = 6;
-const EDGE = 8;
-
-/**
- * Where the feed goes: under the bell with right edges lined up, so it opens down and to the left from the top bar's
- * right end (#786); flipped above or shifted in when it would leave the viewport.
- */
-export function placeFeed(bell: { right: number; top: number; bottom: number }, feed: { width: number; height: number }, view: { width: number; height: number }) {
-  const left = Math.max(EDGE, Math.min(bell.right - feed.width, view.width - feed.width - EDGE));
-  const below = bell.bottom + GAP;
-  const top = below + feed.height <= view.height - EDGE ? below : Math.max(EDGE, bell.top - GAP - feed.height);
-  return { left, top };
 }

@@ -80,8 +80,6 @@ export type BoardProps = {
   /** 상시 화면 or 설정 asked for by the address (old /dispatch#tv, #settings); handled once, then `onExtraDone`. */
   extra?: BoardExtra | null;
   onExtraDone?: () => void;
-  /** The 알림함 bell (#786), at the right end of the page header. */
-  bell?: ReactNode;
   /** Narrow window: the header shows the sidebar trigger. */
   narrow?: boolean;
 };
@@ -143,7 +141,6 @@ export default function SessionBoard(p: BoardProps) {
           <PageHeader
             title="세션 보드"
             narrow={p.narrow}
-            bell={p.bell}
             actions={
               <>
                 <BoardMenu onCreate={() => setCreating(true)} disabled={disabled} />
@@ -163,7 +160,7 @@ export default function SessionBoard(p: BoardProps) {
           ) : !ready ? (
             <Skeleton />
           ) : detail ? (
-            <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
+            <DetailView tab={detail} scope={scope} onRoute={p.onRoute} narrow={p.narrow} />
           ) : (
             <DashGrid ratio="3fr 2fr" fill>
               {/* No 프로젝트 card: this server holds one project (#778). Left 60%: 세션; right 40%: 작업 보드, whose card
@@ -213,13 +210,12 @@ function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab
 }
 
 /** `#board=usage` / `#board=branches`: that screen in one full-width card, with the way back to the dashboard. */
-function DetailView({ tab, scope, onRoute, bell, narrow }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode; narrow?: boolean }) {
+function DetailView({ tab, scope, onRoute, narrow }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; narrow?: boolean }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <PageHeader
         title={tab === 'usage' ? '사용량' : '브랜치'}
         narrow={narrow}
-        bell={bell}
         actions={
           <Button size="sm" variant="ghost" asChild>
             <BoardLink tab="sessions" folder={scope} onRoute={onRoute}>

@@ -108,7 +108,7 @@ function LiveChip() {
 
 /**
  * 세션 보드 › 브랜치 (Branches.dc.html, #889): a live line (실시간, counts, last commit), the commit tree of the board's
- * project scope (#877) with the state legend, and the branch table. The tab's title and bell come from SessionBoard.
+ * project scope (#877) with the state legend, and the branch table. The tab's title comes from SessionBoard.
  */
 export function BranchesPage() {
   const data = useLiveBranches();

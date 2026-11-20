@@ -1,7 +1,6 @@
 // Headless check of agent activity across the app (E537, #654): a fake Claude session and a fake Codex session edit
 // the same document. The agent panel takes 4 of 10 parts beside the text with one card each (status line, current
-// target, recent steps), the dashboard (not the sidebar, #876) lists the sessions, and the bell's
-// feed records their work (start, finish) with an unread badge that clears when the feed opens; a toast shows.
+// target, recent steps), the dashboard (not the sidebar, #876) lists the sessions, and no bell or 알림함 is on screen (#977); the activity log on disk records their work (start, finish).
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // DRAW_SHOTS=<dir> also saves light/dark x desktop/narrow screenshots there.
 // The server gets a scratch HOME and a PATH whose agent CLIs are the fakes in test/fixtures/fake-cli/, so no
@@ -33,7 +32,7 @@ const freePort = () =>
 const p = (t) => ({ type: 'paragraph', content: [{ type: 'text', text: t }] });
 const h = (t) => ({ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: t }] });
 
-test('agent activity: two fake sessions on one document — 6:4 panel, sidebar list, bell feed and toast', { skip: SKIP, timeout: 300_000 }, async (t) => {
+test('agent activity: two fake sessions on one document — 6:4 panel, sidebar list, no bell and the log on disk', { skip: SKIP, timeout: 300_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-activity-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-activity-home-'));
@@ -139,30 +138,13 @@ test('agent activity: two fake sessions on one document — 6:4 panel, sidebar l
   // 2. The sidebar has no 작업 중인 에이전트 group (#876): the dashboard's 실행 중인 세션 card shows the sessions.
   assert.equal(await page.locator('[data-working-agents]').count(), 0);
 
-  // 3. The bell: unread badge and no toast (#811: the 알림함 only); the feed records the starts.
-  await page.locator('[data-activity-badge]').waitFor({ timeout: 10_000 });
-  assert.equal(await page.locator('[data-activity-toast]').count(), 0);
+  // 3. No bell, badge, feed or toast is on screen (#977); the log on disk records the starts.
+  assert.equal(await page.locator('[data-activity-bell], [data-activity-badge], [data-activity-feed], [data-activity-toast]').count(), 0);
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'activity-two-agents-1600.png') });
-  await page.locator('[data-activity-bell]').click();
-  const feed = page.locator('[data-activity-feed]');
-  await feed.waitFor();
-  const items = await feed.locator('[data-inbox-row]').allTextContents();
-  assert.ok(items.some((x) => x.includes(a.name) && x.includes('시작했어요')), JSON.stringify(items));
-  assert.ok(items.some((x) => x.includes(b.name)), JSON.stringify(items));
-  // #797: opening the 알림함 no longer marks it read; 모두 읽음 does.
-  await feed.getByRole('button', { name: '모두 읽음' }).click();
-  await page.waitForFunction(() => !document.querySelector('[data-activity-badge]'), null, { timeout: 5_000 });
-  const fb = await feed.boundingBox();
-  assert.ok(fb.x >= 0 && fb.y >= 0 && fb.x + fb.width <= 1600 && fb.y + fb.height <= 900, `the feed stays in the viewport: ${JSON.stringify(fb)}`);
-  if (SHOTS) await page.screenshot({ path: join(SHOTS, 'activity-feed-1600.png') });
-  await page.keyboard.press('Escape');
 
-  // 4. The Codex session ends: a finish event comes in and shows in the feed.
+  // 4. The Codex session ends: a finish event comes in and is written to the log.
   release(4);
   release(3);
-  await page.locator('[data-activity-badge]').waitFor({ timeout: 20_000 });
-  await page.locator('[data-activity-bell]').click();
-  await page.waitForFunction(() => [...document.querySelectorAll('[data-inbox-row]')].some((e) => /끝냈어요/.test(e.textContent)), null, { timeout: 10_000 });
   // The log is written a moment after a change.
   let stored = { events: [] };
   for (let i = 0; i < 30 && !stored.events.some((e) => e.kind === 'finish'); i++) {

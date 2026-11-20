@@ -88,7 +88,7 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
     if (!confirming && d.open) d.close();
   }, [confirming]);
 
-  // 시작하기 in the 알림함 (#786) opens this file and asks for the same confirm; it waits until the plan is loaded.
+  // 시작하기 from a 세션 요청 row opens this file and asks for the same confirm; it waits until the plan is loaded.
   const openRef = useRef<() => void>(() => {});
   const [asked, setAsked] = useState(0);
   useEffect(() => onPlanConfirmRequest(() => setAsked((n) => n + 1)), []);

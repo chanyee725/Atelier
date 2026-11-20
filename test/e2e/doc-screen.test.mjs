@@ -129,9 +129,9 @@ test('document screen: path, view switch, ⋯ menu, sub-documents, 390px', { ski
     const views = await box(page.getByRole('toolbar', { name: '보기 방식' }));
     const exp = await box(page.getByRole('button', { name: '내보내기' }));
     const more = await box(page.getByRole('button', { name: '더 보기' }));
-    // The 알림함 bell sits at the right end, after ⋯ (#786).
-    const bell = await box(page.locator('header [data-activity-bell]'));
-    assert.ok(views.x > (await box(save)).x + 100 && views.x + views.width < exp.x && exp.x < more.x && more.x + more.width <= bell.x && bell.x + bell.width > 1440 - 24, 'view switch sits on the right, before 내보내기, ⋯ and the bell');
+    // ⋯ is the last control on the right; the 알림 bell is gone (#977).
+    assert.equal(await page.locator('header [data-activity-bell]').count(), 0);
+    assert.ok(views.x > (await box(save)).x + 100 && views.x + views.width < exp.x && exp.x < more.x && more.x + more.width > 1440 - 24, 'view switch sits on the right, before 내보내기 and ⋯');
     // Keyboard: one Tab stop in the toolbar, arrow keys move between the choices.
     await page.getByRole('button', { name: '둘 다', exact: true }).focus();
     await page.keyboard.press('ArrowRight');

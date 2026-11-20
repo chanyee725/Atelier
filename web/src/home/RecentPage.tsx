@@ -16,7 +16,6 @@ type Props = {
   /** Bumps when the workspace changed: the 보관함 list refetches. */
   version: unknown;
   narrow?: boolean;
-  bell?: React.ReactNode;
   onOpen: (path: string) => void;
   onNewDoc: () => void;
   /** Opens the 보관함 dialog (restore lives there). */
@@ -49,7 +48,7 @@ function useTrash(version: unknown) {
   return items;
 }
 
-export function RecentPage({ data, version, narrow, bell, onOpen, onNewDoc, onArchive }: Props) {
+export function RecentPage({ data, version, narrow, onOpen, onNewDoc, onArchive }: Props) {
   const [filter, setFilter] = useState<RecentFilter>('all');
   const all = useMemo(() => recentRows(data.projects, data.unfiled), [data]);
   const rows = filterRecent(all, filter);
@@ -59,7 +58,6 @@ export function RecentPage({ data, version, narrow, bell, onOpen, onNewDoc, onAr
       <PageHeader
         title="최근과 보관함"
         narrow={narrow}
-        bell={bell}
         actions={
           <Button variant="outline" size="sm" className="recent-btn" onClick={onNewDoc}>
             <Plus /> 새 문서

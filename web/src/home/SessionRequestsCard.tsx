@@ -1,6 +1,6 @@
 // 세션 요청 (#880): the dashboard card that lists what agent sessions asked a person for — 계획 승인, 권한 요청, 질문,
 // 사람 기다림 (sessionRequests.ts) — one row each: the session's model mark and name, the request, and since when.
-// A row goes where the 알림함's 확인하기 goes: a plan opens with its 시작하기 confirm, a session opens on the 세션 보드.
+// A row goes where the 확인하기 on a plan goes: a plan opens with its 시작하기 confirm, a session opens on the 세션 보드.
 // Takes the place of 사용량 설정 on the dashboard for now (the sidebar shows model usage). Quiet: the dashboard's <Card>
 // and <CardRow>, no accent of its own.
 import { useMemo } from 'react';
@@ -31,7 +31,7 @@ export function SessionRequestsCard({ sessions, folder, onOpen, onSession }: Pro
   const list = useMemo(() => sessionRequests(plans, asks, Array.isArray(sessions) ? sessions : null, folder), [plans, asks, sessions, folder]);
   const go = (r: SessionRequest) => {
     if ('plan' in r.target) {
-      // The plan's own strip opens its confirm once the document is loaded (same as the 알림함's 확인하기).
+      // The plan's own strip opens its confirm once the document is loaded (same as 확인하기).
       requestPlanConfirm(r.target.plan);
       onOpen(r.target.plan);
     } else onSession?.(r.target.session);
