@@ -228,7 +228,7 @@ export function StatRow({ children, label }: { children: ReactNode; label?: stri
   );
 }
 
-export const TONE = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-bad', idle: 'bg-idle', merged: 'bg-merged' } as const;
+export const TONE = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-bad', idle: 'bg-idle', merged: 'bg-merged', impl: 'bg-[var(--role-impl)]', review: 'bg-[var(--role-review)]' } as const;
 
 /** Small coloured status dot with text; the text is what screen readers get. */
 export function StatusDot({ tone, children, pulse }: { tone: keyof typeof TONE; children?: ReactNode; pulse?: boolean }) {

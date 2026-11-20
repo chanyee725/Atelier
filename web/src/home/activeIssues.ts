@@ -10,11 +10,12 @@ import type { BoardTask, TaskStage } from '../dispatch/types.ts';
 import type { IssueRow } from './issueBoard.ts';
 
 export type ActiveStage = 'impl' | 'review' | 'merge' | 'merged';
-export const ACTIVE_STAGE: Record<ActiveStage, { label: string; tone: 'ok' | 'warn' | 'merged' }> = {
-  impl: { label: '구현', tone: 'ok' },
-  review: { label: '리뷰', tone: 'warn' },
-  merge: { label: '머지 대기', tone: 'warn' },
-  merged: { label: '머지됨', tone: 'merged' },
+/** Stage chips use the task board's stage colours (STAGE_BG): 구현 blue, 리뷰 amber, 머지 대기·머지됨 purple. */
+export const ACTIVE_STAGE: Record<ActiveStage, { label: string; dot: string }> = {
+  impl: { label: '구현', dot: 'bg-[var(--role-impl)]' },
+  review: { label: '리뷰', dot: 'bg-[var(--role-review)]' },
+  merge: { label: '머지 대기', dot: 'bg-merged' },
+  merged: { label: '머지됨', dot: 'bg-merged' },
 };
 const RANK: Record<ActiveStage, number> = { impl: 0, review: 1, merge: 2, merged: 3 };
 

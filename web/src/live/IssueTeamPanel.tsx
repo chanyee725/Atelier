@@ -14,7 +14,6 @@ import { ACTIVE_STAGE, issueEta, type ActiveIssue } from '../home/activeIssues';
 import type { IssueRow } from '../home/issueBoard';
 import type { Pr } from '../home/projectFeeds';
 import { issueTitles, taskSummary } from '../home/taskSummary';
-import { TONE } from '../home/dash';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { liveStateLabel, liveStateTone } from './format';
@@ -74,7 +73,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now }: Props) {
           </h2>
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs">
             <span data-team-stage={issue.stage} className="inline-flex h-6 items-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-muted-foreground">
-              <span aria-hidden className={cn('size-1.5 rounded-full', TONE[stage.tone])} />
+              <span aria-hidden className={cn('size-1.5 rounded-full', stage.dot)} />
               {stage.label}
             </span>
             {issue.url && <HostLink href={issue.url} label="이슈 열기" />}
