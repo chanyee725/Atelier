@@ -80,3 +80,17 @@ test("diff leaves Atelier's run files out but keeps documents in .atelier (#906)
     assert.equal(d.files, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("diff leaves saved chat history (.atelier/chat/) out but keeps look-alike names (#968)", async () => {
+  const { dir } = scratchRepo();
+  try {
+    mkdirSync(path.join(dir, ".atelier", "chat", "s1"), { recursive: true });
+    mkdirSync(path.join(dir, ".atelier", "chats"), { recursive: true });
+    writeFileSync(path.join(dir, ".atelier", "chat", "s1", "log.json"), "[]");
+    writeFileSync(path.join(dir, ".atelier", "chats", "notes.dpx.json"), "{}");
+    writeFileSync(path.join(dir, ".atelier", "chat.dpx.json"), "{}");
+    const d = await diff(dir);
+    assert.deepEqual([...d.untracked].sort(), [".atelier/chat.dpx.json", ".atelier/chats/notes.dpx.json"]);
+    assert.equal(d.files, 2);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
