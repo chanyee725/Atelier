@@ -144,21 +144,21 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   assert.match(await login.innerText(), /1$/);
   await shot(page, 'light-home-1440');
 
-  // Unfold the sub-documents, open one: the document screen sits flush (frame A) and the row is current.
+  // Unfold the sub-documents, open one: the document screen is a floating panel too (#889) and the row is current.
   await nav.getByRole('button', { name: '로그인 로직 하위 문서 펼치기' }).click();
   await row(nav, /토큰 갱신/).click();
   await page.locator('.ProseMirror').waitFor();
-  assert.equal(await frame(), 'attached');
+  assert.equal(await frame(), 'floating');
   assert.equal(await row(nav, /토큰 갱신/).getAttribute('aria-current'), 'page');
   // One-letter keys belong to the editor while it has focus.
   await page.locator('.ProseMirror').click();
   await page.keyboard.press('a');
-  assert.equal(await frame(), 'attached');
+  assert.equal(await page.locator('.ProseMirror').count(), 1, 'still on the document screen');
   // ...and to the canvas while it has focus: R picks the rectangle tool, not 최근.
   const cbox = await page.locator('[data-canvas]').boundingBox();
   await page.mouse.click(cbox.x + cbox.width - 80, cbox.y + cbox.height - 80);
   await page.keyboard.press('r');
-  assert.equal(await frame(), 'attached');
+  assert.equal(await page.locator('.ProseMirror').count(), 1, 'still on the document screen');
   assert.ok(await page.locator('input[data-testid="toolbar-rectangle"]').isChecked(), 'R picked the rectangle tool');
   assert.notEqual(await nav.getByRole('button', { name: /최근/ }).getAttribute('aria-current'), 'page');
   await page.keyboard.press('Escape');
