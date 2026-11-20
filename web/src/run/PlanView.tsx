@@ -7,14 +7,14 @@
 // #935: nodes and arrows follow the document diagrams (eraser-diagrams rules): a 200×56 box with a pale role
 // fill, a role icon on the left, orthogonal arrows with an open V head. State never reshapes the box: a small chip
 // on the top-right corner, and a thin progress line under a running step.
-import { useEffect, useId, useMemo, type CSSProperties } from 'react';
+import { useEffect, useId, useMemo, useState, type CSSProperties } from 'react';
 import { Bot, CodeXml, Compass, Eye, FileText, FlaskConical, GitMerge, Palette, type LucideIcon } from 'lucide-react';
 import { connect } from '../dispatch/store.ts';
 import type { FileSession } from '../fileSession';
 import { useSession } from '../useSession';
 import { cn } from '../lib/utils';
 import { nodeLabels, overlaySteps } from './runModel.ts';
-import { NODE_H, NODE_W, planGraph, type PlanGraphNode } from './planGraphModel.ts';
+import { NODE_H, NODE_W, fitScale, planGraph, type PlanGraphNode } from './planGraphModel.ts';
 import { ROLES, roleLabel } from './overlayModel.ts';
 import { useRunModel } from './useRunModel.ts';
 import { useAskingSteps } from './useAskingSteps';
@@ -100,6 +100,20 @@ function Sheet({ title, sheet }: { title: string; sheet: PlanSheet }) {
   );
 }
 
+/** Width of the element's content box, kept current as the panel resizes (#949). A callback ref, since the card
+    only mounts once the plan has steps. */
+function useWidth<T extends HTMLElement>() {
+  const [el, setEl] = useState<T | null>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(Math.floor(e!.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return [setEl, width] as const;
+}
+
 export default function PlanView({ session }: { session: FileSession }) {
   const plan = useSession(session, (s) => s.file?.plan ?? null);
   const blocks = useSession(session, (s) => s.file?.blocks);
@@ -114,6 +128,8 @@ export default function PlanView({ session }: { session: FileSession }) {
   const steps = useMemo(() => overlaySteps(m.rows), [m.rows]);
   const graph = useMemo(() => (plan ? planGraph(plan, blocks ?? [], steps, labels) : null), [plan, blocks, steps, labels]);
   const sheet = useMemo(() => (plan ? planSheet(plan, document, steps, labels) : null), [plan, document, steps, labels]);
+  const [canvas, room] = useWidth<HTMLElement>();
+  const scale = graph ? fitScale(room, graph.width) : 1;
 
   const strip = <PlanStrip session={session} inTab />;
   if (!graph || !sheet || graph.nodes.length === 0) {
@@ -131,13 +147,22 @@ export default function PlanView({ session }: { session: FileSession }) {
       <div className="plan-body">
         <Sheet title={title || '계획'} sheet={sheet} />
         {/* Focusable so a keyboard can scroll a wide plan; its name says what the picture is. */}
-        <section className="plan-card plan-canvas" aria-label="단계 다이어그램" tabIndex={0}>
+        {/* A wide plan asks for its full width, so the card drops under the sheet; what still does not fit is scaled
+            down to the card (#949), and below MIN_FIT the card scrolls. */}
+        <section
+          ref={canvas}
+          className="plan-card plan-canvas"
+          aria-label="단계 다이어그램"
+          tabIndex={0}
+          style={{ '--plan-graph-w': `${graph.width}px` } as CSSProperties}
+        >
           {graph.problem && (
             <p role="status" className="plan-problem">
               순서를 읽지 못해서 계획 순서대로 보여 줘요.
             </p>
           )}
-          <div className="plan-graph" style={{ width: graph.width, height: graph.height }}>
+          <div className="plan-fit" style={{ width: graph.width * scale, height: graph.height * scale }}>
+          <div className="plan-graph" style={{ width: graph.width, height: graph.height, transform: scale < 1 ? `scale(${scale})` : undefined }}>
             <svg className="plan-edges" width={graph.width} height={graph.height} aria-hidden="true">
               <defs>
                 {(['flow', 'done'] as const).map((k) => (
@@ -155,6 +180,7 @@ export default function PlanView({ session }: { session: FileSession }) {
                 <Node key={n.id} n={n} />
               ))}
             </ol>
+          </div>
           </div>
         </section>
       </div>

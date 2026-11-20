@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Plan } from '../../shared/dispatch/plan.ts';
-import { GAP_X, NODE_H, NODE_W, PAD, planGraph } from '../../web/src/run/planGraphModel.ts';
+import { GAP_X, MIN_FIT, NODE_H, NODE_W, PAD, fitScale, planGraph } from '../../web/src/run/planGraphModel.ts';
 
 const plan: Plan = {
   v: 1,
@@ -75,4 +75,11 @@ test('a plan whose order cannot be read shows its steps in plan order without ar
 test('an empty plan draws nothing', () => {
   const g = planGraph({ v: 1, block: 'b1', steps: [] }, blocks);
   assert.deepEqual([g.nodes.length, g.width, g.height], [0, 0, 0]);
+});
+
+test('fitScale shrinks a wide graph to the card, stays at 1 when it fits, and stops at MIN_FIT (#949)', () => {
+  assert.equal(fitScale(1200, 800), 1);
+  assert.equal(fitScale(0, 800), 1);
+  assert.equal(fitScale(1096, 1336), 1096 / 1336);
+  assert.equal(fitScale(300, 1336), MIN_FIT);
 });
