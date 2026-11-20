@@ -10,7 +10,7 @@ records stay metadata only.
 
 ## 1. Surface
 
-A **non-modal side panel** docked to the right edge, 400px wide (`min(400px, 100vw - 2rem)`), full height under the
+A **non-modal side panel** docked to the right edge, 460px wide (`min(460px, 100vw - 2rem)`), full height under the
 top bar. The page stays usable: the user keeps reading the document or diagram while watching, and a file click
 opens the document behind the panel without closing it.
 
