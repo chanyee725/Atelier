@@ -1,31 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { branchRows, isFindKey, prRows } from '../../web/src/home/dashboardRows.ts';
-import type { BranchTip, PrAnswer } from '../../web/src/home/projectFeeds.ts';
+import { isFindKey, prRows } from '../../web/src/home/dashboardRows.ts';
+import type { PrAnswer } from '../../web/src/home/projectFeeds.ts';
 import type { ApiIssue } from '../../web/src/home/issueBoard.ts';
-
-const tip = (branch: string, extra: Partial<BranchTip> = {}): BranchTip => ({ branch, ahead: 1, behind: 0, lastAt: 1, state: 'open', base: false, ...extra });
-
-test('branchRows drops the integration branch and puts live branches first, then the newest', () => {
-  const tips = new Map([
-    ['develop', tip('develop', { base: true })],
-    ['old', tip('old', { lastAt: 10 })],
-    ['new', tip('new', { lastAt: 30 })],
-    ['live', tip('live', { lastAt: 5, active: true })],
-  ]);
-  assert.deepEqual(branchRows({ base: 'develop', tips }).map((t) => t.branch), ['live', 'new', 'old']);
-  assert.deepEqual(branchRows(null), []);
-  assert.deepEqual(branchRows('failed'), []);
-});
-
-test('branchRows leaves out branches an open issue claims', () => {
-  const tips = new Map([
-    ['develop', tip('develop', { base: true })],
-    ['feat/1-a', tip('feat/1-a', { lastAt: 20 })],
-    ['spike', tip('spike', { lastAt: 10 })],
-  ]);
-  assert.deepEqual(branchRows({ base: 'develop', tips }, new Set(['feat/1-a'])).map((t) => t.branch), ['spike']);
-});
 
 test('prRows lists each PR once, open first, with CI and review of its branch', () => {
   const issues: ApiIssue[] = [

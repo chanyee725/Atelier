@@ -124,7 +124,8 @@ export function providerUsage(meta: ProviderMeta, limits: ProviderLimits): { win
   const windows = Array.isArray(entry?.windows) ? entry.windows : [];
   const extra = subWindows(meta.id, limits);
   const flagged = !!entry?.reached;
-  const reached = flagged || [...windows, ...extra].some((w) => (percent(w.used) ?? 0) >= 100);
+  // Gemini: only agy's quota error holds new work (hub providerHold), so a full bar alone is not 한도 도달 (#884).
+  const reached = flagged || (meta.id !== 'gemini' && [...windows, ...extra].some((w) => (percent(w.used) ?? 0) >= 100));
   return { windows, extra, reached, reset: flagged ? (entry?.reset ?? null) : null };
 }
 

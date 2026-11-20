@@ -218,9 +218,7 @@ function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab
   );
 }
 
-const PICK =
-  'flex min-h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-foreground max-md:min-h-10';
-
+/** `#board=usage` / `#board=branches`: that screen in one full-width card, with the way back to the dashboard. */
 function DetailView({ tab, scope, onRoute, bell }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode }) {
   return (
     <DashGrid ratio="minmax(0,1fr)">
