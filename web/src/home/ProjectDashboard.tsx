@@ -80,8 +80,21 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard, fill 
   const list = Array.isArray(agents) ? agents : [];
   // Filled (#819): a fixed share of the column, its cards scroll inside. Otherwise as tall as its cards (#784, #793).
   const empty = Array.isArray(agents) && list.length === 0;
+  // The dashboard's one standout (#889 refresh): how many sessions are working right now, as a large number.
+  const working = list.filter(isBusy).length;
+  const actions = (
+    <>
+      {working > 0 && (
+        <span data-working className="mr-1 inline-flex items-baseline gap-1">
+          <span className="text-xl leading-none font-semibold tracking-title tabular-nums">{working}</span>
+          <span className="text-xs text-muted-foreground">개가 지금 작업 중이에요</span>
+        </span>
+      )}
+      <BoardLink folder={folder} onBoard={onBoard} />
+    </>
+  );
   return (
-    <Card id="sessions" title="실행 중인 세션" count={list.length} flush fill={fill} actions={<BoardLink folder={folder} onBoard={onBoard} />}>
+    <Card id="sessions" title="실행 중인 세션" count={list.length} flush fill={fill} actions={actions}>
       {agents === null ? (
         <EmptyState>불러오는 중이에요</EmptyState>
       ) : agents === 'failed' ? (
@@ -147,7 +160,7 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
       data-agent={a.sid}
       data-busy={busy || undefined}
       data-editing={editing || undefined}
-      className="@container/session flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40"
+      className="@container/session flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60"
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
       <button
@@ -155,7 +168,7 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
         data-agent-live={a.sid}
         title={`${a.name} 진행상황 보기`}
         onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-start items-center gap-x-3 gap-y-1.5 rounded-md px-3 pt-2.5 pb-2 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] content-start items-center gap-x-3 gap-y-1.5 rounded-card px-3 pt-2.5 pb-2 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         {editing ? (
           <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
@@ -183,7 +196,7 @@ function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title:
       </button>
       {/* The file line only when it holds one: no "파일 없음" filler on every idle card (#793). */}
       {a.file && title ? (
-        <span className="mt-auto flex min-w-0 items-center gap-3 border-t border-border/60 px-3 py-1.5">
+        <span className="mt-auto flex min-w-0 items-center gap-3 border-t px-3 py-1.5">
           <button type="button" onClick={() => onOpen(a.file!)} className="inline-flex min-w-0 items-center gap-1 rounded-sm text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
             <FileText aria-hidden className="size-3 shrink-0 text-muted-foreground" />
             <span className="sr-only">잡고 있는 파일 </span>
