@@ -141,7 +141,7 @@ function Dashboard({ data, ...p }: Shared) {
   return (
     <>
       <PageHeader title="대시보드" narrow={p.narrow} bell={p.bell} />
-      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill />
+      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill approvals />
     </>
   );
 }
