@@ -5,7 +5,7 @@
 // Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, Plus } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
@@ -16,21 +16,18 @@ import { boardHash, plainClick, type BoardExtra, type BoardTab } from '../projec
 import { Card, DashColumn, DashGrid, EmptyState } from '../home/dash';
 import { OffNote, useDispatchStatus } from '../settings/DispatchOff';
 import type { SectionId } from '../settings/model';
-import { elapsed } from '../../../shared/dispatch/attention.ts';
 import { AlertWatcher } from './AlertWatcher';
 import { AlwaysOnView } from './AlwaysOnView';
 import { BranchesPage } from './BranchesView';
-import { AttentionStrip, SummaryLine, useNow } from './AttentionStrip';
+import { AttentionStrip, SummaryLine } from './AttentionStrip';
 import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
+import { presenceOf } from './lib/presence.ts';
+import { SessionCard, SessionGrid } from '../home/SessionCard';
 import { knownFolders, scopePending, type Scope } from './lib/folder.ts';
-import { fmtUsd, isOpen, STATE, stateOf, TONE_TEXT } from './lib/format.ts';
-import { stateStart } from './lib/order.ts';
-import { nowLine } from './lib/turn.ts';
-import { ModelTag, STATE_ICON } from './parts';
+import { isOpen, stateOf } from './lib/format.ts';
 import { ScopeProvider, useScope, useScoped } from './scope';
 import { openAgentLive, useAgentLiveTarget } from '../live/store';
-import { shownAccount, useAccountLabels } from '../accountLabels';
 import { TimelineCard } from './TimelineCard';
 import { TaskBoardCard } from './TaskBoard';
 import { UsagePage } from './UsagePage';
@@ -40,7 +37,6 @@ import type { Session } from './types';
 import { askConfirm } from '../appDialog';
 import { useIssues, usePrTracking as usePrTrackingOn } from '../home/projectFeeds';
 import { issueTitles, taskSummary, type TaskSummary } from '../home/taskSummary';
-import { TaskSummaryLine } from '../home/TaskSummaryLine';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
 
@@ -173,7 +169,6 @@ export default function SessionBoard(p: BoardProps) {
                   whose card takes the spare height so neither column leaves an empty band (#879). */}
               <DashColumn label="세션">
                 <SessionsCard
-                  open={open}
                   onOpen={openSession}
                   onUsage={() => p.onRoute('usage', scope)}
                   onCreate={() => setCreating(true)}
@@ -319,16 +314,15 @@ function Skeleton() {
   );
 }
 
-/** 세션 card: the summary and what needs a person, then the picked project's sessions grouped by project. */
+/** 세션 card: the summary and what needs a person, then the picked project's sessions as the dashboard's session cards,
+ *  under a small title per project (#919). Finished sessions fold behind one link per group. */
 function SessionsCard({
-  open,
   onOpen,
   onUsage,
   onCreate,
   byCwd,
   actions,
 }: {
-  open: string | null;
   onOpen: (id: string, from?: HTMLElement | null) => void;
   onUsage: () => void;
   onCreate: () => void;
@@ -337,8 +331,6 @@ function SessionsCard({
 }) {
   const { sessions, scope, pending } = useScoped();
   const { known, names } = useScope();
-  const all = useDispatch((s) => s.sessions);
-  const byId = useMemo(() => new Map(all.map((s) => [s.id, s])), [all]);
   // What each session works on (#912): issue title (the issue feed, while PR tracking is on), board task, branch, or the
   // lead's own summary.
   const tasks = useDispatch((s) => s.tasks);
@@ -347,7 +339,6 @@ function SessionsCard({
     const titleOf = issueTitles(issues && issues !== 'failed' && issues.ok ? issues.issues : null);
     return new Map(sessions.map((s) => [s.id, taskSummary(s, titleOf, tasks)]));
   }, [sessions, tasks, issues]);
-  const now = useNow(20_000);
   const groups = useMemo(() => boardGroups(sessions, { known, names, stateOf, byCwd }), [sessions, known, names, byCwd]);
   return (
     <Card id="sessions" title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
@@ -368,14 +359,10 @@ function SessionsCard({
             실행 중인 세션이 없어요. 새 세션을 만들면 여기에 보여요.
           </EmptyState>
         ) : (
-          // The query container wraps the grid: an element can't answer its own container query, so the columns
-          // were never set on the grid itself and every row stacked into one column.
-          <div className="@container/list">
-            <div className="grid gap-y-5 @min-[560px]/list:grid-cols-[1.25rem_minmax(4rem,max-content)_minmax(4rem,max-content)_minmax(0,max-content)_minmax(0,1fr)_max-content_1rem] @min-[560px]/list:gap-x-3">
-              {groups.map((g) => (
-                <Group key={g.key ?? '\0'} g={g} scoped={scope !== undefined} open={open} now={now} byId={byId} summaries={summaries} onOpen={onOpen} />
-              ))}
-            </div>
+          <div className="flex flex-col gap-5">
+            {groups.map((g) => (
+              <Group key={g.key ?? '\0'} g={g} scoped={scope !== undefined} summaries={summaries} />
+            ))}
           </div>
         )}
       </div>
@@ -383,134 +370,36 @@ function SessionsCard({
   );
 }
 
-const SUBGRID = '@min-[560px]/list:col-span-full @min-[560px]/list:grid @min-[560px]/list:grid-cols-subgrid';
-
-function Group({
-  g,
-  scoped,
-  open,
-  now,
-  byId,
-  summaries,
-  onOpen,
-}: {
-  g: BoardGroup<Session>;
-  scoped: boolean;
-  open: string | null;
-  now: number;
-  byId: Map<string, Session>;
-  summaries: Map<string, TaskSummary | null>;
-  onOpen: (id: string, from?: HTMLElement | null) => void;
-}) {
+function Group({ g, scoped, summaries }: { g: BoardGroup<Session>; scoped: boolean; summaries: Map<string, TaskSummary | null> }) {
   const head = useId();
-  const body = useId();
-  const [collapsed, setCollapsed] = useState(false);
   const [showDone, setShowDone] = useState(false);
-  const shown = collapsed && !scoped ? [] : [...g.live, ...(showDone ? g.done : [])];
+  const shown = [...g.live, ...(showDone ? g.done : [])];
   return (
-    <section aria-labelledby={head} className={cn('flex min-w-0 flex-col gap-0.5', SUBGRID)}>
-      <div className={cn('flex h-8 min-w-0 items-center gap-2', '@min-[560px]/list:col-span-full')}>
-        <h2 id={head} className="m-0 truncate text-[13px] font-semibold">
-          {g.label}
-        </h2>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          세션 {g.live.length}
-          {g.cost != null && ` · ${fmtUsd(g.cost)}`}
-        </span>
-        {!scoped && (
-          <button
-            type="button"
-            aria-expanded={!collapsed}
-            aria-controls={body}
-            aria-label={`${g.label} 세션`}
-            onClick={() => setCollapsed((c) => !c)}
-            className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none max-md:size-9"
-          >
-            {collapsed ? <ChevronRight aria-hidden className="size-4" /> : <ChevronDown aria-hidden className="size-4" />}
-          </button>
-        )}
-      </div>
-      <div id={body} className={cn('flex min-w-0 flex-col gap-1.5', SUBGRID, '@min-[560px]/list:gap-y-1.5')}>
-        {shown.map((s) => (
-          <Row key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} summary={summaries.get(s.id) ?? null} now={now} expanded={open === s.id} onOpen={onOpen} />
-        ))}
-        {!(collapsed && !scoped) && g.done.length > 0 && (
-          <button
-            type="button"
-            aria-expanded={showDone}
-            onClick={() => setShowDone((v) => !v)}
-            className="h-8 self-start rounded-md px-2 text-left text-xs text-muted-foreground tabular-nums hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @min-[560px]/list:col-span-full @min-[560px]/list:justify-self-start"
-          >
-            {showDone ? '끝난 세션 숨기기' : `끝난 세션 ${g.done.length}개 보기`}
-          </button>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/** What the session is on: why it needs a person, else the current activity, else —. */
-function stepText(s: Session, now: number): ReactNode {
-  const st = stateOf(s);
-  if ((st === 'waiting' || st === 'stuck' || st === 'failed') && s.attention?.reason) return s.attention.reason;
-  if (s.stall) return s.stall.reason;
-  const a = nowLine(s);
-  if (a) {
-    const e = elapsed(a.since, now);
-    return `지금 ${a.label}${e ? ` · ${e}째` : ''}`;
-  }
-  return s.status === 'running' || s.status === 'starting' ? '지금 생각 중' : '—';
-}
-
-function Row({ s, parent, summary, now, expanded, onOpen }: { s: Session; parent?: Session; summary: TaskSummary | null; now: number; expanded: boolean; onOpen: (id: string, from?: HTMLElement | null) => void }) {
-  const state = stateOf(s);
-  const meta = STATE[state] ?? STATE.resting;
-  const Icon = STATE_ICON[state];
-  const since = elapsed(stateStart(s, state), now);
-  const flag = state === 'waiting' || state === 'stuck' || !!s.stall;
-  const failed = state === 'failed';
-  // The label the session started under when the server records one (#747), else the provider's current label.
-  const labels = useAccountLabels();
-  const account = shownAccount(s.provider, s.accountLabel, labels);
-  const wide = '@min-[560px]/list:col-auto @min-[560px]/list:row-auto';
-  return (
-    <button
-      type="button"
-      data-session={s.id}
-      data-session-live={s.id}
-      aria-expanded={expanded}
-      onClick={(e) => onOpen(s.id, e.currentTarget)}
-      title={parent ? `${parent.name}이(가) 만든 세션` : undefined}
-      className={cn(
-        'grid min-h-11 min-w-0 grid-cols-[1.25rem_auto_minmax(0,1fr)_auto_1rem] items-center gap-x-2 gap-y-0.5 rounded-card border-l-2 border-transparent bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-sunken focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-        '@min-[560px]/list:col-span-full @min-[560px]/list:grid-cols-subgrid @min-[560px]/list:gap-x-3 @min-[560px]/list:py-0',
-        flag && 'border-warn bg-warn/5',
-        failed && 'border-destructive bg-destructive/5',
-        expanded && 'bg-sunken',
+    <section aria-labelledby={head} className="flex min-w-0 flex-col">
+      {/* One project: no title needed. Several: a small title with the live count. */}
+      <h3 id={head} className={cn('m-0 truncate px-0.5 text-xs font-medium text-muted-foreground', scoped && 'sr-only')}>
+        {g.label}
+        <span className="ml-1.5 tabular-nums">{g.live.length}</span>
+      </h3>
+      {shown.length > 0 && (
+        <div className="-mx-2">
+          <SessionGrid label={`${g.label} 세션`}>
+            {shown.map((s) => (
+              <SessionCard key={s.id} agent={presenceOf(s, stateOf)} summary={summaries.get(s.id) ?? null} title={null} onOpen={() => undefined} />
+            ))}
+          </SessionGrid>
+        </div>
       )}
-    >
-      <Icon aria-hidden className={cn('size-4 shrink-0', TONE_TEXT[meta.tone])} strokeWidth={meta.tone === 'warn' || meta.tone === 'bad' ? 2.5 : 2} />
-      <span className="min-w-0 truncate font-semibold">
-        {s.name}
-        <span className="sr-only"> {meta.label}</span>
-      </span>
-      <span data-role-chip className="inline-flex h-5 min-w-0 items-center gap-1.5 justify-self-start rounded-[4px] px-1.5 text-xs text-muted-foreground shadow-[inset_0_0_0_1px_var(--line-strong)]">
-        <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: `var(--role-${s.role}, var(--idle))` }} />
-        <span className="truncate">{s.roleName || s.role}</span>
-      </span>
-      <span className="col-span-3 col-start-2 row-start-2 flex min-w-0 items-center gap-2 @min-[560px]/list:contents">
-        <ModelTag provider={s.provider} label={`${s.modelLabel}${s.effort ? ` ${s.effort}` : ''}`} account={account} className="max-w-56 shrink-0" />
-        {/* What it works on (#912) above what it does now; one line each. */}
-        <span className="flex min-w-0 flex-1 flex-col">
-          {summary ? <TaskSummaryLine summary={summary} /> : null}
-          <span className={cn('min-w-0 truncate text-muted-foreground', (flag || failed) && 'text-foreground', summary && 'text-xs')}>{stepText(s, now)}</span>
-        </span>
-      </span>
-      <span className={cn('col-start-4 row-start-1 text-xs whitespace-nowrap text-muted-foreground tabular-nums', wide)} title="이 상태가 된 뒤 지난 시간">
-        {flag || failed ? `${meta.label} · ` : ''}
-        {since ? `${since}째` : '방금'}
-      </span>
-      <ChevronRight aria-hidden className={cn('col-start-5 row-start-1 size-4 text-muted-foreground', wide)} />
-    </button>
+      {g.done.length > 0 && (
+        <button
+          type="button"
+          aria-expanded={showDone}
+          onClick={() => setShowDone((v) => !v)}
+          className="h-8 self-start rounded-md px-2 text-left text-xs text-muted-foreground tabular-nums hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {showDone ? '끝난 세션 숨기기' : `끝난 세션 ${g.done.length}개 보기`}
+        </button>
+      )}
+    </section>
   );
 }
