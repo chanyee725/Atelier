@@ -3,10 +3,14 @@
    only for status. Refresh (#889): a floating panel 8px off the edges, radius 12, its edge a translucent ring.
    #905: it floats 24px off the bottom so the rounded bottom corners and the shadow under them read clearly; the height
    comes from the insets, so it shrinks by the same amount. */
+:root {
+  /* Shared with the chat dock (#937), which moves left of an open panel. */
+  --agent-live-w: min(clamp(460px, calc(40vw - 110px), 720px), 100vw - 2rem);
+}
 .agent-live {
   position: fixed;
   inset: calc(var(--h-bar, 52px) + 8px) 8px 24px auto;
-  width: min(clamp(460px, calc(40vw - 110px), 720px), 100vw - 2rem);
+  width: var(--agent-live-w);
   height: auto;
   max-height: none;
   max-width: none;

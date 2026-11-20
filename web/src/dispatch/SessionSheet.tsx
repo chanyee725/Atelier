@@ -227,7 +227,8 @@ function ThinkingLine({ s }: { s: Session }) {
   );
 }
 
-export function Chat({ s, report }: { s: Session; report: Report }) {
+/** `thinking: false`: the host shows its own waiting line (the chat dock's 생각 중…, #937). */
+export function Chat({ s, report, thinking = true }: { s: Session; report: Report; thinking?: boolean }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -251,7 +252,7 @@ export function Chat({ s, report }: { s: Session; report: Report }) {
         ? <EntryView key={g[0]!.i} m={g[0]!.e} agent={agent} />
         : <ToolRun key={g[0]!.i} items={g} agent={agent} />))}
       {s.pending.map(p => <PermissionCard key={p.requestId} s={s} p={p} report={report} />)}
-      <ThinkingLine s={s} />
+      {thinking && <ThinkingLine s={s} />}
     </div>
   );
 }

@@ -1,0 +1,127 @@
+/* Chat dock (#937): a round button 16px off the bottom right and a 380×560 window above it. Same tokens as the agent
+   live panel (card, 1px border ring, radius 12, 13px). The one motion is the window opening: scale(.97) + opacity from
+   the bottom edge, ease-out 200ms; with reduced motion it just appears.
+   With an agent live panel open (:popover-open .agent-live), both move left of it; under 720px (the panel is a bottom
+   sheet then) and under any modal (Radix dialog or sheet, a native modal dialog) they hide. */
+:root {
+  --chat-dock-right: 16px;
+  --chat-dock-bottom: 16px;
+  --chat-dock-fab: 48px;
+}
+:root:has(.agent-live:popover-open) {
+  --chat-dock-right: calc(var(--agent-live-w, 460px) + 8px + 16px);
+}
+
+.chat-dock-fab {
+  position: fixed;
+  right: var(--chat-dock-right);
+  bottom: var(--chat-dock-bottom);
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: var(--chat-dock-fab);
+  height: var(--chat-dock-fab);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 0 0 1px var(--border), 0 6px 20px rgb(0 0 0 / 0.14);
+  cursor: pointer;
+  transition: scale 140ms ease-out, background-color 150ms ease, right 200ms ease-out;
+}
+@media (hover: hover) {
+  .chat-dock-fab:hover {
+    background: var(--accent);
+  }
+}
+.chat-dock-fab:active {
+  scale: 0.96;
+}
+.chat-dock-fab[aria-expanded="true"] {
+  background: var(--accent);
+}
+
+.chat-dock-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 0 0 2px var(--background);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-dock-window {
+  position: fixed;
+  inset: auto var(--chat-dock-right) calc(var(--chat-dock-bottom) + var(--chat-dock-fab) + 12px) auto;
+  width: min(380px, 100vw - 2rem);
+  height: min(560px, 100dvh - var(--h-bar, 52px) - var(--chat-dock-fab) - 44px);
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: 0 0 0 1px var(--border), 0 8px 28px rgb(0 0 0 / 0.14);
+  font-size: 13px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  --overlay-x: 16px;
+  transform-origin: bottom right;
+  opacity: 0;
+  scale: 0.97;
+  transition-property: opacity, scale, display, overlay;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+  /* Kept out of the shorthand: older browsers drop a whole `transition` that names allow-discrete. */
+  transition-behavior: allow-discrete;
+}
+.chat-dock-window:popover-open {
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  scale: 1;
+}
+@starting-style {
+  .chat-dock-window:popover-open {
+    opacity: 0;
+    scale: 0.97;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-dock-window {
+    transition: none;
+  }
+}
+
+.chat-dock-thinking {
+  margin: 0;
+  padding: 0 var(--overlay-x);
+  min-height: 0;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+}
+.chat-dock-muted {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 719.98px) {
+  :root:has(.agent-live:popover-open) :is(.chat-dock-fab, .chat-dock-window) {
+    display: none;
+  }
+}
+:root:has([data-slot="dialog-overlay"], [data-slot="sheet-overlay"], dialog:modal) :is(.chat-dock-fab, .chat-dock-window) {
+  display: none;
+}

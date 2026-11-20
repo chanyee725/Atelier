@@ -169,6 +169,8 @@ test('a failing dispatch call answers { error } and leaves drawing routes workin
     assert.equal((await fetch(`${base}/api/sessions/nope/live`)).status, 404);
     const empty = await fetch(`${base}/api/sessions/nope/message`, { method: 'POST', headers: W, body: JSON.stringify({ text: ' ' }) });
     assert.equal(empty.status, 400);
+    // A message to a session that is gone is a 404, so the chat dock can tell it from a passing failure (#937).
+    assert.equal((await fetch(`${base}/api/sessions/nope/message`, { method: 'POST', headers: W, body: JSON.stringify({ text: 'hi' }) })).status, 404);
     const bad = await fetch(`${base}/api/tasks`, { method: 'POST', headers: W, body: '{' });
     assert.equal(bad.status, 400);
     // A Hub method that throws something unexpected is still a JSON error, not a dead server.
