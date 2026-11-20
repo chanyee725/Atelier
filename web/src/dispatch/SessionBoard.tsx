@@ -145,7 +145,6 @@ export default function SessionBoard(p: BoardProps) {
             bell={p.bell}
             actions={
               <>
-                <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
                 <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
               </>
             }
@@ -165,10 +164,10 @@ export default function SessionBoard(p: BoardProps) {
           ) : detail ? (
             <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
           ) : (
-            <DashGrid ratio="3fr 2fr">
+            <DashGrid ratio="3fr 2fr" fill>
               {/* No 프로젝트 card: this server holds one project (#778). Left 60%: 세션; right 40%: 작업 보드, whose card
                   takes the spare height so neither column leaves an empty band (#879). */}
-              <DashColumn label="세션">
+              <DashColumn label="세션" fill>
                 <SessionsCard
                   onCreate={() => setCreating(true)}
                   byCwd={listState === 'failed'}
@@ -176,7 +175,7 @@ export default function SessionBoard(p: BoardProps) {
                 <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
               {/* Sticky on a wide pane: 작업 보드 stays in view while 세션 scrolls. */}
-              <DashColumn label="현황" className="@min-[880px]:sticky @min-[880px]:top-4 @min-[880px]:max-h-[calc(100dvh-2rem)] @min-[880px]:self-start">
+              <DashColumn label="현황" fill>
                 <TaskBoardCard fill onOpen={(id) => openSession(id)} onUsage={() => p.onRoute('usage', scope)} />
               </DashColumn>
             </DashGrid>
@@ -194,15 +193,6 @@ export default function SessionBoard(p: BoardProps) {
   );
 }
 
-function NewSessionButton({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
-  const connected = useDispatch((s) => Object.values(s.providers ?? {}).some((x) => x?.connected));
-  return (
-    <Button size="sm" variant="outline" disabled={disabled || !connected} title={connected ? undefined : '연결된 모델이 없어요'} onClick={onCreate}>
-      <Plus aria-hidden />
-      <span className="max-sm:sr-only">새 세션</span>
-    </Button>
-  );
-}
 
 /** A link to a board address that routes in place on a plain click (a new tab still gets the address). */
 function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab: BoardTab; folder: Scope; onRoute: BoardProps['onRoute']; className?: string; children: ReactNode } & Omit<React.ComponentProps<'a'>, 'href' | 'onClick'>) {
@@ -336,7 +326,7 @@ function SessionsCard({
   }, [sessions, tasks, issues]);
   const groups = useMemo(() => boardGroups(sessions, { known, names, stateOf, byCwd }), [sessions, known, names, byCwd]);
   return (
-    <Card id="sessions" title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
+    <Card id="sessions" fill={1} title="세션" count={pending ? undefined : sessions.filter(isOpen).length} actions={actions}>
       <div className="flex min-w-0 flex-col gap-4">
         <SummaryLine />
         {pending ? null : sessions.length === 0 ? (
