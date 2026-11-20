@@ -2,7 +2,9 @@
 // (Linear-like): number, the full title (cut at the panel edge), owner session initials, the open PR and a state chip.
 // 작업 중 first, then PR 리뷰, then 열림; closed issues are not listed. Nothing is shown for an empty bit (no "맡은 세션
 // 없음"). The row's chevron opens its details below: branches with ahead/behind, every PR (review, CI, conflicts) and
-// the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only; links open GitHub in a new tab.
+// the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only. The
+// number and title open the issue's right panel (#954: start panel, or the team panel when a team has it); GitHub is
+// one button inside that panel. PR links still open GitHub in a new tab.
 import { useId, useRef, useState } from 'react';
 import { ChevronRight, GitBranch, GitPullRequest } from 'lucide-react';
 import { STATE, stateOf } from '../dispatch/lib/format.ts';
@@ -11,6 +13,7 @@ import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { PrIssueSessions } from './IssueSessionList';
 import { Pager, useBoxRows, usePaging } from './Pager';
+import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
 import { fromSessions } from './issueSessions';
 import { ISSUE_STATE, initials, issueRows, issuesBlankReason, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
@@ -52,6 +55,7 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '', fi
   const box = useRef<HTMLDivElement | null>(null);
   const size = useBoxRows(box, { rowHeight: ISSUE_ROW_PX, min: 3, max: 60, fallback: ISSUES_PER_PAGE });
   const paged = usePaging(rows, size, filterKey);
+  const shown = useIssueTeamTarget();
   return (
     <Card id="issues" title="이슈" count={rows.length || undefined} flush fill={fill}>
       {issues === null ? (
@@ -68,7 +72,7 @@ export function IssuesCard({ issues, sessions, branches, prs, filterKey = '', fi
           <div ref={box} data-issues-box className={cn(fill !== undefined && '@min-[880px]:min-h-0 @min-[880px]:flex-1 @min-[880px]:overflow-y-auto')}>
             <ul aria-label="열린 이슈" className="m-0 list-none p-0 *:border-t">
               {paged.shown.map((r) => (
-                <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} />
+                <IssueLine key={r.number} row={r} sessions={list} branches={branches} prs={prs} panelOpen={shown === r.number} />
               ))}
             </ul>
           </div>
@@ -114,7 +118,7 @@ function Owners({ sessions }: { sessions: Session[] }) {
   );
 }
 
-function IssueLine({ row: r, sessions, branches, prs }: { row: IssueRow; sessions: Session[]; branches: Feed<Branches>; prs: Feed<ReadonlyMap<string, PrAnswer>> }) {
+function IssueLine({ row: r, sessions, branches, prs, panelOpen }: { row: IssueRow; sessions: Session[]; branches: Feed<Branches>; prs: Feed<ReadonlyMap<string, PrAnswer>>; panelOpen: boolean }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
   const owners = ownerSessions(r);
@@ -129,7 +133,8 @@ function IssueLine({ row: r, sessions, branches, prs }: { row: IssueRow; session
     </>
   );
   return (
-    <li data-row={`issue-${r.number}`} className="min-w-0">
+    // data-origin + aria-current (#942): the row that opened the issue panel keeps a ring while it is open.
+    <li data-row={`issue-${r.number}`} data-origin aria-current={panelOpen || undefined} className="min-w-0">
       <div className="flex h-9 min-w-0 items-center gap-2 pr-3 pl-1.5 text-sm hover:bg-accent/40">
         {hasDetail ? (
           <button
@@ -145,13 +150,16 @@ function IssueLine({ row: r, sessions, branches, prs }: { row: IssueRow; session
         ) : (
           <span aria-hidden className="size-5 shrink-0" />
         )}
-        {r.url ? (
-          <a href={r.url} target="_blank" rel="noreferrer" className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-inherit no-underline hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
-            {title}
-          </a>
-        ) : (
-          <span className="flex min-w-0 flex-1 items-center gap-2">{title}</span>
-        )}
+        <button
+          type="button"
+          aria-expanded={panelOpen}
+          aria-label={`#${r.number} 패널 열기`}
+          data-issue-open={r.number}
+          onClick={(e) => openIssueTeam(r.number, e.currentTarget)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-inherit hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          {title}
+        </button>
         <Owners sessions={owners} />
         {pr && (
           <a

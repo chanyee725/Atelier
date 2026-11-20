@@ -17,6 +17,7 @@ import { cn } from '../lib/utils';
 import { closeIssueTeam } from './issueStore';
 import { PanelTrail } from './PanelTrail';
 import { TRAIL } from './origin';
+import { useAgentLiveTarget } from './store';
 import './live.css';
 
 type Summary = { ok: true; summary: string[] } | { ok: false; reason: string } | null;
@@ -38,13 +39,18 @@ export function IssueStartPanel({ row, sessions, folder, closing = false }: Prop
   // A lead that ended while picked falls back to a new one.
   const leadId = lead && leads.some((s) => s.id === lead) ? lead : NEW_LEAD;
 
+  // One panel at a time: hidden while a session's live panel is open, like the team panel.
+  const hidden = !!useAgentLiveTarget();
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && !el.matches(':popover-open')) el.showPopover();
-  }, []);
+    if (!el) return;
+    const open = el.matches(':popover-open');
+    if (hidden && open) el.hidePopover();
+    else if (!hidden && !open) el.showPopover();
+  }, [hidden]);
   useEffect(() => {
-    closeBtn.current?.focus({ preventScroll: true });
-  }, []);
+    if (!hidden) closeBtn.current?.focus({ preventScroll: true });
+  }, [hidden]);
   useEffect(() => {
     const ctl = new AbortController();
     setSummary(null);

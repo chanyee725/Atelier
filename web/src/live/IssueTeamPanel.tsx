@@ -84,7 +84,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now, closing = fal
               <span aria-hidden className={cn('size-1.5 rounded-full', stage.dot)} />
               {stage.label}
             </span>
-            {issue.url && <HostLink href={issue.url} label="이슈 열기" />}
+            {issue.url && <HostLink href={issue.url} label="GitHub에서 열기" />}
             {prUrl && <HostLink href={prUrl} label="PR 열기" />}
           </div>
         </div>
