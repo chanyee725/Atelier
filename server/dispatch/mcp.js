@@ -161,6 +161,17 @@ const LEAD_TOOLS = [
     },
   },
   {
+    name: "set_session_task",
+    description: "세션 카드에 뜨는 작업 요약 한 줄(80자 이내)을 남긴다. 이슈 없이 시킨 일에 쓴다. session_id를 생략하면 나. 빈 문자열이면 지운다. 개인정보는 넣지 않는다.",
+    inputSchema: { type: "object", required: ["task"], properties: { session_id: { type: "string" }, task: { type: "string", description: "짧은 작업 요약 (예: 로그인 버튼 정리)" } } },
+    run: async ({ session_id, task }) => {
+      const id = session_id || PARENT;
+      if (!id) throw new Error("session_id가 필요해요");
+      await api("POST", `/api/sessions/${id}/task`, { task });
+      return { ok: true };
+    },
+  },
+  {
     name: "write_plan",
     description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 고칠 때는 path 없이 다시 부른다. 쓴 뒤 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 승인 전에는 create_sessions가 거절된다. lane: \"quickfix\"는 단계 하나로 바로 시작한다.",
     inputSchema: {

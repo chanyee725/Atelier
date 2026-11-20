@@ -33,3 +33,15 @@ test("session event: payload carries no history", () => {
   for (const [, d] of sent) assert.equal("history" in d, false);
   assert.ok(hub.timeline().sessions.a.length >= 1, "history is served by the timeline instead");
 });
+
+test("setTask: one line of at most 80 characters on the session; empty clears it (#912)", () => {
+  const s = session();
+  const { hub, events } = fakeHub([s]);
+  hub.setTask("a", "  로그인\n버튼 정리 " + "x".repeat(100));
+  assert.equal(s.task.length, 80);
+  assert.ok(s.task.startsWith("로그인 버튼 정리 x"));
+  assert.equal(events.filter(([ev]) => ev === "session").at(-1)[1].task, s.task, "the session event carries it");
+  hub.setTask("a", "");
+  assert.equal(s.task, null);
+  assert.throws(() => hub.setTask("nope", "x"), /세션이 없어요/);
+});

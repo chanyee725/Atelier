@@ -44,6 +44,8 @@ export interface Session {
   accountLabel?: string | null;
   /** The GitHub issue the session works on, when its task named one (#747). */
   issue?: number | null;
+  /** A short summary of the work a lead left on the session (#912, at most 80 characters, one line); metadata only. */
+  task?: string | null;
   status: Status;
   startedAt: number;
   updatedAt: number;
