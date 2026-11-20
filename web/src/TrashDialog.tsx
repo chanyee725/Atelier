@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, type TrashItem } from './api';
 import { Button } from './components/ui/button';
+import { whenLabel } from './lib/when';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './components/ui/dialog';
 
 type Props = {
@@ -10,7 +11,8 @@ type Props = {
   onRestored: (path: string) => void;
 };
 
-const when = (t: number) => new Date(t).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+// The app's one time label (#889): relative inside a week, then the date; the full time stays in the tooltip.
+const full = (t: number) => new Date(t).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
 const label = (path: string) => path.replace(/\.dpx\.json$/, '');
 // Server messages are English; show Korean copy by status, never the raw message.
 const errText = (e: unknown) => {
@@ -75,14 +77,22 @@ export function TrashDialog({ onClose, onRestored }: Props) {
         )}
         <ul className="min-h-0 flex-1 overflow-auto border-t px-1.5 pt-1.5 pb-(--menu-end)" aria-label="지운 파일">
           {items === null && <li className={hint}>불러오는 중이에요…</li>}
-          {items?.length === 0 && <li className={hint}>최근에 지운 파일이 없어요</li>}
+          {/* Empty (#889 refresh): one centred title and the line that says what fills it, nothing else. */}
+          {items?.length === 0 && (
+            <li className="flex flex-col items-center gap-2 px-6 pt-12 pb-14 text-center">
+              <span className="text-sm font-semibold">최근에 지운 파일이 없어요</span>
+              <span className="max-w-[32ch] text-sm break-keep text-muted-foreground">문서를 지우면 여기에 모여요. 언제든 되살릴 수 있어요.</span>
+            </li>
+          )}
           {items?.map((i) => (
-            <li key={i.id} className="flex items-center gap-2 rounded-md px-2.5 py-1.5 hover:bg-accent">
+            <li key={i.id} className="flex items-center gap-2 rounded-control px-2.5 py-1.5 hover:bg-accent">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm" title={label(i.path)}>
                   {label(i.path)}
                 </div>
-                <div className="text-xs text-muted-foreground tabular-nums">{when(i.deletedAt)}에 지웠어요</div>
+                <div className="text-xs text-muted-foreground tabular-nums" title={full(i.deletedAt)}>
+                  {whenLabel(i.deletedAt)} 지웠어요
+                </div>
                 {i.fromSnapshot && <div className="text-xs text-muted-foreground">앱 밖에서 지워서 마지막 버전 기록으로 돌아와요. 마지막으로 저장한 내용보다 오래됐을 수 있어요</div>}
               </div>
               <Button size="sm" className="shrink-0" disabled={busy !== null} onClick={() => void restore(i)}>
