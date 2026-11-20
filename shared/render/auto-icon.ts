@@ -97,10 +97,47 @@ export function autoIconFor(label: string): string | undefined {
   return undefined;
 }
 
-/** The automatic icon of a graph node: none when it has `icon:`, when `autoIcons off`, or when nothing matches. */
+/**
+ * Node kinds named by a generic word (#935): a Lucide glyph and a pale palette colour, the way Eraser's examples
+ * mark gateways, databases, caches and queues. The kind word is the label's last word ("API Gateway", "Orders DB",
+ * "Session cache") or the whole label ("Client"); a label of more than four words is a sentence and gets none.
+ */
+const KINDS: [words: string[], icon: string, color: string][] = [
+  [['gateway', 'proxy', 'router', 'balancer', 'lb', 'cdn', 'ingress', 'firewall'], 'network', 'purple'],
+  [['db', 'database', 'databases', 'store', 'storage', 'warehouse', 'table', 'bucket', 'replica'], 'database', 'blue'],
+  [['cache'], 'zap', 'red'],
+  [['queue', 'broker', 'topic', 'topics', 'stream', 'streams', 'bus', 'events'], 'inbox', 'orange'],
+  [['service', 'services', 'api', 'server', 'servers', 'backend'], 'server', 'green'],
+  [['worker', 'workers', 'job', 'jobs', 'scheduler', 'cron'], 'cpu', 'green'],
+  [['client', 'clients', 'frontend', 'browser', 'web', 'ui', 'app', 'dashboard'], 'monitor', 'gray'],
+  [['mobile', 'ios', 'android'], 'smartphone', 'gray'],
+  [['user', 'users', 'customer', 'customers', 'admin'], 'user', 'gray'],
+  [['auth', 'identity', 'login', 'sso', 'iam'], 'lock', 'indigo'],
+  [['search', 'index'], 'search', 'indigo'],
+  [['llm', 'model', 'agent', 'ai'], 'bot', 'purple'],
+];
+const KIND_OF = new Map(KINDS.flatMap(([words, icon, color]) => words.map((w) => [w, { icon, color }] as const)));
+
+/** The kind of a node label: its Lucide glyph and pale colour, or undefined. */
+export function kindOf(label: string): { icon: string; color: string } | undefined {
+  const words = labelWords(label);
+  if (words.length === 0 || words.length > 4) return undefined;
+  return KIND_OF.get(words[words.length - 1]!);
+}
+
+/**
+ * The automatic icon of a graph node: none when it has `icon:` or `autoIcons off`; else a product logo or cloud
+ * service (#734), else the glyph of its kind word (#935).
+ */
 export function nodeAutoIcon(d: Pick<DiagramBase, 'styles'>, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
   if (node.attrs.icon !== undefined || d.styles.autoIcons === 'off') return undefined;
-  return autoIconFor(node.label);
+  return autoIconFor(node.label) ?? (iconNamesLoaded() ? kindOf(node.label)?.icon : undefined);
+}
+
+/** The automatic pale colour of a graph node's kind: none with `color:` or `autoIcons off` (#935). */
+export function nodeAutoColor(d: Pick<DiagramBase, 'styles'>, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
+  if (node.attrs.color !== undefined || d.styles.autoIcons === 'off') return undefined;
+  return kindOf(node.label)?.color;
 }
 
 /** Every `icon:` value in a parsed diagram plus the automatic icons of its graph nodes. */
