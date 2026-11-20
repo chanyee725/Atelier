@@ -27,6 +27,8 @@ export interface ThemeColors {
   edgeSoft: string;
   /** Solid offset shadow, no blur. */
   shadow: string;
+  /** Default icon colour when the node has no `color:` (§2.1: grey #475467). */
+  icon: string;
   /**
    * Sequence look that differs from the other diagrams (§2.4), dark only: participant boxes are flat (no offset
    * shadow), filled with `background` and outlined with `columnStroke`, and message labels take `label` instead
@@ -52,6 +54,7 @@ export const THEMES: Record<Theme, ThemeColors> = {
     flowEdge: '#1c1c1c',
     edgeSoft: '#98a2b3',
     shadow: '#e8e8e8',
+    icon: '#475467',
   },
   dark: {
     background: '#17191d',
@@ -67,6 +70,7 @@ export const THEMES: Record<Theme, ThemeColors> = {
     flowEdge: '#e7e9ec',
     edgeSoft: '#5b6370',
     shadow: '#2b2f36',
+    icon: '#e7e9ec',
     // Measured on the reference: the box fill is the background, so the border alone marks the box. It reads
     // 11.19:1 on the background (non-text contrast needs 3:1); the label is the text colour. The border is the
     // reference's warm grey, not `strongStroke` (#c9cdd3, cool): the two differ on purpose, so keep them apart.

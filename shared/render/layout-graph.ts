@@ -17,7 +17,7 @@ import { wrapTopLevel } from './layout-wrap.ts';
 import { routeOrthogonal } from './route-eraser.ts';
 import type { PartialRoute, RoutedEdge, RouterBox } from './route-eraser.ts';
 import type { Point, Scene, SceneBadge, SceneEdge, SceneHandle, SceneItem, ShapeKind } from './scene.ts';
-import { nodeAutoColor, nodeAutoIcon, prepareIcons } from './auto-icon.ts';
+import { nodeAutoIcon, prepareIcons } from './auto-icon.ts';
 
 const SHAPES: readonly ShapeKind[] = [
   'rectangle', 'circle', 'cylinder', 'diamond', 'document', 'ellipse',
@@ -134,9 +134,7 @@ const textHeight = (label: Label, sub: Label | undefined): number => label.h + (
 
 function measureNode(d: GraphDiagram, node: GraphNode): NodeGeom {
   const icon = node.attrs.icon ?? nodeAutoIcon(d, node);
-  const measured = measureNodeWith(d, node, icon);
-  const color = measured.divider ? undefined : nodeAutoColor(d, node);
-  const geom = color ? { ...measured, style: { ...measured.style, paint: { ...measured.style.paint, color } } } : measured;
+  const geom = measureNodeWith(d, node, icon);
   return geom.iconSize ? { ...geom, icon } : geom;
 }
 

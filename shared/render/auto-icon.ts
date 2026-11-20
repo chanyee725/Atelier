@@ -98,30 +98,30 @@ export function autoIconFor(label: string): string | undefined {
 }
 
 /**
- * Node kinds named by a generic word (#935): a Lucide glyph and a pale palette colour, the way Eraser's examples
- * mark gateways, databases, caches and queues. The kind word is the label's last word ("API Gateway", "Orders DB",
+ * Node kinds named by a generic word (#935): a Lucide glyph, the way Eraser's examples mark gateways,
+ * databases, caches and queues. The fill stays white (#984): colour comes only from an explicit `color:`. The kind word is the label's last word ("API Gateway", "Orders DB",
  * "Session cache") or the whole label ("Client"); a label of more than four words is a sentence and gets none.
  * Only cloud-architecture diagrams use kinds (#948): flowchart nodes are steps ("Validate user", "Check cache",
  * "Is user admin?"), and their last word names what the step acts on, not what the node is.
  */
-const KINDS: [words: string[], icon: string, color: string][] = [
-  [['gateway', 'proxy', 'router', 'balancer', 'lb', 'cdn', 'ingress', 'firewall'], 'network', 'purple'],
-  [['db', 'database', 'databases', 'store', 'storage', 'warehouse', 'table', 'bucket', 'replica'], 'database', 'blue'],
-  [['cache'], 'zap', 'red'],
-  [['queue', 'broker', 'topic', 'topics', 'stream', 'streams', 'bus', 'events'], 'inbox', 'orange'],
-  [['service', 'services', 'api', 'server', 'servers', 'backend'], 'server', 'green'],
-  [['worker', 'workers', 'job', 'jobs', 'scheduler', 'cron'], 'cpu', 'green'],
-  [['client', 'clients', 'frontend', 'browser', 'web', 'ui', 'app', 'dashboard'], 'monitor', 'gray'],
-  [['mobile', 'ios', 'android'], 'smartphone', 'gray'],
-  [['user', 'users', 'customer', 'customers', 'admin'], 'user', 'gray'],
-  [['auth', 'identity', 'login', 'sso', 'iam'], 'lock', 'indigo'],
-  [['search', 'index'], 'search', 'indigo'],
-  [['llm', 'model', 'agent', 'ai'], 'bot', 'purple'],
+const KINDS: [words: string[], icon: string][] = [
+  [['gateway', 'proxy', 'router', 'balancer', 'lb', 'cdn', 'ingress', 'firewall'], 'network'],
+  [['db', 'database', 'databases', 'store', 'storage', 'warehouse', 'table', 'bucket', 'replica'], 'database'],
+  [['cache'], 'zap'],
+  [['queue', 'broker', 'topic', 'topics', 'stream', 'streams', 'bus', 'events'], 'inbox'],
+  [['service', 'services', 'api', 'server', 'servers', 'backend'], 'server'],
+  [['worker', 'workers', 'job', 'jobs', 'scheduler', 'cron'], 'cpu'],
+  [['client', 'clients', 'frontend', 'browser', 'web', 'ui', 'app', 'dashboard'], 'monitor'],
+  [['mobile', 'ios', 'android'], 'smartphone'],
+  [['user', 'users', 'customer', 'customers', 'admin'], 'user'],
+  [['auth', 'identity', 'login', 'sso', 'iam'], 'lock'],
+  [['search', 'index'], 'search'],
+  [['llm', 'model', 'agent', 'ai'], 'bot'],
 ];
-const KIND_OF = new Map(KINDS.flatMap(([words, icon, color]) => words.map((w) => [w, { icon, color }] as const)));
+const KIND_OF = new Map(KINDS.flatMap(([words, icon]) => words.map((w) => [w, { icon }] as const)));
 
-/** The kind of a node label: its Lucide glyph and pale colour, or undefined. */
-export function kindOf(label: string): { icon: string; color: string } | undefined {
+/** The kind of a node label: its Lucide glyph, or undefined. */
+export function kindOf(label: string): { icon: string } | undefined {
   const words = labelWords(label);
   if (words.length === 0 || words.length > 4) return undefined;
   return KIND_OF.get(words[words.length - 1]!);
@@ -139,12 +139,6 @@ const nodeKind = (d: AutoDiagram, label: string) => (d.type === 'cloud-architect
 export function nodeAutoIcon(d: AutoDiagram, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
   if (node.attrs.icon !== undefined || d.styles.autoIcons === 'off') return undefined;
   return autoIconFor(node.label) ?? (iconNamesLoaded() ? nodeKind(d, node.label)?.icon : undefined);
-}
-
-/** The automatic pale colour of a graph node's kind: none with `color:`, `autoIcons off` or outside cloud-architecture (#935, #948). */
-export function nodeAutoColor(d: AutoDiagram, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
-  if (node.attrs.color !== undefined || d.styles.autoIcons === 'off') return undefined;
-  return nodeKind(d, node.label)?.color;
 }
 
 /** Every `icon:` value in a parsed diagram plus the automatic icons of its graph nodes. */
