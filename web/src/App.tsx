@@ -998,7 +998,7 @@ export function App() {
           {section.kind === 'board' ? (
             <LazyBoundary>
               <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>}>
-                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} bell={bell} />
+                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} bell={bell} narrow={narrow} />
               </Suspense>
             </LazyBoundary>
           ) : !docScreen ? (

@@ -160,8 +160,8 @@ export function BranchesPage() {
       {!rows.length ? (
         <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>
       ) : (
-        // Graph 80%, branch list 20% (user, 2026-11-20): both fit the screen and scroll inside, so nothing hides below.
-        <div data-branches-split className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(14rem,1fr)]">
+        // Graph 70%, branch list 30% (user, 2026-11-20): both fit the screen and scroll inside, so nothing hides below.
+        <div data-branches-split className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(16rem,3fr)]">
           <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2 lg:max-h-[calc(100dvh-7rem)] lg:overflow-auto">
             <div className="flex flex-wrap items-center gap-3">
               <h2 id={graphTitle} className="m-0 text-sm font-semibold">커밋 그래프</h2>
