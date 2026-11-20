@@ -969,7 +969,7 @@ export function App() {
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
         {sidebar}
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
-        <AgentLiveHost onOpenFile={openFile} />
+        <AgentLiveHost onOpenFile={openFile} dark={dark} />
         <AppDialogHost />
         <Toaster dark={dark} />
         <SidebarInset>
