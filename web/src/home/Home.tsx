@@ -14,7 +14,6 @@ import { PageHeader } from '../components/PageHeader';
 import { plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
 import { isFindKey } from './dashboardRows';
 import { PlanAreas } from './PlanList';
-import { ApprovalCard } from './ApprovalCard';
 import { RecentPage } from './RecentPage';
 
 export type CreateKind = 'doc' | 'canvas' | 'plan' | 'template';
@@ -142,8 +141,7 @@ function Dashboard({ data, ...p }: Shared) {
   return (
     <>
       <PageHeader title="대시보드" narrow={p.narrow} bell={p.bell} />
-      <ApprovalCard onOpen={p.onOpen} />
-      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill />
+      <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill approvals />
     </>
   );
 }

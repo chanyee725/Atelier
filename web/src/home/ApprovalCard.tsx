@@ -123,8 +123,9 @@ export function ApprovalCard({ onOpen }: { onOpen: (path: string) => void }) {
     void job().finally(() => setBusy(null));
   };
   return (
-    <div className="shrink-0 px-4 pt-4" data-approvals>
-      <Card id="approvals" title={<StatusDot tone="warn">승인 대기</StatusDot>} count={total} hint="사람이 확인해야 다음으로 넘어가요" flush>
+    // A card of the dashboard's right column, under 세션 요청 (2026-11-20); no page-wide band above the grid.
+    <div className="contents" data-approvals>
+      <Card id="approvals" title={<StatusDot tone="warn">승인 요청</StatusDot>} count={total} hint="사람이 확인해야 다음으로 넘어가요" flush>
         <ul aria-label="승인 대기 목록" aria-live="polite" className="m-0 list-none divide-y p-0">
           {plans.map((p) => <PlanRow key={p.path} plan={p} now={now} onOpen={onOpen} busy={busy} run={run} />)}
           {asks.map((a) => <AskRow key={a.requestId} ask={a} now={now} busy={busy} run={run} />)}

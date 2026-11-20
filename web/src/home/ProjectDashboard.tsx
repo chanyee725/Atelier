@@ -20,6 +20,7 @@ import { agentsIn, fileStem, isBusy, type AgentPresence } from './agents';
 import { allDocs } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
+import { ApprovalCard } from './ApprovalCard';
 import { PrsCard } from './WorkCards';
 import { WorkTabsCard } from './WorkTabsCard';
 import { SessionRequestsCard } from './SessionRequestsCard';
@@ -39,9 +40,11 @@ type Props = {
   fill?: boolean;
   /** Opens a session on the 세션 보드 (a 세션 요청 row, #880). */
   onSession?: (id: string) => void;
+  /** Show the 승인 요청 card (server-wide plans and permission asks): the whole-project dashboard only. */
+  approvals?: boolean;
 };
 
-export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: Props) {
+export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession, approvals = false }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
@@ -70,6 +73,8 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
         <SessionRequestsCard sessions={sessions} folder={project.path} onOpen={onOpen} onSession={onSession} />
+        {/* Server-wide list: only on the whole-project dashboard, not on one project's tab (#970 review). */}
+        {approvals && <ApprovalCard onOpen={onOpen} />}
         {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>
     </DashGrid>
