@@ -25,6 +25,7 @@ import { actionFileLink, fileLink, type FileLink } from './workView';
 import './live.css';
 
 const AgentLiveSession = lazy(() => import('./AgentLiveSession'));
+const SessionActions = lazy(() => import('./SessionActions'));
 
 type Tab = 'progress' | 'work' | SessionTab;
 const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기'], ['chat', '대화'], ['diff', '변경사항'], ['info', '정보']];
@@ -102,6 +103,9 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
     >
       <header className="agent-live-head">
         <LiveSummaryView d={d} now={now} titleId={titleId} plain />
+        {tab === 'chat' && !outside && (
+          <Suspense fallback={null}><SessionActions sid={sid} onRemoved={closeAgentLive} /></Suspense>
+        )}
         <button ref={closeBtn} type="button" aria-label="닫기" onClick={closeAgentLive} className={cn('agent-live-icon', FOCUS_RING)}>
           <X aria-hidden className="size-4" />
         </button>
@@ -152,7 +156,7 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
           {(['chat', 'diff', 'info'] as const).map((v) => (
             <TabsContent key={v} value={v} className="agent-live-body agent-live-body-session">
               <Suspense fallback={<section><p className="agent-live-muted">불러오는 중이에요…</p></section>}>
-                <AgentLiveSession sid={sid} tab={v} onRemoved={closeAgentLive} />
+                <AgentLiveSession sid={sid} tab={v} />
               </Suspense>
             </TabsContent>
           ))}
@@ -268,7 +272,7 @@ function ActionRow({ a, link, onOpenLink }: { a: LiveAction; link: FileLink | nu
     <li className="agent-live-row" data-live-action={a.id}>
       <span className="agent-live-at">{hhmm(a.at)}</span>
       <span className="shrink-0">{a.label}</span>
-      <Target target={a.target} link={link} max={36} onOpenLink={onOpenLink} />
+      <Target target={a.target} link={link} max={60} onOpenLink={onOpenLink} />
       <span className="agent-live-ok">
         {a.ok === true ? (
           <><Check aria-hidden className="size-3.5 text-ok" /><span className="sr-only">성공</span></>

@@ -1,12 +1,12 @@
 /* Agent live view panel (E559, #728; docs/design/agent-live-view.md §1-2). A non-modal top-layer dialog docked to the
-   right edge under the top bar, 460px; a bottom sheet (full width, 70vh) under 720px. App chrome tokens only; hue
+   right edge under the top bar, clamp(460px, calc(40vw - 110px), 720px) wide (#915: as far left as the dashboard's right column); a bottom sheet (full width, 70vh) under 720px. App chrome tokens only; hue
    only for status. Refresh (#889): a floating panel 8px off the edges, radius 12, its edge a translucent ring.
    #905: it floats 24px off the bottom so the rounded bottom corners and the shadow under them read clearly; the height
    comes from the insets, so it shrinks by the same amount. */
 .agent-live {
   position: fixed;
   inset: calc(var(--h-bar, 52px) + 8px) 8px 24px auto;
-  width: min(460px, 100vw - 2rem);
+  width: min(clamp(460px, calc(40vw - 110px), 720px), 100vw - 2rem);
   height: auto;
   max-height: none;
   max-width: none;
@@ -327,7 +327,7 @@
   border-radius: 4px;
   background: var(--muted);
 }
-/* Tabs (#905): 진행 · 작업 보기 · 대화 · 변경사항 · 정보 in one row under the header; the panel stays 460px for all of
+/* Tabs (#905): 진행 · 작업 보기 · 대화 · 변경사항 · 정보 in one row under the header; the panel keeps one width for all of
    them. The selected tab carries an underline (a border on a pseudo-element, so it survives forced colors), not color
    alone, and nothing that changes its size. The row scrolls instead of wrapping on a narrow sheet. */
 .agent-live {
@@ -388,17 +388,6 @@
 .agent-live-session-scroll {
   flex: 1;
   min-height: 0;
-}
-.agent-live-controls {
-  display: flex;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-}
-.agent-live-controls .agent-live-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 .agent-live-danger {
   color: var(--destructive);
