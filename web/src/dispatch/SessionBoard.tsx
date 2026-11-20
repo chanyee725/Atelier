@@ -417,7 +417,7 @@ function Group({
           </button>
         )}
       </div>
-      <div id={body} className={cn('flex min-w-0 flex-col gap-0.5', SUBGRID, '@min-[560px]/list:gap-y-0.5')}>
+      <div id={body} className={cn('flex min-w-0 flex-col gap-1.5', SUBGRID, '@min-[560px]/list:gap-y-1.5')}>
         {shown.map((s) => (
           <Row key={s.id} s={s} parent={s.parent ? byId.get(s.parent) : undefined} now={now} expanded={open === s.id} onOpen={onOpen} />
         ))}
@@ -469,11 +469,11 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
       onClick={(e) => onOpen(s.id, e.currentTarget)}
       title={parent ? `${parent.name}이(가) 만든 세션` : undefined}
       className={cn(
-        'grid min-h-11 min-w-0 grid-cols-[1.25rem_auto_minmax(0,1fr)_auto_1rem] items-center gap-x-2 gap-y-0.5 rounded-lg border-l-2 border-transparent px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'grid min-h-11 min-w-0 grid-cols-[1.25rem_auto_minmax(0,1fr)_auto_1rem] items-center gap-x-2 gap-y-0.5 rounded-card border-l-2 border-transparent bg-background px-2.5 py-1.5 text-left text-[13px] transition-colors hover:bg-sunken focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         '@min-[560px]/list:col-span-full @min-[560px]/list:grid-cols-subgrid @min-[560px]/list:gap-x-3 @min-[560px]/list:py-0',
         flag && 'border-warn bg-warn/5',
         failed && 'border-destructive bg-destructive/5',
-        expanded && 'bg-muted',
+        expanded && 'bg-sunken',
       )}
     >
       <Icon aria-hidden className={cn('size-4 shrink-0', TONE_TEXT[meta.tone])} strokeWidth={meta.tone === 'warn' || meta.tone === 'bad' ? 2.5 : 2} />
@@ -481,8 +481,8 @@ function Row({ s, parent, now, expanded, onOpen }: { s: Session; parent?: Sessio
         {s.name}
         <span className="sr-only"> {meta.label}</span>
       </span>
-      <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: `var(--role-${s.role}, var(--idle))` }} />
+      <span data-role-chip className="inline-flex h-5 min-w-0 items-center gap-1.5 justify-self-start rounded-[4px] px-1.5 text-xs text-muted-foreground shadow-[inset_0_0_0_1px_var(--line-strong)]">
+        <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: `var(--role-${s.role}, var(--idle))` }} />
         <span className="truncate">{s.roleName || s.role}</span>
       </span>
       <span className="col-span-3 col-start-2 row-start-2 flex min-w-0 items-center gap-2 @min-[560px]/list:contents">
