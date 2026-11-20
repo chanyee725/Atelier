@@ -143,6 +143,9 @@ test('limitGroups: Gemini shows the windows agy /usage reported, as bars, still 
   const [g] = limitGroups({ gemini: { connected: true } }, limits);
   assert.deepEqual(g!.rows, [{ label: '주간', pct: 75, reset: 9 }]);
   assert.equal(g!.reached, false);
+  // A full bar is not 한도 도달 for Gemini: the server holds only on agy's quota error (#884).
   const full = limitGroups({ gemini: { connected: true } }, { gemini: { windows: [{ label: '주간', used: 1 }] } });
-  assert.equal(full[0]!.reached, true);
+  assert.equal(full[0]!.reached, false);
+  const hit = limitGroups({ gemini: { connected: true } }, { gemini: { reached: true, reset: 5, windows: [{ label: '주간', used: 1 }] } });
+  assert.equal(hit[0]!.reached, true);
 });

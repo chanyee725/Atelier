@@ -1,6 +1,6 @@
 // Headless check of the project views (E505d, #484; in the shell since #731; a card dashboard since #879): the 세션
-// 보드's 프로젝트 card offers the workspace's projects as its scope, picking one (or an old /dispatch#folder= or
-// #board=timeline link) shows only its sessions and timeline, usage labels what is account-wide, back/forward walk the board, and a project home has a 세션 tab linking to the scoped board in the shell.
+// 보드 takes its scope from the board address (no 프로젝트 card, one project per server), so an old /dispatch#folder= or
+// #board=timeline link shows only that project's sessions and timeline, usage labels what is account-wide, back/forward walk the board, and a project home has a 세션 tab linking to the scoped board in the shell.
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH of fake agent CLIs; it refuses to go on unless its log names its port and workspace.
 import { test } from 'node:test';

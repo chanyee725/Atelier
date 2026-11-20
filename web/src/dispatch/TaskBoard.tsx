@@ -100,8 +100,8 @@ const CARD_ROWS = 5;
 /**
  * 작업 보드 as a dashboard card (#879): open tasks per stage on one line, then the open tasks that need a look first
  * (stuck, then blocked, then the longest in their stage). 전체 보기 opens the full board in the sheet.
+ * `fill`: the card takes the rest of its column and lists every open task, scrolling inside (세션 보드 right column).
  */
-/** `fill`: the card takes the rest of its column and lists every open task, scrolling inside (세션 보드 right column). */
 export function TaskBoardCard({ fill = false }: { fill?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const { tasks } = useScoped();
