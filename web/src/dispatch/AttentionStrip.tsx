@@ -1,13 +1,12 @@
 // "확인 필요" strip at the top of 세션: sessions waiting on a person, stuck or failed, late tasks, failed merge
 // checks and usage limits from 75 %. Each row says why, for how long, and opens what to look at.
 import { useEffect, useId, useMemo, useState } from 'react';
-import { ChevronRight, CircleCheck, Clock, Gauge, GitMerge, TriangleAlert, type LucideIcon } from 'lucide-react';
-import { Badge } from '../components/ui/badge';
+import { ChevronRight, CircleCheck } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
 import { attentionItems, elapsed, type AttentionItem, type AttentionKind } from '../../../shared/dispatch/attention.ts';
-import { TONE_TEXT, fmtK, fmtUsd, isOpen, stateOf, totalTok, until } from './lib/format.ts';
-import { StatusBadge } from './parts';
+import { fmtK, fmtUsd, isOpen, stateOf, totalTok, until } from './lib/format.ts';
+import { DotChip, StateChip } from './parts';
 import { useDispatch } from './store';
 import { useScoped } from './scope';
 import type { Session } from './types';
@@ -21,23 +20,13 @@ export function useNow(ms = 15_000) {
   return now;
 }
 
-// Non-session rows get their own shape + label, so they also read without colour.
-const KIND: Record<Exclude<AttentionKind, 'session'>, { Icon: LucideIcon; label: string }> = {
-  late: { Icon: Clock, label: '지연' },
-  mismatch: { Icon: TriangleAlert, label: '단계 불일치' },
-  merge: { Icon: GitMerge, label: '병합 안 됨' },
-  limit: { Icon: Gauge, label: '한도' },
-};
+// Non-session rows get their own label, so they also read without colour.
+const KIND: Record<Exclude<AttentionKind, 'session'>, string> = { late: '지연', mismatch: '단계 불일치', merge: '병합 안 됨', limit: '한도' };
 
+// Refresh chips (#897): neutral ground, the dot carries the level.
 function Mark({ item }: { item: AttentionItem }) {
-  if (item.kind === 'session') return <StatusBadge state={item.state ?? 'stuck'} />;
-  const { Icon, label } = KIND[item.kind];
-  return (
-    <Badge variant="outline" className="gap-1 pl-1.5 text-foreground/80">
-      <Icon aria-hidden className={cn('size-3.5!', TONE_TEXT[item.level])} strokeWidth={2.5} />
-      {label}
-    </Badge>
-  );
+  if (item.kind === 'session') return <StateChip state={item.state ?? 'stuck'} />;
+  return <DotChip tone={item.level} label={KIND[item.kind]} />;
 }
 
 /** "8분째", "14분 지연", "2시간 뒤 초기화". */
@@ -62,7 +51,7 @@ function Row({ item, now, onClick }: { item: AttentionItem; now: number; onClick
         className={cn(
           'group/row grid w-full grid-cols-[7rem_minmax(0,10rem)_minmax(0,1fr)_7rem_5.5rem] items-center gap-x-3 gap-y-0.5 px-3 py-2 text-left text-[13px]',
           'max-sm:grid-cols-[7rem_minmax(0,1fr)_auto] max-sm:[&>[data-reason]]:col-span-3 max-sm:[&>[data-go]]:hidden',
-          onClick && 'cursor-pointer transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
+          onClick && 'cursor-pointer transition-colors hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
         )}
       >
         <span className="flex min-w-0"><Mark item={item} /></span>
@@ -94,13 +83,13 @@ export function AttentionStrip({ onOpen, onUsage }: { onOpen: (id: string) => vo
   return (
     <div aria-live="polite" aria-relevant="additions">
       {items.length === 0 ? (
-        <div className="flex h-8 items-center gap-2 rounded-md border bg-card px-3 text-xs text-muted-foreground">
+        <div className="flex h-8 items-center gap-2 rounded-card bg-background px-3 text-xs text-muted-foreground">
           <CircleCheck aria-hidden className="size-3.5 shrink-0 text-ok" />
           지금 볼 것 없어요
         </div>
       ) : (
-        <section aria-label="확인 필요" className="min-w-0 overflow-hidden rounded-md border bg-card">
-          <header className="flex h-8 items-center gap-2 border-b bg-muted/40 px-3 text-xs font-medium text-muted-foreground">
+        <section aria-label="확인 필요" className="min-w-0 overflow-hidden rounded-card bg-background">
+          <header className="flex h-8 items-center gap-2 border-b px-3 text-xs font-medium text-muted-foreground">
             <h2 className="min-w-0 flex-1 truncate font-medium">확인 필요</h2>
             <span className="shrink-0 tabular-nums">
               {items.some(i => i.level === 'bad') && <span className="text-destructive">급함 {items.filter(i => i.level === 'bad').length} · </span>}

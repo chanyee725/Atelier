@@ -27,7 +27,7 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
   const eta = etaLine(t, now);
   const owner = t.owner || '맡은 사람 없음';
   return (
-    <li data-task={t.title} data-task-id={t.id} className={cn('flex min-w-0 flex-col gap-2 rounded-lg border bg-card px-3 py-2.5', t.stuck && 'border-warn/60 bg-warn/5')}>
+    <li data-task={t.title} data-task-id={t.id} className={cn('card-surface flex min-w-0 flex-col gap-2 px-3 py-2.5', t.stuck && 'shadow-[0_0_0_1px_var(--warn)]')}>
       <p className="line-clamp-2 text-sm leading-5 font-medium" title={t.title}>{t.title}</p>
       {t.stuck && (
         <p className="flex items-start gap-1.5 text-xs">
@@ -41,7 +41,7 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
         <span data-in-stage className="ml-auto shrink-0" title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>
       </div>
       {eta && <p data-eta className={cn('text-[11px] tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>예상 {eta.text}</p>}
-      <div role="img" aria-label={`단계별 시간: ${spans.map(s => `${stageLabel(s.stage)} ${span(s.ms)}`).join(', ')}`} className="flex h-1.5 gap-px overflow-clip rounded-full bg-muted">
+      <div role="img" aria-label={`단계별 시간: ${spans.map(s => `${stageLabel(s.stage)} ${span(s.ms)}`).join(', ')}`} className="flex h-1.5 gap-px overflow-clip rounded-full bg-sunken">
         {spans.map((s, i) => <span key={i} data-bar={s.stage} style={{ flexGrow: s.ms / total }} className={cn('min-w-px basis-0', BAR[s.stage])} />)}
       </div>
     </li>
@@ -57,7 +57,7 @@ function Board({ tasks }: { tasks: BoardTask[] }) {
       {STAGES.map(s => {
         const { shown, more } = visibleTasks(s.id, groups[s.id], doneExpanded);
         return (
-        <section key={s.id} aria-label={s.label} data-stage={s.id} className="flex w-56 shrink-0 flex-col gap-2 rounded-lg bg-muted/40 p-2">
+        <section key={s.id} aria-label={s.label} data-stage={s.id} className="flex w-56 shrink-0 flex-col gap-2 rounded-panel bg-sunken p-2">
           <header className="flex items-center gap-2 px-1 text-sm font-semibold">
             {s.label}
             <Badge variant="secondary" className="rounded-md px-1.5 tabular-nums">{groups[s.id].length}</Badge>
