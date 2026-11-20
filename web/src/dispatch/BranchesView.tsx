@@ -129,59 +129,6 @@ function LiveChip() {
 
 const COLS = ['브랜치', '세션', '앞 / 뒤', 'PR', '마지막 커밋', '시각'] as const;
 
-/** The 브랜치 table (Branches.dc.html): one row per session branch, merged ones faded. Scrolls sideways when narrow. */
-function BranchTable({ rows, base, now }: { rows: BranchRow[]; base: string | null; now: number }) {
-  const title = useId();
-  return (
-    <section aria-labelledby={title} className="card-surface flex min-w-0 flex-col">
-      <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5">
-        <h2 id={title} className="m-0 text-sm font-semibold">브랜치</h2>
-        <span className="text-xs text-muted-foreground tabular-nums">{rows.length}</span>
-      </div>
-      <div tabIndex={0} role="region" aria-labelledby={title} className="overflow-x-auto rounded-b-card focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-        <table data-branch-table className="w-full min-w-[40rem] table-fixed border-separate border-spacing-0 text-sm">
-          <colgroup>
-            <col className="w-[28%]" />
-            <col className="w-[5.5rem]" />
-            <col className="w-[5.5rem]" />
-            <col className="w-[7rem]" />
-            <col />
-            <col className="w-[5.5rem]" />
-          </colgroup>
-          <thead>
-            <tr className="text-xs text-muted-foreground">
-              {COLS.map((c, i) => (
-                <th key={c} scope="col" className={cn('px-2 pb-2 text-left font-normal first:pl-4 last:pr-4', i === COLS.length - 1 && 'text-right')}>
-                  {c}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.branch} data-branch-row data-merged={r.merged || undefined} className={cn('h-[38px] [&>*]:border-t [&>*]:border-border', r.merged && 'opacity-50')}>
-                <th scope="row" className="truncate px-2 pl-4 text-left font-medium" title={r.branch}>
-                  <span className="font-mono text-[13px]">{r.branch}</span>
-                  {r.issue != null && <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">#{r.issue}</span>}
-                  {r.dirty && (
-                    <span className="ml-1.5 text-xs text-warn" title="커밋하지 않은 변경이 있어요">
-                      ●<span className="sr-only">커밋하지 않은 변경 있음</span>
-                    </span>
-                  )}
-                </th>
-                <td className="px-2"><Owners sessions={r.sessions} /></td>
-                <td className="px-2 text-xs"><AheadBehind row={r} base={base} /></td>
-                <td className="px-2"><PrStateCell row={r} /></td>
-                <td className="truncate px-2 text-xs text-muted-foreground" title={r.subject}>{r.subject || '—'}</td>
-                <td className="px-2 pr-4 text-right text-xs text-muted-foreground tabular-nums">{r.lastAt ? whenLabel(r.lastAt, now) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
 
 /**
  * 세션 보드 › 브랜치 (Branches.dc.html, #889): a live line (실시간, counts, last commit), the commit tree of the board's
@@ -213,8 +160,9 @@ export function BranchesPage() {
       {!rows.length ? (
         <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>
       ) : (
-        <>
-          <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2">
+        // Graph 80%, branch list 20% (user, 2026-11-20): both fit the screen and scroll inside, so nothing hides below.
+        <div data-branches-split className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(14rem,1fr)]">
+          <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2 lg:max-h-[calc(100dvh-7rem)] lg:overflow-auto">
             <div className="flex flex-wrap items-center gap-3">
               <h2 id={graphTitle} className="m-0 text-sm font-semibold">커밋 그래프</h2>
               <span className="text-xs text-muted-foreground">{data.base ?? '기준 브랜치'}에서 갈라진 순서대로 보여요</span>
@@ -238,9 +186,37 @@ export function BranchesPage() {
               )}
             />
           </section>
-          <BranchTable rows={rows} base={data.base} now={now} />
-        </>
+          <BranchList rows={rows} base={data.base} now={now} />
+        </div>
       )}
+    </section>
+  );
+}
+
+/** The 브랜치 tab's right column: every branch as a compact row (owners, name, last commit, ahead/behind, PR). */
+function BranchList({ rows, base, now }: { rows: BranchRow[]; base: string | null; now: number }) {
+  const title = useId();
+  return (
+    <section aria-labelledby={title} data-branch-list className="card-surface flex min-w-0 flex-col lg:max-h-[calc(100dvh-7rem)]">
+      <h2 id={title} className="m-0 border-b px-4 pt-3.5 pb-2 text-sm font-semibold">
+        브랜치 <span className="font-normal text-muted-foreground tabular-nums">{rows.length}</span>
+      </h2>
+      <ul className="m-0 flex min-h-0 list-none flex-col overflow-auto p-0">
+        {rows.map((r) => (
+          <li key={r.branch} data-branch-row data-merged={r.merged || undefined} className={cn('flex min-w-0 flex-col gap-1 border-b px-4 py-2 text-xs last:border-b-0', r.merged && 'opacity-50')}>
+            <span className="flex min-w-0 items-center gap-2">
+              <Owners sessions={r.sessions} />
+              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground" title={r.branch}>{r.branch}</span>
+              {r.dirty && <span className="shrink-0 text-warn" title="커밋하지 않은 변경이 있어요">●<span className="sr-only">커밋하지 않은 변경 있음</span></span>}
+            </span>
+            <span className="block truncate text-muted-foreground" title={r.subject}>{r.lastAt ? whenLabel(r.lastAt, now) : '—'} · {r.subject}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <AheadBehind row={r} base={base} />
+              <span className="ml-auto"><PrChip pr={r.pr} /></span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

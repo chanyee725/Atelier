@@ -843,3 +843,17 @@ body {
   .plan-arrow path { fill: CanvasText; }
   .plan-badge { background: Canvas !important; color: CanvasText; border-color: CanvasText; }
 }
+
+/* Dashboard session cards (#889 refresh mock): a 2px track; while the session works a sliver sweeps it and the state
+   dot breathes. Reduced motion stops the sweep (the track fills at half strength) and keeps the gentle dot pulse. */
+.session-track { display: block; height: 2px; border-radius: 2px; background: var(--muted); overflow: hidden; position: relative; }
+.session-track.is-on::after {
+  content: ""; position: absolute; inset: 0; width: 28%; border-radius: 2px; background: var(--ok);
+  animation: session-sweep 2.4s linear infinite;
+}
+.session-dot.is-on { animation: session-breathe 2.6s ease-in-out infinite; }
+@keyframes session-sweep { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
+@keyframes session-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .session-track.is-on::after { animation: none; width: 100%; opacity: .5; }
+}
