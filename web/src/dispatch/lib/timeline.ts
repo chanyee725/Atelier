@@ -82,3 +82,97 @@ export function mergeSpans(rows: readonly { spans: readonly Span[]; fails: reado
   const fails = [...new Set(rows.flatMap(r => r.fails))].sort((a, b) => a - b);
   return { spans, fails };
 }
+
+/** Whole-pixel x of time `t` on a track `width` px wide that shows `[now - windowMs, now]` (#936: no subpixel blur). */
+export const trackX = (t: number, now: number, windowMs: number, width: number) =>
+  Math.round(Math.min(1, Math.max(0, (t - (now - windowMs)) / windowMs)) * width);
+
+/** Minimum mark width in px, so short stretches of work read as ticks of one thickness. */
+export const MIN_MARK = 2;
+
+/** Whole-pixel left and width of a span; both ends snap separately so neighbours meet without gaps or overlap. */
+export function spanBox(from: number, to: number, now: number, windowMs: number, width: number): { left: number; width: number } {
+  const left = trackX(from, now, windowMs, width);
+  const right = trackX(to, now, windowMs, width);
+  const w = Math.max(MIN_MARK, right - left);
+  return { left: Math.min(left, Math.max(0, width - w)), width: w };
+}
+
+/**
+ * The time-axis labels: every `step` inside the window, at the same whole-pixel x the tracks use, minus the ones too
+ * close to 지금 at the right end to fit beside it.
+ */
+export function axisTicks(now: number, windowMs: number, width: number, step = 30 * 60_000): { t: number; x: number }[] {
+  const start = now - windowMs;
+  const out: { t: number; x: number }[] = [];
+  for (let t = Math.ceil(start / step) * step; t < now - step / 2; t += step) out.push({ t, x: trackX(t, now, windowMs, width) });
+  return out;
+}
+
+/**
+ * The interval picker (#936): the bucket a bar is drawn at, the stretch of time shown, how often the axis has a tick
+ * and how often a tick gets a time label. 5분 keeps the card's first look: the last two hours.
+ */
+export type IntervalId = '30s' | '1m' | '5m';
+export type Interval = { id: IntervalId; label: string; bucketMs: number; windowMs: number; labelMs: number; hint: string };
+const MIN = 60_000;
+export const INTERVALS: readonly Interval[] = [
+  { id: '30s', label: '30초', bucketMs: MIN / 2, windowMs: 15 * MIN, labelMs: 5 * MIN, hint: '최근 15분' },
+  { id: '1m', label: '1분', bucketMs: MIN, windowMs: 30 * MIN, labelMs: 10 * MIN, hint: '최근 30분' },
+  { id: '5m', label: '5분', bucketMs: 5 * MIN, windowMs: 120 * MIN, labelMs: 30 * MIN, hint: '최근 2시간' },
+];
+export const DEFAULT_INTERVAL: IntervalId = '5m';
+export const intervalOf = (id: string | null | undefined): Interval =>
+  INTERVALS.find(i => i.id === id) ?? INTERVALS.find(i => i.id === DEFAULT_INTERVAL)!;
+
+export const INTERVAL_KEY = 'atelier.timeline.interval';
+type Store = Pick<Storage, 'getItem' | 'setItem'>;
+/** The remembered interval; blocked or missing storage and unknown values fall back to the default. */
+export function readInterval(store: Store | undefined): IntervalId {
+  try {
+    return intervalOf(store?.getItem(INTERVAL_KEY)).id;
+  } catch {
+    return DEFAULT_INTERVAL;
+  }
+}
+/** Remembers the interval; a full or blocked storage just forgets it. */
+export function writeInterval(store: Store | undefined, id: IntervalId) {
+  try {
+    store?.setItem(INTERVAL_KEY, id);
+  } catch {
+    /* not remembered */
+  }
+}
+
+/**
+ * Spans redrawn at `bucketMs`: the window is cut on the wall-clock grid of the bucket (first and last bucket clipped
+ * to it), each bucket takes the strongest state that touches it (as in mergeSpans), and equal neighbours join. A
+ * bucket nothing touches stays empty. Failure ticks keep their exact times.
+ */
+export function bucketSpans(row: { spans: readonly Span[]; fails: readonly number[] }, now: number, windowMs: number, bucketMs: number): { spans: Span[]; fails: number[] } {
+  const start = now - windowMs;
+  const spans: Span[] = [];
+  for (let b = Math.floor(start / bucketMs) * bucketMs; b < now; b += bucketMs) {
+    const from = Math.max(b, start);
+    const to = Math.min(b + bucketMs, now);
+    if (to <= from) continue;
+    let best: string | null = null;
+    for (const p of row.spans) if (p.from < to && p.to > from && (best === null || weight(p.state) < weight(best))) best = p.state;
+    if (best === null) continue;
+    const prev = spans[spans.length - 1];
+    if (prev && prev.state === best && prev.to === from) prev.to = to;
+    else spans.push({ state: best, from, to });
+  }
+  return { spans, fails: row.fails.filter(t => t >= start && t <= now) };
+}
+
+/** Axis tick x positions every `stepMs` on the wall-clock grid, inside the track and off its two ends. */
+export function gridTicks(now: number, windowMs: number, width: number, stepMs: number): number[] {
+  const start = now - windowMs;
+  const out: number[] = [];
+  for (let t = Math.ceil(start / stepMs) * stepMs; t < now; t += stepMs) {
+    const x = trackX(t, now, windowMs, width);
+    if (x > 0 && x < width) out.push(x);
+  }
+  return out;
+}

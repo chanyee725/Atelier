@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeSpans, teamBusy, timelineTeams } from '../../web/src/dispatch/lib/timeline.ts';
+import { INTERVALS, INTERVAL_KEY, MIN_MARK, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
 
 const mk = (id: string, role: string, folder: string | null, startedAt: number, parent: string | null = null) => ({ id, role, folder, startedAt, parent });
 const roles = [{ id: 'lead' }, { id: 'impl' }, { id: 'review' }];
@@ -66,4 +66,95 @@ test('mergeSpans leaves gaps no member covers empty', () => {
   const b = { spans: [{ state: 'working', from: 20, to: 30 }], fails: [] };
   assert.deepEqual(mergeSpans([a, b]).spans, [{ state: 'working', from: 0, to: 10 }, { state: 'working', from: 20, to: 30 }]);
   assert.deepEqual(mergeSpans([]), { spans: [], fails: [] });
+});
+
+test('trackX snaps to whole pixels and clamps to the track (#936)', () => {
+  const now = 7_200_000, win = 7_200_000;
+  assert.equal(trackX(0, now, win, 601), 0);
+  assert.equal(trackX(now, now, win, 601), 601);
+  assert.equal(trackX(now / 2, now, win, 601), 301);
+  assert.equal(trackX(-5, now, win, 601), 0);
+  assert.equal(trackX(now + 5, now, win, 601), 601);
+  for (const t of [1, 1234, 99_999, 3_333_333]) assert.ok(Number.isInteger(trackX(t, now, win, 333.7)));
+});
+
+test('spanBox gives whole-pixel boxes, neighbours meet, short work keeps the tick width (#936)', () => {
+  const now = 7_200_000, win = 7_200_000, w = 517;
+  const a = spanBox(0, 1_000_000, now, win, w);
+  const b = spanBox(1_000_000, 2_500_000, now, win, w);
+  assert.ok([a.left, a.width, b.left, b.width].every(Number.isInteger));
+  assert.equal(a.left + a.width, b.left);
+  assert.equal(spanBox(500, 600, now, win, w).width, MIN_MARK);
+  const end = spanBox(now - 10, now, now, win, w);
+  assert.equal(end.left + end.width, w);
+});
+
+test('axisTicks puts labels on the half hours at the tracks\' x, none crowding 지금 (#936)', () => {
+  const min = 60_000;
+  const now = Date.UTC(2026, 0, 1, 12, 40);
+  const ticks = axisTicks(now, 120 * min, 600);
+  assert.deepEqual(ticks.map(k => new Date(k.t).getUTCHours() * 60 + new Date(k.t).getUTCMinutes()), [660, 690, 720]);
+  for (const k of ticks) assert.equal(k.x, trackX(k.t, now, 120 * min, 600));
+  assert.ok(ticks.every(k => now - k.t >= 15 * min));
+  assert.equal(axisTicks(Date.UTC(2026, 0, 1, 12, 10), 120 * min, 600).at(-1)!.t, Date.UTC(2026, 0, 1, 11, 30));
+});
+
+test('intervals: 30초 shows 15 minutes, 1분 30 minutes, 5분 two hours by default (#936)', () => {
+  assert.deepEqual(INTERVALS.map(i => [i.id, i.bucketMs / 1000, i.windowMs / 60_000]), [['30s', 30, 15], ['1m', 60, 30], ['5m', 300, 120]]);
+  assert.equal(intervalOf(undefined).id, '5m');
+  assert.equal(intervalOf('nope').id, '5m');
+  assert.equal(intervalOf('30s').label, '30초');
+});
+
+test('readInterval/writeInterval remember the pick and survive blocked or broken storage (#936)', () => {
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+  assert.equal(readInterval(store), '5m');
+  writeInterval(store, '1m');
+  assert.equal(mem.get(INTERVAL_KEY), '1m');
+  assert.equal(readInterval(store), '1m');
+  mem.set(INTERVAL_KEY, 'garbage');
+  assert.equal(readInterval(store), '5m');
+  const blocked = { getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('QuotaExceededError'); } };
+  assert.equal(readInterval(blocked), '5m');
+  assert.doesNotThrow(() => writeInterval(blocked, '30s'));
+  assert.equal(readInterval(undefined), '5m');
+  assert.doesNotThrow(() => writeInterval(undefined, '30s'));
+});
+
+test('bucketSpans draws each bucket in its strongest state on the wall-clock grid (#936)', () => {
+  const s = 1000;
+  const now = 600 * s; // window 5 minutes at 30 s buckets
+  const row = { spans: [
+    { state: 'resting', from: 300 * s, to: 410 * s },
+    { state: 'working', from: 410 * s, to: 415 * s }, // 5 s of work fills its whole bucket
+    { state: 'resting', from: 415 * s, to: 600 * s },
+  ], fails: [100 * s, 500 * s] };
+  const out = bucketSpans(row, now, 300 * s, 30 * s);
+  assert.deepEqual(out.spans, [
+    { state: 'resting', from: 300 * s, to: 390 * s },
+    { state: 'working', from: 390 * s, to: 420 * s },
+    { state: 'resting', from: 420 * s, to: 600 * s },
+  ]);
+  assert.deepEqual(out.fails, [500 * s]);
+  for (const p of out.spans) assert.equal((p.from / (30 * s)) % 1, 0);
+});
+
+test('bucketSpans clips the off-grid window ends and leaves untouched buckets empty (#936)', () => {
+  const s = 1000;
+  const out = bucketSpans({ spans: [{ state: 'done', from: 205 * s, to: 215 * s }], fails: [] }, 245 * s, 60 * s, 30 * s);
+  assert.deepEqual(out.spans, [{ state: 'done', from: 185 * s, to: 240 * s }]);
+  const edge = bucketSpans({ spans: [{ state: 'working', from: 0, to: 245 * s }], fails: [] }, 245 * s, 60 * s, 30 * s);
+  assert.deepEqual(edge.spans, [{ state: 'working', from: 185 * s, to: 245 * s }]);
+});
+
+test('every interval keeps whole-pixel ticks, labels and boxes on the same x (#936)', () => {
+  const now = Date.UTC(2026, 0, 1, 12, 7, 13);
+  for (const iv of INTERVALS) for (const w of [1188, 1187.4, 333]) {
+    const grid = gridTicks(now, iv.windowMs, w, iv.bucketMs);
+    assert.ok(grid.every(Number.isInteger) && grid.every(x => x > 0 && x < w));
+    const labels = axisTicks(now, iv.windowMs, w, iv.labelMs);
+    assert.ok(labels.length >= 1);
+    for (const l of labels) assert.ok(grid.includes(l.x), `${iv.id}: label at ${l.x} sits on a tick`);
+  }
 });
