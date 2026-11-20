@@ -1,7 +1,7 @@
 // One session in a side sheet: 대화 / 변경사항 / 정보 tabs, permission and answer cards, message box. The agent live
 // panel (#905) reuses Chat, Info, Composer and AnswerCard as its own tabs instead of opening this sheet.
 // Transcripts come from the in-memory store (never stored). Errors show inline as a destructive Alert.
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Activity, ChevronRight, GitBranch, MessageCircleQuestion, Power, SendHorizontal, ShieldAlert, Square, Trash2 } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
@@ -227,15 +227,18 @@ function ThinkingLine({ s }: { s: Session }) {
   );
 }
 
-/** `thinking: false`: the host shows its own waiting line (the chat dock's 생각 중…, #937). */
-export function Chat({ s, report, thinking = true }: { s: Session; report: Report; thinking?: boolean }) {
+/**
+ * `thinking: false`: the host shows its own waiting line (the chat dock's 생각 중…, #937).
+ * `after`: shown under the last entry (the chat dock's 시작하기 bar under the helper's proposal, #954).
+ */
+export function Chat({ s, report, thinking = true, after }: { s: Session; report: Report; thinking?: boolean; after?: ReactNode }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [entries, s.pending.length]);
+  }, [entries, s.pending.length, !!after]);
   const agent = s.name;
   const runnable = canRun(s);
   return (
@@ -253,6 +256,7 @@ export function Chat({ s, report, thinking = true }: { s: Session; report: Repor
         : <ToolRun key={g[0]!.i} items={g} agent={agent} />))}
       {s.pending.map(p => <PermissionCard key={p.requestId} s={s} p={p} report={report} />)}
       {thinking && <ThinkingLine s={s} />}
+      {after}
     </div>
   );
 }

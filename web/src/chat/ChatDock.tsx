@@ -4,6 +4,8 @@
 // The window is a non-modal <dialog popover="manual">: the page stays usable, ✕ or Esc closes it and focus goes back
 // to the button. It moves left of an open agent live panel and hides under a modal (chat-dock.css).
 // The conversation lives only in the Dispatch store's memory (no disk, localStorage or logs).
+// #954: an issue row (askAboutIssue) opens the dock on the helper with the issue pinned and asks for a proposal; the
+// work reaches a lead only through 시작하기 under the answer (one press, locked synchronously like sendOnce).
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
 import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch/store';
@@ -11,6 +13,9 @@ import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
+import { answeredAsk, issueAskText, useAskRequest, type AskRequest } from './lib/askIssue.ts';
+import { issueTask, newLeadBody, type TeamPick } from '../home/issueStart.ts';
+import { IssueStartBar, type StartState } from './IssueAsk';
 import './chat-dock.css';
 
 const ChatPane = lazy(() => import('./ChatPane'));
@@ -28,6 +33,12 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const [seen, setSeen] = useState<Record<string, number>>({});
   // One send at a time, checked synchronously (sendOnce); `busy` only drives the UI.
   const sending = useRef(false);
+  // #954: the issue pinned at the top, and its 시작하기 state; `starting` is the synchronous one-press lock.
+  const [pin, setPin] = useState<AskRequest | null>(null);
+  const [start, setStart] = useState<StartState>({ state: 'idle' });
+  const starting = useRef(false);
+  const handled = useRef(0);
+  const asked = useAskRequest();
   const ref = useRef<HTMLDialogElement>(null);
   const fab = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -76,17 +87,17 @@ export function ChatDock({ folder }: { folder: string | null }) {
     setOpen(true);
   };
 
-  const send = async () => {
-    const text = draft.trim();
-    if (!text || offline) return;
-    await sendOnce(sending, async () => {
+  /** Sends `text` to session `to`, or makes the helper with it when `to` is null. Returns whether it went out. */
+  const deliver = async (text: string, to: string | null) => {
+    let ok = false;
+    const ran = await sendOnce(sending, async () => {
       setBusy(true);
       setError(null);
       // The box clears at once; a failed send puts the text back.
       setDraft('');
       try {
-        if (sid) {
-          await api('POST', `/api/sessions/${encodeURIComponent(sid)}/message`, { text });
+        if (to) {
+          await api('POST', `/api/sessions/${encodeURIComponent(to)}/message`, { text });
         } else {
           const res = await api<{ sessions: Session[] }>('POST', '/api/sessions', helperBody(text, folder));
           const made = res.sessions[0]?.id;
@@ -96,20 +107,74 @@ export function ChatDock({ folder }: { folder: string | null }) {
             loadTranscript(made).catch(() => {});
           }
         }
+        ok = true;
       } catch (e) {
         setDraft(text);
         setError((e as Error).message);
         // A helper that is gone (removed elsewhere) is made again on the next send; a passing error keeps it.
-        if (sid && sid === helperId && sessionGone(e)) setHelperId(null);
+        if (to && to === helperId && sessionGone(e)) setHelperId(null);
       } finally {
         setBusy(false);
       }
     });
+    // Another send in flight: keep the text in the box instead of dropping it.
+    if (!ran) setDraft(text);
+    return ok;
+  };
+
+  const send = async () => {
+    const text = draft.trim();
+    if (!text || offline) return;
+    await deliver(text, sid);
+  };
+
+  // An issue row asked about an issue: open on the helper (or the team's lead), pin the card, ask once.
+  useEffect(() => {
+    if (!asked || asked.seq === handled.current) return;
+    handled.current = asked.seq;
+    setPin(asked);
+    setStart({ state: 'idle' });
+    setError(null);
+    setOpened(true);
+    setOpen(true);
+    // A partner not in the list (not loaded yet, or ended) falls back to the helper (see `target`).
+    setKey(asked.partner ?? HELPER_KEY);
+    if (!asked.ask) return;
+    const helper = targets[0]!;
+    const text = issueAskText(asked.issue.number);
+    // Claude not connected: leave the question in the box; the notice says why.
+    if (helperOffline(helper, providers)) setDraft(text);
+    else void deliver(text, helper.id);
+    // Runs once per request (seq); the other values are read as they are at that moment.
+  }, [asked]);
+
+  const startIssue = async (team: TeamPick, leadId: string) => {
+    if (!pin || starting.current) return;
+    starting.current = true;
+    setStart({ state: 'busy' });
+    const issue = { number: pin.issue.number, title: pin.issue.title };
+    try {
+      if (leadId) {
+        await api('POST', `/api/sessions/${encodeURIComponent(leadId)}/message`, { text: issueTask(issue, team) });
+        const name = sessions.find(x => x.id === leadId)?.name ?? '관리자';
+        setStart({ state: 'done', text: `${name}에게 보냈어요. 곧 팀원을 만들어요.` });
+      } else {
+        const { default: rules } = await import('../../../plugin/skills/atelier-team/reference/rules.md?raw');
+        await api('POST', '/api/sessions', newLeadBody(issue, team, rules, folder));
+        setStart({ state: 'done', text: '새 관리자를 만들었어요. 곧 팀원을 만들어요.' });
+      }
+    } catch (e) {
+      // A failed start may be pressed again.
+      starting.current = false;
+      setStart({ state: 'error', text: `시작하지 못했어요. ${(e as Error).message}` });
+    }
   };
 
   if (unavailable) return null;
   // Waiting for the answer: our request in flight, a helper that is being made, or the session's turn running.
   const thinking = busy || (helperId !== null && key === HELPER_KEY && !s) || s?.status === 'running' || s?.status === 'starting';
+  // The 시작하기 bar: under the helper's answer to the ask, while the helper is not mid-turn (kept once pressed).
+  const showBar = !!pin?.ask && key === HELPER_KEY && !!s && (start.state !== 'idle' || (!thinking && answeredAsk(entries, pin.issue.number)));
   const label = badge ? `채팅 열기, 읽지 않은 답 ${badge}개` : '채팅 열기';
 
   return (
@@ -156,6 +221,17 @@ export function ChatDock({ folder }: { folder: string | null }) {
               setError={setError}
               onSend={() => void send()}
               onClose={close}
+              issue={pin?.issue ?? null}
+              after={showBar ? focusInput => (
+                <IssueStartBar
+                  key={pin!.seq}
+                  // The helper is a lead-level session too; it proposes, it does not take the work.
+                  sessions={sessions.filter(x => x.id !== helperId)}
+                  state={start}
+                  onStart={(team, leadId) => void startIssue(team, leadId)}
+                  onRevise={focusInput}
+                />
+              ) : undefined}
             />
           </Suspense>
         )}
