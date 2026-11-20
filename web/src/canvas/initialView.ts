@@ -13,6 +13,9 @@ export type Bounds = readonly [number, number, number, number];
 
 /** Largest zoom of a fitted view: a small drawing stays at its real size. */
 export const FIT_MAX_ZOOM = 1;
+/** The 둘 다 view fits with a fixed 48px margin and may enlarge a small drawing up to this zoom (#976). */
+export const PANE_FIT = { marginPx: 48, maxZoom: 2 } as const;
+export type FitOptions = { marginPx?: number; maxZoom?: number };
 /** Smallest zoom of a fitted view (Excalidraw's own minimum). */
 export const FIT_MIN_ZOOM = 0.1;
 /** Share of the viewport the drawing takes, leaving a margin around it. */
@@ -24,16 +27,19 @@ const ZOOM_STEP = 0.1;
  * The view that shows `bounds` whole and centred in a `width`×`height` viewport, or null when there is nothing to
  * fit (no shapes, an empty or hidden viewport). Excalidraw shows scene point p at `(p + scroll) * zoom`.
  */
-export function fitView(bounds: Bounds | null, width: number, height: number): View | null {
+export function fitView(bounds: Bounds | null, width: number, height: number, opts: FitOptions = {}): View | null {
   if (!bounds || !(width > 0) || !(height > 0)) return null;
   const [x1, y1, x2, y2] = bounds;
   if (![x1, y1, x2, y2].every(Number.isFinite) || x2 < x1 || y2 < y1) return null;
   const w = Math.max(x2 - x1, 1);
   const h = Math.max(y2 - y1, 1);
-  const raw = Math.min(width / w, height / h) * FIT_MARGIN;
+  const m = opts.marginPx;
+  // A fixed pixel margin when asked (the viewport must be bigger than it), else a share of the viewport.
+  const raw = m !== undefined && width > 2 * m && height > 2 * m ? Math.min((width - 2 * m) / w, (height - 2 * m) / h) : Math.min(width / w, height / h) * FIT_MARGIN;
+  const maxZoom = opts.maxZoom ?? FIT_MAX_ZOOM;
   // Rounded down to the step (a hair over a step counts as on it), then kept within the limits.
   const stepped = Math.floor(raw / ZOOM_STEP + 1e-9) * ZOOM_STEP;
-  const zoom = Math.min(FIT_MAX_ZOOM, Math.max(FIT_MIN_ZOOM, Number(stepped.toFixed(2))));
+  const zoom = Math.min(maxZoom, Math.max(FIT_MIN_ZOOM, Number(stepped.toFixed(2))));
   return { zoom, scrollX: width / 2 / zoom - (x1 + x2) / 2, scrollY: height / 2 / zoom - (y1 + y2) / 2 };
 }
 
@@ -70,10 +76,22 @@ export function forgetViews(): void {
  * centres the content at 100%, as before). Unless it is the user's, the next view reported for `path` is taken
  * as this opening view, not as a move.
  */
-export function openingView(path: string | undefined, bounds: Bounds | null, width: number, height: number): View | null {
+export function openingView(path: string | undefined, bounds: Bounds | null, width: number, height: number, opts?: FitOptions): View | null {
   const kept = rememberedView(path);
   if (kept) return kept;
-  const fit = fitView(bounds, width, height);
+  const fit = fitView(bounds, width, height, opts);
   if (path) views.set(path, { view: fit, fitted: true, opening: true });
+  return fit;
+}
+
+/**
+ * The view to switch to when the pane's size changed: a fit of `bounds`, unless the user has moved the view of
+ * `path` (it then stays) or the fit is `current` already. The next view reported counts as this fit, not a move.
+ */
+export function refitView(path: string | undefined, bounds: Bounds | null, width: number, height: number, current: View, opts?: FitOptions): View | null {
+  if (!path || rememberedView(path)) return null;
+  const fit = fitView(bounds, width, height, opts);
+  if (!fit || same(fit, current)) return null;
+  views.set(path, { view: fit, fitted: true, opening: true });
   return fit;
 }
