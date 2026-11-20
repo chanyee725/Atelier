@@ -1,90 +1,131 @@
-// 타임라인 card of the 세션 board (E29, #879): one row per session of the picked project in role lanes, the last two hours across, each stretch
-// drawn by state on a sunken, rounded track (refresh, #897). Shape tells states apart without colour: active states fill the row, stuck is hatched, resting is
-// a low solid bar (no fade, so it keeps 3:1 against the track), done a thin faded line, a failure a red tick. History is state and time only (GET /api/timeline).
-// Forced-colors mode drops author backgrounds and gradients, so every mark also gets a system-colour border there
-// (stuck dashed, failures in Highlight); the shapes still tell states apart.
-import { useEffect, useMemo, useRef, useState } from 'react';
+// 타임라인 card of the 세션 board (E29, #879; by team, #928): one folding row per team (a lead and the sessions under
+// it) for the picked project, the last two hours across. Only busy teams start open; a folded lead row draws the whole
+// team's activity merged. States read from the mark's shape, not a legend: work is a solid bar in the one accent colour,
+// resting a dotted line, done a thin line, waiting for a person an outlined stretch (warn), stuck a dashed outline, a
+// failure a short red tick. The exact state is in the hover title and the row's accessible name. History is state and
+// time only (GET /api/timeline). Forced-colors mode drops author backgrounds, so filled marks get a system-colour border.
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { Card, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
-import { roleColor } from '../run/overlayModel';
 import { windowSpans, WINDOW_MS, type Entry } from '../../../shared/dispatch/timeline.js';
-import { STATE, TONE_COLOR, stateOf } from './lib/format.ts';
+import { STATE, stateOf } from './lib/format.ts';
 import { rowHistory } from './lib/usage.ts';
-import { StateChip } from './parts';
 import { api, useDispatch } from './store';
 import { useScope } from './scope';
 import type { Scope } from './lib/folder.ts';
-import { timelineLanes } from './lib/timeline.ts';
+import { mergeSpans, teamBusy, timelineTeams, type Span, type Team } from './lib/timeline.ts';
 import type { Session, SessionState } from './types';
 
 type Timeline = { now: number; windowMs: number; sessions: Record<string, Entry[]> };
+type Spans = { spans: Span[]; fails: number[] };
 
-const SHAPE: Record<SessionState, { h: string; hatch?: boolean; fade?: boolean }> = {
-  working: { h: 'h-full' },
-  waiting: { h: 'h-full' },
-  stuck: { h: 'h-full', hatch: true },
-  failed: { h: 'h-full' },
-  resting: { h: 'h-2/5' },
-  done: { h: 'h-0.5', fade: true },
+const known = (st: string): SessionState => (st in STATE ? (st as SessionState) : 'resting');
+
+/** The mark per state. Only `working` uses the accent; warn and bad are kept for waiting and failure. */
+const MARK: Record<SessionState, { className: string; style?: CSSProperties }> = {
+  working: { className: 'h-2 rounded-[2px] forced-colors:border forced-colors:border-[CanvasText]', style: { background: 'var(--ok)' } },
+  waiting: { className: 'h-2 rounded-[2px] border-[1.5px] border-warn' },
+  stuck: { className: 'h-2 rounded-[2px] border-[1.5px] border-dashed border-muted-foreground' },
+  failed: { className: 'h-0 border-t border-destructive/70' },
+  resting: { className: 'h-0 border-t-2 border-dotted border-muted-foreground' },
+  done: { className: 'h-0 border-t border-muted-foreground/60' },
 };
-/** Border marks that stand in for the background fill in forced-colors mode (Windows high contrast). */
-const forcedMark = (state: SessionState) =>
-  cn('forced-colors:border forced-colors:border-[CanvasText]', SHAPE[state].hatch && 'forced-colors:border-dashed');
-const FORCED_FAIL = 'forced-colors:border-l-[3px] forced-colors:border-[Highlight]';
-const LEGEND: SessionState[] = ['working', 'waiting', 'stuck', 'failed', 'resting', 'done'];
+/** The dot next to a row's current state: colour only where it asks for attention. */
+const DOT: Record<SessionState, string> = {
+  working: 'bg-ok', waiting: 'bg-warn', failed: 'bg-destructive', stuck: 'bg-muted-foreground', resting: 'bg-muted-foreground/60', done: 'bg-muted-foreground/60',
+};
+const FORCED_FAIL = 'forced-colors:bg-[Highlight]';
 
 const hhmm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 const mins = (ms: number) => {
   const m = Math.max(1, Math.round(ms / 60_000));
   return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
 };
-const known = (st: string): SessionState => (st in SHAPE ? (st as SessionState) : 'resting');
+const describe = ({ spans, fails }: Spans) =>
+  spans.map(p => `${STATE[known(p.state)].label} ${hhmm(p.from)}–${hhmm(p.to)}`).join(', ') + (fails.length ? `. 실패 ${fails.length}번` : '');
 
-function barStyle(state: SessionState) {
-  const color = TONE_COLOR[STATE[state].tone];
-  const { hatch, fade } = SHAPE[state];
-  return { background: hatch ? `repeating-linear-gradient(135deg, ${color} 0 4px, transparent 4px 7px)` : color, opacity: fade ? 0.55 : 1 };
-}
+const ROW = 'grid w-full grid-cols-[220px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @max-[560px]:grid-cols-1 @max-[560px]:gap-1.5';
 
-function Swatch({ state }: { state: SessionState }) {
+function StateText({ state }: { state: SessionState }) {
   return (
-    <span aria-hidden className="flex h-3 w-4 shrink-0 items-center">
-      <span className={cn('w-full rounded-full', SHAPE[state].h, forcedMark(state))} style={barStyle(state)} />
+    <span data-state={state} className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground">
+      <span aria-hidden className={cn('size-1.5 rounded-full forced-colors:bg-[CanvasText]', DOT[state])} />
+      {STATE[state].label}
     </span>
   );
 }
 
-function Row({ s, history, now, windowMs, onOpen }: { s: Session; history: Entry[]; now: number; windowMs: number; onOpen: () => void }) {
+function Track({ data, now, windowMs }: { data: Spans; now: number; windowMs: number }) {
   const start = now - windowMs;
-  const { spans, fails } = useMemo(() => windowSpans(history, now, windowMs), [history, now, windowMs]);
   const x = (t: number) => `${((t - start) / windowMs) * 100}%`;
-  const w = (a: number, b: number) => `${((b - a) / windowMs) * 100}%`;
-  const state = stateOf(s);
-  const summary = spans.map(p => `${STATE[known(p.state)].label} ${hhmm(p.from)}–${hhmm(p.to)}`).join(', ');
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      data-row={s.name}
-      aria-label={`${s.name}, 지금 ${STATE[state].label}. ${summary}${fails.length ? `. 실패 ${fails.length}번` : ''}`}
-      className="grid w-full grid-cols-[200px_1fr] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none @max-[560px]:grid-cols-1 @max-[560px]:gap-1.5"
-    >
-      <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-sm font-medium">{s.name}</span>
-        <StateChip state={state} className="ml-auto" />
-      </span>
-      <span aria-hidden className="relative block h-3 overflow-hidden rounded-full bg-sunken">
-        {spans.map(p => (
-          <span key={p.from} data-span={p.state} title={`${STATE[known(p.state)].label} · ${hhmm(p.from)}–${hhmm(p.to)} (${mins(p.to - p.from)})`}
-            className="absolute inset-y-0 flex min-w-0.5 items-center" style={{ left: x(p.from), width: w(p.from, p.to) }}>
-            <span className={cn('w-full rounded-full', SHAPE[known(p.state)].h, forcedMark(known(p.state)))} style={barStyle(known(p.state))} />
+    <span aria-hidden className="relative block h-3">
+      {data.spans.map(p => {
+        const st = known(p.state);
+        return (
+          <span key={p.from} data-span={st} title={`${STATE[st].label} · ${hhmm(p.from)}–${hhmm(p.to)} (${mins(p.to - p.from)})`}
+            className="absolute inset-y-0 flex min-w-0.5 items-center" style={{ left: x(p.from), width: `${((p.to - p.from) / windowMs) * 100}%` }}>
+            <span className={cn('w-full', MARK[st].className)} style={MARK[st].style} />
           </span>
-        ))}
-        {fails.map(t => (
-          <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[3px] -translate-x-1/2 bg-destructive ring-1 ring-sunken', FORCED_FAIL)} style={{ left: x(t) }} />
-        ))}
+        );
+      })}
+      {data.fails.map(t => (
+        <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[2px] -translate-x-1/2 rounded-full bg-destructive', FORCED_FAIL)} style={{ left: x(t) }} />
+      ))}
+    </span>
+  );
+}
+
+function MemberRow({ s, role, data, now, windowMs, onOpen, lone, nested }: { s: Session; role: string; data: Spans; now: number; windowMs: number; onOpen: () => void; lone?: boolean; nested?: boolean }) {
+  const state = stateOf(s);
+  return (
+    <button type="button" onClick={onOpen} data-row={s.name} aria-label={`${s.name}, ${role}, 지금 ${STATE[state].label}. ${describe(data)}`} className={ROW}>
+      {/* Teammates indent inside the name column only, so every track shares one time axis. */}
+      <span className={cn('flex min-w-0 items-baseline gap-2', nested && '-my-1.5 ml-[6px] items-center self-stretch border-l py-1.5 pl-3.5')}>
+        {/* A lead without teammates lines its name up with the leads that have a fold chevron. */}
+        {lone && <span aria-hidden className="w-3.5 shrink-0" />}
+        <span className={cn('truncate text-sm', lone && '-ml-0.5 font-medium')}>{s.name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{role}</span>
+        <StateText state={state} />
       </span>
+      <Track data={data} now={now} windowMs={windowMs} />
     </button>
+  );
+}
+
+function TeamRows({ team, open, onToggle, spansOf, roleOf, now, windowMs, onOpen }: {
+  team: Team<Session>; open: boolean; onToggle: () => void; spansOf: (id: string) => Spans; roleOf: (s: Session) => string;
+  now: number; windowMs: number; onOpen: (id: string) => void;
+}) {
+  const { lead, members } = team;
+  const all = [lead, ...members];
+  const merged = mergeSpans(all.map(s => spansOf(s.id)));
+  if (!members.length) return <MemberRow s={lead} role={roleOf(lead)} data={spansOf(lead.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(lead.id)} lone />;
+  // The folded row speaks for the whole team: its state is the strongest any member is in now.
+  const states = all.map(stateOf);
+  const teamState = (['working', 'waiting', 'stuck', 'failed', 'resting', 'done'] as const).find(st => states.includes(st)) ?? 'resting';
+  const panel = `team-${lead.id}`;
+  return (
+    <div data-team={lead.id}>
+      <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={panel} data-row={lead.name}
+        aria-label={`${lead.name} 팀, 팀원 ${members.length}명, 지금 ${STATE[teamState].label}. ${describe(merged)}`} className={ROW}>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-(--ease-out) motion-reduce:transition-none', open && 'rotate-90')} />
+          <span className="truncate text-sm font-medium">{lead.name}</span>
+          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">팀원 {members.length}</span>
+          <StateText state={teamState} />
+        </span>
+        <Track data={merged} now={now} windowMs={windowMs} />
+      </button>
+      <div id={panel} inert={!open} className={cn('grid transition-[grid-template-rows] duration-200 ease-(--ease-out) motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
+        <div className="overflow-hidden">
+          {all.map(s => (
+            <MemberRow key={s.id} s={s} role={roleOf(s)} data={spansOf(s.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} nested />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -94,7 +135,7 @@ function Axis({ now, windowMs }: { now: number; windowMs: number }) {
   const ticks: number[] = [];
   for (let t = Math.ceil(start / step) * step; t < now - step / 2; t += step) ticks.push(t);
   return (
-    <div aria-hidden className="grid grid-cols-[200px_1fr] gap-3 pr-2 pl-[19px] @max-[560px]:grid-cols-1">
+    <div aria-hidden className="grid grid-cols-[220px_1fr] gap-3 px-2 @max-[560px]:grid-cols-1">
       <span className="@max-[560px]:hidden" />
       <div className="relative h-4 text-[11px] text-muted-foreground tabular-nums">
         {ticks.map(t => <span key={t} className="absolute -translate-x-1/2" style={{ left: `${((t - start) / windowMs) * 100}%` }}>{hhmm(t)}</span>)}
@@ -105,15 +146,17 @@ function Axis({ now, windowMs }: { now: number; windowMs: number }) {
 }
 
 /**
- * 타임라인 card (#879): the sessions of `projectId` (the board's picked project; 전체 = undefined, 미분류 = null) over
- * the last two hours. `focus` (#board=timeline) scrolls the card into view.
+ * 타임라인 card (#879, #928): the teams of `projectId` (the board's picked project; 전체 = undefined, 미분류 = null)
+ * over the last two hours. `focus` (#board=timeline) scrolls the card into view.
  */
 export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; onOpen: (id: string) => void; focus?: boolean }) {
   const all = useDispatch(s => s.sessions);
   const roles = useDispatch(s => s.roles);
-  const { known, pending = false } = useScope();
+  const { known: knownFolders, pending = false } = useScope();
   const [data, setData] = useState<Timeline | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** Teams the person opened or closed; the rest follow whether they are busy. */
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -130,9 +173,16 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
   }, []);
 
   const windowMs = data?.windowMs ?? WINDOW_MS;
-  const lanes = useMemo(() => timelineLanes(all, roles, projectId, known, pending), [all, roles, projectId, known, pending]);
-  const count = lanes.reduce((n, l) => n + l.sessions.length, 0);
-  const histories = useMemo(() => new Map(lanes.flatMap(l => l.sessions).map(s => [s.id, rowHistory(s, data?.sessions[s.id], now)])), [lanes, data, now]);
+  const teams = useMemo(() => timelineTeams(all, roles, projectId, knownFolders, pending), [all, roles, projectId, knownFolders, pending]);
+  const count = teams.reduce((n, t) => n + 1 + t.members.length, 0);
+  const spans = useMemo(() => {
+    const m = new Map<string, Spans>();
+    for (const s of teams.flatMap(t => [t.lead, ...t.members])) m.set(s.id, windowSpans(rowHistory(s, data?.sessions[s.id], now), now, windowMs));
+    return m;
+  }, [teams, data, now, windowMs]);
+  const spansOf = useMemo(() => (id: string) => spans.get(id) ?? { spans: [], fails: [] }, [spans]);
+  const roleNames = useMemo(() => new Map(roles.map(r => [r.id, r.name])), [roles]);
+  const roleOf = (s: Session) => roleNames.get(s.role) ?? (s.roleName || s.role);
 
   return (
     <div ref={ref} className="scroll-mt-4">
@@ -140,22 +190,15 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
         {!count ? (
           <EmptyState>{projectId === undefined ? '아직 세션이 없어요.' : '이 프로젝트에는 아직 세션이 없어요.'}</EmptyState>
         ) : (
-          <div className="@container">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-4 py-2 text-xs text-muted-foreground">
-              {LEGEND.map(st => <span key={st} className="inline-flex items-center gap-1.5"><Swatch state={st} />{STATE[st].label}</span>)}
-              <span className="inline-flex items-center gap-1.5"><span aria-hidden data-legend="failed" className={cn('inline-block h-3 w-[3px] bg-destructive', FORCED_FAIL)} />실패한 순간</span>
-            </div>
-            <div className="flex flex-col gap-4 px-2 py-3">
-              {lanes.map(lane => (
-                <section key={lane.id} aria-label={lane.name} className="border-l-[3px] pl-2" style={{ borderColor: roleColor(lane.id) }}>
-                  <h3 className="m-0 mb-1 px-2 text-[13px] font-semibold">{lane.name}</h3>
-                  {lane.sessions.map(s => (
-                    <Row key={s.id} s={s} history={histories.get(s.id) ?? []} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} />
-                  ))}
-                </section>
-              ))}
-              <Axis now={now} windowMs={windowMs} />
-            </div>
+          <div className="@container flex flex-col gap-1 px-2 py-3">
+            {teams.map(team => {
+              const open = picked[team.lead.id] ?? teamBusy([team.lead, ...team.members].map(stateOf));
+              return (
+                <TeamRows key={team.lead.id} team={team} open={open} onToggle={() => setPicked(p => ({ ...p, [team.lead.id]: !open }))}
+                  spansOf={spansOf} roleOf={roleOf} now={now} windowMs={windowMs} onOpen={onOpen} />
+              );
+            })}
+            <Axis now={now} windowMs={windowMs} />
           </div>
         )}
       </Card>
