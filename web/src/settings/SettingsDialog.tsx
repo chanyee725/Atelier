@@ -123,21 +123,17 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
       onClose={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="settings-dialog m-auto h-[min(680px,calc(100dvh-2rem))] w-[min(800px,calc(100vw-1rem))] max-w-none overflow-hidden rounded-lg border bg-background p-0 text-foreground shadow-md max-md:h-[calc(100dvh-1rem)]"
+      // The refresh (#889): a card with panel corners and the ink ring, the section list on the panel step at left.
+      className="settings-dialog m-auto h-[min(680px,calc(100dvh-2rem))] w-[min(960px,calc(100vw-1rem))] max-w-none overflow-hidden rounded-panel border-0 bg-card p-0 text-card-foreground shadow-[0_0_0_1px_var(--border),0_24px_60px_rgb(0_0_0/0.22)] max-md:h-[calc(100dvh-1rem)]"
     >
       <SettingsContext.Provider value={ctx}>
-        <div className="flex h-full min-h-0 flex-col">
-          <header className="overlay-head flex shrink-0 items-center gap-2 border-b">
-            <h2 id={titleId} className="text-sm font-semibold">
+        <div className="relative flex h-full min-h-0 max-md:flex-col">
+          <aside className="flex w-[220px] shrink-0 flex-col bg-background px-2 py-4 max-md:w-full max-md:gap-2 max-md:border-b max-md:px-(--overlay-x) max-md:py-3">
+            <h2 id={titleId} className="px-2 pb-3 text-[15px] font-semibold max-md:p-0 max-md:pr-10">
               설정
             </h2>
-            <button type="button" aria-label="설정 닫기" onClick={askClose} className={cn(BTN, 'ml-auto px-2 text-muted-foreground')}>
-              <X aria-hidden className="size-4" />
-            </button>
-          </header>
-          <div className="flex min-h-0 flex-1 max-md:flex-col">
-            <nav ref={navRef} aria-label="설정 항목" className="w-44 shrink-0 overflow-y-auto border-r p-2 max-md:hidden">
-              <ul className="flex flex-col gap-0.5">
+            <nav ref={navRef} aria-label="설정 항목" className="min-h-0 overflow-y-auto max-md:hidden">
+              <ul className="flex flex-col gap-px">
                 {SECTIONS.map((s) => (
                   <li key={s.id}>
                     <button
@@ -146,10 +142,10 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                       aria-current={current === s.id ? 'true' : undefined}
                       onClick={() => pick(s.id)}
                       className={cn(
-                        'flex h-8 w-full items-center rounded-md px-2.5 text-left text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                        // Plain background/text state like the app's other nav, no side bar (#675). Not by colour alone:
-                        // the current item is also bold (WCAG 1.4.1).
-                        'aria-[current=true]:bg-muted aria-[current=true]:font-semibold aria-[current=true]:text-foreground',
+                        'press flex h-8 w-full items-center rounded-control px-2 text-left text-sm text-muted-foreground outline-none hover:bg-(--sunken) hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+                        // The current item sits on the card step, like the app's other nav (no side bar, #675). Not by
+                        // colour alone: it is also bold (WCAG 1.4.1).
+                        'aria-[current=true]:bg-card aria-[current=true]:font-semibold aria-[current=true]:text-foreground aria-[current=true]:shadow-(--shadow-card)',
                       )}
                     >
                       {s.label}
@@ -158,7 +154,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 ))}
               </ul>
             </nav>
-            <div className="hidden shrink-0 border-b px-(--overlay-x) py-2 max-md:block">
+            <div className="hidden max-md:block">
               <label htmlFor={selectId} className="sr-only">
                 설정 항목
               </label>
@@ -167,7 +163,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 data-testid="settings-section-select"
                 value={current}
                 onChange={(e) => pick(e.target.value as SectionId)}
-                className="h-11 w-full rounded-md border bg-background px-2 text-sm"
+                className="h-11 w-full rounded-control border border-(--line-strong) bg-card px-2 text-sm"
               >
                 {SECTIONS.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -176,7 +172,13 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
                 ))}
               </select>
             </div>
-            <div className="settings-dialog-body overlay-body min-h-0 min-w-0 flex-1 overflow-y-auto">
+          </aside>
+          {/* Closing sits at the top right of the section, level with its title (the title leaves room for it). */}
+          <button type="button" aria-label="설정 닫기" onClick={askClose} className={cn(BTN, 'absolute top-4 right-4 z-10 size-8 px-0 text-muted-foreground max-md:size-11 max-md:top-2.5')}>
+            <X aria-hidden className="mx-auto size-4" />
+          </button>
+          <div className="flex min-h-0 min-w-0 flex-1">
+            <div className="settings-dialog-body min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-5 pb-6 max-md:px-(--overlay-x)">
               {SECTIONS.map((s) => {
                 const Section = SECTION_COMPONENTS[s.id];
                 return (
@@ -196,7 +198,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
         aria-labelledby={confirmTitleId}
         aria-describedby={confirmTextId}
         data-testid="settings-close-confirm"
-        className="settings-confirm m-auto w-[min(360px,calc(100vw-2rem))] max-w-none overlay-box rounded-lg border bg-background text-foreground shadow-md"
+        className="settings-confirm m-auto w-[min(360px,calc(100vw-2rem))] max-w-none overlay-box rounded-panel border-0 bg-card text-card-foreground shadow-[0_0_0_1px_var(--border),0_24px_60px_rgb(0_0_0/0.22)]"
       >
         <h2 id={confirmTitleId} className="text-sm font-semibold">
           저장하지 않은 내용이 있어요

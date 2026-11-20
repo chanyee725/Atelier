@@ -8,7 +8,7 @@ import { useDirtyMark } from '../context';
 import { BTN, PRIMARY_BTN } from '../LimitsForm';
 import { DEFAULT_PORT, defaultsDirty, defaultsErrors, defaultsForm, defaultsPatch, type DefaultsField, type DefaultsForm } from './userDefaultsForm';
 
-const INPUT = 'h-8 rounded-md border bg-transparent px-2 text-sm aria-invalid:border-destructive max-md:h-11';
+const INPUT = 'h-8 rounded-control border border-(--line-strong) bg-card px-2 text-sm aria-invalid:border-destructive max-md:h-11';
 
 export function UserDefaultsForm() {
   const [status, setStatus] = useState<UserDefaultsStatus | null>(null);
@@ -158,7 +158,15 @@ export function UserDefaultsForm() {
                 </span>
               )}
             </div>
-            <div className="flex items-start gap-2">
+            <div className="settings-row">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <label htmlFor={ids.pr} className="text-sm font-medium">
+                  PR 추적 기본으로 켜기
+                </label>
+                <span id={`${ids.pr}-hint`} className="text-xs text-muted-foreground">
+                  작업 폴더에서 따로 켜고 끈 값이 있으면 그 값이 먼저예요. 기본값 켜짐.
+                </span>
+              </div>
               <input
                 id={ids.pr}
                 name="prStatus"
@@ -170,16 +178,7 @@ export function UserDefaultsForm() {
                   setForm((f) => ({ ...f, prStatus: e.target.checked }));
                   setNote({ text: '' });
                 }}
-                className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
               />
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <label htmlFor={ids.pr} className="text-sm">
-                  PR 추적 기본으로 켜기
-                </label>
-                <span id={`${ids.pr}-hint`} className="text-xs text-muted-foreground">
-                  작업 폴더에서 따로 켜고 끈 값이 있으면 그 값이 먼저예요. 기본값 켜짐.
-                </span>
-              </div>
             </div>
           </fieldset>
           {!readOnly && (
@@ -196,7 +195,7 @@ export function UserDefaultsForm() {
           )}
           {readOnly && broken && (
             <div className="flex justify-end">
-              <button type="button" onClick={() => void load()} className={cn(BTN, 'border')}>
+              <button type="button" onClick={() => void load()} className={cn(BTN, 'bg-card shadow-(--shadow-card)')}>
                 다시 읽기
               </button>
             </div>

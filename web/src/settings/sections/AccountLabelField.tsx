@@ -86,13 +86,13 @@ export function AccountLabelField({ meta }: { meta: ProviderMeta }) {
             setNote(null);
           }}
           onBlur={() => dirty && setError(checkAccountLabel(value).error ?? null)}
-          className={cn('h-8 w-full max-w-60 min-w-0 rounded-md border bg-transparent px-2 text-sm aria-invalid:border-destructive max-md:h-11', FOCUS)}
+          className={cn('h-8 w-full max-w-60 min-w-0 rounded-control border border-(--line-strong) bg-card px-2 text-sm aria-invalid:border-destructive max-md:h-11', FOCUS)}
         />
         <button
           type="submit"
           aria-disabled={saving || !dirty ? true : undefined}
           className={cn(
-            'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm text-muted-foreground transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:cursor-default aria-disabled:opacity-60 [&:not([aria-disabled])]:hover:bg-accent [&:not([aria-disabled])]:hover:text-foreground',
+            'press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-control bg-card px-3 text-sm text-foreground shadow-(--shadow-card) max-md:h-11 aria-disabled:cursor-default aria-disabled:opacity-60 [&:not([aria-disabled])]:hover:bg-accent',
             FOCUS,
           )}
         >

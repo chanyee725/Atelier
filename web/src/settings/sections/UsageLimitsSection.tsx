@@ -45,7 +45,7 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
       {ok && failed && (
         <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           사용량을 불러오지 못했어요.
-          <button type="button" onClick={() => setTick((t) => t + 1)} className={cn(BTN, 'border')}>
+          <button type="button" onClick={() => setTick((t) => t + 1)} className={cn(BTN, 'bg-card shadow-(--shadow-card)')}>
             다시 불러오기
           </button>
         </p>
@@ -54,17 +54,19 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
       {ok && limits && groups.length === 0 && <p className="text-sm text-muted-foreground">연결된 모델이 없어요.</p>}
       {ok &&
         groups.map((g) => (
-          <div key={g.id} data-provider={g.id} className="flex flex-col gap-2">
-            <h5 className="text-sm">
+          // One panel card per provider, like 모델 연결 (#889).
+          <div key={g.id} data-provider={g.id} className="flex flex-col gap-2.5 rounded-card bg-background px-4 py-3.5">
+            <h5 className="text-sm font-medium">
               {g.name}
-              {g.plan && <span className="ml-2 text-xs text-muted-foreground">{g.plan}</span>}
+              {g.plan && <span className="ml-2 rounded-full bg-(--sunken) px-2 text-[11px] font-normal text-muted-foreground">{g.plan}</span>}
             </h5>
             {g.windows.length > 0 ? (
               <ul className="flex flex-col gap-3">
                 {g.windows.map((w) => (
                   <li key={w.label} className="grid grid-cols-[88px_1fr_48px] items-center gap-3 text-sm">
-                    <span>{w.label}</span>
-                    <Meter value={w.used} label={`${g.name} ${w.label} ${pct(w.used)}`} />
+                    <span className="text-muted-foreground">{w.label}</span>
+                    {/* The ink line as the track: --muted sits too close to the panel step in dark mode. */}
+                    <Meter value={w.used} label={`${g.name} ${w.label} ${pct(w.used)}`} className="bg-(color:--line-strong)" />
                     <span className="text-right tabular-nums">{pct(w.used)}</span>
                     {w.reset ? <span className="col-start-2 col-end-4 -mt-2 text-xs text-muted-foreground">{until(w.reset)} 뒤 초기화</span> : null}
                   </li>

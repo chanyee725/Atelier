@@ -54,9 +54,17 @@ export default function GeneralSection() {
   return (
     <SectionFrame title="일반" hint="알림은 이 브라우저에만, 테마와 기본값은 이 컴퓨터에 저장돼요." testId="settings-section-general">
       <ThemeField />
-      <div className="flex flex-col gap-2">
-        <h4 className="text-sm font-medium">브라우저 알림</h4>
-        <div className="flex items-start gap-2">
+      <div className="flex flex-col">
+        <h4 className="pb-2 text-sm font-medium">브라우저 알림</h4>
+        <div className="settings-row">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <label htmlFor="settings-alerts" className="text-sm font-medium">
+              세션 알림 받기
+            </label>
+            <span id={alertsHint} className="text-xs text-muted-foreground">
+              {ALERT_NOTE[alerts] || '세션이 답을 기다리거나 멈추거나 한도에 닿으면 알려 줘요. 이 탭이 가려져 있을 때는 아래 알림도 브라우저 알림으로 보내요.'}
+            </span>
+          </div>
           <input
             id="settings-alerts"
             type="checkbox"
@@ -65,34 +73,24 @@ export default function GeneralSection() {
             checked={alerts === 'on'}
             disabled={alerts === 'unsupported' || alerts === 'denied'}
             onChange={(e) => void (e.target.checked ? turnAlertsOn() : turnAlertsOff())}
-            className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
           />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="settings-alerts" className="text-sm">
-              세션 알림 받기
-            </label>
-            <span id={alertsHint} className="text-xs text-muted-foreground">
-              {ALERT_NOTE[alerts] || '세션이 답을 기다리거나 멈추거나 한도에 닿으면 알려 줘요. 이 탭이 가려져 있을 때는 아래 알림도 브라우저 알림으로 보내요.'}
-            </span>
-          </div>
         </div>
       </div>
-      <fieldset className="flex flex-col gap-2" aria-describedby={toastHint} data-testid="settings-toast-categories">
+      <fieldset className="flex flex-col" aria-describedby={toastHint} data-testid="settings-toast-categories">
         <legend className="text-sm font-medium">알림 종류</legend>
-        <span id={toastHint} className="text-xs text-muted-foreground">
+        <span id={toastHint} className="pt-1 pb-2 text-xs text-muted-foreground">
           켠 알림만 알림함에 쌓여요. 끈 알림은 알림함에도 남지 않아요.
         </span>
         {TOAST_CATEGORIES.map((c) => (
-          <label key={c.id} className="flex items-center gap-2 text-sm">
+          <label key={c.id} className="settings-row py-2.5 text-sm">
+            <span className="min-w-0 flex-1">{c.label}</span>
             <input
               type="checkbox"
               {...({ switch: '' } as object)}
               checked={!toastOff.has(c.id)}
               onChange={(e) => setCategoryOn(c.id, e.target.checked)}
               data-toast-category={c.id}
-              className="size-4 shrink-0 accent-primary max-md:size-5"
             />
-            {c.label}
           </label>
         ))}
       </fieldset>
@@ -100,7 +98,15 @@ export default function GeneralSection() {
         <h4 className="text-sm font-medium">답변 스타일</h4>
         <LoadNote load={load} onRetry={retry} />
         {off && <OffNote id={offId} status={load.status} />}
-        <div className={cn('flex items-start gap-2', !ready && 'opacity-60')}>
+        <div className={cn('settings-row', !ready && 'opacity-60')}>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <label htmlFor="settings-reply-style" className="text-sm font-medium">
+              {REPLY.label}
+            </label>
+            <span id={replyHint} className="text-xs text-muted-foreground">
+              {REPLY.hint}
+            </span>
+          </div>
           <input
             id="settings-reply-style"
             type="checkbox"
@@ -109,16 +115,7 @@ export default function GeneralSection() {
             checked={reply}
             disabled={!ready || pending !== null}
             onChange={(e) => void setReply(e.target.checked)}
-            className="mt-0.5 size-4 shrink-0 accent-primary max-md:size-5"
           />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <label htmlFor="settings-reply-style" className="text-sm">
-              {REPLY.label}
-            </label>
-            <span id={replyHint} className="text-xs text-muted-foreground">
-              {REPLY.hint}
-            </span>
-          </div>
         </div>
         <p role="status" className={cn('min-h-4 text-xs', note.bad ? 'text-destructive' : 'text-muted-foreground')}>
           {note.text}

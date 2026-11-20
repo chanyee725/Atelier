@@ -41,7 +41,7 @@ import '../../connect.css';
 const STATE_DOT = { off: 'bg-muted-foreground/50', missing: 'bg-destructive', busy: '', connected: 'bg-ok', idle: 'bg-muted-foreground/50' } as const;
 const FOCUS = 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
 const ACTION_BTN = cn(
-  'inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors duration-[120ms] motion-reduce:transition-none max-md:h-11 aria-disabled:cursor-default aria-disabled:opacity-60',
+  'inline-flex h-8 shrink-0 items-center gap-1.5 press whitespace-nowrap rounded-control px-3 text-sm font-medium max-md:h-11 aria-disabled:cursor-default aria-disabled:opacity-60',
   FOCUS,
 );
 
@@ -58,7 +58,7 @@ export default function ProvidersSection() {
           불러오는 중이에요…
         </p>
       ) : (
-        <ul className="flex flex-col divide-y rounded-lg border">
+        <ul className="flex flex-col gap-3">
           {PROVIDERS.map((meta) => (
             <ProviderRow key={meta.id} meta={meta} models={models} describedBy={off ? offId : undefined} />
           ))}
@@ -140,9 +140,9 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
   const error = p?.error && key !== 'busy' && key !== 'connected' ? p.error : null;
   const line = enabled ? metaLine(meta, p) : null;
   return (
-    <li data-testid="settings-provider" data-provider={meta.id} data-state-key={key} className="flex flex-col gap-2 px-3 py-3">
+    <li data-testid="settings-provider" data-provider={meta.id} data-state-key={key} className="flex flex-col gap-2 rounded-card bg-background px-4 py-3.5">
       <div className="flex items-center gap-3">
-        <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-md border text-foreground">
+        <span aria-hidden className="grid size-8 shrink-0 place-items-center rounded-control bg-card text-foreground shadow-(--shadow-card)">
           <ProviderIcon provider={meta.id} className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
@@ -172,7 +172,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
             onClick={() => !pending && void run(action)}
             className={cn(
               ACTION_BTN,
-              action === 'connect' ? 'bg-primary text-primary-foreground [&:not([aria-disabled])]:hover:bg-primary/90' : 'border text-muted-foreground [&:not([aria-disabled])]:hover:bg-accent [&:not([aria-disabled])]:hover:text-foreground',
+              action === 'connect' ? 'bg-primary text-primary-foreground [&:not([aria-disabled])]:hover:bg-primary/90' : 'bg-card text-foreground shadow-(--shadow-card) [&:not([aria-disabled])]:hover:bg-accent',
             )}
           >
             {pending && pending !== 'key' && pending !== 'cliLogout' && <Loader2 aria-hidden className="connect-spin size-3.5" />}
@@ -213,7 +213,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
                 autoFocus
                 required
                 onInput={(e) => setKeyTyped(e.currentTarget.value !== '')}
-                className={cn('h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm max-md:h-11', FOCUS)}
+                className={cn('h-8 min-w-0 flex-1 rounded-control border border-(--line-strong) bg-card px-2 text-sm max-md:h-11', FOCUS)}
               />
               <button type="submit" aria-disabled={pending ? true : undefined} className={cn(ACTION_BTN, 'bg-primary text-primary-foreground [&:not([aria-disabled])]:hover:bg-primary/90')}>
                 {pending === 'key' && <Loader2 aria-hidden className="connect-spin size-3.5" />}키로 연결
