@@ -74,6 +74,15 @@ const sessionEnv = s => ({ ...SESSION_ENV, ...ownGitEnv(), DRAWING_SESSION: s.id
 const isOpenStatus = st => !["done", "error"].includes(st);
 const clip = (s, n = 2000) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
 
+/**
+ * A Claude stream-json user message body: plain text, or (with images, #968) image blocks then the text block.
+ * `images` are [{ mediaType, data }] already checked by routes.js (type, size, count).
+ */
+export const userContent = (text, images) => !images?.length ? text : [
+  ...images.map(i => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } })),
+  ...(text ? [{ type: "text", text }] : []),
+];
+
 // Splits a child's stdout into JSON lines. A last line without a trailing newline is read when the stream ends.
 function onJsonLines(stream, fn) {
   let buf = "";
@@ -756,9 +765,10 @@ export class Hub extends EventEmitter {
   /** True while a guard window is over its threshold: no new turns until the reset. */
   get paused() { return !!this.limitHit(); }
 
-  send(id, text, { force = false } = {}) {
+  send(id, text, { force = false, images = null } = {}) {
     const s = this.get(id);
     if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
+    if (images?.length && s.provider !== "claude") throw Object.assign(new Error("이미지는 Claude 세션에만 보낼 수 있어요"), { status: 400 });
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
     if (s.provider === "openai") void this.refreshCodex(); // fresh windows for the next turn's hold check
     const blocked = this.runBlock(s); // before anything is recorded or started
@@ -768,23 +778,24 @@ export class Hub extends EventEmitter {
     // does not go out.
     const notes = r.leadNotes?.length ? r.leadNotes.splice(0) : [];
     if (notes.length) text = `${text}\n\n${notes.join("\n")}`;
-    try { this.deliver(s, r, text); } catch (e) { r.leadNotes = [...notes, ...(r.leadNotes || [])]; throw e; }
+    try { this.deliver(s, r, text, images); } catch (e) { r.leadNotes = [...notes, ...(r.leadNotes || [])]; throw e; }
     // Whoever writes to a teammate in its grace period keeps it: the auto-remove timer stops once the
     // message went out. A refused message (a running Codex or Gemini turn) leaves the timer armed.
     this.cancelAutoRemove(id);
   }
 
-  deliver(s, r, text) {
+  deliver(s, r, text, images = null) {
     // Past the length guard (#969): the message goes to a fresh session instead, with the handoff in front.
-    if (this.replaceDue(s) && this.replaceSession(s, { text })) return;
+    if (this.replaceDue(s) && this.replaceSession(s, { text, images })) return;
     // A pending length-guard note is attached here and cleared only on a path that delivers the message.
     const pend = s.longPending;
     if (pend) text = `${text}\n\n${pend}`;
     const sent = () => { if (pend && s.longPending === pend) s.longPending = null; };
-    this.push(s, { kind: "user", text });
-    if (this.shouldRotate(s)) { sent(); return this.rotate(s, text); }
+    // Images (#968) go to the CLI only; the transcript keeps a count, never the bytes.
+    this.push(s, { kind: "user", text: images?.length ? [text, `[이미지 ${images.length}장]`].filter(Boolean).join("\n") : text });
+    if (this.shouldRotate(s)) { sent(); return this.rotate(s, text, images); }
     if (s.provider === "claude" && r.proc) {
-      r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
+      r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: userContent(text, images) } }) + "\n");
       sent();
       this.touch(s, { status: "running" });
     } else if (s.provider === "openai" && r.proc) {
@@ -792,7 +803,7 @@ export class Hub extends EventEmitter {
     } else if (s.provider === "gemini" && r.proc) {
       throw new Error("Gemini는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
     } else {
-      this.start(s, text);
+      this.start(s, text, images);
     }
   }
 
@@ -878,7 +889,7 @@ export class Hub extends EventEmitter {
   }
 
   /** Ends the current CLI session and starts a fresh one with a handoff note plus `text`. */
-  rotate(s, text) {
+  rotate(s, text, images = null) {
     const r = this.rt(s.id);
     const old = r.proc;
     r.proc = null; // the exit handler ignores a process that is no longer current
@@ -896,7 +907,7 @@ export class Hub extends EventEmitter {
     s.ctx = 0;
     s.ctxHigh = null;
     r.ctxNoticed = false;
-    this.start(s, note);
+    this.start(s, note, images);
   }
 
   /* ---------------- Auto-replace long sessions (#969) ---------------- */
@@ -930,7 +941,7 @@ export class Hub extends EventEmitter {
    * board tasks, tickets and plans move to it; `old` is removed with its worktree kept (the new session works in it).
    * Returns the new session, or null when it could not be made (the old one stays).
    */
-  replaceSession(old, { last = null, text = null } = {}) {
+  replaceSession(old, { last = null, text = null, images = null } = {}) {
     const r = this.rt(old.id);
     if (r.replacing) return null;
     r.replacing = true;
@@ -969,7 +980,7 @@ export class Hub extends EventEmitter {
     this.touch(s);
     // The work folder now belongs to the new session, so the old one goes without dropping it.
     this.remove(old.id, { keepWorktree: true });
-    this.start(s, note);
+    this.start(s, note, images);
     for (const c of this.sessions) if (c.parent === s.id) this.touch(c);
     if (s.parent) this.notifyLead(s.parent, `[Dispatch] ${old.name}(${old.roleName ?? old.role}) 세션이 누적 ${mtok}M 토큰을 넘어 같은 설정의 새 팀원 ${s.name}(id ${s.id})로 바꿨어요${s.branch ? `(브랜치 ${s.branch})` : ""}. 앞으로는 이 id로 지시하세요.`);
     this.emit("tasks", this.tasks);
@@ -1361,7 +1372,7 @@ export class Hub extends EventEmitter {
     return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
-  start(s, prompt) {
+  start(s, prompt, images = null) {
     s._killed = false;
     // Turn clock and token baseline for the web "thinking" line.
     s.turnStartedAt = Date.now();
@@ -1379,7 +1390,7 @@ export class Hub extends EventEmitter {
       return;
     }
     try {
-      if (s.provider === "claude") this.startClaude(s, prompt);
+      if (s.provider === "claude") this.startClaude(s, prompt, images);
       else if (s.provider === "gemini") this.startGemini(s, prompt);
       else this.startCodex(s, prompt);
     } catch (e) {
@@ -1413,7 +1424,7 @@ export class Hub extends EventEmitter {
     });
   }
 
-  startClaude(s, prompt) {
+  startClaude(s, prompt, images = null) {
     const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
       "--model", s.model, "--permission-mode", s.perm, "--permission-prompt-tool", "stdio"];
     if (s.effort) args.push("--effort", s.effort);
@@ -1429,7 +1440,7 @@ export class Hub extends EventEmitter {
     s._costBase = s.cost;
     this.attach(s, proc);
     onJsonLines(proc.stdout, m => this.onClaude(s, m));
-    proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: prompt } }) + "\n");
+    proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: userContent(prompt, images) } }) + "\n");
     this.touch(s, { status: "running", error: null });
   }
 

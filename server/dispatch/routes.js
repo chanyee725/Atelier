@@ -21,11 +21,38 @@ const required = text => {
   return t;
 };
 
-async function readBody(req) {
+/** Chat images (#968): at most 4, png/jpeg/gif/webp, 5 MB of base64 each, Claude sessions only (hub.send). */
+export const IMAGE_LIMITS = { max: 4, base64Bytes: 5 * 1024 * 1024, types: ["image/png", "image/jpeg", "image/gif", "image/webp"] };
+/** The message route reads up to this much so four full images and the text fit. */
+const MESSAGE_BODY = IMAGE_LIMITS.max * IMAGE_LIMITS.base64Bytes + MAX_BODY;
+
+/** `images` from a message body as [{ mediaType, data }], or null; anything off-limits is a 400. */
+export function checkImages(images) {
+  if (images == null) return null;
+  if (!Array.isArray(images)) throw fail(400, "images는 배열이어야 해요");
+  if (!images.length) return null;
+  if (images.length > IMAGE_LIMITS.max) throw fail(400, `이미지는 한 번에 ${IMAGE_LIMITS.max}장까지 보낼 수 있어요`);
+  return images.map(i => {
+    const mediaType = i?.mediaType, data = i?.data;
+    if (!IMAGE_LIMITS.types.includes(mediaType)) throw fail(400, "PNG, JPEG, GIF, WebP 이미지만 보낼 수 있어요");
+    if (typeof data !== "string" || !data || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) throw fail(400, "이미지 데이터가 올바르지 않아요");
+    if (data.length > IMAGE_LIMITS.base64Bytes) throw fail(400, "이미지는 장당 5MB(base64)까지 보낼 수 있어요");
+    return { mediaType, data };
+  });
+}
+
+/** POST /api/sessions/:id/message: text, or images with or without text. */
+export function messageBody(b) {
+  const images = checkImages(b?.images);
+  const text = images ? String(b?.text ?? "").trim() : required(b?.text);
+  return { text, images };
+}
+
+async function readBody(req, max = MAX_BODY) {
   let raw = "";
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > MAX_BODY) throw fail(413, "body too large");
+    if (raw.length > max) throw fail(413, "body too large");
   }
   try { return raw ? JSON.parse(raw) : {}; } catch { throw fail(400, "invalid JSON"); }
 }
@@ -41,13 +68,13 @@ function send(res, status, data) {
  * reaches the app's 500 handler, so one failing Dispatch call can't affect drawing routes. The
  * x-drawing header on writes is checked by server/app.js for every /api route.
  */
-export function adapt([method, path, fn]) {
+export function adapt([method, path, fn, opts]) {
   return {
     method,
     path,
     async handler(req, res, _ctx, match, url) {
       try {
-        const body = method === "GET" ? {} : await readBody(req);
+        const body = method === "GET" ? {} : await readBody(req, opts?.maxBody);
         send(res, 200, await fn(match.slice(1), body ?? {}, url));
       } catch (e) {
         if (!res.headersSent) send(res, e.status || 400, { error: e.message });
@@ -113,7 +140,11 @@ export function routeTable(d) {
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/diff$/, async ([id]) => diff(session(id).cwd, root)],
-    ["POST", /^\/api\/sessions\/([\w-]+)\/message$/, async ([id], b) => { hub.send(id, required(b?.text)); return { ok: true }; }],
+    ["POST", /^\/api\/sessions\/([\w-]+)\/message$/, async ([id], b) => {
+      const { text, images } = messageBody(b);
+      hub.send(id, text, images ? { images } : undefined);
+      return { ok: true };
+    }, { maxBody: MESSAGE_BODY }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/interrupt$/, async ([id]) => { hub.interrupt(id); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/kill$/, async ([id]) => { hub.kill(id); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/remove$/, async ([id]) => { hub.remove(id); return { ok: true }; }],
