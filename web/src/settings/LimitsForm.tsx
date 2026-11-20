@@ -21,7 +21,7 @@ const toSaved = (s: DispatchSettings): GuardSaved => ({
 });
 
 /** Hover only on enabled buttons, ~120ms, none under prefers-reduced-motion. */
-export const BTN = 'h-8 rounded-md px-3 text-sm transition-colors duration-[120ms] motion-reduce:transition-none enabled:hover:bg-accent enabled:hover:text-foreground max-md:h-11';
+export const BTN = 'press h-8 rounded-control px-3 text-sm outline-none enabled:hover:bg-accent enabled:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:h-11';
 export const PRIMARY_BTN = cn(BTN, 'bg-primary text-primary-foreground enabled:hover:bg-primary/90 enabled:hover:text-primary-foreground disabled:opacity-50');
 
 /**
