@@ -35,7 +35,7 @@ const ROLE_ICONS: Record<string, LucideIcon> = {
 function Node({ n }: { n: PlanGraphNode }) {
   const { shown, more } = n.badges;
   const Icon = ROLE_ICONS[n.role] ?? Bot;
-  const role = n.role in ROLES || n.role === 'merge' ? n.role : '';
+  const role = Object.hasOwn(ROLES, n.role) || n.role === 'merge' ? n.role : '';
   return (
     <li
       className="plan-node"

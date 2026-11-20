@@ -101,6 +101,8 @@ export function autoIconFor(label: string): string | undefined {
  * Node kinds named by a generic word (#935): a Lucide glyph and a pale palette colour, the way Eraser's examples
  * mark gateways, databases, caches and queues. The kind word is the label's last word ("API Gateway", "Orders DB",
  * "Session cache") or the whole label ("Client"); a label of more than four words is a sentence and gets none.
+ * Only cloud-architecture diagrams use kinds (#948): flowchart nodes are steps ("Validate user", "Check cache",
+ * "Is user admin?"), and their last word names what the step acts on, not what the node is.
  */
 const KINDS: [words: string[], icon: string, color: string][] = [
   [['gateway', 'proxy', 'router', 'balancer', 'lb', 'cdn', 'ingress', 'firewall'], 'network', 'purple'],
@@ -125,19 +127,24 @@ export function kindOf(label: string): { icon: string; color: string } | undefin
   return KIND_OF.get(words[words.length - 1]!);
 }
 
+type AutoDiagram = Pick<DiagramBase, 'styles'> & { type: Diagram['type'] };
+
+/** The kind of a node in this diagram: cloud-architecture only (#948). */
+const nodeKind = (d: AutoDiagram, label: string) => (d.type === 'cloud-architecture' ? kindOf(label) : undefined);
+
 /**
  * The automatic icon of a graph node: none when it has `icon:` or `autoIcons off`; else a product logo or cloud
- * service (#734), else the glyph of its kind word (#935).
+ * service (#734), else the glyph of its kind word in a cloud-architecture diagram (#935, #948).
  */
-export function nodeAutoIcon(d: Pick<DiagramBase, 'styles'>, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
+export function nodeAutoIcon(d: AutoDiagram, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
   if (node.attrs.icon !== undefined || d.styles.autoIcons === 'off') return undefined;
-  return autoIconFor(node.label) ?? (iconNamesLoaded() ? kindOf(node.label)?.icon : undefined);
+  return autoIconFor(node.label) ?? (iconNamesLoaded() ? nodeKind(d, node.label)?.icon : undefined);
 }
 
-/** The automatic pale colour of a graph node's kind: none with `color:` or `autoIcons off` (#935). */
-export function nodeAutoColor(d: Pick<DiagramBase, 'styles'>, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
+/** The automatic pale colour of a graph node's kind: none with `color:`, `autoIcons off` or outside cloud-architecture (#935, #948). */
+export function nodeAutoColor(d: AutoDiagram, node: Pick<GraphNode, 'attrs' | 'label'>): string | undefined {
   if (node.attrs.color !== undefined || d.styles.autoIcons === 'off') return undefined;
-  return kindOf(node.label)?.color;
+  return nodeKind(d, node.label)?.color;
 }
 
 /** Every `icon:` value in a parsed diagram plus the automatic icons of its graph nodes. */

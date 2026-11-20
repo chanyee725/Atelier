@@ -84,7 +84,16 @@ test('nodes without icon: get one from the label; an explicit icon always wins; 
   assert.deepEqual(icons(off.svg), ['users:lucide']);
   assert.deepEqual(off.diagnostics, []);
   const flow = await renderDiagram('Kafka topic > Postgres DB', { type: 'flowchart' });
-  assert.deepEqual(icons(flow.svg).sort(), ['inbox:lucide', 'postgres:simple-icons']);
+  assert.deepEqual(icons(flow.svg), ['postgres:simple-icons'], 'flowchart: logos only, no kind glyph (#948)');
+});
+
+test('flowchart steps get no kind icon or colour; product logos still apply (#948)', async () => {
+  const code = 'Validate user > Check cache > Send events > Is user admin?\nOrders DB\nPostgres DB';
+  const flow = await renderDiagram(code, { type: 'flowchart' });
+  assert.deepEqual(icons(flow.svg), ['postgres:simple-icons']);
+  assert.doesNotMatch(flow.svg, /#f4f3ff|#eff8ff|#fef3f2|#fff6ed|#f2f4f7|#ecfdf3/, 'no pale kind fill');
+  const arch = await renderDiagram(code, { type: 'cloud-architecture' });
+  assert.ok(icons(arch.svg).includes('database:lucide'), 'architecture graphs keep kinds');
 });
 
 test('vendor artwork draws inside its icon box in its own colours; the dark canvas maps them', async () => {

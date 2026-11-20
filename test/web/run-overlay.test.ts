@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 
 async function scene(code: string): Promise<Scene> {
@@ -248,4 +248,10 @@ test('run layer CSS (#935): no node fill, no dashed ring', async () => {
   const css = await readFile(new URL('../../web/src/index.css', import.meta.url), 'utf8');
   const tsx = await readFile(new URL('../../web/src/run/RunLayer.tsx', import.meta.url), 'utf8');
   for (const src of [css, tsx]) assert.doesNotMatch(src, /run-fill|run-ring/);
+});
+
+test('role names that are Object.prototype keys are not roles (#948)', () => {
+  assert.equal(roleLabel('constructor'), 'constructor');
+  assert.equal(roleColor('toString'), 'var(--idle)');
+  assert.notEqual(roleLabel('impl'), 'impl');
 });
