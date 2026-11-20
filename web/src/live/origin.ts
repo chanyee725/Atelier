@@ -10,6 +10,8 @@ export const FLASH_MS = 600;
 export const TRAIL = {
   sessions: ['대시보드', '실행 중인 세션'],
   issues: ['대시보드', '진행 중인 이슈'],
+  /** The start panel of an issue from the 이슈 card (#954). */
+  openIssues: ['대시보드', '이슈'],
   board: ['세션 보드'],
 } as const;
 
