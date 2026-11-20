@@ -32,6 +32,7 @@ import { noteTree } from './freshPaths';
 import { canApplyLive, type WorkspaceEvent } from './externalChange';
 import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
+import { STORAGE_KEY, defaultShare, loadShare, saveShare } from './splitRatio';
 import { RunStrip } from './run/RunStrip';
 import { onRunEvent, reloadRun, watchRun } from './run/runData';
 import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from './canvas/cursorStore';
@@ -260,7 +261,8 @@ export function App() {
   const [wideView, setView] = useState<View>('both');
   // Below md only one pane fits: the split view falls back to the document (design doc 6 §6).
   const baseView = shownView(wideView, narrow);
-  const [ratio, setRatio] = useState(0.45);
+  // The doc share of the 둘 다 view: what this browser remembered, else the default (#976).
+  const [storedShare, setStoredShare] = useState<number | null>(() => loadShare());
   const [error, setError] = useState<string | null>(null);
   // A request from the document to show a diagram block on the canvas; `n` makes each click a new request.
   const [focus, setFocus] = useState<CanvasFocus | null>(null);
@@ -301,6 +303,19 @@ export function App() {
   const title = useSession(session, (s) => s.file?.title ?? '');
   // A pipeline file (it has a plan): its runs show in the strip, the 실행 view and the canvas overlay.
   const hasPlan = useSession(session, (s) => !!s.file?.plan);
+  const ratio = storedShare ?? defaultShare(hasPlan);
+  const setRatio = useCallback((r: number) => {
+    setStoredShare(r);
+    saveShare(r);
+  }, []);
+  const resetRatio = useCallback(() => {
+    setStoredShare(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // not remembered anyway
+    }
+  }, []);
   // Open in-document questions (#738): the agent area's badge, and the blocked steps of the plan.
   const openCount = useSession(session, (s) => openQuestions(s.file?.discussions).length);
   const asking = useAskingSteps(session);
@@ -1092,7 +1107,7 @@ export function App() {
               </Suspense>
             </LazyBoundary>
           ) : view === 'both' ? (
-            <Splitter ratio={ratio} onRatio={setRatio} left={doc} right={canvas} />
+            <Splitter ratio={ratio} onRatio={setRatio} onReset={resetRatio} left={doc} right={canvas} />
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-auto">
               {showDoc && doc}
