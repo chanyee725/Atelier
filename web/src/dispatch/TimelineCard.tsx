@@ -77,12 +77,15 @@ function Track({ data, now, windowMs }: { data: Spans; now: number; windowMs: nu
   );
 }
 
-function MemberRow({ s, role, data, now, windowMs, onOpen }: { s: Session; role: string; data: Spans; now: number; windowMs: number; onOpen: () => void }) {
+function MemberRow({ s, role, data, now, windowMs, onOpen, lone, nested }: { s: Session; role: string; data: Spans; now: number; windowMs: number; onOpen: () => void; lone?: boolean; nested?: boolean }) {
   const state = stateOf(s);
   return (
     <button type="button" onClick={onOpen} data-row={s.name} aria-label={`${s.name}, ${role}, 지금 ${STATE[state].label}. ${describe(data)}`} className={ROW}>
-      <span className="flex min-w-0 items-baseline gap-2">
-        <span className="truncate text-sm">{s.name}</span>
+      {/* Teammates indent inside the name column only, so every track shares one time axis. */}
+      <span className={cn('flex min-w-0 items-baseline gap-2', nested && '-my-1.5 ml-[6px] items-center self-stretch border-l py-1.5 pl-3.5')}>
+        {/* A lead without teammates lines its name up with the leads that have a fold chevron. */}
+        {lone && <span aria-hidden className="w-3.5 shrink-0" />}
+        <span className={cn('truncate text-sm', lone && '-ml-0.5 font-medium')}>{s.name}</span>
         <span className="shrink-0 text-xs text-muted-foreground">{role}</span>
         <StateText state={state} />
       </span>
@@ -98,7 +101,7 @@ function TeamRows({ team, open, onToggle, spansOf, roleOf, now, windowMs, onOpen
   const { lead, members } = team;
   const all = [lead, ...members];
   const merged = mergeSpans(all.map(s => spansOf(s.id)));
-  if (!members.length) return <MemberRow s={lead} role={roleOf(lead)} data={spansOf(lead.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(lead.id)} />;
+  if (!members.length) return <MemberRow s={lead} role={roleOf(lead)} data={spansOf(lead.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(lead.id)} lone />;
   // The folded row speaks for the whole team: its state is the strongest any member is in now.
   const states = all.map(stateOf);
   const teamState = (['working', 'waiting', 'stuck', 'failed', 'resting', 'done'] as const).find(st => states.includes(st)) ?? 'resting';
@@ -117,11 +120,9 @@ function TeamRows({ team, open, onToggle, spansOf, roleOf, now, windowMs, onOpen
       </button>
       <div id={panel} inert={!open} className={cn('grid transition-[grid-template-rows] duration-200 ease-(--ease-out) motion-reduce:transition-none', open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="overflow-hidden">
-          <div className="ml-[15px] border-l pl-1">
-            {all.map(s => (
-              <MemberRow key={s.id} s={s} role={roleOf(s)} data={spansOf(s.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} />
-            ))}
-          </div>
+          {all.map(s => (
+            <MemberRow key={s.id} s={s} role={roleOf(s)} data={spansOf(s.id)} now={now} windowMs={windowMs} onOpen={() => onOpen(s.id)} nested />
+          ))}
         </div>
       </div>
     </div>
