@@ -1,12 +1,11 @@
 // The progress board layer (design §5.1): one transparent SVG over a block picture, in the picture's own (scene)
-// coordinates, so it scales with the picture. Draws rings, a glyph corner badge and a "state · agent" label per step
-// and traces active edges. Never touches the picture, the canvas elements or the file.
+// coordinates, so it scales with the picture. Draws a glyph corner chip, a "state · agent" label chip and, on a
+// running step, a progress line per step, and traces active edges; never a fill or a ring over the node (#935). Never touches the picture, the canvas elements or the file.
 // The same component draws on the canvas (RunOverlay) and in the document's diagram embed (DiagramView).
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { badgeRect } from '../../../shared/render/badge.ts';
-import { boardShown, etaPanel, legendOf, legendSpot, overlayModel, pathData, runProgress, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, legendSpot, MARK_PAD, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -28,17 +27,9 @@ type Props = {
 
 /** Below this scale the labels are too small to read and hidden (§5 "hidden below 40 % zoom"). */
 const MIN_LABEL_SCALE = 0.4;
-const PAD = 5;
-const LABEL_FONT = 11;
+const PAD = MARK_PAD;
 /** How far a step label reaches under its node (scene units): the room the canvas legend leaves under the picture. */
 const LABEL_REACH = PAD + 4 + 18;
-
-/** Rough text width for the label plate: Hangul and other wide characters about one em, the rest about 0.6 em. */
-export function textWidth(s: string, size = LABEL_FONT): number {
-  let w = 0;
-  for (const ch of s) w += /[ᄀ-ᇿ　-鿿가-힯＀-￯]/.test(ch) ? size : ch === ' ' ? size * 0.3 : size * 0.6;
-  return Math.ceil(w);
-}
 
 export function RunLayer({ scene, steps, left, top, scale, motionInside, hideEta }: Props) {
   const model = useMemo(() => overlayModel(scene, steps), [scene, steps]);
@@ -103,18 +94,15 @@ function EtaCorner({ panel }: { panel: EtaPanel }) {
 }
 
 function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
-  const { x, y, w, h } = n.rect;
-  // "결정 필요" already says the step waits on a person.
-  const text = `${n.glyph} ${n.text}`;
-  const tw = textWidth(text) + 12;
-  const cx = x + w / 2;
-  const ly = y + h + PAD + 4;
-  // The same chip as a diagram node's `badge:` (shared/render/badge.ts), drawn as an outline in the step colour.
-  const chip = badgeRect(x + w + PAD, y - PAD, textWidth(n.glyph));
+  const { chip, label, progress } = stepMarks(n, labels);
   return (
     <g role="img" aria-label={n.label} data-step={n.step} data-view={n.view} data-tone={n.tone} style={{ color: n.color }}>
-      <rect className="run-fill" x={x} y={y} width={w} height={h} rx={6} />
-      <rect className={`run-ring${n.live ? ' is-live' : ''}`} data-view={n.view} x={x - PAD} y={y - PAD} width={w + PAD * 2} height={h + PAD * 2} rx={10} />
+      {progress && (
+        <g className="run-progress-line" aria-hidden="true">
+          <line className="run-progress-track" x1={progress.x1} y1={progress.y} x2={progress.x2} y2={progress.y} />
+          <line className="run-progress-bar" x1={progress.x1} y1={progress.y} x2={progress.x2} y2={progress.y} pathLength={100} />
+        </g>
+      )}
       <g className="run-corner" aria-hidden="true">
         <rect x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx={chip.h / 2} />
         <text x={chip.x + chip.w / 2} y={chip.y + chip.h / 2} textAnchor="middle" dominantBaseline="central">
@@ -122,11 +110,11 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
         </text>
       </g>
       <Badges n={n} />
-      {labels && (
+      {label && (
         <g className="run-label" aria-hidden="true">
-          <rect x={cx - tw / 2} y={ly} width={tw} height={18} rx={9} />
-          <text x={cx} y={ly + 9} textAnchor="middle" dominantBaseline="central">
-            {text}
+          <rect x={label.x} y={label.y} width={label.w} height={label.h} rx={label.h / 2} />
+          <text x={label.x + label.w / 2} y={label.y + label.h / 2} textAnchor="middle" dominantBaseline="central">
+            {label.text}
           </text>
         </g>
       )}

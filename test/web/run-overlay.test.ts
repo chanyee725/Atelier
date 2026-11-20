@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, runProgress } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 
 async function scene(code: string): Promise<Scene> {
@@ -226,4 +226,26 @@ test('press (#736): one agent opens its live view at once, several show the list
   assert.equal(pressAction([]), null);
   assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }]), { kind: 'open', sid: 's1' });
   assert.deepEqual(pressAction([{ sid: 's1', name: 'Juno' }, { sid: 's3', name: 'Oren' }]), { kind: 'pick' });
+});
+
+test('step marks (#935): chips and a progress line only, never a fill or ring over the node', () => {
+  const rect = { x: 100, y: 50, w: 160, h: 52 };
+  const idle = stepMarks({ rect, glyph: '○', text: '대기', live: false }, true);
+  assert.deepEqual(Object.keys(idle).sort(), ['chip', 'label']);
+  assert.ok(idle.chip.x + idle.chip.w > rect.x + rect.w, 'corner chip reaches the top-right corner');
+  assert.ok(idle.chip.y < rect.y);
+  assert.ok(idle.label!.y > rect.y + rect.h, 'label chip under the node');
+  assert.equal(idle.label!.text, '○ 대기');
+  const live = stepMarks({ rect, glyph: '▶', text: '진행 · Juno', live: true }, false);
+  assert.equal(live.label, undefined, 'labels hidden when too small');
+  const p = live.progress!;
+  assert.equal(p.y, rect.y + rect.h - 2, 'progress line inside the bottom edge');
+  assert.ok(p.x1 > rect.x && p.x2 < rect.x + rect.w);
+});
+
+test('run layer CSS (#935): no node fill, no dashed ring', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const css = await readFile(new URL('../../web/src/index.css', import.meta.url), 'utf8');
+  const tsx = await readFile(new URL('../../web/src/run/RunLayer.tsx', import.meta.url), 'utf8');
+  for (const src of [css, tsx]) assert.doesNotMatch(src, /run-fill|run-ring/);
 });

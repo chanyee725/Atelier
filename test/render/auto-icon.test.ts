@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { autoIconFor, labelWords } from '../../shared/render/auto-icon.ts';
+import { autoIconFor, kindOf, labelWords } from '../../shared/render/auto-icon.ts';
 import { loadIconNames } from '../../shared/render/icon-registry.ts';
 import { renderDiagram } from '../../shared/render/index.ts';
 
@@ -42,14 +42,49 @@ test('plain labels and everyday words stay without an icon', async () => {
   }
 });
 
+test('generic kind words get a Lucide glyph and a pale colour; sentences and plain words get none (#935)', () => {
+  const want: [string, string, string][] = [
+    ['API Gateway', 'network', 'purple'],
+    ['Orders DB', 'database', 'blue'],
+    ['Database', 'database', 'blue'],
+    ['Session cache', 'zap', 'red'],
+    ['Job queue', 'inbox', 'orange'],
+    ['Payment service', 'server', 'green'],
+    ['Client', 'monitor', 'gray'],
+    ['Web App', 'monitor', 'gray'],
+    ['Users', 'user', 'gray'],
+    ['Auth', 'lock', 'indigo'],
+  ];
+  for (const [label, icon, color] of want) assert.deepEqual(kindOf(label), { icon, color }, label);
+  for (const label of ['Next step', 'Go', 'Box', 'Payments', 'Start', 'Check order status', 'Send the order to the queue now', '']) {
+    assert.equal(kindOf(label), undefined, label);
+  }
+});
+
+test('kind icons and colours: product logo first, explicit icon:/color: win, autoIcons off turns both off', async () => {
+  const fills = (svg: string): string[] => [...svg.matchAll(/<rect[^>]*fill="(#[0-9a-f]{6})"[^>]*stroke="(#[0-9a-f]{6})"/g)].map((m) => `${m[1]}/${m[2]}`);
+  const on = await renderDiagram('API Gateway\nRedis cache\nOrders DB [icon: box]\nClient [color: green]', { type: 'cloud-architecture' });
+  assert.deepEqual(icons(on.svg).sort(), ['box:lucide', 'monitor:lucide', 'network:lucide', 'redis:simple-icons']);
+  const f = fills(on.svg).join(' ');
+  assert.match(f, /#f4f3ff\/#6938ef/, 'gateway: pale purple');
+  assert.match(f, /#fef3f2\/#d92d20/, 'cache: pale red');
+  assert.match(f, /#eff8ff\/#2e90fa/, 'db keeps its kind colour under icon: box');
+  assert.match(f, /#ecfdf3\/#079455/, 'color: green wins over gray');
+  assert.doesNotMatch(f, /#f2f4f7\/#98a2b3/, 'no gray client');
+  const off = await renderDiagram('autoIcons off\nAPI Gateway\nOrders DB', { type: 'cloud-architecture' });
+  assert.deepEqual(icons(off.svg), []);
+  assert.doesNotMatch(off.svg, /#f4f3ff|#eff8ff/);
+});
+
 test('nodes without icon: get one from the label; an explicit icon always wins; autoIcons off turns it off', async () => {
   const on = await renderDiagram('Postgres DB\nOrders [icon: users]\nRedis [icon: aws-elasticache]\nNext step', { type: 'cloud-architecture' });
   assert.deepEqual(icons(on.svg).sort(), ['aws-elasticache:aws', 'postgres:simple-icons', 'users:lucide']);
+  // 'Next step' is no kind word, so it stays plain.
   const off = await renderDiagram('autoIcons off\nPostgres DB\nOrders [icon: users]', { type: 'cloud-architecture' });
   assert.deepEqual(icons(off.svg), ['users:lucide']);
   assert.deepEqual(off.diagnostics, []);
   const flow = await renderDiagram('Kafka topic > Postgres DB', { type: 'flowchart' });
-  assert.deepEqual(icons(flow.svg), ['postgres:simple-icons']);
+  assert.deepEqual(icons(flow.svg).sort(), ['inbox:lucide', 'postgres:simple-icons']);
 });
 
 test('vendor artwork draws inside its icon box in its own colours; the dark canvas maps them', async () => {
