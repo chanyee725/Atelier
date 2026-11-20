@@ -119,6 +119,10 @@ const NOISE = new Set(["node_modules", ".next", ".next-prod", "dist", ".playwrig
 const IGNORED_NOISE = new Set([...NOISE, "coverage"]);
 // Untracked files count as work unless they sit in a top-level noise folder (a linked node_modules).
 const keep = f => !NOISE.has(f.split("/")[0]);
+// The 작업 보기 diff also skips the Atelier workspace folder (#906): its lock and state files are not the session's work.
+// Only the diff: a worktree with files in .atelier still counts as having work (they may be documents).
+const DIFF_SKIP = new Set([".atelier"]);
+const keepInDiff = f => keep(f) && !DIFF_SKIP.has(f.split("/")[0]);
 // Changed tracked files are always work. Only files git ignores may be noise at any depth
 // (web/node_modules, web/dist, coverage): `?? src/dist/new.js` or ` M docs/dist/x.md` is real work.
 const noiseLine = l => {
@@ -135,7 +139,7 @@ const out = p => p.then(r => r.stdout, () => "");
  */
 export async function diff(cwd, root = cwd) {
   if (!(await hasHead(cwd))) {
-    const files = (await out(git(cwd, "status", "--porcelain"))).split("\n").filter(Boolean).map(l => l.slice(3)).filter(keep);
+    const files = (await out(git(cwd, "status", "--porcelain"))).split("\n").filter(Boolean).map(l => l.slice(3)).filter(keepInDiff);
     return { files: files.length, add: 0, del: 0, untracked: files, patch: "", commits: [], base: null, merged: false };
   }
   let base = "HEAD", baseName = null, commits = [], merged = false;
@@ -166,7 +170,7 @@ export async function diff(cwd, root = cwd) {
     const [a, d, f] = line.split("\t");
     add += +a || 0; del += +d || 0; if (f) changed.add(f);
   }
-  const untracked = others.split("\n").filter(Boolean).filter(keep);
+  const untracked = others.split("\n").filter(Boolean).filter(keepInDiff);
   const LIMIT = 200_000;
   const p = patch.length > LIMIT ? patch.slice(0, LIMIT) + "\n… (잘림)" : patch;
   return { files: changed.size + untracked.length, add, del, untracked, patch: p, commits, base: baseName, merged };
