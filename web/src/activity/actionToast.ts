@@ -9,13 +9,13 @@ import { categoryOn } from './appInbox';
 export function toastAction(e: AppEvent) {
   const t = actionToastOf(e);
   if (!t || !categoryOn(t.category)) return;
-  if (t.tone === 'error') toast.error(t.text, { id: t.id, closeButton: true });
+  if (t.tone === 'error') toast.error(t.text, { id: t.id, closeButton: true, duration: Infinity });
   else toast.success(t.text, { id: t.id });
 }
 
 /** A one-line result the person asked for (복사했어요, 내보냈어요); a failure stays until closed. */
 export function toastResult(text: string, failed = false) {
-  if (failed) toast.error(text, { closeButton: true });
+  if (failed) toast.error(text, { closeButton: true, duration: Infinity });
   else toast.success(text);
 }
 
@@ -27,7 +27,8 @@ export function toastRequest<T>(request: Promise<T>, text: { loading: string; su
   toast.promise(request, {
     loading: text.loading,
     success: text.success,
-    ...(text.error ? { error: text.error, closeButton: true } : {}),
+    // Options inside `error` apply to the failure only; top-level ones would also stick to loading and success.
+    ...(text.error ? { error: { message: text.error, closeButton: true, duration: Infinity } } : {}),
   });
   return request;
 }
