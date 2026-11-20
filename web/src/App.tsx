@@ -47,6 +47,7 @@ const SessionBoard = lazy(() => import('./dispatch/SessionBoard'));
 // TipTap and the diagram renderer are big; they load when a file is first opened.
 const DocPane = lazy(() => import('./DocPane').then((m) => ({ default: m.DocPane })));
 import { CanvasPane } from './CanvasPane';
+import { lookKey, planLookOf, type PlanLook } from './canvas/planStyle';
 import { LazyBoundary } from './LazyBoundary';
 import { CHUNK_MESSAGE, isChunkLoadError } from './chunkError';
 import { useTheme } from './theme';
@@ -172,6 +173,7 @@ const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, o
   const { scene: frameScene, blocks: frameBlocks } = useSettled(framePair, 250, key);
   const getBlocks = useCallback(() => session.getState().file?.blocks ?? NO_BLOCKS, [session]);
   const getCanvas = useCallback(() => session.getState().file?.canvas, [session]);
+  const look = usePlanLook(session);
   const onDocument = useCallback((d: unknown) => session.edit({ document: d }), [session]);
   const onBlocks = useCallback((b: Block[]) => session.edit({ blocks: b }), [session]);
   return (
@@ -205,11 +207,21 @@ const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, o
           onShowFrame={onShowFrame}
           onExportBlock={onExportBlock}
           onEditor={onEditor}
+          look={look}
         />
       </Suspense>
     </LazyBoundary>
   );
 });
+
+/** The open file's plan look (#971), kept while only unrelated plan fields change. */
+function usePlanLook(session: FileSession): PlanLook | null {
+  const plan = useSession(session, (s) => s.file?.plan);
+  const look = planLookOf(plan);
+  const key = lookKey(look);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => look, [key]);
+}
 
 type CanvasSlotProps = {
   session: FileSession;
@@ -223,7 +235,8 @@ const CanvasSlot = memo(function CanvasSlot({ session, focus, dark, handle, onFa
   const canvas = useSession(session, (s) => s.file?.canvas);
   const blocks = useSession(session, (s) => s.file?.blocks ?? NO_BLOCKS);
   const onChange = useCallback((patch: { canvas?: CanvasData; blocks?: Block[] }) => session.edit(patch), [session]);
-  return <CanvasPane fileKey={fileKey} canvas={canvas} blocks={blocks} focus={focus} dark={dark} onChange={onChange} handle={handle} onFail={onFail} />;
+  const look = usePlanLook(session);
+  return <CanvasPane fileKey={fileKey} canvas={canvas} blocks={blocks} focus={focus} dark={dark} onChange={onChange} handle={handle} onFail={onFail} look={look} />;
 });
 
 export function App() {

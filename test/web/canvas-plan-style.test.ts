@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { decorateCode, planRoles, rolesKey } from '../../web/src/canvas/planStyle.ts';
+import { decorateCode, drawnBlock, lookKey, planLookOf, planRoles, rolesKey } from '../../web/src/canvas/planStyle.ts';
 import { parseFlowchart } from '../../shared/dsl/index.ts';
 
 const errors = (code: string) => parseFlowchart(code).diagnostics.filter((d) => d.severity === 'error');
@@ -43,6 +43,7 @@ test('decorateCode handles nodes in groups, quoted names, a type marker and unkn
 test('decorateCode leaves other diagram types and unchanged looks alone', () => {
   const seq = 'a > b: hi';
   assert.equal(decorateCode(seq, 'sequence', { a: 'impl' }), seq);
+  assert.equal(decorateCode('a', 'architecture', { a: 'docs' }), 'a [icon: file-text, color: gray, styleMode: plain]');
   const plain = 'a [styleMode: plain]';
   assert.equal(decorateCode(plain, 'flowchart', {}), plain);
 });
@@ -52,4 +53,16 @@ test('planRoles takes each step role or the plan default; rolesKey is order inde
   assert.deepEqual(roles, { s1: 'review', s2: 'impl' });
   assert.equal(rolesKey({ b: 'x', a: 'y' }), rolesKey({ a: 'y', b: 'x' }));
   assert.deepEqual(planRoles(null), {});
+});
+
+test('drawnBlock decorates only the plan block and keeps its identity otherwise', () => {
+  const look = planLookOf({ block: 'p', steps: [{ id: 'a', node: 'a', role: 'impl' }] });
+  const other = { id: 'q', type: 'flowchart', code: 'a' };
+  assert.equal(drawnBlock(other, look), other);
+  assert.equal(drawnBlock({ id: 'p', type: 'flowchart', code: 'a' }, null).code, 'a');
+  const d = drawnBlock({ id: 'p', type: 'flowchart', code: 'a', layout: undefined }, look);
+  assert.equal(d.code, 'a [icon: code-xml, color: blue, styleMode: plain]');
+  assert.equal(d.id, 'p');
+  assert.notEqual(lookKey(look), lookKey(planLookOf({ block: 'p', steps: [{ id: 'a', node: 'a', role: 'test' }] })));
+  assert.equal(lookKey(null), '');
 });

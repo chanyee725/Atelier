@@ -45,8 +45,10 @@ function nodesOf(children: readonly GraphChild[], out: GraphChild[] = []): Graph
  * Code that is not a flowchart or architecture graph comes back unchanged.
  */
 export function decorateCode(code: string, type: string, roles: Readonly<Record<string, string>>): string {
-  if (type !== 'flowchart' && type !== 'cloud-architecture') return code;
-  const { ast } = parse(code, type);
+  // Block types say `architecture`; the parser says `cloud-architecture`.
+  const kind = type === 'architecture' ? 'cloud-architecture' : type;
+  if (kind !== 'flowchart' && kind !== 'cloud-architecture') return code;
+  const { ast } = parse(code, kind);
   if (ast.type !== 'flowchart' && ast.type !== 'cloud-architecture') return code;
   const lines = code.split('\n');
   // Edits per line, applied right to left so earlier columns stay valid.
@@ -73,4 +75,33 @@ export function decorateCode(code: string, type: string, roles: Readonly<Record<
     lines[i] = t;
   }
   return lines.join('\n');
+}
+
+/** The plan look a file's diagrams are drawn with: which block is the plan and its node roles. */
+export type PlanLook = { block: string; roles: Readonly<Record<string, string>> };
+
+/** The look of `plan`, or null when the file has none. */
+export const planLookOf = (plan: Pick<Plan, 'block' | 'steps' | 'defaults'> | null | undefined): PlanLook | null =>
+  plan ? { block: plan.block, roles: planRoles(plan) } : null;
+
+/** A key that changes when the look does, for memos and picture caches. */
+export const lookKey = (look: PlanLook | null | undefined): string => (look ? `${look.block}|${rolesKey(look.roles)}` : '');
+
+const decorated = new Map<string, string>();
+
+/**
+ * The block as it is drawn: the plan block with its code decorated (`decorateCode`), any other block as it is.
+ * Use it wherever the code is drawn or laid out, so pictures, layout sessions and caches all see the same code;
+ * never write its code back.
+ */
+export function drawnBlock<B extends { id: string; type: string; code: string }>(b: B, look: PlanLook | null | undefined): B {
+  if (!look || b.id !== look.block) return b;
+  const key = `${b.type}\n${rolesKey(look.roles)}\n${b.code}`;
+  let code = decorated.get(key);
+  if (code === undefined) {
+    code = decorateCode(b.code, b.type, look.roles);
+    decorated.set(key, code);
+    if (decorated.size > 50) decorated.delete(decorated.keys().next().value!);
+  }
+  return code === b.code ? b : { ...b, code };
 }
