@@ -1,15 +1,16 @@
 // 플랜 tab (#729): the pipeline plan as its own diagram, steps as nodes and arrows for the order they run in, each
 // node painted with its live state (#687 colours and agent initial badges). Pure: no DOM, so it runs under
 // `node --test`. Laid out left to right by dependency depth; rows keep the plan's step order.
+// #935: drawn like the document diagrams (eraser-diagrams rules): 200×56 box nodes and orthogonal (elbow) arrows.
 
 import type { Plan } from '../../../shared/dispatch/plan.ts';
 import { planOrderIn } from '../../../shared/dispatch/plan-diagram.ts';
 import { nodeStatus, type NodeStatus } from './nodeStatus.ts';
 import { agentColors, nodeBadges, roleLabel, type NodeBadges, type RunStep } from './overlayModel.ts';
 
-/** Node box and gaps, in px. */
-export const NODE_W = 196;
-export const NODE_H = 72;
+/** Node box (the eraser-diagrams 200 width bucket and 56 height) and gaps, in px. */
+export const NODE_W = 200;
+export const NODE_H = 56;
 export const GAP_X = 72;
 export const GAP_Y = 32;
 /** Room above a node for its badges and around the picture. */
@@ -20,6 +21,8 @@ export interface PlanGraphNode {
   /** 1-based position in the plan. */
   n: number;
   title: string;
+  /** The step's role (`lead`, `impl`...): its icon and colour. */
+  role: string;
   /** Dependency depth (column) and place in it (row). */
   col: number;
   row: number;
@@ -37,7 +40,7 @@ export interface PlanGraphEdge {
   key: string;
   from: string;
   to: string;
-  /** SVG path from the source's right edge to the target's left edge. */
+  /** Orthogonal SVG path from the source's right edge to the target's left edge (one elbow pair when rows differ). */
   d: string;
   /** The source step finished. */
   done: boolean;
@@ -89,6 +92,7 @@ export function planGraph(plan: Plan, blocks: readonly Block[], steps: readonly 
       id: s.id,
       n,
       title,
+      role: s.role ?? run?.agents?.[0]?.role ?? '',
       col: c,
       row: r,
       x: PAD + c * (NODE_W + GAP_X),
@@ -112,7 +116,8 @@ export function planGraph(plan: Plan, blocks: readonly Block[], steps: readonly 
       const x2 = to.x;
       const y2 = to.y + NODE_H / 2;
       const mid = (x1 + x2) / 2;
-      edges.push({ key: `${a}>${s.id}`, from: a, to: s.id, d: `M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`, done: from.status.tone === 'done' });
+      const d = y1 === y2 ? `M ${x1} ${y1} H ${x2}` : `M ${x1} ${y1} H ${mid} V ${y2} H ${x2}`;
+      edges.push({ key: `${a}>${s.id}`, from: a, to: s.id, d, done: from.status.tone === 'done' });
     }
   }
 

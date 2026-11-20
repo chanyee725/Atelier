@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Plan } from '../../shared/dispatch/plan.ts';
-import { GAP_X, NODE_W, PAD, planGraph } from '../../web/src/run/planGraphModel.ts';
+import { GAP_X, NODE_H, NODE_W, PAD, planGraph } from '../../web/src/run/planGraphModel.ts';
 
 const plan: Plan = {
   v: 1,
@@ -29,11 +29,21 @@ test('steps lay out left to right by dependency depth, rows in plan order', () =
   assert.equal(g.nodes[1]!.title, 'api');
 });
 
-test('one arrow per dependency, from the source right edge to the target left edge', () => {
+test('nodes use the eraser-diagrams 200×56 box and carry their role (#935)', () => {
+  assert.deepEqual([NODE_W, NODE_H], [200, 56]);
+  const g = planGraph(plan, blocks);
+  assert.deepEqual(g.nodes.map((n) => n.role), ['lead', 'impl', 'impl', 'review']);
+});
+
+test('one orthogonal arrow per dependency, from the source right edge to the target left edge (#935)', () => {
   const g = planGraph(plan, blocks);
   assert.deepEqual(g.edges.map((e) => e.key).sort(), ['api>review', 'plan>api', 'plan>web', 'web>review']);
   const e = g.edges.find((x) => x.key === 'plan>api')!;
-  assert.match(e.d, new RegExp(`^M ${PAD + NODE_W} `));
+  const y = PAD + NODE_H / 2;
+  assert.equal(e.d, `M ${PAD + NODE_W} ${y} H ${PAD + NODE_W + GAP_X}`, 'same row: one straight segment');
+  const bent = g.edges.find((x) => x.key === 'plan>web')!;
+  assert.match(bent.d, /^M [\d.]+ [\d.]+ H [\d.]+ V [\d.]+ H [\d.]+$/, 'other row: horizontal, vertical, horizontal');
+  for (const x of g.edges) assert.doesNotMatch(x.d, /C/, 'no curves');
 });
 
 test('without a run every step is 대기; run views paint the #687 tones and badges', () => {
