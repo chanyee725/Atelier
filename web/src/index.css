@@ -61,6 +61,8 @@
   --sunken: #E3E5E0;
   --line-strong: rgb(27 29 26 / 0.24);
   --shadow-pop: 0 0 0 1px var(--border), 0 8px 24px oklch(0 0 0 / 10%);
+  /* Card edge (#889): a translucent ink ring instead of a solid border, so it sits on any surface step. */
+  --shadow-card: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04);
 
   /* Status colours (not in shadcn), from Dispatch light (doc 5 §3.1): only for state dots and bars. */
   --ok: oklch(0.62 0.15 155);
@@ -115,6 +117,7 @@
   --sunken: #171917;
   --line-strong: rgb(230 232 226 / 0.2);
   --shadow-pop: 0 0 0 1px var(--border), 0 8px 24px oklch(0 0 0 / 40%);
+  --shadow-card: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.2);
 
   /* Status colours from Dispatch's monitor theme (tuned for dark panels). */
   --ok: oklch(0.76 0.17 150);
@@ -235,11 +238,18 @@
   --text-xl--line-height: 30px;
   --text-doc: 14px;
   --text-doc--line-height: 1.65;
-  /* shadcn radius steps: sm 6px, md 8px, lg 10px, xl 14px. */
+  /* Radius steps (#889): controls 6 (sm, md), cards 10 (lg), panels 12 (xl), chips full. The named ones say which
+     layer a box is: rounded-control, rounded-card, rounded-panel. */
   --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-control: calc(var(--radius) - 4px);
+  --radius-card: var(--radius);
+  --radius-panel: calc(var(--radius) + 2px);
+  /* Large titles track tighter (#889): tracking-title. */
+  --tracking-title: -0.02em;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -272,6 +282,7 @@
   --color-bad: var(--bad);
   --color-idle: var(--idle);
   --shadow-pop: var(--shadow-pop);
+  --shadow-card: var(--shadow-card);
 }
 
 /* The app shell is exactly one viewport tall (100dvh, #800): no document scroll, only panes scroll inside.
@@ -294,8 +305,32 @@ body {
 @media (width < 48rem) { .crumbs > li + li::before { content: none; } }
 /* The canvas keeps its own type; the chrome tracking above must not leak into Excalidraw. */
 .excalidraw { letter-spacing: normal; }
+/* Reduced motion (#889): movement goes, fades stay. The enter/exit animations (tw-animate-css) keep their opacity
+   and lose their scale, slide and spin; press feedback (.press, Button) drops its scale. Keyframes of our own handle
+   reduced motion next to their rule. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after {
+    --tw-enter-scale: 1 !important; --tw-exit-scale: 1 !important;
+    --tw-enter-translate-x: 0 !important; --tw-enter-translate-y: 0 !important;
+    --tw-exit-translate-x: 0 !important; --tw-exit-translate-y: 0 !important;
+    --tw-enter-rotate: 0 !important; --tw-exit-rotate: 0 !important;
+  }
+}
+/* A card (#889): card surface, 10px corners, the ink ring and a faint shadow. */
+@utility card-surface {
+  background-color: var(--card);
+  color: var(--card-foreground);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+/* Press feedback (#889) for buttons that are not ui/button: shrink to 0.97 while held, no movement with reduced
+   motion. Hover styles stay inside @media (hover: hover) (Tailwind's hover: already is). */
+@utility press {
+  transition-property: color, background-color, border-color, box-shadow, opacity, scale;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled, [aria-disabled="true"]) { scale: 0.97; }
+  @media (prefers-reduced-motion: reduce) { &:active:not(:disabled, [aria-disabled="true"]) { scale: none; } }
 }
 
 /* Excalidraw suggests double-click/Enter to crop an image; on diagram blocks those open the code instead. */
@@ -396,7 +431,7 @@ body {
   background: var(--background);
   cursor: pointer;
 }
-.doc-diagram-pic:hover { border-color: var(--ring); }
+@media (hover: hover) { .doc-diagram-pic:hover { border-color: var(--ring); } }
 .doc-diagram.is-selected .doc-diagram-pic { border-color: var(--primary); }
 .doc-diagram-pic:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .doc-diagram-pic img { max-width: 100%; height: auto; }
@@ -406,7 +441,7 @@ body {
 .doc-diagram-gone { border: 1px dashed var(--border); border-radius: 10px; text-align: center; }
 .doc-diagram-actions { display: flex; justify-content: center; gap: 0.4em; }
 .doc-diagram-actions button { font-size: 13px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted-foreground); }
-.doc-diagram-actions button:hover { color: var(--foreground); background: var(--accent); }
+@media (hover: hover) { .doc-diagram-actions button:hover { color: var(--foreground); background: var(--accent); } }
 .doc-diagram-actions button:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
 .doc-diagram figcaption { font-size: 13px; color: var(--muted-foreground); text-align: center; }
 
@@ -458,7 +493,7 @@ body {
   font-size: 14px;
 }
 .doc-table-bar button { height: 1.75rem; padding: 0 0.6rem; border-radius: 6px; }
-.doc-table-bar button:hover { background: var(--accent); }
+@media (hover: hover) { .doc-table-bar button:hover { background: var(--accent); } }
 
 /* Outline (목차) and heading links */
 /* Fill the pane (flex column in 문서-only view, block in the splitter) so a short doc's empty area still reveals the button. */
@@ -467,20 +502,20 @@ body {
 .doc-outline-btn { color: var(--muted-foreground); opacity: 0; transition: opacity 0.15s, color 0.12s ease, background-color 0.12s ease; }
 .doc-host:hover .doc-outline-btn, .doc-host:focus-within .doc-outline-btn, .doc-outline-btn[aria-expanded="true"] { opacity: 1; }
 @media (hover: none) { .doc-outline-btn { opacity: 1; } }
-.doc-outline-btn:hover { color: var(--foreground); }
+@media (hover: hover) { .doc-outline-btn:hover { color: var(--foreground); } }
 .doc-outline { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 260px; max-height: 50vh; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover); color: var(--popover-foreground); box-shadow: var(--shadow-pop); }
 .doc-outline ul { list-style: none; margin: 0; padding: 0; }
 .doc-outline li > button { display: block; width: 100%; text-align: left; font-size: 14px; padding: 3px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.doc-outline li > button:hover { background: var(--accent); }
+@media (hover: hover) { .doc-outline li > button:hover { background: var(--accent); } }
 .doc-outline-empty { font-size: 14px; color: var(--muted-foreground); padding: 4px 6px; }
 .doc-editor h1, .doc-editor h2, .doc-editor h3 { position: relative; }
 .doc-h-link { position: absolute; left: -1.3em; top: 0; width: 1.1em; font-size: 0.7em; line-height: 1.8; color: var(--muted-foreground); opacity: 0; user-select: none; }
 .doc-editor h1:hover .doc-h-link, .doc-editor h2:hover .doc-h-link, .doc-editor h3:hover .doc-h-link, .doc-h-link:focus-visible { opacity: 1; }
-.doc-h-link:hover { color: var(--foreground); }
+@media (hover: hover) { .doc-h-link:hover { color: var(--foreground); } }
 .doc-h-flash { animation: doc-h-flash 1.5s ease-out; }
 @keyframes doc-h-flash { from { background: var(--muted); } to { background: transparent; } }
 .doc-wikilink { color: var(--foreground); background: var(--muted); border-radius: 4px; padding: 0 4px; cursor: pointer; text-decoration: none; }
-.doc-wikilink:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 8%); }
+@media (hover: hover) { .doc-wikilink:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 8%); } }
 .doc-wikilink.ProseMirror-selectednode { outline: 2px solid var(--primary); }
 
 /* The canvas `/` insert menu: the document's slash list with a search field on top. */
@@ -571,7 +606,7 @@ body {
 .doc-diagram-stage .run-motion { bottom: auto; top: -8px; right: -8px; margin: 0; }
 /* On the canvas a picture at the top edge would clip the switch above it: it moves into the picture's corner. */
 .run-layer[data-motion-inside] .run-motion { bottom: auto; top: 4px; right: 4px; margin: 0; }
-.run-motion:hover { color: var(--foreground); background: var(--accent); }
+@media (hover: hover) { .run-motion:hover { color: var(--foreground); background: var(--accent); } }
 .run-motion:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
 /* Short colour fade on the document's and overlay's own controls (#546). Under reduced motion the global rule above
    cuts it to 0.01ms, so colours change at once there (#564). */
@@ -595,7 +630,7 @@ body {
 .run-legend-dim { color: var(--muted-foreground); }
 .run-legend details { margin-top: 4px; }
 .run-legend summary { cursor: pointer; color: var(--muted-foreground); }
-.run-legend summary:hover { color: var(--foreground); }
+@media (hover: hover) { .run-legend summary:hover { color: var(--foreground); } }
 .run-legend summary:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 .run-legend ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .run-legend li { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
