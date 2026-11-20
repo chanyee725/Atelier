@@ -112,12 +112,12 @@ function UsageList() {
   if (!groups.length) return <EmptyState>최근 7일 동안 기록된 사용량이 없어요.</EmptyState>;
   return (
     <div data-usage-list className="text-xs">
-      <p className={cn(GRID, 'm-0 h-8 border-b text-muted-foreground')}>
+      <p className={cn(GRID, 'm-0 h-8 border-t text-muted-foreground')}>
         <span>최근 7일 · 계정 전체</span>
         <span className="text-right">토큰</span>
         <span className="text-right">비용</span>
       </p>
-      <ul aria-label="제공사별 사용량" className="m-0 list-none divide-y p-0">
+      <ul aria-label="제공사별 사용량" className="m-0 list-none p-0 *:border-t">
         {groups.map((g) => (
           <ProviderGroup key={g.provider} group={g} />
         ))}

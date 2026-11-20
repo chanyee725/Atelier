@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { api, type DispatchStatus, type ProviderLimits, type ProviderState } from './api';
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
+import { SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from './components/ui/sidebar';
 import { events } from './lib/events';
 import { cn } from './lib/utils';
 import { PROVIDERS, rowStatus, type ProviderMeta, type RowTone } from './modelConnect';
@@ -58,11 +58,15 @@ export function SidebarModels() {
   const models = useModels();
   if (!models.status) return null;
   return (
-    <SidebarMenu aria-label="모델 연결">
-      {PROVIDERS.map((meta) => (
-        <ModelRow key={meta.id} meta={meta} models={models} />
-      ))}
-    </SidebarMenu>
+    // One sunken well under the nav (#889 refresh): the rows sit a step below the sidebar paper.
+    <div className="rounded-card bg-sunken p-1">
+      <SidebarGroupLabel className="h-6">모델 사용량</SidebarGroupLabel>
+      <SidebarMenu aria-label="모델 연결">
+        {PROVIDERS.map((meta) => (
+          <ModelRow key={meta.id} meta={meta} models={models} />
+        ))}
+      </SidebarMenu>
+    </div>
   );
 }
 
