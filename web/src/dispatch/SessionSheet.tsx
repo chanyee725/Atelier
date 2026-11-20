@@ -1,7 +1,7 @@
 // One session in a side sheet: 대화 / 변경사항 / 정보 tabs, permission and answer cards, message box. The agent live
 // panel (#905) reuses Chat, Info, Composer and AnswerCard as its own tabs instead of opening this sheet.
 // Transcripts come from the in-memory store (never stored). Errors show inline as a destructive Alert.
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Activity, ChevronRight, GitBranch, MessageCircleQuestion, Power, SendHorizontal, ShieldAlert, Square, Trash2 } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
@@ -228,15 +228,18 @@ function ThinkingLine({ s }: { s: Session }) {
   );
 }
 
-/** `thinking: false`: the host shows its own waiting line (the chat dock's 생각 중…, #937). */
-export function Chat({ s, report, thinking = true }: { s: Session; report: Report; thinking?: boolean }) {
+/**
+ * `thinking: false`: the host shows its own waiting line (the chat dock's 생각 중…, #937).
+ * `after`: shown under the last entry (the chat dock's 시작하기 bar under the helper's proposal, #954).
+ */
+export function Chat({ s, report, thinking = true, after }: { s: Session; report: Report; thinking?: boolean; after?: ReactNode }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => {
     const el = box.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [entries, s.pending.length]);
+  }, [entries, s.pending.length, !!after]);
   const agent = s.name;
   const runnable = canRun(s);
   return (
@@ -254,6 +257,7 @@ export function Chat({ s, report, thinking = true }: { s: Session; report: Repor
         : <ToolRun key={g[0]!.i} items={g} agent={agent} />))}
       {s.pending.map(p => <PermissionCard key={p.requestId} s={s} p={p} report={report} />)}
       {thinking && <ThinkingLine s={s} />}
+      {after}
     </div>
   );
 }
@@ -261,7 +265,7 @@ export function Chat({ s, report, thinking = true }: { s: Session; report: Repor
 export function Info({ s }: { s: Session }) {
   const roles = useDispatch(st => st.roles);
   const prompt = shownPrompt(s, roles);
-  // One type family (Pretendard) throughout, ids included; numbers tabular. Grouped panels instead of one long list.
+  // Same plain sections as the 진행 tab (2026-11-20): no grey boxes, a hairline between sections, a bold heading each.
   const rows: [string, string][] = [
     ['모델', `${s.modelLabel || s.model}${s.effort ? ` · effort ${s.effort}` : ''}`],
     ['역할', `${s.roleName}${s.canSpawn ? ' · 팀원을 만들 수 있어요' : ''}`],
@@ -271,12 +275,15 @@ export function Info({ s }: { s: Session }) {
   ];
   const ratio = s.ctxWindow ? s.ctx / s.ctxWindow : null;
   const usage: [string, number][] = [['입력', s.usage.input], ['출력', s.usage.output], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite]];
+  const section = 'border-t border-border/70 py-4 first:border-t-0 first:pt-1';
+  const heading = 'm-0 mb-2.5 text-[13px] font-semibold text-foreground';
   return (
-    <div className="flex h-full flex-col gap-4 overflow-y-auto overlay-body font-sans text-[13px] leading-[1.55]">
-      <section aria-label="세션" className="rounded-[10px] bg-muted/40 px-4 py-1">
-        <dl className="m-0 divide-y divide-border/60">
+    <div className="flex h-full flex-col overflow-y-auto overlay-body font-sans text-[13px] leading-[1.55]">
+      <section aria-label="세션" className={section}>
+        <h3 className={heading}>세션</h3>
+        <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2">
           {rows.map(([k, v]) => (
-            <div key={k} className="grid grid-cols-[88px_minmax(0,1fr)] items-baseline gap-x-3 py-2.5">
+            <div key={k} className="contents">
               <dt className="text-muted-foreground">{k}</dt>
               <dd className="m-0 min-w-0 break-all text-foreground tabular-nums">{v}</dd>
             </div>
@@ -284,37 +291,37 @@ export function Info({ s }: { s: Session }) {
         </dl>
       </section>
 
-      <section aria-label="컨텍스트" className="rounded-[10px] bg-muted/40 px-4 py-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="m-0 text-[13px] font-semibold">컨텍스트</h3>
+      <section aria-label="컨텍스트" className={section}>
+        <div className="mb-2 flex items-baseline justify-between gap-3">
+          <h3 className="m-0 text-[13px] font-semibold text-foreground">컨텍스트</h3>
           <span className="tabular-nums text-muted-foreground">
             <span className="font-semibold text-foreground">{pct(ratio)}</span> · {fmtK(s.ctx)} / {fmtK(s.ctxWindow)}
           </span>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background" aria-hidden>
+        <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
           <div className={cn('h-full rounded-full', (ratio ?? 0) >= 0.85 ? 'bg-bad' : (ratio ?? 0) >= 0.6 ? 'bg-warn' : 'bg-ok')} style={{ width: `${Math.min(100, Math.round((ratio ?? 0) * 100))}%` }} />
         </div>
       </section>
 
-      <section aria-label="토큰과 비용" className="rounded-[10px] bg-muted/40 px-4 py-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="m-0 text-[13px] font-semibold">토큰</h3>
+      <section aria-label="토큰과 비용" className={section}>
+        <div className="mb-2.5 flex items-baseline justify-between gap-3">
+          <h3 className="m-0 text-[13px] font-semibold text-foreground">토큰</h3>
           <span className="text-muted-foreground">
             비용 <span className="text-[15px] font-semibold tracking-[-0.01em] text-foreground tabular-nums">{fmtUsd(s.cost)}</span>
           </span>
         </div>
-        <dl className="m-0 mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {usage.map(([k, v]) => (
-            <div key={k} className="rounded-md bg-background px-3 py-2">
+            <div key={k}>
               <dt className="text-xs text-muted-foreground">{k}</dt>
-              <dd className="m-0 mt-0.5 text-[15px] font-semibold tracking-[-0.01em] tabular-nums">{fmtK(v)}</dd>
+              <dd className="m-0 text-[15px] font-semibold tracking-[-0.01em] tabular-nums">{fmtK(v)}</dd>
             </div>
           ))}
         </dl>
         {s.cost == null && <p className="m-0 mt-2 text-xs text-muted-foreground">이 CLI는 비용을 알려주지 않아요.</p>}
       </section>
 
-      <details className="group rounded-[10px] bg-muted/40 px-4 py-3">
+      <details className={cn(section, 'group')}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px] font-semibold marker:hidden">
           역할 프롬프트
           <span className="text-xs font-normal text-muted-foreground group-open:hidden">펼치기</span>

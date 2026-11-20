@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { closedIssues, createIssueList, joinIssues, referencedIssues } from "../../server/dispatch/issues.js";
+import { bodySummary, closedIssues, createIssueList, joinIssues, referencedIssues } from "../../server/dispatch/issues.js";
 import { setPrTracking } from "../../server/dispatch/pr-status.js";
 import { FAKE_MARKER } from "../../server/dispatch/cli.js";
 
@@ -106,4 +106,31 @@ test("GET /api/issues answers from d.issues and does not shadow /api/issues/:n/a
   assert.deepEqual(await hits("/api/issues")[0][2]([]), { ok: true, issues: [] });
   assert.equal(hits("/api/issues/776/accounts").length, 1);
   assert.notEqual(hits("/api/issues/776/accounts")[0], hits("/api/issues")[0]);
+  assert.equal(hits("/api/issues/954/summary").length, 1);
+  assert.deepEqual(await hits("/api/issues/954/summary")[0][2](["954"]), { ok: false, reason: "disabled" });
+  const issues = Object.assign(async () => ({ ok: true, issues: [] }), { summary: async n => ({ ok: true, summary: [`#${n}`] }) });
+  const t2 = routeTable({ root: "/x", store: {}, hub: {}, models: [], broadcast: () => {}, issues });
+  const s = t2.find(([m, re]) => m === "GET" && re.test("/api/issues/954/summary"));
+  assert.deepEqual(await s[2](["954"]), { ok: true, summary: ["#954"] });
+});
+
+test("bodySummary keeps the first plain lines of an issue body (#954)", () => {
+  const body = "## Goal\n\n대시보드 **이슈** 카드에서 [이슈](https://x/y)를 누르면\n```js\ncode()\n```\n- [ ] 오른쪽 패널\n<!-- c -->\n---\n4번째 줄";
+  assert.deepEqual(bodySummary(body), ["Goal", "대시보드 이슈 카드에서 이슈를 누르면", "오른쪽 패널"]);
+  assert.deepEqual(bodySummary("a\u0007b " + "x".repeat(200), { lines: 1, width: 10 }), ["a b xxxxx…"]);
+  assert.deepEqual(bodySummary(null), []);
+});
+
+test("listIssues.summary reads one issue body through gh issue view, caches it, follows the switch (#954)", async () => {
+  const f = fakeGh({ "954": { number: 954, body: "첫 줄\n둘째 줄" } });
+  let t = 0;
+  const list = createIssueList({ workspaceDir: f.ws, cwd: f.ws, env: f.env, now: () => t });
+  assert.deepEqual(await list.summary(954), { ok: true, summary: ["첫 줄", "둘째 줄"] });
+  assert.deepEqual(await list.summary(954), { ok: true, summary: ["첫 줄", "둘째 줄"] });
+  assert.deepEqual(f.calls().map(c => c.args), [["issue", "view", "--json", "number,body", "--", "954"]]);
+  assert.equal((await list.summary(1)).ok, false);
+  assert.deepEqual(await list.summary(0), { ok: false, reason: "error" });
+  t = 1e9;
+  await setPrTracking(f.ws, false);
+  assert.deepEqual(await list.summary(954), { ok: false, reason: "disabled" });
 });

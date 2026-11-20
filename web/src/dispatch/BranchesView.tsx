@@ -124,7 +124,7 @@ export function BranchesPage() {
   const off = prOffText(data.pr);
   const sum = branchSummary(rows);
   return (
-    <section data-branches-page className="flex min-w-0 flex-col gap-4 px-5 pt-1 pb-5 max-md:px-4">
+    <section data-branches-page className="flex min-w-0 flex-col gap-4 px-5 pt-1 pb-5 max-md:px-4 lg:min-h-0 lg:flex-1">
       <div className="flex flex-wrap items-center gap-3">
         <LiveChip />
         <span className="flex-1" />
@@ -137,8 +137,8 @@ export function BranchesPage() {
         <p className="m-0 text-sm text-muted-foreground">세션 브랜치가 아직 없어요. worktree로 세션을 만들면 여기에 떠요.</p>
       ) : (
         // Graph 70%, branch list 30% (user, 2026-11-20): both fit the screen and scroll inside, so nothing hides below.
-        <div data-branches-split className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(16rem,3fr)]">
-          <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2 lg:max-h-[calc(100dvh-7rem)] lg:overflow-auto">
+        <div data-branches-split className="grid min-w-0 gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,7fr)_minmax(16rem,3fr)] lg:grid-rows-[minmax(0,1fr)]">
+          <section aria-labelledby={graphTitle} className="card-surface flex min-w-0 flex-col gap-1.5 px-4 pt-3.5 pb-2 lg:min-h-0 lg:overflow-auto">
             <div className="flex flex-wrap items-center gap-3">
               <h2 id={graphTitle} className="m-0 text-sm font-semibold">커밋 그래프</h2>
               <span className="text-xs text-muted-foreground">{data.base ?? '기준 브랜치'}에서 갈라진 순서대로 보여요</span>
@@ -173,7 +173,7 @@ export function BranchesPage() {
 function BranchList({ rows, base, now }: { rows: BranchRow[]; base: string | null; now: number }) {
   const title = useId();
   return (
-    <section aria-labelledby={title} data-branch-list className="card-surface flex min-w-0 flex-col lg:max-h-[calc(100dvh-7rem)]">
+    <section aria-labelledby={title} data-branch-list className="card-surface flex min-w-0 flex-col lg:min-h-0">
       <h2 id={title} className="m-0 border-b px-4 pt-3.5 pb-2 text-sm font-semibold">
         브랜치 <span className="font-normal text-muted-foreground tabular-nums">{rows.length}</span>
       </h2>

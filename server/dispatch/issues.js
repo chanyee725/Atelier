@@ -29,6 +29,32 @@ export function referencedIssues(body) {
   return [...new Set([...body.matchAll(REFS)].map(m => issueNumber(Number(m[1]))).filter(Boolean))];
 }
 
+/**
+ * The first few lines of an issue body for the start panel (#954): markdown marks, links' targets, code blocks, HTML
+ * and blank lines dropped, each line cut to `width`. Kept in memory only, never written.
+ */
+export function bodySummary(body, { lines = 3, width = 160 } = {}) {
+  if (typeof body !== "string") return [];
+  const out = [];
+  let fence = false;
+  for (const raw of body.split(/\r?\n/)) {
+    if (/^\s*(```|~~~)/.test(raw)) { fence = !fence; continue; }
+    if (fence) continue;
+    const t = raw
+      .replace(/<[^>]*>/g, " ")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+)/, "")
+      .replace(/[*_`~]+/g, "")
+      .replace(CONTROL, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!t || /^[-=|:\s]+$/.test(t)) continue;
+    out.push(t.length > width ? `${t.slice(0, width - 1)}…` : t);
+    if (out.length >= lines) break;
+  }
+  return out;
+}
+
 const cleanTitle = t => (typeof t === "string" ? t.replace(CONTROL, " ").trim().slice(0, TITLE_MAX) : "");
 
 /**
@@ -140,6 +166,25 @@ export function createIssueList({ workspaceDir, cwd, env, prDefault = async () =
     } catch { state = null; }
     states.set(num, { at: now(), state });
     return state;
+  };
+  // The start panel's body summary (#954): `{ ok: true, summary }` (bodySummary's lines) or `{ ok: false, reason }`,
+  // one `gh issue view` per issue per cacheMs. Only the summary lines are kept, in memory.
+  const summaries = new Map(); // n -> { at, result }
+  listIssues.summary = async n => {
+    const num = issueNumber(n);
+    if (!num || typeof cwd !== "string" || !cwd) return { ok: false, reason: "error" };
+    const hit = summaries.get(num);
+    if (hit && now() - hit.at < cacheMs) return hit.result;
+    if (workspaceDir && !(await prTrackingEnabled(workspaceDir, await prDefault()))) return { ok: false, reason: "disabled" };
+    let result;
+    try {
+      result = { ok: true, summary: bodySummary((await gh(["issue", "view", "--json", "number,body", "--", String(num)]))?.body) };
+    } catch (e) {
+      const reason = e instanceof SyntaxError ? "error" : classify(e);
+      result = { ok: false, reason: reason === "no-pr" ? "error" : reason };
+    }
+    summaries.set(num, { at: now(), result });
+    return result;
   };
   return listIssues;
 }

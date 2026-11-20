@@ -1,12 +1,14 @@
 // 타임라인 card of the 세션 board (E29, #879; by team, #928): one folding row per team (a lead and the sessions under
-// it) for the picked project, the last two hours across. Only busy teams start open; a folded lead row draws the whole
+// it) for the picked project, the last 30 minutes across (#944). Only busy teams start open; a folded lead row draws the whole
 // team's activity merged. States read from the mark's shape, not a legend: work is a solid bar in the one accent colour,
 // resting a dotted line, done a thin line, waiting for a person an outlined stretch (warn), stuck a dashed outline, a
 // failure a short red tick. The exact state is in the hover title and the row's accessible name. History is state and
 // time only (GET /api/timeline). Forced-colors mode drops author backgrounds, so filled marks get a system-colour border.
 // Geometry (#936): every row's text sits on one centre line, the name and state columns have fixed widths so every
 // track starts at the same x, and marks, ticks and axis labels land on whole pixels measured from the track's width.
-// The interval picker (30초 · 1분 · 5분) sets the bucket bars are drawn at, the stretch shown and the axis ticks.
+// The interval picker (30초 · 1분 · 5분) sets the bucket bars are drawn at and the axis ticks; the stretch shown stays
+// 30 minutes (#944). While the page is visible the card polls every 5s; each update blinks a dot once beside
+// 최근 업데이트 and slides the marks along 300ms linear. Hidden pages stop polling; reduced motion only changes the text.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Card, EmptyState } from '../home/dash';
@@ -19,7 +21,8 @@ import { api, useDispatch } from './store';
 import { useScope } from './scope';
 import type { Scope } from './lib/folder.ts';
 import {
-  INTERVALS, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeInterval,
+  INTERVALS, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy,
+  timelineTeams, trackX, writeInterval,
   type IntervalId, type Span, type Team,
 } from './lib/timeline.ts';
 import type { Session, SessionState } from './types';
@@ -49,6 +52,8 @@ const DOT: Record<SessionState, string> = {
   working: 'bg-ok', waiting: 'bg-warn', failed: 'bg-destructive', stuck: 'bg-muted-foreground', resting: 'bg-muted-foreground/60', done: 'bg-muted-foreground/60',
 };
 const FORCED_FAIL = 'forced-colors:bg-[Highlight]';
+/** Each 5s update moves marks along in 300ms linear (#944); reduced motion jumps. */
+const SLIDE = 'motion-safe:transition-[left,width] motion-safe:duration-300 motion-safe:ease-linear';
 
 const hhmm = (t: number) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
 const mins = (ms: number) => {
@@ -83,13 +88,13 @@ function Track({ data, geo }: { data: Spans; geo: Geo }) {
         const box = spanBox(p.from, p.to, now, windowMs, width);
         return (
           <span key={p.from} data-span={st} title={`${STATE[st].label} · ${hhmm(p.from)}–${hhmm(p.to)} (${mins(p.to - p.from)})`}
-            className="absolute inset-y-0 flex items-center" style={{ left: box.left, width: box.width }}>
+            className={cn('absolute inset-y-0 flex items-center', SLIDE)} style={{ left: box.left, width: box.width }}>
             <span className={cn('w-full', MARK[st].className)} style={MARK[st].style} />
           </span>
         );
       })}
       {width > 0 && data.fails.map(t => (
-        <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[2px] rounded-full bg-destructive', FORCED_FAIL)}
+        <span key={t} title={`실패 · ${hhmm(t)}`} data-fail className={cn('absolute inset-y-0 w-[2px] rounded-full bg-destructive', FORCED_FAIL, SLIDE)}
           style={{ left: Math.min(width - 2, Math.max(0, trackX(t, now, windowMs, width) - 1)) }} />
       ))}
     </span>
@@ -191,8 +196,25 @@ function Axis({ geo, bucketMs, labelMs, trackRef }: { geo: Geo; bucketMs: number
 }
 
 /**
+ * 최근 업데이트 N초 전 under the axis, recounted on every 5s tick. `at` is the last successful load; a new value
+ * replays the dot's one blink (keyed remount), only when motion is allowed.
+ */
+function Updated({ at, now }: { at: number | null; now: number }) {
+  if (at === null) return null;
+  return (
+    <p data-updated className={cn('grid text-[11px] leading-4 text-muted-foreground', COLS)}>
+      <span className="@max-[560px]:hidden" />
+      <span className="flex items-center justify-end gap-1.5 tabular-nums">
+        <span key={at} aria-hidden className="size-1.5 rounded-full bg-ok forced-colors:bg-[CanvasText] motion-safe:animate-[timeline-blink_600ms_ease-out_1]" />
+        {agoLabel(now - at)}
+      </span>
+    </p>
+  );
+}
+
+/**
  * 타임라인 card (#879, #928): the teams of `projectId` (the board's picked project; 전체 = undefined, 미분류 = null)
- * over the last two hours. `focus` (#board=timeline) scrolls the card into view.
+ * over the last 30 minutes. `focus` (#board=timeline) scrolls the card into view.
  */
 export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; onOpen: (id: string) => void; focus?: boolean }) {
   const all = useDispatch(s => s.sessions);
@@ -200,6 +222,8 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
   const { known: knownFolders, pending = false } = useScope();
   const [data, setData] = useState<Timeline | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  /** When the last load succeeded (null before the first). */
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   /** Teams the person opened or closed; the rest follow whether they are busy. */
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const ref = useRef<HTMLDivElement>(null);
@@ -220,17 +244,29 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
     if (focus) ref.current?.scrollIntoView({ block: 'start' });
   }, [focus]);
 
+  // Every 5s while the page is visible (#944): reload the history and move 지금 along. A hidden page stops both and
+  // catches up the moment it shows again.
   useEffect(() => {
     let alive = true;
-    const load = () => api<Timeline>('GET', '/api/timeline').then(d => alive && setData(d), () => {});
-    load();
-    const fetchT = setInterval(load, 60_000);
-    const tick = setInterval(() => setNow(Date.now()), 15_000);
-    return () => { alive = false; clearInterval(fetchT); clearInterval(tick); };
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const load = () => api<Timeline>('GET', '/api/timeline').then(d => {
+      if (!alive) return;
+      const t = Date.now();
+      setData(d);
+      setUpdatedAt(t);
+      setNow(t);
+    }, () => {});
+    const step = () => { setNow(Date.now()); load(); };
+    const start = () => { if (timer === undefined) { step(); timer = setInterval(step, REFRESH_MS); } };
+    const stop = () => { clearInterval(timer); timer = undefined; };
+    const onVis = () => (document.hidden ? stop() : start());
+    if (document.hidden) load(); else start();
+    document.addEventListener('visibilitychange', onVis);
+    return () => { alive = false; stop(); document.removeEventListener('visibilitychange', onVis); };
   }, []);
 
-  // The server keeps two hours; every interval shows that or less.
-  const windowMs = Math.min(interval.windowMs, data?.windowMs ?? interval.windowMs);
+  // The server keeps two hours; the card shows the last 30 minutes of it whatever the interval (#944).
+  const windowMs = Math.min(WINDOW_MS, data?.windowMs ?? WINDOW_MS);
   const teams = useMemo(() => timelineTeams(all, roles, projectId, knownFolders, pending), [all, roles, projectId, knownFolders, pending]);
   const count = teams.reduce((n, t) => n + 1 + t.members.length, 0);
   const spans = useMemo(() => {
@@ -262,6 +298,7 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
               );
             })}
             <Axis geo={geo} bucketMs={interval.bucketMs} labelMs={interval.labelMs} trackRef={axisRef} />
+            <Updated at={updatedAt} now={now} />
           </div>
         )}
       </Card>

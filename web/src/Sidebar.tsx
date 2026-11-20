@@ -366,12 +366,6 @@ export function Sidebar(p: Props) {
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
         <ProjectName name={p.project} />
-        <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
-          <Search />
-        </button>
-        <button type="button" className={cn(ICON_BUTTON, NEW_FILE_BUTTON)} aria-label="새 파일 (N)" title="새 파일 (N)" onClick={p.onNewFile}>
-          <SquarePen />
-        </button>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
@@ -402,7 +396,16 @@ export function Sidebar(p: Props) {
           {views.slice(1).map(viewRow)}
         </SidebarMenu>
         <SidebarGroup className="mt-3">
-          <SidebarGroupLabel>문서</SidebarGroupLabel>
+          {/* 찾기 and 새 파일 sit beside 문서 (2026-11-20): they act on the documents, not on the project name. */}
+          <div className="flex items-center gap-1 pr-1">
+            <SidebarGroupLabel className="flex-1">문서</SidebarGroupLabel>
+            <button type="button" className={ICON_BUTTON} aria-label="찾기 (Ctrl K)" title="찾기 (Ctrl K)" onClick={p.onCommands}>
+              <Search />
+            </button>
+            <button type="button" className={cn(ICON_BUTTON, NEW_FILE_BUTTON)} aria-label="새 파일 (N)" title="새 파일 (N)" onClick={p.onNewFile}>
+              <SquarePen />
+            </button>
+          </div>
           {folders.length === 0 && loose.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">{p.view ? '아직 문서가 없어요.' : '불러오는 중이에요…'}</p>
           ) : (

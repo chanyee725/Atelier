@@ -1,6 +1,8 @@
 // Inside of the chat dock window (#937), loaded on its first open: 대화 상대 picker, the conversation (the #915 bubbles
 // and markdown reader via SessionSheet's Chat), 생각 중…, and the message box (Enter sends, Shift+Enter adds a line).
-import { useEffect, useRef } from 'react';
+// #954: an issue asked about from the dashboard is pinned under the header, and the 시작하기 bar sits under the
+// helper's proposal.
+import { useEffect, useRef, type ReactNode } from 'react';
 import { SendHorizontal, X } from 'lucide-react';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
@@ -10,6 +12,8 @@ import { Chat, type Report } from '../dispatch/SessionSheet';
 import { canRun, READ_ONLY_NOTICE } from '../dispatch/lib/runnable.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { sendsOnEnter, type ChatTarget } from './lib/chatDock.ts';
+import { IssueCard } from './IssueAsk';
+import type { AskedIssue } from './lib/askIssue';
 
 type Props = {
   titleId: string;
@@ -28,9 +32,13 @@ type Props = {
   setError: (v: string | null) => void;
   onSend: () => void;
   onClose: () => void;
+  /** The issue being talked about (#954), pinned at the top. */
+  issue: AskedIssue | null;
+  /** Under the last entry; gets a function that puts the cursor in the message box (수정 요청). */
+  after?: (focusInput: () => void) => ReactNode;
 };
 
-export default function ChatPane({ titleId, open, targets, target, onPick, session: s, thinking, draft, setDraft, busy, notice, error, setError, onSend, onClose }: Props) {
+export default function ChatPane({ titleId, open, targets, target, onPick, session: s, thinking, draft, setDraft, busy, notice, error, setError, onSend, onClose, issue, after }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   // The message box takes focus when the window opens and when another partner is picked.
   useEffect(() => {
@@ -56,10 +64,11 @@ export default function ChatPane({ titleId, open, targets, target, onPick, sessi
           <X />
         </Button>
       </header>
+      {issue && <IssueCard issue={issue} />}
       {error && <Alert variant="destructive" className="rounded-none">{error}</Alert>}
       <div className="min-h-0 flex-1">
         {s ? (
-          <Chat s={s} report={report} thinking={false} />
+          <Chat s={s} report={report} thinking={false} after={after?.(() => input.current?.focus())} />
         ) : (
           <div className="flex h-full flex-col justify-end gap-1 overlay-body-mid text-[13px] leading-[1.55]">
             <p className="m-0 font-medium">무엇이든 물어보세요</p>
