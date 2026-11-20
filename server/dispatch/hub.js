@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ownGitEnv, spawnCli } from "./cli.js";
+import { ownGitEnv, runCli, spawnCli } from "./cli.js";
 import { redact, redactDeep } from "./redact.js";
 import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
@@ -12,7 +12,7 @@ import { MODE_IDS } from "./mode-profiles.js";
 import { replyStyle } from "./style.js";
 import { checkLane, etaHint, laneItems, recordRunTime } from "./lanes.js";
 import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
-import { codexLimits, geminiResetFrom, isQuotaError, SharedLimits } from "./limits.js";
+import { codexLimits, geminiResetFrom, geminiUsage, isQuotaError, SharedLimits } from "./limits.js";
 import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
 import { asksUser, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
 import { AGENT_COLORS, pickColor } from "./colors.js";
@@ -375,7 +375,7 @@ export class Hub extends EventEmitter {
 
   /**
    * Limits per provider for the top bar: Claude windows (and Fable's own weekly window once a Fable
-   * turn reported it), Codex windows, Gemini reached/ok.
+   * turn reported it), Codex windows, Gemini reached/ok plus its windows from agy's /usage (#878).
    */
   async providerLimits(now = Date.now()) {
     const c = this.currentLimits(now);
@@ -390,9 +390,16 @@ export class Hub extends EventEmitter {
       fable: c.fable == null ? null : { windows: [{ label: "Fable 주간", used: c.fable, reset: c.fableReset }] },
       // ~/.codex/sessions is read only once the user has connected OpenAI Codex in Drawing.
       openai: this.isConnected("openai") ? (this.codexLast = await codexLimits()) : null,
-      gemini: { reached: geminiReached, reset: geminiReached ? g.reset ?? null : null },
+      gemini: {
+        reached: geminiReached, reset: geminiReached ? g.reset ?? null : null,
+        // agy is started for /usage only once the user has connected Gemini (cached five minutes).
+        windows: this.isConnected("gemini") ? ((await this.geminiUsage(runCli).catch(() => null))?.windows ?? []) : [],
+      },
     };
   }
+
+  /** Gemini's windows from agy's /usage (limits.js geminiUsage); a seam so tests can stub it. */
+  geminiUsage(run) { return geminiUsage(run); }
 
   /** Reads Codex's windows again (cached for a minute by codexLimits) for providerHold. */
   async refreshCodex() {

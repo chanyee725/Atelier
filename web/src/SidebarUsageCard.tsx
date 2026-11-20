@@ -1,6 +1,6 @@
 // Usage card for a sidebar model row (E548, #698): hovering or keyboard-focusing a provider row shows that provider's
-// usage limits. Claude: 5시간, 주간, Fable 주간; OpenAI Codex: the windows its CLI reports; Gemini: whether its quota
-// was hit. Each window shows the percent used, when it resets and the block threshold from 설정 > 사용 한도 (#676).
+// usage limits. Claude: 5시간, 주간, Fable 주간; OpenAI Codex: the windows its CLI reports; Gemini: the windows agy's
+// /usage reports (#878), else whether its quota was hit. Each window shows the percent used, when it resets and the block threshold from 설정 > 사용 한도 (#676).
 // Data comes from useUsage (the same /api/limits + providers read as the home dashboard), and the thresholds from
 // GET /api/state settings plus the `settings` event, both read only while the card is open. Numbers only: no account,
 // email or token is read or kept.
@@ -185,17 +185,17 @@ export function SidebarUsageCard({ id, meta, anchor, statusText }: { id: string;
         {meta.name}
         {group?.plan && <span className="text-xs font-normal text-muted-foreground">{group.plan}</span>}
       </p>
-      <CardBody usage={usage} group={group} rows={rows} name={meta.name} windowless={!!meta.windowless} statusText={statusText} />
+      <CardBody usage={usage} group={group} rows={rows} name={meta.name} statusText={statusText} />
     </div>
   );
 }
 
-function CardBody({ usage, group, rows, name, windowless, statusText }: { usage: ReturnType<typeof useUsage>; group: UsageGroup | undefined; rows: CardRow[]; name: string; windowless: boolean; statusText: string }) {
+function CardBody({ usage, group, rows, name, statusText }: { usage: ReturnType<typeof useUsage>; group: UsageGroup | undefined; rows: CardRow[]; name: string; statusText: string }) {
   const note = 'text-xs text-muted-foreground';
   if (usage === null) return <p className={note}>불러오는 중이에요…</p>;
   if (usage === 'failed') return <p className={note}>사용량을 불러오지 못했어요.</p>;
   if (!group) return <p className={note}>{statusText}. 연결하면 사용량이 보여요.</p>;
-  if (windowless || rows.length === 0) {
+  if (rows.length === 0) {
     if (group.reached != null)
       return <p className={note}>{group.reached ? `한도에 닿았어요.${group.reset ? ` ${until(group.reset)} 뒤 풀려요.` : ''}` : '한도에 닿지 않았어요.'}</p>;
     return <p className={note}>아직 사용량 정보가 없어요.</p>;
