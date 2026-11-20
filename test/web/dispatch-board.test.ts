@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DONE_LIMIT, etaLine, groupByStage, span, stageSpans, visibleTasks } from '../../web/src/dispatch/lib/board.ts';
+import { DONE_LIMIT, attentionTaskIds, etaLine, groupByStage, span, stageSpans, visibleTasks } from '../../web/src/dispatch/lib/board.ts';
 import type { BoardTask } from '../../web/src/dispatch/types.ts';
 
 const MIN = 60_000;
@@ -63,4 +63,9 @@ test('taskWarn: only blocked, stuck or late tasks carry a warning (#919)', async
   assert.equal(taskWarn({ stage: 'blocked', note: '', stuck: null, etaAt: null } as never, now)?.text, '막혔어요');
   assert.deepEqual(taskWarn({ stage: 'impl', note: null, stuck: { label: '예상 20분의 1.5배' }, etaAt: null } as never, now), { text: '예상 20분의 1.5배', tone: 'warn' });
   assert.equal(taskWarn({ stage: 'impl', note: null, stuck: null, etaAt: now - 10 * 60_000 } as never, now)?.tone, 'warn');
+});
+
+test('attentionTaskIds: task rows (late, mismatch, merge) hide that task from the board list; session and limit rows do not', () => {
+  const ids = attentionTaskIds([{ key: 't:a' }, { key: 'm:b' }, { key: 's:c' }, { key: 'l:five' }]);
+  assert.deepEqual([...ids].sort(), ['a', 'b']);
 });
