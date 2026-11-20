@@ -1,5 +1,5 @@
 // Headless check of the agent live view (E559, #728): a fake session on the 세션 board opens the panel from its card,
-// the panel closes by its button and by Esc, turns into a bottom sheet under 720px, and hides while 대화 보기 is open.
+// the panel closes by its button and by Esc, turns into a bottom sheet under 720px, and shows the chat in its 대화 tab (#905).
 // Run on request: DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 // The server gets a scratch HOME and a PATH of fake agent CLIs; it refuses to go on unless its log names its port and workspace.
 import { test } from 'node:test';
@@ -25,7 +25,7 @@ const freePort = () =>
     s.on('error', fail);
   });
 
-test('agent live view opens from a board card, closes by button and Esc, bottom sheet under 720px, hides under 대화 보기', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
+test('agent live view opens from a board card, closes by button and Esc, bottom sheet under 720px, chat in the 대화 tab', { skip: !ON && 'set DRAW_E2E=1, CHROME and PLAYWRIGHT_CORE to run', timeout: 120_000 }, async (t) => {
   const { chromium } = await import(pathToFileURL(join(process.env.PLAYWRIGHT_CORE, 'index.mjs')).href);
   const repo = mkdtempSync(join(tmpdir(), 'draw-live-'));
   const home = mkdtempSync(join(tmpdir(), 'draw-live-home-'));
@@ -128,10 +128,13 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-live-sheet-600.png') });
   await page.setViewportSize({ width: 1280, height: 800 });
 
-  // 5. 대화 보기 opens the session sheet and the panel hides under it.
-  await panel.getByRole('button', { name: '대화 보기' }).click();
-  await page.locator('[data-slot=sheet-content]').waitFor({ timeout: 10_000 });
-  await page.waitForFunction((id) => !document.querySelector(`dialog[data-agent-live="${id}"]:popover-open`), s.id);
+  // 5. #905: the 대화 tab shows the chat inside the panel; the panel stays open and no sheet opens over it.
+  const chatTab = panel.getByRole('tab', { name: '대화', exact: true });
+  await chatTab.click();
+  assert.equal(await chatTab.getAttribute('aria-selected'), 'true');
+  await panel.locator('[data-session-tab="chat"]').waitFor({ timeout: 10_000 });
+  assert.ok(await page.evaluate((id) => !!document.querySelector(`dialog[data-agent-live="${id}"]:popover-open`), s.id), 'panel stays open');
+  assert.equal(await page.locator('[data-slot=sheet-content]').count(), 0, 'no session sheet over the panel');
   if (SHOTS) await page.screenshot({ path: join(SHOTS, 'agent-live-chat-1280.png') });
   const body = await page.locator('body').textContent();
   assert.ok(!body.includes(home) && !body.includes(repo), 'no scratch home or repo path on the page');
