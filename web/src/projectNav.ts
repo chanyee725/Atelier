@@ -162,8 +162,7 @@ export function shellKey(e: KeyLike): ShellKey | null {
 
 /** "42%" from a 0..1 fraction; null when unknown. */
 export const percent = (used: number | null | undefined) => (used == null || !Number.isFinite(used) ? null : Math.max(0, Math.min(100, Math.round(used * 100))));
-/** Above this a usage figure turns to the warning colour (doc 6 §2.1). */
-/** Sidebar usage colour steps (5-hour window): green under WARN_PERCENT, yellow from it, red from BAD_PERCENT. */
+/** Sidebar usage colour steps (5-hour window, doc 6 §2.1): green under WARN_PERCENT, yellow from it, red from BAD_PERCENT. */
 export const WARN_PERCENT = 60;
 export const BAD_PERCENT = 85;
 

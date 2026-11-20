@@ -71,7 +71,7 @@ test('percent clamps and rounds', () => {
   assert.equal(percent(Number.NaN), null);
 });
 
-test('modelStatus: text next to every dot, warn above 75%', async () => {
+test('modelStatus: text next to every dot, yellow from 60%, red from 85%', async () => {
   const { modelStatus } = await import('../../web/src/projectNav.ts');
   const m = { id: 'claude', name: 'Claude', installed: true, connected: true, pct: 42, reached: false };
   assert.deepEqual(modelStatus(m, true), { text: '42%', long: '연결됨, 5시간 한도 42% 사용', tone: 'ok' });

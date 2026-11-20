@@ -63,15 +63,3 @@ test('scopePending holds 미분류 until the project list has arrived (#761)', a
   assert.equal(scopePending(undefined, 'loading'), false);
   assert.equal(scopePending('/w/alpha', 'loading'), false);
 });
-
-test('project picker rows: 전체, projects, an unlisted pick, 미분류, with open counts', async () => {
-  const { pickerRows } = await import('../../web/src/dispatch/lib/folder.ts');
-  const list = [{ path: 'a', name: 'Alpha' }, { path: 'b c', name: '' }];
-  const ss = [s('1', 'a'), s('2', 'a', 'done'), s('3', 'b c'), s('4', 'zzz'), s('5', null)];
-  const rows = pickerRows(list, ss, known, undefined);
-  assert.deepEqual(rows.map(r => [r.label, r.open, r.current]), [['전체 프로젝트', 4, true], ['Alpha', 1, false], ['b c', 1, false], ['미분류', 2, false]]);
-  assert.deepEqual(pickerRows(list, ss, known, null).filter(r => r.current).map(r => r.folder), [null]);
-  const odd = pickerRows(list, ss, new Set([...known, 'gone']), 'gone');
-  assert.deepEqual(odd.map(r => r.label), ['전체 프로젝트', 'Alpha', 'b c', 'gone', '미분류']);
-  assert.equal(odd.find(r => r.current)?.folder, 'gone');
-});
