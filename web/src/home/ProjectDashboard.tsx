@@ -1,14 +1,15 @@
 // Card dashboard (#686, #793): one grid of compact cards for the project, no document list (the sidebar's 문서 tree
 // has the documents). Left: the work in progress, sessions running now and the open GitHub issues as the unit of work
-// (#776, #784, #785). Right: 사용량 설정 (limits per provider) and a tabbed card, PR과 머지 / 사용량 (#819); no 최근
+// (#776, #784, #785). Right: 세션 요청 (what sessions asked a person for, #880; it took 사용량 설정's place, the
+// sidebar shows model usage) and a tabbed card, PR과 머지 / 사용량 (#819); no 최근
 // 문서 card (the sidebar has the documents) and no branch card (branch status is the sidebar's 브랜치 row, the board's
 // 브랜치 tab). All live: agents by the event stream, sessions by session events, branches, PRs and usage by polling
 // while the page is visible.
 // `fill` (#819, the home 대시보드): side by side, both columns end at the pane's bottom edge. 실행 중인 세션 takes 2 parts
 // and 이슈 3 parts of the left column (each list scrolls inside; issues page to the rows that fit, the pager on the
-// card's bottom edge); the tabbed card takes what 사용량 설정 leaves. At a narrow main pane (under 880px) the halves
-// stack, work first, and the page scrolls as before. Live sessions show as small cards in even rows (#799, #819).
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+// card's bottom edge); the tabbed card takes what 세션 요청 leaves. At a narrow main pane (under 880px) the halves
+// stack, work first, and the page scrolls as before. Live sessions show as small cards, 4 a row (#799, #875).
+import { useMemo, type ReactNode } from 'react';
 import { boardHash, plainClick } from '../projectNav';
 import { ArrowRight, FileText, LoaderCircle, RotateCw } from 'lucide-react';
 import type { ProjectInfo } from '../api';
@@ -24,8 +25,7 @@ import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
 import { PrsCard } from './WorkCards';
 import { WorkTabsCard } from './WorkTabsCard';
-import { colsThatFit, perCard, rowSizes } from './sessionGrid';
-import { UsageSettingsCard } from './UsageSettingsCard';
+import { SessionRequestsCard } from './SessionRequestsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectSessions, useSessionBranches } from './projectFeeds';
 
 type Props = {
@@ -35,9 +35,11 @@ type Props = {
   onBoard: (folder: string, tab?: 'usage') => void;
   /** Fill the pane to its bottom edge (#819); the parent must be a flex column of fixed height (the home <main>). */
   fill?: boolean;
+  /** Opens a session on the 세션 보드 (a 세션 요청 row, #880). */
+  onSession?: (id: string) => void;
 };
 
-export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
+export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: Props) {
   const { agents: live, retry } = useAgents();
   const agents = useMemo(() => (Array.isArray(live) ? agentsIn(live, project.path) : live), [live, project.path]);
   const titles = useMemo(() => new Map(allDocs([project], []).map((x) => [x.doc.path, x.doc.title])), [project]);
@@ -56,7 +58,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill }: Props) {
         <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
-        <UsageSettingsCard />
+        <SessionRequestsCard sessions={sessions} folder={project.path} onOpen={onOpen} onSession={onSession} />
         {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>
     </DashGrid>
@@ -99,50 +101,28 @@ function SessionsCard({ agents, onRetry, titleOf, onOpen, folder, onBoard, fill 
           <EmptyState className="@min-[880px]:flex-1 @min-[880px]:items-center @min-[880px]:justify-center">지금 실행 중인 세션이 없어요.</EmptyState>
         )
       ) : (
-        <SessionGrid label="실행 중인 세션" count={list.length}>
-          {(widthOf) =>
-            list.map((a, i) => (
-              <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} width={widthOf(i)} />
-            ))
-          }
+        <SessionGrid label="실행 중인 세션">
+          {list.map((a) => (
+            <SessionCard key={a.sid} agent={a} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
+          ))}
         </SessionGrid>
       )}
     </Card>
   );
 }
 
-/** Narrowest session card, px: name, state, role, model and step stay readable (#819). */
-const SESSION_MIN_PX = 224;
-const SESSION_GAP_PX = 8;
-
 /**
- * Session cards in even rows (#819): as many a row as fit at SESSION_MIN_PX (at most 4), then spread over the fewest
- * rows so none is left with an empty cell (4 → 2 + 2, 7 → 3 + 2 + 2). Each card's width is a share of its row.
+ * Session cards in rows of 4 (#875): 4 a row when the card is wide enough (the home 대시보드 at 1660px), else 2,
+ * else 1. CSS grid on the card's own width (a container query), so the columns follow the pane, not the window.
+ * Breakpoints keep each card at about 180px or more: name and state text stay on one line (#819).
  */
-function SessionGrid({ label, count, children }: { label: string; count: number; children: (widthOf: (i: number) => string) => ReactNode }) {
-  const ref = useRef<HTMLUListElement | null>(null);
-  const [width, setWidth] = useState(0);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const read = () => {
-      const cs = getComputedStyle(el);
-      setWidth(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
-    };
-    read();
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(read);
-    ro?.observe(el);
-    return () => ro?.disconnect();
-  }, []);
-  const each = perCard(rowSizes(count, colsThatFit(width, SESSION_MIN_PX, SESSION_GAP_PX, 4)));
-  const widthOf = (i: number) => {
-    const k = each[i] ?? 1;
-    return k === 1 ? '100%' : `calc((100% - ${(k - 1) * SESSION_GAP_PX}px) / ${k})`;
-  };
+function SessionGrid({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <ul ref={ref} aria-label={label} className="m-0 flex list-none flex-wrap content-start gap-2 p-2">
-      {children(widthOf)}
-    </ul>
+    <div className="@container/sessions">
+      <ul aria-label={label} data-session-grid className="m-0 grid list-none grid-cols-1 content-start gap-2 p-2 @min-[24rem]/sessions:grid-cols-2 @min-[47.5rem]/sessions:grid-cols-4">
+        {children}
+      </ul>
+    </div>
   );
 }
 
@@ -153,7 +133,7 @@ function SessionGrid({ label, count, children }: { label: string; count: number;
  * The card's top part opens the session's live view; the file line opens the document. In a narrow card the state
  * keeps only its icon (under 11rem) and the model moves under the role (under 12rem).
  */
-function SessionCard({ agent: a, title, onOpen, width }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void; width?: string }) {
+function SessionCard({ agent: a, title, onOpen }: { agent: AgentPresence; title: string | null; onOpen: (p: string) => void }) {
   const busy = isBusy(a);
   const look = !busy && needsLook(a);
   const editing = isEditingDiagram(a);
@@ -167,7 +147,6 @@ function SessionCard({ agent: a, title, onOpen, width }: { agent: AgentPresence;
       data-agent={a.sid}
       data-busy={busy || undefined}
       data-editing={editing || undefined}
-      style={width ? { width } : undefined}
       className="@container/session flex min-w-0 flex-col rounded-md border bg-card text-xs transition-colors hover:bg-accent/40"
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}

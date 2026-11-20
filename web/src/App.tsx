@@ -962,8 +962,9 @@ export function App() {
     />
   );
 
-  // The 알림함 sits at the right end of whichever top bar is on screen (#786).
-  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon-sm', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[17px]' })} onOpen={openFile} onSession={openBoardSession} files={treePaths} />;
+  // The 알림함 sits at the right end of whichever top bar is on screen (#786); a step larger than the other top-bar
+  // icons (#880): 32px target, 19px bell.
+  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[19px]' })} onOpen={openFile} onSession={openBoardSession} files={treePaths} />;
   return (
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
@@ -1012,6 +1013,7 @@ export function App() {
               onCreate={(k, project) => void newFile(project, k)}
               // '' = the whole-project dashboard: the whole board, not 미분류.
               onBoard={(f, tab) => showSection({ kind: 'board', tab: tab ?? 'sessions', folder: f || undefined })}
+              onSession={openBoardSession}
               // `/` on the dashboard: the command menu on its 문서 section, the same search Ctrl/⌘+K opens (#793).
               onFind={findFile}
             />

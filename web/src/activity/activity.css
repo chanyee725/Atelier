@@ -3,17 +3,17 @@
 
 .activity-badge {
   position: absolute;
-  inset-block-start: 1px;
-  inset-inline-end: 0;
-  min-inline-size: 15px;
-  block-size: 15px;
+  inset-block-start: 0;
+  inset-inline-end: -2px;
+  min-inline-size: 17px;
+  block-size: 17px;
   padding: 0 4px;
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--primary);
   color: var(--primary-foreground);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 15px;
+  line-height: 17px;
   text-align: center;
   font-variant-numeric: tabular-nums;
   pointer-events: none;

@@ -85,6 +85,9 @@ test('app sidebar: project name, 문서, dashboard home, frames A/B, shortcuts, 
   assert.ok((await nav.locator('[data-project-name]').innerText()).endsWith(basename(repo)));
   assert.equal(await nav.getByRole('button', { name: /폴더 바꾸기/ }).count(), 0);
   assert.equal(await nav.getByRole('button', { name: '새 프로젝트' }).count(), 0);
+  // Views in order (#876), and no 작업 중인 에이전트 group (the dashboard's 실행 중인 세션 card shows them).
+  assert.deepEqual(await nav.locator('[data-nav]').evaluateAll((els) => els.map((e) => e.getAttribute('data-nav'))), ['all', 'board', 'branches', 'recent', 'archive']);
+  assert.equal(await nav.getByText('작업 중인 에이전트').count(), 0);
   // 문서: top folders sorted by name (the meta name wins over the folder name), then the loose documents.
   const group = nav.locator('[data-slot="sidebar-group"]').filter({ hasText: '문서' });
   assert.equal(await group.locator('[data-slot="sidebar-group-label"]').innerText(), '문서');

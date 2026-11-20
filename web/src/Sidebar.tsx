@@ -1,12 +1,13 @@
-// App sidebar, layout B (design doc 6 §2.1, §3.1): the project's name with search and new-file icons, the views
-// (대시보드 A, 최근 R, 보관함 B) and the 세션 보드 link, then 문서: this one project's folders and documents with their nested
+// App sidebar, layout B (design doc 6 §2.1, §3.1): the project's name with search and new-file icons, the views in
+// order 대시보드 A, 세션 보드 S, 브랜치, 최근 R, 보관함 B (#876; no 작업 중인 에이전트 group, the dashboard's 실행 중인
+// 세션 card shows them), then 문서: this one project's folders and documents with their nested
 // sub-documents (#778), one row per model with its connection status (SidebarModels.tsx) and settings.
 // Built from the shadcn Sidebar (components/ui/sidebar.tsx).
 import { freshClass } from './freshPaths';
 import { approvalCount } from './activity/approvals';
 import { usePermissionAsks } from './activity/permissionAsksStore';
 import { useWaitingPlans } from './activity/waitingPlans';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Archive, ChevronRight, Clock, File, FolderClosed, FolderInput, GitBranch, House, LayoutGrid, MoreHorizontal, Pencil, Search, SquarePen, Trash2 } from 'lucide-react';
 import type { DocNode, PipelineMark, Project, ProjectsView } from './api';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from './components/ui/dropdown-menu';
@@ -30,11 +31,10 @@ import { cn } from './lib/utils';
 import { openPathsFor, type Section } from './projectNav';
 import { SettingsEntry } from './settings/SettingsEntry';
 import { SidebarModels } from './SidebarModels';
-import { WorkingAgents } from './activity/WorkingAgents';
 import { ThemeSwitch } from './ThemeSwitch';
 import { ProjectName } from './ProjectName';
 import type { Theme, ThemePref } from './theme';
-import { displayName, titlesOf } from './docTitles';
+import { displayName } from './docTitles';
 import { moveDestinations, moveItemOf, moveTarget, type MoveDestination, type MoveItem } from './sidebarMove';
 
 type Props = {
@@ -334,9 +334,23 @@ export function Sidebar(p: Props) {
     { id: 'archive', label: '보관함', icon: Archive, key: 'B', run: p.onArchive },
   ] as const;
   const waiting = approvalCount(useWaitingPlans(), usePermissionAsks());
+  const viewRow = (v: (typeof views)[number]) => (
+    <SidebarMenuItem key={v.id}>
+      <SidebarMenuButton aria-current={p.section.kind === v.id ? 'page' : undefined} onClick={v.run} data-nav={v.id} className="group/row">
+        <v.icon aria-hidden />
+        <span className="truncate">{v.label}</span>
+        {/* What waits for a person (#836): waiting plans and permission prompts, shown on the dashboard's 승인 대기 card. */}
+        {v.id === 'all' && waiting > 0 && (
+          <SidebarMenuBadge className="min-w-5 rounded-full bg-warn/15 px-1.5 text-center font-medium text-foreground" aria-label={`승인 대기 ${waiting}건`}>
+            {waiting}
+          </SidebarMenuBadge>
+        )}
+        <Kbd className={cn(v.id === 'all' && waiting > 0 ? 'ml-1' : 'ml-auto', 'opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden')}>{v.key}</Kbd>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
   const folders = p.view?.projects ?? [];
   const loose = p.view?.loose ?? [];
-  const titles = useMemo(() => titlesOf(p.view), [p.view]);
   return (
     <SidebarRoot label="사이드바">
       <SidebarHeader className="flex-row items-center gap-1 pt-[9px]">
@@ -350,21 +364,7 @@ export function Sidebar(p: Props) {
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
-          {views.map((v) => (
-            <SidebarMenuItem key={v.id}>
-              <SidebarMenuButton aria-current={p.section.kind === v.id ? 'page' : undefined} onClick={v.run} data-nav={v.id} className="group/row">
-                <v.icon aria-hidden />
-                <span className="truncate">{v.label}</span>
-                {/* What waits for a person (#836): waiting plans and permission prompts, shown on the dashboard's 승인 대기 card. */}
-                {v.id === 'all' && waiting > 0 && (
-                  <SidebarMenuBadge className="min-w-5 rounded-full bg-warn/15 px-1.5 text-center font-medium text-foreground" aria-label={`승인 대기 ${waiting}건`}>
-                    {waiting}
-                  </SidebarMenuBadge>
-                )}
-                <Kbd className={cn(v.id === 'all' && waiting > 0 ? 'ml-1' : 'ml-auto', 'opacity-0 group-hover/row:opacity-100 group-focus-visible/row:opacity-100 max-md:hidden')}>{v.key}</Kbd>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
+          {views.slice(0, 1).map(viewRow)}
           <SidebarMenuItem>
             {/* The board is a section of the shell (#731); this server holds one project, so it shows all its sessions (#778). */}
             <SidebarMenuButton
@@ -389,8 +389,8 @@ export function Sidebar(p: Props) {
               <span className="truncate">브랜치</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {views.slice(1).map(viewRow)}
         </SidebarMenu>
-        <WorkingAgents current={p.current} onOpen={p.onOpen} titleOf={(path) => titles.get(path) ?? null} />
         <SidebarGroup className="mt-3">
           <SidebarGroupLabel>문서</SidebarGroupLabel>
           {folders.length === 0 && loose.length === 0 ? (
