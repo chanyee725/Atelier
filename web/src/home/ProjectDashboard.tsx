@@ -20,6 +20,7 @@ import { agentsIn, fileStem, isBusy, type AgentPresence } from './agents';
 import { allDocs } from './model';
 import { useAgents } from './useAgents';
 import { IssuesCard, openPrBranches } from './IssuesCard';
+import { ApprovalCard } from './ApprovalCard';
 import { PrsCard } from './WorkCards';
 import { WorkTabsCard } from './WorkTabsCard';
 import { SessionRequestsCard } from './SessionRequestsCard';
@@ -70,6 +71,7 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession }: 
       </DashColumn>
       <DashColumn label="현황" fill={fill}>
         <SessionRequestsCard sessions={sessions} folder={project.path} onOpen={onOpen} onSession={onSession} />
+        <ApprovalCard onOpen={onOpen} />
         {fill ? <WorkTabsCard issues={issues} prs={prs} onBoard={onBoard} /> : <PrsCard issues={issues} prs={prs} />}
       </DashColumn>
     </DashGrid>
