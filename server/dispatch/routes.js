@@ -1,5 +1,7 @@
 // Dispatch HTTP API as Drawing module routes. Paths are the ones the standalone Dispatch server had
 // (so mcp.js, the skills and the hook keep working); only /api/events is shared, see index.js.
+import { readdir, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { agentsSummary } from "./agents-summary.js";
 import { createChatStore } from "./chat-store.js";
@@ -46,6 +48,39 @@ export function messageBody(b) {
   const images = checkImages(b?.images);
   const text = images ? String(b?.text ?? "").trim() : required(b?.text);
   return { text, images };
+}
+
+/** A SKILL.md front matter's one-line `name` and `description`, or null. Nothing else is read out of the file. */
+export function skillMeta(text) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(text ?? ""));
+  if (!fm) return null;
+  const field = key => {
+    const m = new RegExp(`^${key}:[ \\t]*(.*)$`, "m").exec(fm[1]);
+    return m ? m[1].trim().replace(/^(["'])(.*)\1$/, "$2") : "";
+  };
+  const name = field("name");
+  if (!/^[\w:.-]{1,64}$/.test(name)) return null;
+  const description = field("description");
+  return { name, description: /^[>|]/.test(description) ? "" : description.slice(0, 200) };
+}
+
+/**
+ * Installed skills for the chat's "/" menu (#968): `name` and `description` only, no paths or file contents.
+ * Looks in the project's .claude/skills and the user's ~/.claude/skills; the project wins on a name clash.
+ */
+export async function listSkills(dirs) {
+  const seen = new Map();
+  for (const dir of dirs) {
+    let names = [];
+    try { names = await readdir(dir); } catch { continue; }
+    for (const n of names.sort()) {
+      if (n.startsWith(".")) continue;
+      let meta = null;
+      try { meta = skillMeta(await readFile(path.join(dir, n, "SKILL.md"), "utf8")); } catch { /* not a skill */ }
+      if (meta && !seen.has(meta.name)) seen.set(meta.name, meta);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function readBody(req, max = MAX_BODY) {
@@ -243,6 +278,9 @@ export function routeTable(d) {
       await d.refreshProviders();
       return { ok: true, connected: !!d.providers()[id]?.connected };
     }],
+    ["GET", /^\/api\/skills$/, async () => ({
+      skills: await listSkills(d.skillDirs ?? [path.join(root, ".claude", "skills"), path.join(homedir(), ".claude", "skills")]),
+    })],
     // Saved chat history (#968): .atelier/chat/, masked by chat-store.js before it reaches disk, never in git.
     ["GET", /^\/api\/chats$/, async () => ({ chats: await chats().list() })],
     ["GET", /^\/api\/chats\/([a-z0-9]+)$/, async ([id]) => {
