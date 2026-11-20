@@ -340,8 +340,8 @@
   gap: 8px;
 }
 .agent-live-btn[aria-pressed='true'] {
-  border-color: var(--border);
-  background: var(--muted);
+  border-color: var(--ring);
+  background: var(--accent);
 }
 .agent-work-doc-head {
   grid-template-columns: auto 1fr auto;
