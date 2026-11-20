@@ -169,9 +169,12 @@ export function routeTable(d) {
     // Harness profiles per mode × role (#748). PUT: { cells }, { hints } or { reset: true | <mode> }.
     ["GET", /^\/api\/mode-profiles$/, async () => d.modeProfiles.get()],
     ["PUT", /^\/api\/mode-profiles$/, async (_, b) => d.modeProfiles.put(b)],
-    ["POST", /^\/api\/sessions$/, async (_, b) => ({
-      sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }), ...(typeof b.lane === "string" && { lane: b.lane }) }),
-    })],
+    ["POST", /^\/api\/sessions$/, async (_, b) => {
+      const images = checkImages(b.images);
+      return {
+        sessions: await hub.create({ items: b.items || [], commonPrompt: b.commonPrompt || "", worktree: b.worktree !== false, parent: b.parent || null, folder: b.folder, ...(typeof b.mode === "string" && { mode: b.mode }), ...(typeof b.lane === "string" && { lane: b.lane }), ...(images && { images }) }),
+      };
+    }, { maxBody: MESSAGE_BODY }],
     ["GET", /^\/api\/sessions\/([\w-]+)\/messages$/, async ([id]) => ({ session: hub.publicSession(session(id)), messages: hub.transcript(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/live$/, async ([id]) => ({ session: hub.publicSession(session(id)), live: hub.liveState(id) })],
     ["GET", /^\/api\/sessions\/([\w-]+)\/diff$/, async ([id]) => diff(session(id).cwd, root)],

@@ -1,7 +1,14 @@
 // Chat images (#968 s2): POST /api/sessions/:id/message takes images [{ mediaType, data }] for Claude sessions;
 // the CLI gets content blocks, the transcript keeps only "[이미지 N장]".
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Store } from "../../server/dispatch/dispatch-store.js";
+import { SharedLimits } from "../../server/dispatch/limits.js";
+import { staticModels } from "../../server/dispatch/models.js";
+import { ROLES } from "../../server/dispatch/roles.js";
 import { Hub, userContent } from "../../server/dispatch/hub.js";
 import { checkImages, IMAGE_LIMITS, messageBody, routeTable } from "../../server/dispatch/routes.js";
 
@@ -77,4 +84,49 @@ test("hub.send: images to a non-Claude session are refused", () => {
   const { hub, lines } = fakeHub(s);
   assert.throws(() => hub.send("a", "x", { images: [png] }), e => e.status === 400);
   assert.equal(lines.length, 0);
+});
+
+// A real Hub in a temp root that records start() instead of spawning a CLI.
+const dirs = [];
+after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
+async function realHub() {
+  const root = mkdtempSync(path.join(tmpdir(), "drawing-968-images-"));
+  dirs.push(root);
+  const store = new Store(root);
+  await store.load();
+  const hub = new Hub({ root, store, models: staticModels(), roles: ROLES, port: 0, limits: new SharedLimits(path.join(root, "limits.json")) });
+  hub.isConnected = () => true;
+  const started = [];
+  hub.start = (s, prompt, images) => started.push({ id: s.id, prompt, images, resume: s.providerSessionId });
+  return { hub, started };
+}
+const helper = (over = {}) => ({ role: "lead", model: "claude-sonnet-5-5", perm: "auto", n: 1, ...over });
+
+test("create: the helper's first message carries images; the transcript keeps the count", async () => {
+  const { hub, started } = await realHub();
+  const [s] = await hub.create({ items: [helper()], commonPrompt: "", worktree: false, images: [png] });
+  assert.deepEqual(started[0].images, [png]);
+  assert.equal(started[0].prompt, "");
+  assert.equal(hub.transcript(s.id).at(-1).text, "[이미지 1장]");
+  await assert.rejects(hub.create({ items: [helper({ n: 2 })], commonPrompt: "x", worktree: false, images: [png] }), e => e.status === 400);
+});
+
+test("create: an item's resume id becomes the CLI session to continue; bad ids are refused", async () => {
+  const { hub, started } = await realHub();
+  await hub.create({ items: [helper({ resume: "abc-123_DEF" })], commonPrompt: "next", worktree: false });
+  assert.equal(started[0].resume, "abc-123_DEF");
+  await assert.rejects(hub.create({ items: [helper({ resume: "../x" })], commonPrompt: "x", worktree: false }), e => e.status === 400);
+  await hub.create({ items: [helper()], commonPrompt: "fresh", worktree: false });
+  assert.equal(started[1].resume, null);
+});
+
+test("POST /api/sessions passes checked images to hub.create", async () => {
+  const calls = [];
+  const table = routeTable({ root: "/x", store: {}, hub: { create: async a => { calls.push(a); return []; } }, models: [], broadcast: () => {} });
+  const entry = table.find(([m, re]) => m === "POST" && re.test("/api/sessions"));
+  await entry[2]([], { items: [helper()], commonPrompt: "hi" });
+  await entry[2]([], { items: [helper()], commonPrompt: "", images: [png] });
+  assert.equal(calls[0].images, undefined);
+  assert.deepEqual(calls[1].images, [png]);
+  await assert.rejects(entry[2]([], { items: [helper()], images: [{ mediaType: "text/html", data: "AAAA" }] }), e => e.status === 400);
 });

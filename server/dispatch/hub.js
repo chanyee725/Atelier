@@ -78,6 +78,9 @@ const clip = (s, n = 2000) => { s = String(s ?? ""); return s.length > n ? s.sli
  * A Claude stream-json user message body: plain text, or (with images, #968) image blocks then the text block.
  * `images` are [{ mediaType, data }] already checked by routes.js (type, size, count).
  */
+/** A saved Claude CLI session id the chat may resume (same shape chat-store.js keeps). */
+const RESUME_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
 export const userContent = (text, images) => !images?.length ? text : [
   ...images.map(i => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } })),
   ...(text ? [{ type: "text", text }] : []),
@@ -642,9 +645,13 @@ export class Hub extends EventEmitter {
   // items: [{ role, model, effort, perm, prompt, n, mode }]. `mode` (per item, else the call's) picks the harness
   // profile of that mode (#748, mode-profiles.js); an item's own model, effort and perm still win over it.
   // `lane` (#768, lanes.js): quickfix skips the plan gate, refuses reviewer/tester roles and defaults to the quickfix mode.
-  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode, lane }) {
+  // `images` (#968, checked by routes.js) go with the first message of a single Claude session (the chat's helper).
+  // An item's `resume` is a saved CLI session id: the session continues that conversation (`claude --resume`).
+  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode, lane, images = null }) {
     const total = items.reduce((a, x) => a + (x.n || 1), 0);
     if (!total) throw new Error("만들 세션이 없어요");
+    if (images?.length && total > 1) throw badRequest("이미지는 세션 하나에만 보낼 수 있어요");
+    for (const it of items) if (it.resume != null && !RESUME_ID.test(String(it.resume))) throw badRequest("이어 갈 대화 id가 올바르지 않아요");
     items = laneItems(items, lane, mode);
     const gate = parent && checkLane(lane) !== "quickfix" && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
@@ -661,6 +668,7 @@ export class Hub extends EventEmitter {
     for (const it of items) {
       if (!roles.some(r => r.id === it.role)) throw badRequest(`알 수 없는 역할: ${it.role}`);
       const { provider } = modelOf(it);
+      if (provider !== "claude" && (images?.length || it.resume != null)) throw badRequest("이미지와 대화 이어 가기는 Claude 세션만 돼요");
       if (!this.isConnected(provider)) throw new Error(`${PROVIDER_NAMES[provider] ?? provider}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`);
       const hold = this.providerHold(provider);
       if (hold) throw Object.assign(new Error(hold), { status: 409 });
@@ -696,9 +704,10 @@ export class Hub extends EventEmitter {
         if (wd.warning) this.push(s, { kind: "system", text: wd.warning });
         if (it.profileNote) this.push(s, { kind: "system", text: `모드 프로필: ${it.profileNote}` });
         const first = it.task || commonPrompt;
-        this.push(s, { kind: "user", text: first, label: parent ? "관리자 지시" : "공통 프롬프트" });
+        const shown = images?.length ? [first, `[이미지 ${images.length}장]`].filter(Boolean).join("\n") : first;
+        this.push(s, { kind: "user", text: shown, label: parent ? "관리자 지시" : "공통 프롬프트" });
         this.touch(s);
-        this.start(s, first);
+        this.start(s, first, images);
         made.push(s);
       }
     }
@@ -721,7 +730,8 @@ export class Hub extends EventEmitter {
       last: "", turns: 0, ctx: 0, ctxWindow: model.contextWindow,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       cost: model.provider === "claude" ? 0 : null,
-      providerSessionId: null, error: null,
+      providerSessionId: it.resume != null && model.provider === "claude" && RESUME_ID.test(String(it.resume)) ? String(it.resume) : null,
+      error: null,
     };
   }
 
