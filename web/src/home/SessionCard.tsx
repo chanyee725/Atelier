@@ -75,13 +75,15 @@ export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent
             )}
             <RoleBadge agent={a} className="shrink-0" />
             <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>
-              {/* Working reads as a turning loader (2026-11-20), not a coloured dot; waiting and idle keep their dots. */}
-              {busy ? (
-                <LoaderCircle aria-hidden className="size-3.5 shrink-0 text-muted-foreground motion-safe:animate-spin" />
-              ) : (
-                <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, !look && 'opacity-60')} />
-              )}
+              {/* Waiting and idle keep a dot before the label; working shows a loader after it (2026-11-20). */}
+              {!busy && <span aria-hidden className={cn('session-dot size-1.5 shrink-0 rounded-full', dotTone, !look && 'opacity-60')} />}
               {state}
+              {busy && (
+                // A square box that spins as a whole, so the ring turns on its own centre instead of wobbling.
+                <span aria-hidden className="grid size-3.5 shrink-0 place-items-center motion-safe:animate-spin">
+                  <LoaderCircle className="block size-3.5 text-muted-foreground" />
+                </span>
+              )}
             </span>
           </span>
           {summary ? <TaskSummaryLine summary={summary} /> : null}

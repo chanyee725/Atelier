@@ -135,7 +135,7 @@ export function TaskBoardCard({ fill = false, onOpen, onUsage }: { fill?: boolea
           {chips.length > 0 && (
             <ul aria-label="단계별 작업 수" className="m-0 flex list-none flex-nowrap gap-1.5 overflow-x-auto border-b px-4 py-2">
               {chips.map(s => (
-                <li key={s.id} data-stage-count={s.id} className={cn('inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs tabular-nums shadow-[inset_0_0_0_1px_var(--line-strong)]', s.id === 'blocked' ? 'text-destructive' : 'text-muted-foreground')}>
+                <li key={s.id} data-stage-count={s.id} className={cn('inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md bg-foreground/6 px-2 text-xs tabular-nums', s.id === 'blocked' ? 'text-destructive' : 'text-muted-foreground')}>
                   <span aria-hidden className={cn('size-1.5 rounded-full', BAR[s.id])} />
                   {s.label}
                   <span className={cn('font-medium', s.id === 'blocked' ? 'text-destructive' : 'text-foreground')}>{groups[s.id].length}</span>

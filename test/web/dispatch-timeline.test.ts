@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTERVALS, INTERVAL_KEY, MIN_MARK, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
+import { INTERVALS, INTERVAL_KEY, MIN_MARK, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
 
 const mk = (id: string, role: string, folder: string | null, startedAt: number, parent: string | null = null) => ({ id, role, folder, startedAt, parent });
 const roles = [{ id: 'lead' }, { id: 'impl' }, { id: 'review' }];
@@ -99,11 +99,24 @@ test('axisTicks puts labels on the half hours at the tracks\' x, none crowding �
   assert.equal(axisTicks(Date.UTC(2026, 0, 1, 12, 10), 120 * min, 600).at(-1)!.t, Date.UTC(2026, 0, 1, 11, 30));
 });
 
-test('intervals: 30초 shows 15 minutes, 1분 30 minutes, 5분 two hours by default (#936)', () => {
-  assert.deepEqual(INTERVALS.map(i => [i.id, i.bucketMs / 1000, i.windowMs / 60_000]), [['30s', 30, 15], ['1m', 60, 30], ['5m', 300, 120]]);
+test('intervals: every pick shows the last 30 minutes, only the bucket and ticks change (#944)', () => {
+  assert.equal(WINDOW_MS, 30 * 60_000);
+  assert.deepEqual(INTERVALS.map(i => [i.id, i.bucketMs / 1000]), [['30s', 30], ['1m', 60], ['5m', 300]]);
+  assert.deepEqual(INTERVALS.map(i => i.hint), ['최근 30분 · 30초 간격', '최근 30분 · 1분 간격', '최근 30분 · 5분 간격']);
+  assert.ok(INTERVALS.every(i => !('windowMs' in i)));
   assert.equal(intervalOf(undefined).id, '5m');
   assert.equal(intervalOf('nope').id, '5m');
   assert.equal(intervalOf('30s').label, '30초');
+});
+
+test('agoLabel counts 최근 업데이트 in seconds, then minutes, refreshed every 5s (#944)', () => {
+  assert.equal(REFRESH_MS, 5_000);
+  assert.equal(agoLabel(0), '최근 업데이트 방금');
+  assert.equal(agoLabel(-200), '최근 업데이트 방금');
+  assert.equal(agoLabel(4_999), '최근 업데이트 방금');
+  assert.equal(agoLabel(5_000), '최근 업데이트 5초 전');
+  assert.equal(agoLabel(59_999), '최근 업데이트 59초 전');
+  assert.equal(agoLabel(125_000), '최근 업데이트 2분 전');
 });
 
 test('readInterval/writeInterval remember the pick and survive blocked or broken storage (#936)', () => {
@@ -151,9 +164,9 @@ test('bucketSpans clips the off-grid window ends and leaves untouched buckets em
 test('every interval keeps whole-pixel ticks, labels and boxes on the same x (#936)', () => {
   const now = Date.UTC(2026, 0, 1, 12, 7, 13);
   for (const iv of INTERVALS) for (const w of [1188, 1187.4, 333]) {
-    const grid = gridTicks(now, iv.windowMs, w, iv.bucketMs);
+    const grid = gridTicks(now, WINDOW_MS, w, iv.bucketMs);
     assert.ok(grid.every(Number.isInteger) && grid.every(x => x > 0 && x < w));
-    const labels = axisTicks(now, iv.windowMs, w, iv.labelMs);
+    const labels = axisTicks(now, WINDOW_MS, w, iv.labelMs);
     assert.ok(labels.length >= 1);
     for (const l of labels) assert.ok(grid.includes(l.x), `${iv.id}: label at ${l.x} sits on a tick`);
   }
