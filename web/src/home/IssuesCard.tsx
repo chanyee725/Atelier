@@ -189,7 +189,7 @@ function AheadBehind({ branch, branches }: { branch: string; branches: Feed<Bran
   const tip = branches.tips.get(branch);
   if (!tip) return null;
   return (
-    <span className="ml-auto inline-flex shrink-0 items-center gap-2 font-mono tabular-nums">
+    <span className="inline-flex shrink-0 items-center gap-1.5 pl-0.5 text-muted-foreground tabular-nums">
       <span className="sr-only">{`${branches.base}보다 커밋 ${tip.ahead}개 앞, ${tip.behind}개 뒤`}</span>
       <span aria-hidden className={tip.ahead > 0 ? 'text-foreground' : undefined}>↑{tip.ahead}</span>
       <span aria-hidden className={tip.behind > 0 ? 'text-[color-mix(in_oklch,var(--warn)_65%,var(--foreground))]' : undefined}>↓{tip.behind}</span>
@@ -197,56 +197,49 @@ function AheadBehind({ branch, branches }: { branch: string; branches: Feed<Bran
   );
 }
 
-const SUMMARY =
-  'flex cursor-pointer list-none items-center gap-1.5 px-3 py-1.5 text-muted-foreground select-none hover:bg-accent/60 hover:text-foreground focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden';
-const Chevron = () => <ChevronRight aria-hidden className="size-3 shrink-0 transition-transform duration-[120ms] group-open/d:rotate-90 motion-reduce:transition-none" />;
 
-/** The issue's sessions, branches (with ahead/behind) and every PR with its review and CI, under its row. */
+/** The issue's work under its row (2026-11-20 tidy): one inset panel with the branch → PR flow as chips, then its sessions. */
 function IssueDetails({ row: r, sessions, branches, prs }: { row: IssueRow; sessions: Session[]; branches: Feed<Branches>; prs: Feed<ReadonlyMap<string, PrAnswer>> }) {
   const labels = useAccountLabels();
   const fallback = r.sessions.flatMap((s) => (s.branch ? fromSessions(sessions, s.branch, labels).filter((x) => x.key === s.id) : []));
   const version = Math.floor(Math.max(0, ...r.sessions.map((s) => s.updatedAt ?? 0)) / 60_000);
+  const chip = 'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1';
   return (
-    <div data-issue-details className="text-xs">
-      <ul className="m-0 list-none divide-y p-0 pl-7">
-        {r.sessions.length > 0 && (
-          <li className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5 pr-3 text-muted-foreground">
-            {r.sessions.map((s) => (
-              <span key={s.id} className="inline-flex min-w-0 items-center gap-1">
-                <span className="text-foreground">{s.name}</span>
-                <span>{STATE[stateOf(s)].label}</span>
+    <div data-issue-details className="py-2 pr-3 pl-8 text-xs">
+      <div className="flex flex-col gap-2.5 rounded-card bg-background p-3 shadow-[0_0_0_1px_var(--border)]">
+        {(r.branches.length > 0 || r.prs.length > 0) && (
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {r.branches.map((b) => (
+              <span key={b} data-branch={b} className={chip} title={b}>
+                <GitBranch aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate text-foreground">{b}</span>
+                <AheadBehind branch={b} branches={branches} />
               </span>
             ))}
-          </li>
-        )}
-        {r.branches.map((b) => (
-          <li key={b} data-branch={b} className="flex min-w-0 items-center gap-1.5 py-1.5 pr-3">
-            <GitBranch aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 truncate font-mono" title={b}>{b}</span>
-            <AheadBehind branch={b} branches={branches} />
-          </li>
-        ))}
-        {r.prs.map((p) => {
-          const live = liveOf(p, prs);
-          const ci = live ? CI[live.ci] : null;
-          return (
-            <li key={p.number} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 py-1.5 pr-3">
-              <GitPullRequest aria-hidden className="size-3 shrink-0 text-muted-foreground" />
-              {p.url ? (
-                <a href={p.url} target="_blank" rel="noreferrer" className="font-mono text-foreground hover:underline">#{p.number}</a>
+            {r.branches.length > 0 && r.prs.length > 0 && <ChevronRight aria-hidden className="size-3 shrink-0 text-muted-foreground" />}
+            {r.prs.map((p) => {
+              const live = liveOf(p, prs);
+              const ci = live ? CI[live.ci] : null;
+              const body = (
+                <>
+                  <GitPullRequest aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="font-medium text-foreground tabular-nums">#{p.number}</span>
+                  <span className={p.state === 'merged' ? 'text-merged' : 'text-muted-foreground'}>{PR_STATE[p.state]}</span>
+                  {live?.review && <span className="text-muted-foreground">· {REVIEW[live.review]}</span>}
+                  {ci && <StatusDot tone={ci.tone}>{ci.label}</StatusDot>}
+                  {live?.conflict && <StatusDot tone="bad">충돌</StatusDot>}
+                </>
+              );
+              return p.url ? (
+                <a key={p.number} href={p.url} target="_blank" rel="noreferrer" className={cn(chip, 'no-underline hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none')}>{body}</a>
               ) : (
-                <span className="font-mono">#{p.number}</span>
-              )}
-              <span className="text-muted-foreground">{PR_STATE[p.state]}</span>
-              {live?.review && <span className="text-muted-foreground">{REVIEW[live.review]}</span>}
-              {ci && <StatusDot tone={ci.tone}>{ci.label}</StatusDot>}
-              {live?.conflict && <StatusDot tone="bad">충돌</StatusDot>}
-              {p.branch && <span className="ml-auto min-w-0 truncate font-mono text-muted-foreground">{p.branch}</span>}
-            </li>
-          );
-        })}
-      </ul>
-      <PrIssueSessions issue={r.number} fallback={fallback} version={version} />
+                <span key={p.number} className={chip}>{body}</span>
+              );
+            })}
+          </div>
+        )}
+        <PrIssueSessions issue={r.number} fallback={fallback} version={version} />
+      </div>
     </div>
   );
 }
