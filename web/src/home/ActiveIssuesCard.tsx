@@ -46,7 +46,7 @@ export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now(
 function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
   const st = ACTIVE_STAGE[stage];
   return (
-    <span data-active-stage={stage} className="inline-flex h-6 w-[5.75rem] shrink-0 items-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
+    <span data-active-stage={stage} className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
       <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', TONE[st.tone])} />
       <span className="truncate">{st.label}</span>
     </span>
