@@ -67,23 +67,3 @@ export const knownFolders = (paths: readonly string[], scope: Scope, ready: bool
   if (!ready && typeof scope === 'string') k.add(scope);
   return k;
 };
-
-/** One row of the board's 프로젝트 card (#879): `folder` is the scope it picks, `open` its open-session count. */
-export type PickerRow = { key: string; folder: Scope; label: string; open: number; current: boolean };
-
-/** 전체, then every project in list order, then 미분류. A picked folder missing from the list (a link that came before
- *  the list, or a removed project) keeps its own row so the card always shows what is picked. */
-export function pickerRows(
-  projects: readonly { path: string; name: string }[],
-  sessions: readonly Pick<Session, 'folder' | 'status'>[],
-  known: ReadonlySet<string>,
-  scope: Scope,
-): PickerRow[] {
-  const counts = openCounts(sessions, known);
-  const all = [...counts.values()].reduce((a, n) => a + n, 0);
-  const rows: PickerRow[] = [{ key: '\0all', folder: undefined, label: '전체 프로젝트', open: all, current: scope === undefined }];
-  for (const p of projects) rows.push({ key: p.path, folder: p.path, label: p.name || p.path, open: counts.get(p.path) ?? 0, current: scope === p.path });
-  if (typeof scope === 'string' && !projects.some(p => p.path === scope)) rows.push({ key: scope, folder: scope, label: scope, open: counts.get(scope) ?? 0, current: true });
-  rows.push({ key: '\0unfiled', folder: null, label: UNFILED, open: counts.get(null) ?? 0, current: scope === null });
-  return rows;
-}
