@@ -9,6 +9,7 @@ import { api } from '../api';
 import { pollWhileVisible } from './model';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { IssuesAnswer } from './issueBoard.ts';
+import type { BoardTask } from '../dispatch/types.ts';
 
 export type Feed<T> = T | 'failed' | null;
 
@@ -23,17 +24,24 @@ const PRS_POLL_MS = 60_000;
 /** The server answers at most this many branches per /api/prs call (routes.js PR_BRANCHES). */
 export const PR_BRANCHES = 12;
 
-/** The project's sessions (open first, newest first), reloaded on every session event (at most every 1.5s). */
-export function useProjectSessions(folder: string): Feed<Session[]> {
-  const [sessions, setSessions] = useState<Feed<Session[]>>(null);
+/**
+ * The project's sessions (open first, newest first) and the task board (stage and ETA, metadata only) from the same
+ * GET /api/state, reloaded on every session event (at most every 1.5s).
+ */
+export function useProjectState(folder: string): { sessions: Feed<Session[]>; tasks: readonly BoardTask[] } {
+  const [state, setState] = useState<{ sessions: Feed<Session[]>; tasks: readonly BoardTask[] }>({ sessions: null, tasks: [] });
   useEffect(() => {
     const ctl = new AbortController();
-    setSessions(null);
+    setState({ sessions: null, tasks: [] });
     const load = () =>
-      void get<{ sessions?: Session[] }>('/api/state', ctl.signal).then((d) => {
+      void get<{ sessions?: Session[]; tasks?: BoardTask[] }>('/api/state', ctl.signal).then((d) => {
         if (ctl.signal.aborted) return;
         // A failed reload keeps the list already shown.
-        setSessions((old) => (d ? sessionsOf(d.sessions ?? [], folder) : Array.isArray(old) ? old : 'failed'));
+        setState((old) =>
+          d
+            ? { sessions: sessionsOf(d.sessions ?? [], folder), tasks: Array.isArray(d.tasks) ? d.tasks : [] }
+            : { sessions: Array.isArray(old.sessions) ? old.sessions : 'failed', tasks: old.tasks },
+        );
       });
     let timer: ReturnType<typeof setTimeout> | null = null;
     const soon = () => {
@@ -44,7 +52,7 @@ export function useProjectSessions(folder: string): Feed<Session[]> {
       }, SESSION_EVENT_GAP_MS);
     };
     const stop = pollWhileVisible(load, SESSIONS_POLL_MS);
-    const offs = ['session', 'removed'].map((t) => events.subscribeJson<unknown>(t, soon));
+    const offs = ['session', 'removed', 'tasks'].map((t) => events.subscribeJson<unknown>(t, soon));
     return () => {
       ctl.abort();
       stop();
@@ -52,8 +60,11 @@ export function useProjectSessions(folder: string): Feed<Session[]> {
       if (timer) clearTimeout(timer);
     };
   }, [folder]);
-  return sessions;
+  return state;
 }
+
+/** The project's sessions only (see useProjectState). */
+export const useProjectSessions = (folder: string): Feed<Session[]> => useProjectState(folder).sessions;
 
 export type BranchTip = { branch: string; ahead: number; behind: number; lastAt: number | null; state: 'open' | 'merged' | 'empty' | null; base: boolean; active?: boolean };
 export type Branches = { base: string; tips: ReadonlyMap<string, BranchTip> };
