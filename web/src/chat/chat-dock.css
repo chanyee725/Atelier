@@ -24,10 +24,10 @@
   border-radius: 999px;
   /* Brand gradient (2026-11-20, from the planned Atelier logo): cyan → blue → violet, with a soft glow of the same hues.
      The one coloured object on the page, so it reads as "talk to Atelier". */
-  --chat-dock-grad: linear-gradient(135deg, oklch(0.8 0.14 210) 0%, oklch(0.62 0.2 262) 52%, oklch(0.6 0.24 305) 100%);
+  --chat-dock-grad: linear-gradient(135deg, oklch(0.65 0.12 215) 0%, oklch(0.62 0.2 262) 52%, oklch(0.6 0.24 305) 100%);
   background: var(--chat-dock-grad);
   color: white;
-  box-shadow: 0 0 0 1px oklch(0.55 0.2 270 / 0.55), 0 6px 22px oklch(0.62 0.2 262 / 0.38), 0 0 18px oklch(0.8 0.14 210 / 0.22);
+  box-shadow: 0 0 0 1px oklch(0.55 0.2 270 / 0.55), 0 6px 22px oklch(0.62 0.2 262 / 0.38), 0 0 18px oklch(0.7 0.13 212 / 0.22);
   cursor: pointer;
   transition: scale 140ms ease-out, filter 150ms ease, right 200ms ease-out;
 }
