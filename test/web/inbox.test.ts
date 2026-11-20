@@ -203,3 +203,19 @@ test('a session that starts waiting on a question raises a 알림함 item that o
   // A permission prompt (no ask) is not a question.
   assert.deepEqual(sessionEvents(prev, { ...base, status: 'waiting', state: 'waiting' }, 600), []);
 });
+
+test('a session question shows in its toast but never reaches the stored 알림함 (#886)', () => {
+  const store = new Map<string, string>();
+  const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+  const sync = createInboxSync(() => storage, () => {});
+  const base = { id: 's1', name: 'Ollie', role: 'lead', provider: 'claude' };
+  for (const since of [500, undefined]) {
+    const next = { ...base, status: 'idle', state: 'waiting', ask: '비밀 질문으로 머지할까요?', ...(since ? { stateSince: since } : {}) };
+    const t = toastOf(sessionEvents({ ...base, status: 'running', state: 'working' }, next, 600)[0])!;
+    assert.match(t.text, /비밀 질문/);
+    sync.addToast(t, since ?? 900);
+  }
+  const saved = store.get(INBOX_KEY)!;
+  assert.ok(!saved.includes('비밀 질문'), saved);
+  assert.deepEqual(sync.read().items.map((i) => i.text), ['Ollie 세션이 답을 기다려요', 'Ollie 세션이 답을 기다려요']);
+});

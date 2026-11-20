@@ -48,6 +48,8 @@ export interface AppToast {
   category: ToastCategory;
   tone: ToastTone;
   text: string;
+  /** What the 알림함 keeps instead of `text` when the toast says more than metadata (a session's question, #886). */
+  inboxText?: string;
   /** Errors stay until dismissed; the rest close by themselves. */
   persist: boolean;
   target?: ToastTarget;
@@ -59,6 +61,12 @@ const NOUN: Record<EntryKind, string> = { doc: '문서', canvas: '캔버스', fo
 const nameOf = (path: string) => fileStemOf(path.replace(/\/+$/, '')) || path;
 /** "‘설계’ 문서" — the entry's own name in quotes, then what it is. */
 const label = (kind: EntryKind, path: string, title?: string) => `‘${(title || nameOf(path)).slice(0, 40)}’ ${NOUN[kind]}`;
+/** A short signature of a text, so a key tells two texts apart without holding either. */
+const textSig = (t: string) => {
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
 const PR_STATE: Record<string, string> = { open: '열렸어요', merged: '병합됐어요', closed: '닫혔어요' };
 
 /** The toast for one event; null when it says nothing worth a toast (an unknown PR state). */
@@ -104,8 +112,10 @@ export function toastOf(e: AppEvent): AppToast | null {
     }
     case 'session-asks':
       // Stays until closed: a question left unseen stalls the team (#886). 열기 goes to the session's live view.
+      // The question shows in the toast only: the 알림함 is saved to localStorage, so it and the key keep metadata.
       return {
-        ...info('sessions', `session-asks:${e.id}:${e.since ?? e.ask}`, `${e.name} 세션이 답을 기다려요: ${e.ask}`, { session: e.id }),
+        ...info('sessions', `session-asks:${e.id}:${e.since ?? textSig(e.ask)}`, `${e.name} 세션이 답을 기다려요: ${e.ask}`, { session: e.id }),
+        inboxText: `${e.name} 세션이 답을 기다려요`,
         persist: true,
         agent: { name: e.name, role: e.role ?? '', ...(e.provider ? { provider: e.provider } : {}) },
       };
