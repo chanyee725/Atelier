@@ -195,7 +195,7 @@ export function UserDefaultsForm() {
           )}
           {readOnly && broken && (
             <div className="flex justify-end">
-              <button type="button" onClick={() => void load()} className={cn(BTN, 'border')}>
+              <button type="button" onClick={() => void load()} className={cn(BTN, 'bg-card shadow-(--shadow-card)')}>
                 다시 읽기
               </button>
             </div>
