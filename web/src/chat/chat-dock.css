@@ -128,3 +128,115 @@
 :root:has([data-slot="dialog-overlay"], [data-slot="sheet-overlay"], dialog:modal) :is(.chat-dock-fab, .chat-dock-window) {
   display: none;
 }
+
+/* #968 s2. 크게 보기: the same window, wider and taller (still above the button, still non-modal). */
+.chat-dock-window[data-expanded] {
+  width: min(760px, 100vw - 2rem);
+  height: min(860px, 100dvh - var(--h-bar, 52px) - var(--chat-dock-fab) - 44px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chat-dock-window {
+    transition-property: opacity, scale, display, overlay, width, height;
+  }
+}
+
+/* Tokens and cost of the conversation: quiet, tabular, next to the title. */
+.chat-dock-spend {
+  margin-left: 6px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.chat-composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chat-composer.is-dragging {
+  background: color-mix(in oklch, var(--primary) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 45%, transparent);
+}
+
+/* "/" menu: a cmdk list driven from the textarea, sitting on the box's top edge. */
+.chat-slash-menu {
+  position: absolute;
+  left: var(--overlay-x);
+  right: var(--overlay-x);
+  bottom: calc(100% + 4px);
+  z-index: 1;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.14);
+}
+
+.chat-attachments {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chat-attachments li {
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+.chat-attachments img {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border);
+}
+.chat-attachments button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--background);
+  cursor: pointer;
+}
+.chat-attachments button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* A reopened saved conversation, read-only until the next message resumes it. */
+.chat-prior {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.chat-prior p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-prior-who {
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.chat-prior-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}

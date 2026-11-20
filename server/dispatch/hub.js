@@ -74,6 +74,18 @@ const sessionEnv = s => ({ ...SESSION_ENV, ...ownGitEnv(), DRAWING_SESSION: s.id
 const isOpenStatus = st => !["done", "error"].includes(st);
 const clip = (s, n = 2000) => { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; };
 
+/**
+ * A Claude stream-json user message body: plain text, or (with images, #968) image blocks then the text block.
+ * `images` are [{ mediaType, data }] already checked by routes.js (type, size, count).
+ */
+/** A saved Claude CLI session id the chat may resume (same shape chat-store.js keeps). */
+const RESUME_ID = /^[A-Za-z0-9_-]{1,80}$/;
+
+export const userContent = (text, images) => !images?.length ? text : [
+  ...images.map(i => ({ type: "image", source: { type: "base64", media_type: i.mediaType, data: i.data } })),
+  ...(text ? [{ type: "text", text }] : []),
+];
+
 // Splits a child's stdout into JSON lines. A last line without a trailing newline is read when the stream ends.
 function onJsonLines(stream, fn) {
   let buf = "";
@@ -633,9 +645,13 @@ export class Hub extends EventEmitter {
   // items: [{ role, model, effort, perm, prompt, n, mode }]. `mode` (per item, else the call's) picks the harness
   // profile of that mode (#748, mode-profiles.js); an item's own model, effort and perm still win over it.
   // `lane` (#768, lanes.js): quickfix skips the plan gate, refuses reviewer/tester roles and defaults to the quickfix mode.
-  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode, lane }) {
+  // `images` (#968, checked by routes.js) go with the first message of a single Claude session (the chat's helper).
+  // An item's `resume` is a saved CLI session id: the session continues that conversation (`claude --resume`).
+  async create({ items, commonPrompt, worktree = true, parent = null, folder, mode, lane, images = null }) {
     const total = items.reduce((a, x) => a + (x.n || 1), 0);
     if (!total) throw new Error("만들 세션이 없어요");
+    if (images?.length && total > 1) throw badRequest("이미지는 세션 하나에만 보낼 수 있어요");
+    for (const it of items) if (it.resume != null && !RESUME_ID.test(String(it.resume))) throw badRequest("이어 갈 대화 id가 올바르지 않아요");
     items = laneItems(items, lane, mode);
     const gate = parent && checkLane(lane) !== "quickfix" && this.createGate?.(parent);
     if (gate) throw Object.assign(new Error(gate), { status: 409 });
@@ -652,6 +668,7 @@ export class Hub extends EventEmitter {
     for (const it of items) {
       if (!roles.some(r => r.id === it.role)) throw badRequest(`알 수 없는 역할: ${it.role}`);
       const { provider } = modelOf(it);
+      if (provider !== "claude" && (images?.length || it.resume != null)) throw badRequest("이미지와 대화 이어 가기는 Claude 세션만 돼요");
       if (!this.isConnected(provider)) throw new Error(`${PROVIDER_NAMES[provider] ?? provider}가 Drawing에 연결되지 않았어요. 연결하기에서 먼저 연결하세요.`);
       const hold = this.providerHold(provider);
       if (hold) throw Object.assign(new Error(hold), { status: 409 });
@@ -687,9 +704,10 @@ export class Hub extends EventEmitter {
         if (wd.warning) this.push(s, { kind: "system", text: wd.warning });
         if (it.profileNote) this.push(s, { kind: "system", text: `모드 프로필: ${it.profileNote}` });
         const first = it.task || commonPrompt;
-        this.push(s, { kind: "user", text: first, label: parent ? "관리자 지시" : "공통 프롬프트" });
+        const shown = images?.length ? [first, `[이미지 ${images.length}장]`].filter(Boolean).join("\n") : first;
+        this.push(s, { kind: "user", text: shown, label: parent ? "관리자 지시" : "공통 프롬프트" });
         this.touch(s);
-        this.start(s, first);
+        this.start(s, first, images);
         made.push(s);
       }
     }
@@ -712,7 +730,8 @@ export class Hub extends EventEmitter {
       last: "", turns: 0, ctx: 0, ctxWindow: model.contextWindow,
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       cost: model.provider === "claude" ? 0 : null,
-      providerSessionId: null, error: null,
+      providerSessionId: it.resume != null && model.provider === "claude" && RESUME_ID.test(String(it.resume)) ? String(it.resume) : null,
+      error: null,
     };
   }
 
@@ -756,9 +775,10 @@ export class Hub extends EventEmitter {
   /** True while a guard window is over its threshold: no new turns until the reset. */
   get paused() { return !!this.limitHit(); }
 
-  send(id, text, { force = false } = {}) {
+  send(id, text, { force = false, images = null } = {}) {
     const s = this.get(id);
     if (!s) throw Object.assign(new Error("세션이 없어요"), { status: 404 });
+    if (images?.length && s.provider !== "claude") throw Object.assign(new Error("이미지는 Claude 세션에만 보낼 수 있어요"), { status: 400 });
     if (!force && this.paused) throw new Error("사용량 한도로 일시정지 중이에요. 남은 작업은 티켓으로 저장됐고, 초기화되면 이어서 진행해요.");
     if (s.provider === "openai") void this.refreshCodex(); // fresh windows for the next turn's hold check
     const blocked = this.runBlock(s); // before anything is recorded or started
@@ -768,23 +788,24 @@ export class Hub extends EventEmitter {
     // does not go out.
     const notes = r.leadNotes?.length ? r.leadNotes.splice(0) : [];
     if (notes.length) text = `${text}\n\n${notes.join("\n")}`;
-    try { this.deliver(s, r, text); } catch (e) { r.leadNotes = [...notes, ...(r.leadNotes || [])]; throw e; }
+    try { this.deliver(s, r, text, images); } catch (e) { r.leadNotes = [...notes, ...(r.leadNotes || [])]; throw e; }
     // Whoever writes to a teammate in its grace period keeps it: the auto-remove timer stops once the
     // message went out. A refused message (a running Codex or Gemini turn) leaves the timer armed.
     this.cancelAutoRemove(id);
   }
 
-  deliver(s, r, text) {
+  deliver(s, r, text, images = null) {
     // Past the length guard (#969): the message goes to a fresh session instead, with the handoff in front.
-    if (this.replaceDue(s) && this.replaceSession(s, { text })) return;
+    if (this.replaceDue(s) && this.replaceSession(s, { text, images })) return;
     // A pending length-guard note is attached here and cleared only on a path that delivers the message.
     const pend = s.longPending;
     if (pend) text = `${text}\n\n${pend}`;
     const sent = () => { if (pend && s.longPending === pend) s.longPending = null; };
-    this.push(s, { kind: "user", text });
-    if (this.shouldRotate(s)) { sent(); return this.rotate(s, text); }
+    // Images (#968) go to the CLI only; the transcript keeps a count, never the bytes.
+    this.push(s, { kind: "user", text: images?.length ? [text, `[이미지 ${images.length}장]`].filter(Boolean).join("\n") : text });
+    if (this.shouldRotate(s)) { sent(); return this.rotate(s, text, images); }
     if (s.provider === "claude" && r.proc) {
-      r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: text } }) + "\n");
+      r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: userContent(text, images) } }) + "\n");
       sent();
       this.touch(s, { status: "running" });
     } else if (s.provider === "openai" && r.proc) {
@@ -792,7 +813,7 @@ export class Hub extends EventEmitter {
     } else if (s.provider === "gemini" && r.proc) {
       throw new Error("Gemini는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
     } else {
-      this.start(s, text);
+      this.start(s, text, images);
     }
   }
 
@@ -878,7 +899,7 @@ export class Hub extends EventEmitter {
   }
 
   /** Ends the current CLI session and starts a fresh one with a handoff note plus `text`. */
-  rotate(s, text) {
+  rotate(s, text, images = null) {
     const r = this.rt(s.id);
     const old = r.proc;
     r.proc = null; // the exit handler ignores a process that is no longer current
@@ -896,7 +917,7 @@ export class Hub extends EventEmitter {
     s.ctx = 0;
     s.ctxHigh = null;
     r.ctxNoticed = false;
-    this.start(s, note);
+    this.start(s, note, images);
   }
 
   /* ---------------- Auto-replace long sessions (#969) ---------------- */
@@ -930,7 +951,7 @@ export class Hub extends EventEmitter {
    * board tasks, tickets and plans move to it; `old` is removed with its worktree kept (the new session works in it).
    * Returns the new session, or null when it could not be made (the old one stays).
    */
-  replaceSession(old, { last = null, text = null } = {}) {
+  replaceSession(old, { last = null, text = null, images = null } = {}) {
     const r = this.rt(old.id);
     if (r.replacing) return null;
     r.replacing = true;
@@ -969,7 +990,7 @@ export class Hub extends EventEmitter {
     this.touch(s);
     // The work folder now belongs to the new session, so the old one goes without dropping it.
     this.remove(old.id, { keepWorktree: true });
-    this.start(s, note);
+    this.start(s, note, images);
     for (const c of this.sessions) if (c.parent === s.id) this.touch(c);
     if (s.parent) this.notifyLead(s.parent, `[Dispatch] ${old.name}(${old.roleName ?? old.role}) 세션이 누적 ${mtok}M 토큰을 넘어 같은 설정의 새 팀원 ${s.name}(id ${s.id})로 바꿨어요${s.branch ? `(브랜치 ${s.branch})` : ""}. 앞으로는 이 id로 지시하세요.`);
     this.emit("tasks", this.tasks);
@@ -1361,7 +1382,7 @@ export class Hub extends EventEmitter {
     return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
-  start(s, prompt) {
+  start(s, prompt, images = null) {
     s._killed = false;
     // Turn clock and token baseline for the web "thinking" line.
     s.turnStartedAt = Date.now();
@@ -1379,7 +1400,7 @@ export class Hub extends EventEmitter {
       return;
     }
     try {
-      if (s.provider === "claude") this.startClaude(s, prompt);
+      if (s.provider === "claude") this.startClaude(s, prompt, images);
       else if (s.provider === "gemini") this.startGemini(s, prompt);
       else this.startCodex(s, prompt);
     } catch (e) {
@@ -1413,7 +1434,7 @@ export class Hub extends EventEmitter {
     });
   }
 
-  startClaude(s, prompt) {
+  startClaude(s, prompt, images = null) {
     const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
       "--model", s.model, "--permission-mode", s.perm, "--permission-prompt-tool", "stdio"];
     if (s.effort) args.push("--effort", s.effort);
@@ -1429,7 +1450,7 @@ export class Hub extends EventEmitter {
     s._costBase = s.cost;
     this.attach(s, proc);
     onJsonLines(proc.stdout, m => this.onClaude(s, m));
-    proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: prompt } }) + "\n");
+    proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: userContent(prompt, images) } }) + "\n");
     this.touch(s, { status: "running", error: null });
   }
 
