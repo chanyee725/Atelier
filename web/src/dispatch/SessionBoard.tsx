@@ -1,7 +1,7 @@
 // 세션 보드 inside the Atelier shell (#731), as a card dashboard on the home's dash primitives (#879): no header or tab
-// row and no 프로젝트 card (one project per server, #778; the scope still comes from the address). Left 60%: 세션 and
-// 타임라인; right 40%: 작업 보드 (사용량 lives in the sidebar and the 대시보드, #919). `#board=usage` and `#board=branches` open their full screen in one card;
-// `#board=timeline` opens the dashboard at the 타임라인 card.
+// row and no 프로젝트 card (one project per server, #778; the scope still comes from the address). Left 60%: 세션;
+// right 40%: 작업 보드 (사용량 lives in the sidebar and the 대시보드, #919). `#board=usage` and `#board=branches` open their full screen in one card;
+// `#board=timeline` opens the 타임라인 view (header switch `세션 | 타임라인`, #919).
 // Rendered by App.tsx for `section.kind === 'board'` (the /dispatch address redirects there).
 // Loaded lazily so the editor bundle does not carry it. Numbers and names only: no transcript text is read here.
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -144,6 +144,7 @@ export default function SessionBoard(p: BoardProps) {
             bell={p.bell}
             actions={
               <>
+                <ViewSwitch tab={p.tab} folder={scope} onRoute={p.onRoute} />
                 <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
                 <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
               </>
@@ -163,10 +164,17 @@ export default function SessionBoard(p: BoardProps) {
             <Skeleton />
           ) : detail ? (
             <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
+          ) : p.tab === 'timeline' ? (
+            // 타임라인 as its own view (#919): one card, full width. Back to 세션 is the switch in the header.
+            <DashGrid ratio="1fr">
+              <DashColumn label="타임라인">
+                <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} />
+              </DashColumn>
+            </DashGrid>
           ) : (
             <DashGrid ratio="3fr 2fr">
-              {/* No 프로젝트 card: this server holds one project (#778). Left: 세션 and 타임라인; right: 작업 보드,
-                  whose card takes the spare height so neither column leaves an empty band (#879). */}
+              {/* No 프로젝트 card: this server holds one project (#778). Left 60%: 세션; right 40%: 작업 보드, whose card
+                  takes the spare height so neither column leaves an empty band (#879). */}
               <DashColumn label="세션">
                 <SessionsCard
                   onOpen={openSession}
@@ -174,9 +182,8 @@ export default function SessionBoard(p: BoardProps) {
                   onCreate={() => setCreating(true)}
                   byCwd={listState === 'failed'}
                 />
-                <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
-              {/* Sticky on a wide pane: 작업 보드 stays in view while 세션 and 타임라인 scroll. */}
+              {/* Sticky on a wide pane: 작업 보드 stays in view while 세션 scrolls. */}
               <DashColumn label="현황" className="@min-[880px]:sticky @min-[880px]:top-4 @min-[880px]:max-h-[calc(100dvh-2rem)] @min-[880px]:self-start">
                 <TaskBoardCard fill />
               </DashColumn>
@@ -192,6 +199,33 @@ export default function SessionBoard(p: BoardProps) {
         <AlertWatcher onOpen={(id) => openSession(id, null)} />
       </div>
     </ScopeProvider>
+  );
+}
+
+/** `세션 | 타임라인` (#919): two real links, so `#board=timeline` opens the second and a new tab works. */
+function ViewSwitch({ tab, folder, onRoute }: { tab: BoardTab; folder: Scope; onRoute: BoardProps['onRoute'] }) {
+  const items: { id: BoardTab; label: string }[] = [
+    { id: 'sessions', label: '세션' },
+    { id: 'timeline', label: '타임라인' },
+  ];
+  return (
+    <nav aria-label="보기" data-view-switch className="inline-flex h-8 items-center rounded-md bg-sunken p-0.5">
+      {items.map((x) => (
+        <BoardLink
+          key={x.id}
+          tab={x.id}
+          folder={folder}
+          onRoute={onRoute}
+          aria-current={tab === x.id ? 'page' : undefined}
+          className={cn(
+            'inline-flex h-7 items-center rounded-[5px] px-2.5 text-[13px] text-muted-foreground no-underline transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+            tab === x.id && 'bg-background font-medium text-foreground shadow-xs',
+          )}
+        >
+          {x.label}
+        </BoardLink>
+      ))}
+    </nav>
   );
 }
 
