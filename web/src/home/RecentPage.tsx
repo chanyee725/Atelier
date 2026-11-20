@@ -1,10 +1,10 @@
 // 최근 page (#889, Lists.dc.html): every document newest edit first with a kind filter, and next to it the files in
 // the 보관함 (recently deleted, kept 30 days). Restoring stays in TrashDialog; this card only lists and opens it.
 import { useEffect, useMemo, useState } from 'react';
-import { Menu, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { api, type ProjectsResponse, type TrashItem } from '../api';
 import { Button } from '../components/ui/button';
-import { SidebarTrigger } from '../components/ui/sidebar';
+import { PageHeader } from '../components/PageHeader';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
 import { whenLabel } from '../lib/when';
 import { locationOf } from './model';
@@ -56,18 +56,16 @@ export function RecentPage({ data, version, narrow, bell, onOpen, onNewDoc, onAr
   const trash = useTrash(version);
   return (
     <div className="recent-page" data-screen="recent">
-      <header className="recent-head">
-        {narrow && (
-          <SidebarTrigger aria-label="메뉴 열기">
-            <Menu className="size-[17px]" />
-          </SidebarTrigger>
-        )}
-        <h1>최근과 보관함</h1>
-        <Button variant="outline" size="sm" className="recent-btn" onClick={onNewDoc}>
-          <Plus /> 새 문서
-        </Button>
-        {bell}
-      </header>
+      <PageHeader
+        title="최근과 보관함"
+        narrow={narrow}
+        bell={bell}
+        actions={
+          <Button variant="outline" size="sm" className="recent-btn" onClick={onNewDoc}>
+            <Plus /> 새 문서
+          </Button>
+        }
+      />
       <div className="recent-body">
         <section className="recent-card recent-main" aria-labelledby="recent-title">
           <div className="recent-card-head">

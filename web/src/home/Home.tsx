@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { ProjectSessions } from './ProjectSessions';
 import { RunsBlock } from './ProjectRuns';
 import { ProjectDashboard } from './ProjectDashboard';
+import { PageHeader } from '../components/PageHeader';
 import { plansByArea, pollWhileVisible, relativeTime, runningIn, wholeProject } from './model';
 import { isFindKey } from './dashboardRows';
 import { PlanAreas } from './PlanList';
@@ -140,15 +141,7 @@ function Dashboard({ data, ...p }: Shared) {
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
   return (
     <>
-      <header className="flex h-(--h-bar) shrink-0 items-center gap-3 pr-3 pl-5">
-        {p.narrow && (
-          <SidebarTrigger aria-label="메뉴 열기">
-            <Menu className="size-[17px]" />
-          </SidebarTrigger>
-        )}
-        <h1 className="m-0 shrink-0 text-[15px] font-semibold tracking-[-0.01em]">대시보드</h1>
-        <span className="ml-auto">{p.bell}</span>
-      </header>
+      <PageHeader title="대시보드" narrow={p.narrow} bell={p.bell} />
       <ApprovalCard onOpen={p.onOpen} />
       <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill />
     </>

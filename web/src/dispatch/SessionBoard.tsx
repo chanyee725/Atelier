@@ -10,6 +10,7 @@ import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
+import { PageHeader } from '../components/PageHeader';
 import { projectsApi, type DispatchSettings, type ProjectInfo } from '../api';
 import { boardHash, plainClick, type BoardExtra, type BoardTab } from '../projectNav';
 import { Card, DashColumn, DashGrid, EmptyState } from '../home/dash';
@@ -80,8 +81,10 @@ export type BoardProps = {
   /** 상시 화면 or 설정 asked for by the address (old /dispatch#tv, #settings); handled once, then `onExtraDone`. */
   extra?: BoardExtra | null;
   onExtraDone?: () => void;
-  /** The 알림함 bell (#786); with no top bar it sits at the end of the 세션 card's header. */
+  /** The 알림함 bell (#786), at the right end of the page header. */
   bell?: ReactNode;
+  /** Narrow window: the header shows the sidebar trigger. */
+  narrow?: boolean;
 };
 
 export default function SessionBoard(p: BoardProps) {
@@ -135,8 +138,21 @@ export default function SessionBoard(p: BoardProps) {
   return (
     <ScopeProvider value={ctx}>
       <div data-session-board className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
-        <h1 className="sr-only">세션 보드</h1>
         {offline && <Alert variant="destructive">서버와 연결이 끊겼어요. 다시 연결하는 중이에요.</Alert>}
+        {/* Same header as 대시보드 (2026-11-20); the 브랜치/사용량 views name themselves. */}
+        {!detail && (
+          <PageHeader
+            title="세션 보드"
+            narrow={p.narrow}
+            bell={p.bell}
+            actions={
+              <>
+                <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
+                <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
+              </>
+            }
+          />
+        )}
         <main className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto', offline && 'opacity-60')}>
           {/* The live region stays mounted so the notice is read when it appears. */}
           <div role="status">
@@ -149,7 +165,7 @@ export default function SessionBoard(p: BoardProps) {
           ) : !ready ? (
             <Skeleton />
           ) : detail ? (
-            <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} />
+            <DetailView tab={detail} scope={scope} onRoute={p.onRoute} bell={p.bell} narrow={p.narrow} />
           ) : (
             <DashGrid ratio="minmax(0,1fr) minmax(16rem,22rem)">
               {/* No 프로젝트 card: this server holds one project (#778). Left: 세션 and 타임라인; right: 사용량 and 작업 보드,
@@ -161,13 +177,6 @@ export default function SessionBoard(p: BoardProps) {
                   onUsage={() => p.onRoute('usage', scope)}
                   onCreate={() => setCreating(true)}
                   byCwd={listState === 'failed'}
-                  actions={
-                    <>
-                      <NewSessionButton disabled={disabled} onCreate={() => setCreating(true)} />
-                      <BoardMenu onTv={() => setTv(true)} onSettings={() => setSettings('general')} onBranches={() => p.onRoute('branches', scope)} disabled={disabled} />
-                      {p.bell}
-                    </>
-                  }
                 />
                 <TimelineCard projectId={scope} onOpen={(id) => openSession(id)} focus={p.tab === 'timeline'} />
               </DashColumn>
@@ -220,28 +229,24 @@ function BoardLink({ tab, folder, onRoute, className, children, ...rest }: { tab
 }
 
 /** `#board=usage` / `#board=branches`: that screen in one full-width card, with the way back to the dashboard. */
-function DetailView({ tab, scope, onRoute, bell }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode }) {
+function DetailView({ tab, scope, onRoute, bell, narrow }: { tab: 'usage' | 'branches'; scope: Scope; onRoute: BoardProps['onRoute']; bell?: ReactNode; narrow?: boolean }) {
   return (
-    <DashGrid ratio="minmax(0,1fr)">
-      <Card
-        id={tab}
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <PageHeader
         title={tab === 'usage' ? '사용량' : '브랜치'}
-        flush
+        narrow={narrow}
+        bell={bell}
         actions={
-          <>
-            <Button size="sm" variant="ghost" asChild>
-              <BoardLink tab="sessions" folder={scope} onRoute={onRoute}>
-                <ArrowLeft aria-hidden />
-                세션 보드
-              </BoardLink>
-            </Button>
-            {bell}
-          </>
+          <Button size="sm" variant="ghost" asChild>
+            <BoardLink tab="sessions" folder={scope} onRoute={onRoute}>
+              <ArrowLeft aria-hidden />
+              세션 보드
+            </BoardLink>
+          </Button>
         }
-      >
-        {tab === 'usage' ? <UsagePage /> : <BranchesPage />}
-      </Card>
-    </DashGrid>
+      />
+      <div data-card={tab} className="min-w-0">{tab === 'usage' ? <UsagePage /> : <BranchesPage />}</div>
+    </div>
   );
 }
 
@@ -328,7 +333,7 @@ function SessionsCard({
   onUsage: () => void;
   onCreate: () => void;
   byCwd: boolean;
-  actions: ReactNode;
+  actions?: ReactNode;
 }) {
   const { sessions, scope, pending } = useScoped();
   const { known, names } = useScope();
