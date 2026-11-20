@@ -1,5 +1,5 @@
 // shadcn/ui (MIT) new-york Dialog, adapted: relative imports, no built-in close icon (callers keep their own
-// "닫기" button), thin border and a light shadow.
+// "닫기" button), a ring shadow and 12px panel corners (#889); it grows from the centre.
 import * as React from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { cn } from '../../lib/utils';
@@ -34,7 +34,7 @@ function DialogContent({ className, overlayClassName, children, onInteractOutsid
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border bg-background text-foreground shadow-md outline-none duration-150',
+          'fixed top-1/2 left-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-panel bg-background text-foreground shadow-(--shadow-pop) outline-none duration-200 ease-(--ease-out)',
           'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-[0.98] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[0.98]',
           className,
         )}

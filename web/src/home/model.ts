@@ -1,5 +1,6 @@
 // Pure data helpers for the dashboard and project home (no React).
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
+import { whenLabel } from '../lib/when.ts';
 
 /** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
 export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
@@ -77,17 +78,9 @@ export function filterDocs(docs: ProjectDoc[], query: string): ProjectDoc[] {
   });
 }
 
-const MIN = 60_000;
-/** "방금", "5분 전", "3시간 전", "2일 전", then a date. */
+/** The app's time label (lib/when.ts); "-" when there is no time. */
 export function relativeTime(ms: number, now = Date.now()): string {
-  if (!ms) return '-';
-  const d = Math.max(0, now - ms);
-  if (d < MIN) return '방금';
-  if (d < 60 * MIN) return `${Math.floor(d / MIN)}분 전`;
-  if (d < 24 * 60 * MIN) return `${Math.floor(d / (60 * MIN))}시간 전`;
-  if (d < 30 * 24 * 60 * MIN) return `${Math.floor(d / (24 * 60 * MIN))}일 전`;
-  const x = new Date(ms);
-  return `${x.getFullYear()}.${x.getMonth() + 1}.${x.getDate()}`;
+  return ms ? whenLabel(ms, now) : '-';
 }
 
 /** Folder to create new files in, from a project id (null = workspace root). */
