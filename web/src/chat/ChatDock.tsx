@@ -13,9 +13,9 @@ import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { badgeText, chatTargets, helperBody, HELPER_KEY, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
-import { answeredAsk, issueAskText, useAskRequest, type AskRequest } from './lib/askIssue.ts';
+import { answeredAsk, issueAskText, runStart, startGate, useAskRequest, type AskRequest, type StartState } from './lib/askIssue.ts';
 import { issueTask, newLeadBody, type TeamPick } from '../home/issueStart.ts';
-import { IssueStartBar, type StartState } from './IssueAsk';
+import { IssueStartBar } from './IssueAsk';
 import './chat-dock.css';
 
 const ChatPane = lazy(() => import('./ChatPane'));
@@ -33,10 +33,10 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const [seen, setSeen] = useState<Record<string, number>>({});
   // One send at a time, checked synchronously (sendOnce); `busy` only drives the UI.
   const sending = useRef(false);
-  // #954: the issue pinned at the top, and its 시작하기 state; `starting` is the synchronous one-press lock.
+  // #954: the issue pinned at the top, and its 시작하기 state; `gate` is the per-ask one-press lock and result filter.
   const [pin, setPin] = useState<AskRequest | null>(null);
   const [start, setStart] = useState<StartState>({ state: 'idle' });
-  const starting = useRef(false);
+  const gate = useRef(startGate()).current;
   const handled = useRef(0);
   const asked = useAskRequest();
   const ref = useRef<HTMLDialogElement>(null);
@@ -133,6 +133,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
     if (!asked || asked.seq === handled.current) return;
     handled.current = asked.seq;
     setPin(asked);
+    gate.pin(asked.seq);
     setStart({ state: 'idle' });
     setError(null);
     setOpened(true);
@@ -148,26 +149,19 @@ export function ChatDock({ folder }: { folder: string | null }) {
     // Runs once per request (seq); the other values are read as they are at that moment.
   }, [asked]);
 
-  const startIssue = async (team: TeamPick, leadId: string) => {
-    if (!pin || starting.current) return;
-    starting.current = true;
-    setStart({ state: 'busy' });
+  const startIssue = (team: TeamPick, leadId: string) => {
+    if (!pin) return;
     const issue = { number: pin.issue.number, title: pin.issue.title };
-    try {
+    return runStart(gate, pin.seq, async () => {
       if (leadId) {
         await api('POST', `/api/sessions/${encodeURIComponent(leadId)}/message`, { text: issueTask(issue, team) });
         const name = sessions.find(x => x.id === leadId)?.name ?? '관리자';
-        setStart({ state: 'done', text: `${name}에게 보냈어요. 곧 팀원을 만들어요.` });
-      } else {
-        const { default: rules } = await import('../../../plugin/skills/atelier-team/reference/rules.md?raw');
-        await api('POST', '/api/sessions', newLeadBody(issue, team, rules, folder));
-        setStart({ state: 'done', text: '새 관리자를 만들었어요. 곧 팀원을 만들어요.' });
+        return `${name}에게 보냈어요. 곧 팀원을 만들어요.`;
       }
-    } catch (e) {
-      // A failed start may be pressed again.
-      starting.current = false;
-      setStart({ state: 'error', text: `시작하지 못했어요. ${(e as Error).message}` });
-    }
+      const { default: rules } = await import('../../../plugin/skills/atelier-team/reference/rules.md?raw');
+      await api('POST', '/api/sessions', newLeadBody(issue, team, rules, folder));
+      return '새 관리자를 만들었어요. 곧 팀원을 만들어요.';
+    }, setStart);
   };
 
   if (unavailable) return null;

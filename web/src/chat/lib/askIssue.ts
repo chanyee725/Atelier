@@ -44,3 +44,44 @@ export function answeredAsk(entries: readonly { kind: string; text: string }[] |
   // The hub echoes every message, the helper's first prompt included, as a user entry (hub.js); no ask, no answer.
   return at >= 0 && entries.slice(at + 1).some((e) => e.kind === 'assistant');
 }
+
+export type StartState = { state: 'idle' } | { state: 'busy' } | { state: 'done'; text: string } | { state: 'error'; text: string };
+
+/**
+ * The 시작하기 lock and result filter, per pinned ask (`seq`). `pin` marks a new ask current and drops the lock, so
+ * a second issue can start after the first; `take` is the synchronous one-press lock; a result is shown only while
+ * its ask is still the pinned one, so issue A's answer never lands on issue B's bar.
+ */
+export function startGate() {
+  let pinned: number | null = null;
+  let locked: number | null = null;
+  return {
+    pin(seq: number) {
+      pinned = seq;
+      locked = null;
+    },
+    take(seq: number) {
+      if (seq !== pinned || locked === seq) return false;
+      locked = seq;
+      return true;
+    },
+    release(seq: number) {
+      if (locked === seq) locked = null;
+    },
+    current: (seq: number) => seq === pinned,
+  };
+}
+export type StartGate = ReturnType<typeof startGate>;
+
+/** One 시작하기 press: lock, run, and show the outcome only if `seq` is still pinned. A failure unlocks for a retry. */
+export async function runStart(gate: StartGate, seq: number, work: () => Promise<string>, show: (s: StartState) => void): Promise<void> {
+  if (!gate.take(seq)) return;
+  show({ state: 'busy' });
+  try {
+    const text = await work();
+    if (gate.current(seq)) show({ state: 'done', text });
+  } catch (e) {
+    gate.release(seq);
+    if (gate.current(seq)) show({ state: 'error', text: `시작하지 못했어요. ${(e as Error).message}` });
+  }
+}

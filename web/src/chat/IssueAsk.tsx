@@ -43,7 +43,8 @@ export function IssueCard({ issue }: { issue: AskedIssue }) {
   );
 }
 
-export type StartState = { state: 'idle' } | { state: 'busy' } | { state: 'done'; text: string } | { state: 'error'; text: string };
+export type { StartState } from './lib/askIssue.ts';
+import type { StartState } from './lib/askIssue.ts';
 
 type BarProps = {
   sessions: readonly Session[];
