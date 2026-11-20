@@ -72,3 +72,25 @@ export function chatRecord(entries: Entry[], sessionId: string | null, id?: stri
 
 /** True when the saved conversation has something worth saving (a user message and an answer). */
 export const worthSaving = (entries: Entry[] | undefined) => !!entries?.some(e => e.kind === 'user') && !!entries.some(e => e.kind === 'assistant');
+
+export type SavedMessage = ReturnType<typeof chatRecord>['messages'][number];
+
+/**
+ * The save body for a resumed conversation: the messages saved before it was reopened, then this session's. The new
+ * CLI session's transcript starts empty, so saving without the old part would cut the conversation short.
+ */
+export function withPrior(record: ReturnType<typeof chatRecord>, prior: SavedMessage[] | null | undefined) {
+  return prior?.length ? { ...record, messages: [...prior, ...record.messages] } : record;
+}
+
+/** Header line for the session's spend: "12.3k 토큰 · $0.042"; empty before anything was used. */
+export function usageText(usage: { input: number; output: number; cacheRead: number; cacheWrite: number } | undefined, cost: number | null | undefined): string {
+  if (!usage) return '';
+  const n = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
+  if (!n && !cost) return '';
+  const tok = n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n);
+  return cost == null ? `${tok} 토큰` : `${tok} 토큰 · $${cost.toFixed(cost < 10 ? 3 : 2)}`;
+}
+
+/** A saved CLI session id (server/dispatch/chat-store.js SESSION_ID): what openChatSession accepts. */
+export const isCliSessionId = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(v);

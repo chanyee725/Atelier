@@ -34,13 +34,17 @@ export const unread = (entries: Entry[] | undefined, seen: number) => Math.max(0
 /** Badge text: up to 9, then 9+. Empty when nothing is unread. */
 export const badgeText = (n: number) => (n <= 0 ? '' : n > 9 ? '9+' : String(n));
 
-/** POST /api/sessions body for the helper; its first message is the person's first message. */
-export function helperBody(text: string, folder: string | null) {
+/**
+ * POST /api/sessions body for the helper; its first message is the person's first message. `resume` (#968) is a saved
+ * CLI session id to continue; `images` go with that first message.
+ */
+export function helperBody(text: string, folder: string | null, opts: { resume?: string | null; images?: { mediaType: string; data: string }[] } = {}) {
   return {
     commonPrompt: text,
     worktree: false,
     ...(folder ? { folder } : {}),
-    items: [{ role: HELPER_ROLE, model: HELPER_MODEL, effort: null, perm: HELPER_PERM, n: 1 }],
+    ...(opts.images?.length ? { images: opts.images } : {}),
+    items: [{ role: HELPER_ROLE, model: HELPER_MODEL, effort: null, perm: HELPER_PERM, n: 1, ...(opts.resume ? { resume: opts.resume } : {}) }],
   };
 }
 

@@ -6,16 +6,22 @@
 // The conversation lives only in the Dispatch store's memory (no disk, localStorage or logs).
 // #954: an issue row (askAboutIssue) opens the dock on the helper with the issue pinned and asks for a proposal; the
 // work reaches a lead only through 시작하기 under the answer (one press, locked synchronously like sendOnce).
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+// #968 s2: the CLI in the app. One partner (the main session); images, the "/" menu, Esc or 정지 stops a turn, 새 대화
+// (/clear) saves and ends the helper, 대화 저장 writes the masked record (POST /api/chats) and tells the sidebar,
+// 크게 보기 widens the window. openChatSession (index.ts) reopens a saved conversation through a window event.
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { MessageCircle } from 'lucide-react';
 import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch/store';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { badgeText, mainTarget, helperBody, HELPER_OFFLINE, helperOffline, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
+import { badgeText, mainTarget, helperBody, HELPER_OFFLINE, helperOffline, isAlive, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
 import { answeredAsk, issueAskText, runStart, startGate, useAskRequest, type AskRequest, type StartState } from './lib/askIssue.ts';
 import { issueTask, newLeadBody, type TeamPick } from '../home/issueStart.ts';
 import { IssueStartBar } from './IssueAsk';
+import { chatRecord, imagesBody, isClear, isCliSessionId, withPrior, worthSaving, type Attachment, type SavedMessage } from './lib/chatInput.ts';
+import { HISTORY_CHANGED, OPEN_CHAT_SESSION, type ChatSummary } from '../shell/chatHistory';
 import './chat-dock.css';
 
 const ChatPane = lazy(() => import('./ChatPane'));
@@ -26,7 +32,15 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const [opened, setOpened] = useState(false);
   // Memory only: the helper's id, the draft and how many replies were seen per session.
   const [helperId, setHelperId] = useState<string | null>(null);
-    const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState('');
+  // #968 s2, memory only: attached images, the skill list for "/", the wide window, the saved record this conversation
+  // updates, and a reopened conversation (its CLI session to resume and its earlier messages).
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [skills, setSkills] = useState<{ name: string; description: string }[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [resume, setResume] = useState<string | null>(null);
+  const [prior, setPrior] = useState<SavedMessage[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seen, setSeen] = useState<Record<string, number>>({});
@@ -84,28 +98,38 @@ export function ChatDock({ folder }: { folder: string | null }) {
     setOpen(true);
   };
 
-  /** Sends `text` to session `to`, or makes the helper with it when `to` is null. Returns whether it went out. */
-  const deliver = async (text: string, to: string | null) => {
+  // The "/" menu's skills: names and descriptions only, loaded once the window is first opened.
+  useEffect(() => {
+    if (!opened) return;
+    api<{ skills: { name: string; description: string }[] }>('GET', '/api/skills').then(r => setSkills(r.skills), () => {});
+  }, [opened]);
+
+  /** Sends `text` (and `images`) to session `to`, or makes the helper with it when `to` is null. Returns whether it went out. */
+  const deliver = async (text: string, to: string | null, images: Attachment[] = []) => {
     let ok = false;
     const ran = await sendOnce(sending, async () => {
       setBusy(true);
       setError(null);
       // The box clears at once; a failed send puts the text back.
       setDraft('');
+      setAttachments(() => []);
+      const imgs = images.length ? imagesBody(images) : undefined;
       try {
         if (to) {
-          await api('POST', `/api/sessions/${encodeURIComponent(to)}/message`, { text });
+          await api('POST', `/api/sessions/${encodeURIComponent(to)}/message`, imgs ? { text, images: imgs } : { text });
         } else {
-          const res = await api<{ sessions: Session[] }>('POST', '/api/sessions', helperBody(text, folder));
+          const res = await api<{ sessions: Session[] }>('POST', '/api/sessions', helperBody(text, folder, { resume, images: imgs }));
           const made = res.sessions[0]?.id;
           if (made) {
             setHelperId(made);
+            setResume(null);
             loadTranscript(made).catch(() => {});
           }
         }
         ok = true;
       } catch (e) {
         setDraft(text);
+        setAttachments(() => images);
         setError((e as Error).message);
         // A helper that is gone (removed elsewhere) is made again on the next send; a passing error keeps it.
         if (to && to === helperId && sessionGone(e)) setHelperId(null);
@@ -120,9 +144,83 @@ export function ChatDock({ folder }: { folder: string | null }) {
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || offline) return;
-    await deliver(text, sid);
+    if (offline) return;
+    if (isClear(text)) return void newChat();
+    if (!text && !attachments.length) return;
+    await deliver(text, sid, attachments);
   };
+
+  /** Esc or 정지: interrupts the running turn (the CLI's Esc). */
+  const stop = () => {
+    if (!sid) return;
+    api('POST', `/api/sessions/${encodeURIComponent(sid)}/interrupt`).catch((e: Error) => setError(e.message));
+  };
+
+  /** Writes the conversation (masked by the server) and tells the sidebar list to reload. */
+  const save = async (quiet = false) => {
+    if (!worthSaving(entries)) return false;
+    try {
+      const body = withPrior(chatRecord(entries ?? [], s?.providerSessionId ?? resume ?? null, savedId ?? undefined), prior);
+      const res = await api<{ chat: { id: string } }>('POST', '/api/chats', body);
+      setSavedId(res.chat.id);
+      window.dispatchEvent(new Event(HISTORY_CHANGED));
+      if (!quiet) toast.success('대화를 저장했어요');
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
+    }
+  };
+
+  /** 새 대화 (/clear): saves what is there, ends the helper (its CLI process), and the next message makes a new one. */
+  const newChat = async () => {
+    if (worthSaving(entries) && !(await save(true))) return;
+    const old = helperId;
+    setHelperId(null);
+    setSavedId(null);
+    setResume(null);
+    setPrior(null);
+    setDraft('');
+    setAttachments(() => []);
+    setError(null);
+    if (old) api('POST', `/api/sessions/${encodeURIComponent(old)}/kill`).catch(() => {});
+  };
+
+  /** Reopens a saved conversation by its CLI session id: the live helper that has it, else a new one that resumes it. */
+  const openSession = useCallback(async (cliSessionId: string) => {
+    if (!isCliSessionId(cliSessionId)) return;
+    setOpened(true);
+    setOpen(true);
+    setError(null);
+    setDraft('');
+    setAttachments(() => []);
+    const live = getState().sessions.find(x => x.providerSessionId === cliSessionId && isAlive(x));
+    if (live) {
+      setHelperId(live.id);
+      setResume(null);
+      setPrior(null);
+    } else {
+      setHelperId(null);
+      setResume(cliSessionId);
+    }
+    // The saved record: its id (a later save updates it) and, for a resumed session, its earlier messages.
+    try {
+      const { chats } = await api<{ chats: ChatSummary[] }>('GET', '/api/chats');
+      const hit = chats.find(c => c.sessionId === cliSessionId);
+      setSavedId(hit?.id ?? null);
+      if (!hit || live) return setPrior(null);
+      const { chat } = await api<{ chat: { messages: SavedMessage[] } }>('GET', `/api/chats/${encodeURIComponent(hit.id)}`);
+      setPrior(chat.messages);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+
+  useEffect(() => {
+    const on = (e: Event) => void openSession((e as CustomEvent<{ cliSessionId?: unknown }>).detail?.cliSessionId as string);
+    window.addEventListener(OPEN_CHAT_SESSION, on);
+    return () => window.removeEventListener(OPEN_CHAT_SESSION, on);
+  }, [openSession]);
 
   // An issue row asked about an issue: open on the helper (or the team's lead), pin the card, prefill the question.
   useEffect(() => {
@@ -182,10 +280,13 @@ export function ChatDock({ folder }: { folder: string | null }) {
         popover="manual"
         className="chat-dock-window"
         aria-labelledby={titleId}
+        data-expanded={expanded || undefined}
         onKeyDown={e => {
           if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            close();
+            // Like the CLI: Esc stops a running turn first; with nothing running it closes the window.
+            if (thinking && s) stop();
+            else close();
           }
         }}
       >
@@ -199,11 +300,21 @@ export function ChatDock({ folder }: { folder: string | null }) {
               thinking={thinking}
               draft={draft}
               setDraft={setDraft}
+              attachments={attachments}
+              setAttachments={setAttachments}
+              skills={skills}
               busy={busy}
               notice={offline ? HELPER_OFFLINE : null}
               error={error}
               setError={setError}
               onSend={() => void send()}
+              onStop={stop}
+              onNew={() => void newChat()}
+              onSave={() => void save()}
+              canSave={worthSaving(entries)}
+              expanded={expanded}
+              onExpand={() => setExpanded(v => !v)}
+              prior={s ? null : prior}
               onClose={close}
               issue={pin?.issue ?? null}
               after={showBar ? focusInput => (

@@ -31,6 +31,12 @@ test('helperBody: lead role, sonnet 5.5, perm auto, no worktree, the project fol
     items: [{ role: 'lead', model: 'claude-sonnet-5-5', effort: null, perm: 'auto', n: 1 }],
   });
   assert.equal('folder' in helperBody('x', null), false);
+  // #968 s2: a resumed CLI session rides on the item; images on the body.
+  const img = { mediaType: 'image/png', data: 'AAAA' };
+  const b = helperBody('', 'proj', { resume: 'abc-1', images: [img] });
+  assert.deepEqual(b.items[0], { role: 'lead', model: 'claude-sonnet-5-5', effort: null, perm: 'auto', n: 1, resume: 'abc-1' });
+  assert.deepEqual(b.images, [img]);
+  assert.equal('images' in helperBody('x', null, { images: [] }), false);
 });
 
 test('sendsOnEnter: Enter sends; Shift+Enter and IME composition do not', () => {
@@ -77,7 +83,7 @@ test('sessionGone: only a 404 forgets the helper', () => {
   assert.equal(sessionGone(new TypeError('Failed to fetch')), false);
 });
 
-import { chatRecord, imagesBody, isClear, parseDataUrl, pickImages, slashItems, slashQuery, worthSaving } from '../web/src/chat/lib/chatInput.ts';
+import { chatRecord, imagesBody, isClear, isCliSessionId, parseDataUrl, pickImages, slashItems, slashQuery, usageText, withPrior, worthSaving } from '../web/src/chat/lib/chatInput.ts';
 
 test('pickImages: type, size and the 4-image cap; the rest still attach', () => {
   const png = { type: 'image/png', size: 100 };
@@ -116,4 +122,24 @@ test('chatRecord: text and tool names only; tools attach to the answer before th
   assert.equal(rec.id, 'abc12345');
   assert.equal(worthSaving(list), true);
   assert.equal(worthSaving([e('user', 'hi')]), false);
+});
+
+test('withPrior: a reopened conversation saves its earlier messages first', () => {
+  const rec = { sessionId: 's1', messages: [{ role: 'user' as const, text: 'new' }] };
+  assert.deepEqual(withPrior(rec, [{ role: 'assistant', text: 'old' }]).messages.map(m => m.text), ['old', 'new']);
+  assert.equal(withPrior(rec, null), rec);
+});
+
+test('usageText: tokens and cost in one quiet line; empty before use', () => {
+  const u = (n: number) => ({ input: n, output: 0, cacheRead: 0, cacheWrite: 0 });
+  assert.equal(usageText(undefined, null), '');
+  assert.equal(usageText(u(0), 0), '');
+  assert.equal(usageText(u(12_345), 0.0421), '12.3k 토큰 · $0.042');
+  assert.equal(usageText(u(2_500_000), 12.5), '2.50M 토큰 · $12.50');
+  assert.equal(usageText(u(900), null), '900 토큰');
+});
+
+test('isCliSessionId: the saved id shape only', () => {
+  assert.equal(isCliSessionId('3f2a-b_C9'), true);
+  for (const bad of ['', '../x', 'a b', 'x'.repeat(81), 5, null]) assert.equal(isCliSessionId(bad), false);
 });
