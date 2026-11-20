@@ -189,19 +189,22 @@ function CodeWork({ sid, files, shown, step, statusLabel }: { sid: string; files
           const open = isOpen(c, i);
           return (
             <li key={c.path} data-work-file={c.path}>
-              <button type="button" aria-expanded={open} onClick={() => toggle(c, i)} className={cn('agent-work-row', FOCUS_RING)}>
-                <ChevronRight aria-hidden className={cn('agent-work-chev size-3.5 shrink-0', open && 'rotate-90')} />
-                <span className="agent-live-target" title={c.path}>{middle(c.path, 48)}</span>
-                {c.untracked ? (
-                  <span className="agent-live-time">새 파일</span>
-                ) : (
-                  <span className="agent-work-counts">
-                    <span className="text-ok">+{c.add}</span>
-                    <span className="text-destructive">−{c.del}</span>
-                  </span>
-                )}
-              </button>
-              {open && <FilePatch c={c} />}
+              {/* A native disclosure (details/summary); the patch is only drawn while open. */}
+              <details open={open} onToggle={(e) => e.currentTarget.open !== open && toggle(c, i)}>
+                <summary className={cn('agent-work-row', FOCUS_RING)}>
+                  <ChevronRight aria-hidden className={cn('agent-work-chev size-3.5 shrink-0', open && 'rotate-90')} />
+                  <span className="agent-live-target" title={c.path}>{middle(c.path, 48)}</span>
+                  {c.untracked ? (
+                    <span className="agent-live-time">새 파일</span>
+                  ) : (
+                    <span className="agent-work-counts">
+                      <span className="text-ok">+{c.add}</span>
+                      <span className="text-destructive">−{c.del}</span>
+                    </span>
+                  )}
+                </summary>
+                {open && <FilePatch c={c} />}
+              </details>
             </li>
           );
         })}

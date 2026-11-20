@@ -375,6 +375,11 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* summary: drop the built-in marker, the chevron draws the state */
+  list-style: none;
+}
+.agent-work-row::-webkit-details-marker {
+  display: none;
 }
 @media (hover: hover) {
   .agent-work-row:hover {
