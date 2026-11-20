@@ -12,6 +12,8 @@ export interface BoardTask {
   stages?: { stage: TaskStage; at: number }[];
   mergeCheck?: MergeCheck | null;
   stuck?: TaskStuck | null;
+  /** Why the server's auto close (#930) left this open task as it is. */
+  autoCheck?: { reason: string; at: number } | null;
 }
 
 /** Work saved when a usage limit was reached; resumed after the reset. */

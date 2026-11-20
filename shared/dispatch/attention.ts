@@ -2,7 +2,11 @@
 // Pure and free of "@/" imports so the server's node test runner can load it (type imports are erased).
 import type { Limits, Session, SessionState } from "./types.ts";
 
-export interface MergeCheck { ok: boolean | null; commit: string | null; base: string | null; reason: string | null; at: number }
+export interface MergeCheck {
+  ok: boolean | null; commit: string | null; base: string | null; reason: string | null; at: number;
+  /** Set by the server's auto close (#930): which evidence closed it and a short sentence about it. */
+  auto?: boolean; via?: "commit" | "pr" | "issue"; evidence?: string;
+}
 /** The task fields the strip reads; the board's task type plus the server's merge check. */
 export interface AttentionTask {
   id: string; lead: string | null; title: string; stage: string; owner: string | null;
@@ -11,6 +15,8 @@ export interface AttentionTask {
   updatedAt?: number;
   /** Server's flag (server/state.js taskStuck); absent or null while the task looks fine. */
   stuck?: TaskStuck | null;
+  /** Why the server's auto close (#930, server/dispatch/task-close.js) left this open task as it is. */
+  autoCheck?: { reason: string; at: number } | null;
 }
 
 /** server/state.js taskStuck: past 1.5× the estimate, or the board stage disagrees with what the owner does. */
@@ -124,7 +130,9 @@ export function attentionItems(
       out.push({ key: `t:${t.id}`, kind: "mismatch", level: "warn", who: t.title, reason: by(st.label), since: st.sinceMs ?? null, sessionId: target, flagged: true });
     } else if (st?.reason === "over-eta" || (t.etaAt != null && t.etaAt < now)) {
       // Lateness counts from the estimate either way; the server's sentence says how far past it is.
-      const reason = st?.reason === "over-eta" ? st.label : "예상 시간을 넘겼어요";
+      // The auto close found no evidence it landed (#930): say why, so the reader knows to check it by hand.
+      const base = st?.reason === "over-eta" ? st.label : "예상 시간을 넘겼어요";
+      const reason = t.autoCheck?.reason ? `${base} · ${t.autoCheck.reason}` : base;
       out.push({ key: `t:${t.id}`, kind: "late", level: "warn", who: t.title, reason: by(reason), since: t.etaAt ?? st?.sinceMs ?? null, sessionId: target, flagged: st?.reason === "over-eta" });
     }
   }
