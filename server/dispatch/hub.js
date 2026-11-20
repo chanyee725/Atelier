@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ownGitEnv, runCli, spawnCli } from "./cli.js";
 import { redact, redactDeep } from "./redact.js";
-import { dropWorktree, prepareWorkdir, verifyMerged } from "./git.js";
+import { branchStatus, dropWorktree, integrationBranch, prepareWorkdir, verifyMerged } from "./git.js";
 import { enterStage } from "./tasks.js";
 import { AUTO_CLOSE_STAGES, closeEvidence } from "./task-close.js";
 import { CHILD_PROMPT, DRAWING_WRITE_NOTE, NAMES, PERMS, SPAWN_PROMPT, WRITING } from "./roles.js";
@@ -530,10 +530,17 @@ export class Hub extends EventEmitter {
       }
       const issueState = issues?.issueState ? n => issues.issueState(n).catch(() => null) : async () => null;
       const verify = c => verifyMerged(this.root, c);
+      let base = null;
+      const branchState = async b => {
+        // A leading "-" would read as an option to git.
+        if (typeof b !== "string" || !b || b.startsWith("-")) return null;
+        base ??= await integrationBranch(this.root);
+        return (await branchStatus(this.root, b, base).catch(() => null))?.state ?? null;
+      };
       const closed = [];
       let changed = false;
       for (const t of open) {
-        const ev = await closeEvidence(t, { verify, prs, issueState });
+        const ev = await closeEvidence(t, { verify, branchState, prs, issueState });
         // The lead may have moved the task while gh or git answered.
         if (!AUTO_CLOSE_STAGES.has(t.stage)) continue;
         const now = Date.now();
