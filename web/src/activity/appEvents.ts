@@ -142,6 +142,24 @@ export function toastOf(e: AppEvent): AppToast | null {
   }
 }
 
+/** Results of what the person just did (#899): they pop up as a Sonner toast and stay out of the 알림함. */
+const ACTION_EVENTS: ReadonlySet<AppEvent['type']> = new Set(['saved', 'save-failed', 'created', 'deleted', 'moved', 'renamed']);
+
+export interface ActionToast {
+  /** Same id → Sonner updates the toast in place instead of stacking a second one. */
+  id: string;
+  category: ToastCategory;
+  tone: 'success' | 'error';
+  text: string;
+}
+
+/** The toast for an action result; null for anything else (agent and workspace events go to the 알림함 only). */
+export function actionToastOf(e: AppEvent): ActionToast | null {
+  if (!ACTION_EVENTS.has(e.type)) return null;
+  const t = toastOf(e);
+  return t && { id: t.key, category: t.category, tone: t.tone === 'error' ? 'error' : 'success', text: t.text };
+}
+
 /** Repeats of one key within this window show once (a burst of saves, an echo from another tab). */
 export const DEDUPE_MS = 4_000;
 

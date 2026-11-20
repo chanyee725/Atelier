@@ -3,6 +3,7 @@
 // what the person changed and unanswered asks. Running files are E22's strip, so this one hides then.
 // In the 플랜 tab (#729, `inTab`) the same strip, dialog and 시작하기 sit at the top of the tab instead, with the
 // approval state as a chip (승인 대기, 개정 대기 for a revision after a run, 승인됨 once started).
+import { toastResult } from '../activity/actionToast';
 import { Alert } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -198,6 +199,8 @@ export function PlanStrip({ session, inTab = false }: { session: FileSession; in
         return;
       }
       setConfirming(false);
+      // Said once the confirm dialog is closed: a toast behind a modal would be missed (#899).
+      toastResult('시작했어요');
       void refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : '시작하지 못했어요');

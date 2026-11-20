@@ -1,4 +1,4 @@
-// The 알림함 (E582, #797): every toast the app shows — app events (appToasts.ts), agent activity and plans waiting for
+// The 알림함 (E582, #797): every toast the app shows — app events (appInbox.ts), agent activity and plans waiting for
 // 시작하기 — kept as an item in the bell's popover, newest first, at most INBOX_MAX. Read, delete one, read all and
 // clear all. Kept per browser (localStorage, inboxStore.ts). Pure (no React or DOM), so it runs under `node --test`.
 // Metadata only: the toast's one line (file, session and provider names, PR numbers), when, where it leads, and the

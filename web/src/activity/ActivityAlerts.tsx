@@ -1,10 +1,10 @@
 // New agent activity and app events while the app is open (E537 #654, E540 #671). Since #811 nothing pops up on the
 // page: every event goes to the 알림함 (the bell, inboxStore.ts) only. While the page is hidden and notifications are
 // on (설정 > 일반, dispatch/lib/notify.ts), start, finish and error activity also goes out as a browser notification
-// (app events do the same from notifyApp, appToasts.ts). Renders nothing.
+// (app events do the same from notifyInbox, appInbox.ts). Renders nothing.
 import { useEffect, useRef } from 'react';
 import type { ToastTarget } from './appEvents';
-import { setToastOpener, watchAppEvents } from './appToasts';
+import { setInboxOpener, watchAppEvents } from './appInbox';
 import { activitySentence } from '../../../shared/dispatch/agent-activity.ts';
 import { alertsOn } from '../dispatch/lib/notify';
 import { alertRoute } from './activity';
@@ -37,7 +37,7 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   useEffect(() => {
     watchAppEvents();
     const go = (target: ToastTarget) => ('file' in target ? open.current(target.file) : openSession.current(target.session));
-    setToastOpener((t) => t.target && go(t.target));
+    setInboxOpener((t) => t.target && go(t.target));
   }, []);
   return null;
 }

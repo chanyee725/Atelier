@@ -1,4 +1,4 @@
-// The 알림함's items in this browser (E582, #797; pure logic in inbox.ts). App toasts come in from notifyApp (the one
+// The 알림함's items in this browser (E582, #797; pure logic in inbox.ts). App events come in from notifyInbox (the one
 // place every app toast goes through), agent activity from the server's activity log (store.ts). Saved to
 // localStorage on every change and read back on load; another tab's change comes in over the `storage` event.
 // Storage that is off or full is skipped: the inbox then lives in memory only. Metadata only.
@@ -37,7 +37,7 @@ const subscribe = (f: () => void) => {
 
 export const useInbox = () => useSyncExternalStore(subscribe, read, read);
 
-/** An app toast as an inbox item (called by notifyApp once the toast passed its category and dedupe checks). */
+/** An app toast as an inbox item (called by notifyInbox once the toast passed its category and dedupe checks). */
 export const addToastToInbox = (t: AppToast) => sync.addToast(t, Date.now());
 
 export const readInboxItem = (id: string) => set(markItemRead(read(), id));

@@ -21,7 +21,7 @@ The role prompts in `server/dispatch/roles.js` point here.
 | Command menu (⌘K) | `cmdk` via `ui/command.tsx` | installed | Never |
 | Class names, variants | `clsx` + `tailwind-merge`, `class-variance-authority` | installed | Never |
 | Icons | `lucide-react` | installed | Brand marks only (vendored SVG) |
-| Toasts | Sonner | proposed (#730) | Until approved, use `web/src/activity/appToasts.ts`; don't add a third toast system |
+| Toasts | `sonner` via `ui/sonner.tsx` and `activity/actionToast.ts` | installed (#899) | Never. Only results of what the person just did (save, allow/deny, 시작하기, copy); agent events go to the 알림함 (`activity/appInbox.ts`), not a toast |
 | Drawer / bottom sheet (phone width) | Vaul | proposed | Desktop side panels: use `sheet.tsx` |
 | Animated number (usage %, ETA, cost) | NumberFlow | proposed | Static numbers: plain text with `tabular-nums` |
 | Hover, fade, small enter/exit | none (CSS transitions, `tw-animate-css`) | installed | Always; no motion library for these |
