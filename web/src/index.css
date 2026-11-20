@@ -380,9 +380,11 @@ body {
   overflow-wrap: anywhere;
 }
 .doc-editor > * + * { margin-top: 0.6em; }
-.doc-editor h1 { font-size: 1.9em; font-weight: 700; line-height: 1.25; margin-top: 1.1em; }
-.doc-editor h2 { font-size: 1.45em; font-weight: 600; line-height: 1.3; margin-top: 1em; }
-.doc-editor h3 { font-size: 1.125em; font-weight: 600; line-height: 1.35; margin-top: 0.9em; }
+/* Headings (#889): 20 / 17 / 15px semibold, the larger two tracked tighter; the chrome type scale, not a blog's. */
+.doc-editor h1 { font-size: 1.43em; font-weight: 600; line-height: 1.3; letter-spacing: var(--tracking-title); margin-top: 1.1em; }
+.doc-editor h2 { font-size: 1.2em; font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; margin-top: 1em; }
+.doc-editor h3 { font-size: 1.07em; font-weight: 600; line-height: 1.4; margin-top: 0.9em; }
+.doc-editor p { max-width: 65ch; }
 .doc-editor > :first-child { margin-top: 0; }
 .doc-editor ul { list-style: disc; padding-left: 1.5em; }
 .doc-editor ol { list-style: decimal; padding-left: 1.5em; }
@@ -393,7 +395,7 @@ body {
 .doc-editor ul[data-type="taskList"] li > label input { accent-color: var(--primary); width: 1em; height: 1em; }
 .doc-editor ul[data-type="taskList"] li > div { flex: 1; min-width: 0; }
 .doc-editor ul[data-type="taskList"] li[data-checked="true"] > div { color: var(--muted-foreground); text-decoration: line-through; }
-.doc-editor a { color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
+.doc-editor a { color: var(--foreground); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
 .doc-editor blockquote { border-left: 3px solid var(--border); padding-left: 1em; color: var(--muted-foreground); }
 .doc-editor hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
 .doc-editor hr.ProseMirror-selectednode { border-top-color: var(--primary); }
@@ -428,30 +430,57 @@ body {
 }
 .doc-editor .suggestion { color: var(--muted-foreground); }
 
-.doc-diagram { margin: 1em 0; display: flex; flex-direction: column; gap: 0.35em; }
+/* Diagram block (#889): a ringed card on the panel step. The caption and the export buttons form its head row;
+   the picture, the run ETA and legend fill the rows under it. */
+.doc-diagram {
+  margin: 1em 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-radius: var(--radius-card);
+  background: var(--background);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: box-shadow 150ms ease;
+}
+.doc-diagram > * { grid-column: 1 / -1; }
+.doc-diagram > figcaption, .doc-diagram > .doc-diagram-actions { grid-column: auto; grid-row: 1; }
+.doc-diagram > figcaption {
+  min-width: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-diagram > figcaption strong { color: var(--foreground); font-weight: 600; }
+.doc-diagram-actions { display: flex; gap: 2px; padding: 0 8px; }
+.doc-diagram-actions button {
+  height: 24px; padding: 0 8px; border-radius: var(--radius-control); font-size: 12px; font-weight: 500;
+  color: var(--muted-foreground); transition: background-color 150ms ease, color 150ms ease;
+}
+@media (hover: hover) { .doc-diagram-actions button:hover { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 5%, transparent); } }
+.doc-diagram-actions button:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
+/* The head row's rule: drawn on the row under it, so it spans both head cells. */
+.doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic, .doc-diagram-gone) { border-top: 1px solid var(--border); }
 .doc-diagram-pic {
   display: flex;
   justify-content: center;
   width: 100%;
-  padding: 0.75em;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--background);
+  padding: 12px;
+  border: 0;
+  background: transparent;
   cursor: pointer;
 }
-@media (hover: hover) { .doc-diagram-pic:hover { border-color: var(--ring); } }
-.doc-diagram.is-selected .doc-diagram-pic { border-color: var(--primary); }
-.doc-diagram-pic:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (hover: hover) { .doc-diagram:has(.doc-diagram-pic:hover) { box-shadow: 0 0 0 1px var(--line-strong), 0 1px 2px rgb(0 0 0 / 0.04); } }
+.doc-diagram.is-selected { box-shadow: 0 0 0 2px var(--primary); }
+.doc-diagram-pic:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; border-radius: var(--radius-card); }
 .doc-diagram-pic img { max-width: 100%; height: auto; }
 /* Holds the picture button and, as its sibling, the run overlay (positioned over the img). */
 .doc-diagram-stage { position: relative; }
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: 14px; padding: 1.5em; }
-.doc-diagram-gone { border: 1px dashed var(--border); border-radius: 10px; text-align: center; }
-.doc-diagram-actions { display: flex; justify-content: center; gap: 0.4em; }
-.doc-diagram-actions button { font-size: 13px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--muted-foreground); }
-@media (hover: hover) { .doc-diagram-actions button:hover { color: var(--foreground); background: var(--accent); } }
-.doc-diagram-actions button:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
-.doc-diagram figcaption { font-size: 13px; color: var(--muted-foreground); text-align: center; }
+.doc-diagram-gone { text-align: center; }
 
 /* The `/` and `+` menus (and the canvas insert list): a dense command list on the app-chrome tokens. */
 .doc-slash {
@@ -505,7 +534,7 @@ body {
 
 /* Outline (목차) and heading links */
 /* Fill the pane (flex column in 문서-only view, block in the splitter) so a short doc's empty area still reveals the button. */
-.doc-host { flex: 1 0 auto; min-height: 100%; }
+.doc-host { flex: 1 0 auto; min-height: 100%; background: var(--card); } /* the document sits on the card step (#889) */
 .doc-outline-wrap { position: relative; align-self: flex-end; }
 .doc-outline-btn { color: var(--muted-foreground); opacity: 0; transition: opacity 0.15s, color 0.12s ease, background-color 0.12s ease; }
 .doc-host:hover .doc-outline-btn, .doc-host:focus-within .doc-outline-btn, .doc-outline-btn[aria-expanded="true"] { opacity: 1; }
@@ -698,6 +727,8 @@ body {
   html.print-doc section[aria-label='문서'] { position: absolute !important; left: 0; top: 0; width: 100%; max-width: none; padding: 0; }
   html.print-doc .doc-outline-wrap, html.print-doc .doc-table-bar, html.print-doc .doc-diagram-actions, html.print-doc .run-layer { display: none !important; }
   html.print-doc .doc-diagram, html.print-doc .doc-diagram-pic { break-inside: avoid; }
+  html.print-doc .doc-diagram { box-shadow: none; background: none; }
+  html.print-doc .doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic) { border-top: 0; }
   /* Light tokens on paper; [data-theme] repeats so this outranks :root[data-theme='dark']. */
   html.print-doc, html.print-doc[data-theme] { color-scheme: light; --foreground: #0a0a0a; --background: #fff; --muted: #f5f5f5; --muted-foreground: #636363; --border: #e5e5e5; }
   html.print-doc body { background: #fff !important; color: #0a0a0a !important; }

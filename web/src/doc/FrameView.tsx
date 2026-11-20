@@ -43,7 +43,10 @@ function FrameView({ node, selected }: ReactNodeViewProps) {
           {saved ? `"${saved}" 프레임을 찾을 수 없어요. ` : '프레임을 찾을 수 없어요. '}캔버스에서 지웠을 수 있어요. 이 줄을 지워도 돼요.
         </p>
       )}
-      <figcaption>{found ? `${label} · 누르면 캔버스로 가요` : label}</figcaption>
+      <figcaption>
+        <strong>{label}</strong>
+        {found && ' · 누르면 캔버스로 가요'}
+      </figcaption>
     </NodeViewWrapper>
   );
 }
