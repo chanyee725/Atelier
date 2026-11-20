@@ -825,13 +825,15 @@ body {
 /* Panel origin (#942, live/origin.ts): the card or row that opened the right panel keeps a 2px ink ring and a slightly
    darker fill while the panel is open (aria-current), and flashes once when the panel closes (the ring fades out over
    600ms). The flash only fades, so it also runs under reduced motion. */
+/* 30% lighter than full ink (2026-11-20): the ring marks the origin without shouting. */
+:root { --origin-ring: color-mix(in oklab, var(--primary) 70%, transparent); }
 [data-origin][aria-current="true"] {
-  box-shadow: inset 0 0 0 2px var(--primary);
-  background-color: color-mix(in oklab, var(--accent), var(--foreground) 6%);
+  box-shadow: inset 0 0 0 2px var(--origin-ring);
+  background-color: color-mix(in oklab, var(--accent), var(--foreground) 4%);
 }
 [data-origin][data-origin-flash] { animation: origin-flash 600ms cubic-bezier(0.23, 1, 0.32, 1) both; }
 @keyframes origin-flash {
-  from { box-shadow: inset 0 0 0 2px var(--primary); }
+  from { box-shadow: inset 0 0 0 2px var(--origin-ring); }
   to { box-shadow: inset 0 0 0 2px transparent; }
 }
 @media (forced-colors: active) {
@@ -854,5 +856,5 @@ body {
 /* A waiting card that also opened the panel (#942) keeps both rings: the ink ring inside, a steady amber ring outside. */
 .session-look[data-origin][aria-current="true"] {
   animation: none;
-  box-shadow: inset 0 0 0 2px var(--primary), 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent);
+  box-shadow: inset 0 0 0 2px var(--origin-ring), 0 0 0 1.5px var(--warn), 0 0 0 4px color-mix(in oklch, var(--warn) 18%, transparent);
 }
