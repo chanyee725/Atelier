@@ -94,7 +94,8 @@ test('agent live view opens from a board card, closes by button and Esc, bottom 
   assert.equal(await isOpen(), true, 'panel open');
   assert.equal(await open.getAttribute('aria-expanded'), 'true');
   const box = await panel.boundingBox();
-  assert.ok(Math.abs(box.width - 400) <= 1 && Math.abs(box.x + box.width - 1280) <= 1, `right-docked 400px: ${JSON.stringify(box)}`);
+  // #905: 460px, 8px off the right edge, floating 24px above the bottom.
+  assert.ok(Math.abs(box.width - 460) <= 1 && Math.abs(box.x + box.width - 1272) <= 1 && Math.abs(box.y + box.height - 776) <= 1, `floating 460px panel: ${JSON.stringify(box)}`);
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), '닫기', 'focus on the close button');
   assert.match(await page.evaluate(() => location.hash), new RegExp(`agent=${encodeURIComponent(s.id)}`));
   await page.waitForFunction((id) => /npm test/.test(document.querySelector(`dialog[data-agent-live="${id}"]`)?.textContent ?? ''), s.id, { timeout: 10_000 });

@@ -1,9 +1,11 @@
 /* Agent live view panel (E559, #728; docs/design/agent-live-view.md §1-2). A non-modal top-layer dialog docked to the
    right edge under the top bar, 460px; a bottom sheet (full width, 70vh) under 720px. App chrome tokens only; hue
-   only for status. Refresh (#889): a floating panel 8px off the edges, radius 12, its edge a translucent ring. */
+   only for status. Refresh (#889): a floating panel 8px off the edges, radius 12, its edge a translucent ring.
+   #905: it floats 24px off the bottom so the rounded bottom corners and the shadow under them read clearly; the height
+   comes from the insets, so it shrinks by the same amount. */
 .agent-live {
   position: fixed;
-  inset: calc(var(--h-bar, 52px) + 8px) 8px 8px auto;
+  inset: calc(var(--h-bar, 52px) + 8px) 8px 24px auto;
   width: min(460px, 100vw - 2rem);
   height: auto;
   max-height: none;
