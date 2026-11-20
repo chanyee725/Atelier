@@ -1,4 +1,5 @@
 // Number, time and label formatting for the Dispatch screens. Pure: node --test loads it directly.
+import { whenLabel } from '../../lib/when.ts';
 import type { BurnWarn, SessionState, Status, Usage } from '../../../../shared/dispatch/types.ts';
 
 export const fmtK = (n: number) => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n));
@@ -22,14 +23,8 @@ export function until(t: number | null, now = Date.now()) {
   return `${m}분`;
 }
 
-/** "방금", "5분 전", "2시간 전", "3일 전". */
-export function ago(t: number, now = Date.now()) {
-  const m = Math.round((now - t) / 60e3);
-  if (m < 1) return '방금';
-  if (m >= 1440) return `${Math.floor(m / 1440)}일 전`;
-  if (m >= 60) return `${Math.floor(m / 60)}시간 전`;
-  return `${m}분 전`;
-}
+/** The app's time label (lib/when.ts): relative inside a week, then a date. */
+export const ago = (t: number, now = Date.now()) => whenLabel(t, now);
 
 /** Tone of a state: drives the Tailwind status classes (text-ok, text-warn, text-destructive, muted). */
 export type Tone = 'ok' | 'warn' | 'bad' | 'idle';
