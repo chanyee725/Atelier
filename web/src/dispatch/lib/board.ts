@@ -2,6 +2,20 @@
 // Pure: node --test loads it directly. Inputs are the metadata the server keeps on a task; no transcript text.
 import type { BoardTask, TaskStage } from '../types.ts';
 
+/**
+ * One colour per stage everywhere (2026-11-20): 구현 blue and 리뷰 amber are the role colours (--role-impl,
+ * --role-review), 테스트 the tester's green, 병합 purple (--merged). Plan and done stay quiet; blocked is red.
+ */
+export const STAGE_BG: Record<TaskStage, string> = {
+  plan: 'bg-muted-foreground/40',
+  impl: 'bg-[var(--role-impl)]',
+  review: 'bg-[var(--role-review)]',
+  test: 'bg-[var(--role-test)]',
+  merge: 'bg-merged',
+  done: 'bg-muted-foreground/60',
+  blocked: 'bg-destructive',
+};
+
 export const STAGES: { id: TaskStage; label: string }[] = [
   { id: 'plan', label: '계획' },
   { id: 'impl', label: '구현' },

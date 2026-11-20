@@ -6,7 +6,7 @@
 import { useMemo } from 'react';
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { Card, TONE } from './dash';
+import { Card } from './dash';
 import { IssueTeamPanel } from '../live/IssueTeamPanel';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
 import { ACTIVE_STAGE, activeIssues, issueEta, type ActiveIssue } from './activeIssues';
@@ -58,7 +58,7 @@ function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
   const st = ACTIVE_STAGE[stage];
   return (
     <span data-active-stage={stage} className="inline-flex h-6 w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
-      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', TONE[st.tone])} />
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', st.dot)} />
       <span className="truncate">{st.label}</span>
     </span>
   );

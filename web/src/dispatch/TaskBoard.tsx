@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { AttentionGroup, useAttention, useNow } from './AttentionStrip';
-import { DONE_LIMIT, STAGES, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
+import { DONE_LIMIT, STAGES, STAGE_BG, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
 
@@ -17,9 +17,7 @@ import type { BoardTask, TaskStage } from './types';
 /** How many open tasks the card lists before 전체 보기. */
 const CARD_ROWS = 5;
 
-const BAR: Record<TaskStage, string> = {
-  plan: 'bg-muted-foreground/40', impl: 'bg-foreground/60', review: 'bg-ok/70', test: 'bg-warn/70', merge: 'bg-foreground/30', done: 'bg-ok', blocked: 'bg-destructive',
-};
+const BAR = STAGE_BG;
 
 /** "12분째"; "방금" under a minute. */
 const inStage = (ms: number) => (ms < 60_000 ? '방금' : `${span(ms)}째`);
