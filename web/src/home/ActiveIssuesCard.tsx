@@ -7,6 +7,8 @@ import { useMemo } from 'react';
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Card, TONE } from './dash';
+import { IssueTeamPanel } from '../live/IssueTeamPanel';
+import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
 import { ACTIVE_STAGE, activeIssues, issueEta, type ActiveIssue } from './activeIssues';
 import { issueRows, type IssuesAnswer } from './issueBoard';
 import type { Feed, PrAnswer } from './projectFeeds';
@@ -22,23 +24,32 @@ type Props = {
 };
 
 export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now() }: Props) {
+  const rows = useMemo(() => (issues && issues !== 'failed' && issues.ok && Array.isArray(sessions) ? issueRows(issues.issues, sessions) : []), [issues, sessions]);
+  const open = useIssueTeamTarget();
   const list = useMemo(() => {
-    if (!issues || issues === 'failed' || !issues.ok || !Array.isArray(sessions)) return [];
+    if (!rows.length || !Array.isArray(sessions)) return [];
     const approved = (b: string) => {
       const a = prs && prs !== 'failed' ? prs.get(b) : undefined;
       return !!a?.ok && a.pr.review === 'approved';
     };
-    return activeIssues(issueRows(issues.issues, sessions), sessions, tasks, approved);
-  }, [issues, sessions, tasks, prs]);
+    return activeIssues(rows, sessions, tasks, approved);
+  }, [rows, sessions, tasks, prs]);
+  const answerOf = (b: string) => {
+    const a = prs && prs !== 'failed' ? prs.get(b) : undefined;
+    return a?.ok ? a.pr : null;
+  };
+  const shown = open != null ? list.find((x) => x.number === open) : undefined;
+  const shownRow = shown ? rows.find((r) => r.number === shown.number) : undefined;
   if (!list.length) return null;
   return (
     // As tall as its rows up to a cap, then the rows scroll inside (like 세션 요청): a fill share cut rows in half.
     <Card id="active-issues" title="진행 중인 이슈" count={list.length} flush scroll className="max-h-80 shrink-0">
       <ul aria-label="진행 중인 이슈" className="m-0 list-none p-0 *:border-t">
         {list.map((x) => (
-          <ActiveLine key={x.number} issue={x} now={now} />
+          <ActiveLine key={x.number} issue={x} now={now} open={open === x.number} />
         ))}
       </ul>
+      {shown && shownRow && <IssueTeamPanel issue={shown} row={shownRow} tasks={tasks} answerOf={answerOf} now={now} />}
     </Card>
   );
 }
@@ -55,7 +66,7 @@ function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
 
 const names = (list: readonly Session[]) => list.map((s) => s.name).join(', ');
 
-function ActiveLine({ issue: x, now }: { issue: ActiveIssue; now: number }) {
+function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: number; open: boolean }) {
   const eta = issueEta(x.etaAt, now);
   const title = (
     <>
@@ -66,13 +77,9 @@ function ActiveLine({ issue: x, now }: { issue: ActiveIssue; now: number }) {
   return (
     <li data-active-issue={x.number} className="grid min-w-0 gap-1.5 px-3 py-2 text-sm">
       <div className="flex min-w-0 items-center gap-2">
-        {x.url ? (
-          <a href={x.url} target="_blank" rel="noreferrer" className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-inherit no-underline hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
-            {title}
-          </a>
-        ) : (
-          <span className="flex min-w-0 flex-1 items-center gap-2">{title}</span>
-        )}
+        <button type="button" aria-expanded={open} aria-label={`#${x.number} 팀 모니터링 열기`} onClick={(e) => openIssueTeam(x.number, e.currentTarget)} className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-inherit hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
+          {title}
+        </button>
         <StageChip stage={x.stage} />
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
