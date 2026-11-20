@@ -2,10 +2,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { branchStatus, integrationBranch, verifyMerged } from "../../server/dispatch/git.js";
+import { branchStatus, diff, integrationBranch, verifyMerged } from "../../server/dispatch/git.js";
 
 function scratchRepo() {
   const dir = mkdtempSync(path.join(tmpdir(), "dispatch-merge-"));
@@ -63,5 +63,20 @@ test("branchStatus: ahead/behind, last commit time and merge state", async () =>
     g("branch", "fresh", "develop");
     r = await branchStatus(dir, "fresh", "develop");
     assert.deepEqual({ ahead: r.ahead, behind: r.behind, state: r.state }, { ahead: 0, behind: 0, state: "empty" });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("diff leaves Atelier's run files out but keeps documents in .atelier (#906)", async () => {
+  const { dir } = scratchRepo();
+  try {
+    mkdirSync(path.join(dir, ".atelier", "Web"), { recursive: true });
+    writeFileSync(path.join(dir, ".atelier", "drawing.lock"), "1");
+    writeFileSync(path.join(dir, ".atelier", "state.json"), "{}");
+    writeFileSync(path.join(dir, ".atelier", "server.port"), "4000");
+    writeFileSync(path.join(dir, ".atelier", "Web", "doc.dpx.json"), "{}");
+    writeFileSync(path.join(dir, "new.txt"), "work\n");
+    const d = await diff(dir);
+    assert.deepEqual([...d.untracked].sort(), [".atelier/Web/doc.dpx.json", "new.txt"]);
+    assert.equal(d.files, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
