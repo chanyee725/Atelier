@@ -25,7 +25,7 @@ export const KEY_ORDER = ['version', 'theme', 'workspace', 'port', 'prStatus', '
 
 const TEAM_INT = ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec', 'ctxHandoff', 'handoffMTokens', 'stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes'];
 const TEAM_NUM = ['stuckEtaRatio'];
-const TEAM_BOOL = ['replyStyle', 'shareDeps', 'dropWorktrees', 'autoRemoveDone'];
+const TEAM_BOOL = ['replyStyle', 'shareDeps', 'dropWorktrees', 'autoRemoveDone', 'autoRotateLong'];
 const GUARD_NUM = ['five', 'seven', 'fable'];
 
 export const BROKEN_MESSAGE = '~/.atelier/drawing.json 파일을 읽지 못했어요. 파일을 고치거나 지우면 다시 저장할 수 있어요. 지금은 기본값을 써요.';

@@ -45,6 +45,12 @@ export const TEAM_DEFAULTS = () => ({
    * teammate's lead is told once to replace it with a fresh teammate, and a lead is told to hand over.
    */
   handoffMTokens: envNum("DISPATCH_HANDOFF_MTOKENS", 15),
+  /**
+   * Past `handoffMTokens`, swap the session for a fresh one with the same role, model, effort, perm and folder once
+   * it is between turns (#969): a lead hands over to its successor (teammates and board move with it), a teammate
+   * is swapped on its next turn when its lead did not replace it. Off: only the notices above.
+   */
+  autoRotateLong: true,
   /** Stuck detection: the same check command failing this many times in a row (0 = off). */
   stuckFails: 3,
   /** A running session with no output or tool event for this many minutes (0 = off). */
@@ -93,7 +99,7 @@ export function patchTeam(store, patch, { roles, models }) {
   if ("stuckSilentMinutes" in patch) next.stuckSilentMinutes = int(patch.stuckSilentMinutes, 0, 240);
   if ("stuckMismatchMinutes" in patch) next.stuckMismatchMinutes = int(patch.stuckMismatchMinutes, 0, 240);
   if ("stuckEtaRatio" in patch) next.stuckEtaRatio = ratio(patch.stuckEtaRatio, 1, 10);
-  for (const k of ["replyStyle", "shareDeps", "dropWorktrees", "autoRemoveDone"]) if (k in patch) next[k] = patch[k] === true;
+  for (const k of ["replyStyle", "shareDeps", "dropWorktrees", "autoRemoveDone", "autoRotateLong"]) if (k in patch) next[k] = patch[k] === true;
   if (patch.roleModels && typeof patch.roleModels === "object") {
     const rm = { ...(cur.roleModels || {}) };
     for (const [role, model] of Object.entries(patch.roleModels)) {
