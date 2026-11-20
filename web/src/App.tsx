@@ -853,7 +853,7 @@ export function App() {
   );
   const canvas = <CanvasSlot session={session} focus={focus} dark={dark} handle={canvasHandle} onFail={flushForReload} />;
 
-  // The document screen sits flush against the sidebar (frame A); everything else is a floating panel (frame B).
+  // Every screen, the document one included, is a floating panel on the sidebar frame (#889).
   const docScreen = hasFile && section.kind === 'doc';
   const homeSection = section.kind === 'doc' ? ({ kind: 'all' } as const) : section;
   // Dashboard / project home (shown outside the document screen): null = all files, else a project id (its folder path).
@@ -972,7 +972,7 @@ export function App() {
         <ActivityAlerts onOpen={openFile} onSession={openBoardSession} />
         <AgentLiveHost onOpenFile={openFile} />
         <AppDialogHost />
-        <SidebarInset frame={docScreen ? 'attached' : 'floating'}>
+        <SidebarInset>
           {historyOpen && path && <HistoryDialog path={path} dark={dark} onClose={() => setHistoryOpen(false)} onRestore={restoreVersion} />}
           {trashOpen && <TrashDialog onClose={() => setTrashOpen(false)} onRestored={() => void refreshTree()} />}
           {paletteOpen && <CommandPalette commands={registry.list()} scope={paletteScope(docScreen ? section : homeSection, projects, path)} onlyGroup={paletteGroup} onClose={() => setPaletteOpen(false)} />}

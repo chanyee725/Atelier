@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPipelineView, shownView, toCanvas } from '../../web/src/viewMode.ts';
+import { isPipelineView, shownView, switchViews, toCanvas } from '../../web/src/viewMode.ts';
 
 test('shownView: narrow screens show the document instead of both panes', () => {
   assert.equal(shownView('both', true), 'doc');
@@ -35,4 +35,15 @@ test('toCanvas: the 플랜 view (#729) leaves for the canvas like 실행', () =>
   assert.equal(isPipelineView('plan'), true);
   assert.equal(isPipelineView('run'), true);
   assert.equal(isPipelineView('doc'), false);
+});
+
+test('switchViews: the header offers 문서 / 둘 다 / 캔버스, one pane at a time when narrow, 플랜 and 실행 for pipelines', () => {
+  const ids = (narrow: boolean, canRun: boolean) => switchViews(narrow, canRun).map((v) => v.id);
+  assert.deepEqual(ids(false, false), ['doc', 'both', 'canvas']);
+  assert.deepEqual(switchViews(false, false).map((v) => v.label), ['문서', '둘 다', '캔버스']);
+  assert.deepEqual(ids(true, false), ['doc', 'canvas']);
+  assert.deepEqual(ids(false, true), ['doc', 'both', 'canvas', 'plan', 'run']);
+  assert.deepEqual(ids(true, true), ['doc', 'canvas', 'plan', 'run']);
+  // Every offered view is shown as picked: the switch never offers a view the screen would replace.
+  for (const narrow of [false, true]) for (const v of ids(narrow, true)) assert.equal(shownView(v, narrow), v);
 });

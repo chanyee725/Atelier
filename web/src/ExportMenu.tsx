@@ -69,7 +69,7 @@ export function ExportMenu({ open, onOpen, canvasReady, selected, options, onOpt
               <Download />
             </Button>
           ) : (
-            <Button variant="outline" disabled={disabled} title={`내보내기 (${IS_MAC ? '⌘E' : 'Ctrl+E'})`} className="whitespace-nowrap">
+            <Button variant="outline" size="sm" disabled={disabled} title={`내보내기 (${IS_MAC ? '⌘E' : 'Ctrl+E'})`} className="whitespace-nowrap">
               내보내기
             </Button>
           )}

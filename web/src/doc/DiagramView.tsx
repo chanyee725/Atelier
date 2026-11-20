@@ -145,7 +145,11 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       )}
       {block && board && box && <RunEta steps={board.steps} />}
       {block && board && box && <RunLegend steps={board.steps} />}
-      <figcaption>{block ? `${label} · 누르면 캔버스로 가요` : label}</figcaption>
+      {/* The block's head row (#889): its name, then the hint in muted text. */}
+      <figcaption>
+        <strong>{label}</strong>
+        {block && ' · 누르면 캔버스로 가요'}
+      </figcaption>
       {block && (
         <div className="doc-diagram-actions" role="group" aria-label="다이어그램 내보내기">
           {(

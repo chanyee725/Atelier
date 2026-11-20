@@ -11,3 +11,16 @@ export const shownView = (stored: View, narrow: boolean): View => (narrow && sto
 
 /** The view after asking to show something on the canvas: next to the document, or instead of it on a narrow screen. */
 export const toCanvas = (stored: View, narrow: boolean): View => (narrow ? 'canvas' : stored === 'doc' || isPipelineView(stored) ? 'both' : stored);
+
+/** The header's view switch, in order. */
+const VIEWS: { id: View; label: string }[] = [
+  { id: 'doc', label: '문서' },
+  { id: 'both', label: '둘 다' },
+  { id: 'canvas', label: '캔버스' },
+  { id: 'plan', label: '플랜' },
+  { id: 'run', label: '실행' },
+];
+
+/** The choices the view switch offers: narrow screens (390px) have no 둘 다, only pipeline files have 플랜 and 실행. */
+export const switchViews = (narrow: boolean, canRun: boolean): { id: View; label: string }[] =>
+  VIEWS.filter((v) => !(narrow && v.id === 'both') && (canRun || !isPipelineView(v.id)));

@@ -1,6 +1,7 @@
 /* Canvas chrome in the app's own tokens (index.css), so it reads less like stock Excalidraw. */
 .excalidraw.excalidraw {
-  --island-bg-color: var(--background);
+  /* Toolbars and panels are cards (#889): card surface, the ink line as their edge, 10px corners, a faint drop. */
+  --island-bg-color: var(--card);
   --default-border-color: var(--border);
   --sidebar-border-color: var(--border);
   /* Excalidraw's own violets follow the neutral shadcn tokens (#130, #132). Fills are opaque mixes of --primary
@@ -19,14 +20,14 @@
   --color-selection: var(--ring);
   /* Opacity slider track: Excalidraw ships a lavender one (hsl 240/244), so use a neutral mix. */
   --color-slider-track: color-mix(in oklab, var(--muted-foreground) 35%, var(--background));
-  /* Surfaces, three steps: buttons rest on --sidebar (the old --panel), hover on --muted, selected is the mix above. */
-  --color-surface-low: var(--sidebar);
+  /* Surfaces, three steps: buttons rest on the card they sit in (quiet, #889), hover on --muted, selected is the mix above. */
+  --color-surface-low: var(--card);
   --color-surface-mid: var(--muted);
   --color-surface-high: var(--muted);
   --color-surface-lowest: var(--background);
-  --border-radius-lg: 8px;
+  --border-radius-lg: 10px;
   --border-radius-md: 6px;
-  --shadow-island: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-island: 0 1px 2px rgb(0 0 0 / 0.04);
 }
 .excalidraw.excalidraw .Island,
 .excalidraw.excalidraw .App-menu__left,
@@ -35,7 +36,7 @@
   border: 1px solid var(--border);
 }
 .excalidraw.excalidraw.theme--dark {
-  --shadow-island: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-island: 0 1px 2px rgb(0 0 0 / 0.2);
   /* Dark: a 12% mix (L~0.24) sits under the --muted hover (0.269); 30% (L~0.37) reads as selected, above hover. */
   --color-primary-light: color-mix(in oklab, var(--primary) 30%, var(--background));
   --color-surface-primary-container: color-mix(in oklab, var(--primary) 30%, var(--background));
@@ -81,7 +82,7 @@
 /* Narrow canvas (the split view is under Excalidraw's 730px breakpoint) gets Excalidraw's mobile
    layout: a full-width bottom bar holding only ☰ and undo/redo. Shrink it to the compact bottom-left
    cluster the wide canvas has: 16px in from the corner (the bar sits 14px in, so 2px more), same
-   8px-radius island. The shape panel (.App-mobile-menu) and the ☰ main menu (.dropdown-menu) open
+   10px-radius island. The shape panel (.App-mobile-menu) and the ☰ main menu (.dropdown-menu) open
    inside this island, so it keeps the stock full width while either is open. */
 .excalidraw.excalidraw .App-bottom-bar > .Island:not(:has(.App-mobile-menu, .dropdown-menu)) {
   width: fit-content;

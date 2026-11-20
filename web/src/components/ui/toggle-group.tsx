@@ -13,8 +13,8 @@ const toggleVariants = cva(
       variant: {
         default: 'bg-transparent',
         outline: 'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
-        // Tabs-like: a muted track with the pressed item raised (what the old Segmented control drew).
-        segmented: 'border border-transparent text-muted-foreground hover:bg-transparent hover:text-foreground aria-pressed:border-border aria-pressed:bg-background aria-pressed:text-foreground aria-pressed:shadow-xs',
+        // #889: the picked item is a card on the sunken track (ring shadow, no border), the rest stay quiet text.
+        segmented: 'rounded-control text-xs text-muted-foreground hover:bg-transparent hover:text-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-card',
       },
       size: {
         default: 'h-8 min-w-8 px-2',
@@ -48,7 +48,7 @@ function ToggleGroup({
       data-variant={variant}
       value={value}
       onValueChange={(v: string) => v && onValueChange(v)}
-      className={cn('group/toggle-group flex w-fit items-center rounded-md', variant === 'segmented' && 'h-8 bg-muted p-0.5', className)}
+      className={cn('group/toggle-group flex w-fit items-center rounded-md', variant === 'segmented' && 'h-7 rounded-control bg-sunken p-0.5', className)}
       {...props}
     >
       <ToggleGroupContext.Provider value={{ variant, size, value }}>{children}</ToggleGroupContext.Provider>

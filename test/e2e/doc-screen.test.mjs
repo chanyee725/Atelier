@@ -121,10 +121,10 @@ test('document screen: path, view switch, ⋯ menu, sub-documents, 390px', { ski
     // Layout A: path and save state on the left; view switch, 내보내기 and ⋯ on the right.
     const save = page.locator('header [data-save]');
     assert.equal(await save.innerText(), '저장됨');
-    const dot = await save.locator('span').first().evaluate((n) => { const r = n.getBoundingClientRect(); return { w: r.width, bg: getComputedStyle(n).backgroundColor }; });
-    const ok = await page.evaluate(() => { const n = document.createElement('i'); n.style.color = 'var(--ok)'; document.body.append(n); const c = getComputedStyle(n).color; n.remove(); return c; });
-    assert.equal(dot.w, 6);
-    assert.equal(dot.bg, ok, 'saved dot uses --ok');
+    // Saved is plain muted text with no dot; the dot shows only while saving or on a problem (#889).
+    assert.equal(await save.locator('.rounded-full').count(), 0, 'no dot when saved');
+    const muted = await page.evaluate(() => { const n = document.createElement('i'); n.style.color = 'var(--muted-foreground)'; document.body.append(n); const c = getComputedStyle(n).color; n.remove(); return c; });
+    assert.equal(await save.evaluate((n) => getComputedStyle(n).color), muted, 'saved text uses --muted-foreground');
     const box = async (loc) => loc.boundingBox();
     const views = await box(page.getByRole('toolbar', { name: '보기 방식' }));
     const exp = await box(page.getByRole('button', { name: '내보내기' }));
