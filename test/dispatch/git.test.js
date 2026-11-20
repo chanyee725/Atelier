@@ -66,15 +66,17 @@ test("branchStatus: ahead/behind, last commit time and merge state", async () =>
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("diff leaves the .atelier workspace folder out of untracked files (#906)", async () => {
+test("diff leaves Atelier's run files out but keeps documents in .atelier (#906)", async () => {
   const { dir } = scratchRepo();
   try {
-    mkdirSync(path.join(dir, ".atelier"));
+    mkdirSync(path.join(dir, ".atelier", "Web"), { recursive: true });
     writeFileSync(path.join(dir, ".atelier", "drawing.lock"), "1");
     writeFileSync(path.join(dir, ".atelier", "state.json"), "{}");
+    writeFileSync(path.join(dir, ".atelier", "server.port"), "4000");
+    writeFileSync(path.join(dir, ".atelier", "Web", "doc.dpx.json"), "{}");
     writeFileSync(path.join(dir, "new.txt"), "work\n");
     const d = await diff(dir);
-    assert.deepEqual(d.untracked, ["new.txt"]);
-    assert.equal(d.files, 1);
+    assert.deepEqual([...d.untracked].sort(), [".atelier/Web/doc.dpx.json", "new.txt"]);
+    assert.equal(d.files, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

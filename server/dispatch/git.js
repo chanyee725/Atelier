@@ -21,10 +21,13 @@ async function hasHead(dir) {
 // Keep the session worktrees and the team state out of `git status` without touching the tracked
 // .gitignore. Only Atelier's own entries: the rest of .atelier/ (documents) is the user's to track.
 // `worktrees` is the folder new worktrees go in; a not-yet-moved .dispatch/ is excluded whole, as before.
+/** Atelier's own run files in the state folder (kept out of git, and out of the 작업 보기 diff, #906). */
+const STATE_FILES = ["state.json", "drawing.lock*", "server.port", "server.pid", "server.log"];
+
 export async function ensureExcluded(root, worktrees) {
   const rel = path.relative(root, worktrees).split(path.sep).join("/");
   const lines = rel.startsWith(STATE_DIR + "/")
-    ? [`/${rel}/`, ...["state.json", "drawing.lock*", "server.port", "server.pid", "server.log"].map(f => `/${STATE_DIR}/${f}`)]
+    ? [`/${rel}/`, ...STATE_FILES.map(f => `/${STATE_DIR}/${f}`)]
     : [`${rel.split("/")[0]}/`];
   const file = path.join(root, ".git", "info", "exclude");
   try {
@@ -119,10 +122,14 @@ const NOISE = new Set(["node_modules", ".next", ".next-prod", "dist", ".playwrig
 const IGNORED_NOISE = new Set([...NOISE, "coverage"]);
 // Untracked files count as work unless they sit in a top-level noise folder (a linked node_modules).
 const keep = f => !NOISE.has(f.split("/")[0]);
-// The 작업 보기 diff also skips the Atelier workspace folder (#906): its lock and state files are not the session's work.
-// Only the diff: a worktree with files in .atelier still counts as having work (they may be documents).
-const DIFF_SKIP = new Set([".atelier"]);
-const keepInDiff = f => keep(f) && !DIFF_SKIP.has(f.split("/")[0]);
+// The 작업 보기 diff also skips Atelier's own run files and worktrees in the state folder (#906): a lock or state.json
+// is not the session's work. Documents in that folder still show, since they are work.
+const isRunFile = f => {
+  if (!f.startsWith(STATE_DIR + "/")) return false;
+  const rest = f.slice(STATE_DIR.length + 1);
+  return rest.startsWith("worktrees/") || STATE_FILES.some(p => (p.endsWith("*") ? rest.startsWith(p.slice(0, -1)) : rest === p));
+};
+const keepInDiff = f => keep(f) && !isRunFile(f);
 // Changed tracked files are always work. Only files git ignores may be noise at any depth
 // (web/node_modules, web/dist, coverage): `?? src/dist/new.js` or ` M docs/dist/x.md` is real work.
 const noiseLine = l => {
@@ -139,7 +146,7 @@ const out = p => p.then(r => r.stdout, () => "");
  */
 export async function diff(cwd, root = cwd) {
   if (!(await hasHead(cwd))) {
-    const files = (await out(git(cwd, "status", "--porcelain"))).split("\n").filter(Boolean).map(l => l.slice(3)).filter(keepInDiff);
+    const files = (await out(git(cwd, "status", "--porcelain", "-uall"))).split("\n").filter(Boolean).map(l => l.slice(3)).filter(keepInDiff);
     return { files: files.length, add: 0, del: 0, untracked: files, patch: "", commits: [], base: null, merged: false };
   }
   let base = "HEAD", baseName = null, commits = [], merged = false;
