@@ -17,7 +17,10 @@ import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import { clock, hhmm, middle, span, ticking, waitNote } from './format';
 import { LiveSummaryView, useNow, type SummaryData } from './AgentLiveSummary';
-import { closeAgentLive, useAgentLiveTarget, useSheetOpen } from './store';
+import { closeAgentLive, useAgentLiveTarget, useAgentLiveTrail, useSheetOpen } from './store';
+import { PanelTrail } from './PanelTrail';
+import { usePanelExit } from './usePanelExit';
+import { trackProps, trackTone } from '../home/trackTone';
 import { closeIssueTeam, useIssueTeamTarget } from './issueStore';
 import { useAgentLive } from './useAgentLive';
 import { AgentWorkView } from './AgentWorkView';
@@ -33,16 +36,19 @@ const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기']
 
 /** Mounted once in App.tsx. A SessionSheet opened elsewhere (세션 보드) still hides the panel while it is open. */
 export function AgentLiveHost({ onOpenFile, dark = false }: { onOpenFile: (path: string) => void; dark?: boolean }) {
-  const sid = useAgentLiveTarget();
+  // Kept mounted for the 160ms slide-out after closing (#942).
+  const { shown: sid, closing } = usePanelExit(useAgentLiveTarget());
   const sheetOpen = useSheetOpen();
-  return sid ? <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} dark={dark} onOpenFile={onOpenFile} /> : null;
+  return sid ? <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} closing={closing} dark={dark} onOpenFile={onOpenFile} /> : null;
 }
 
-function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden: boolean; dark: boolean; onOpenFile: (path: string) => void }) {
+function AgentLivePanel({ sid, hidden, closing, dark, onOpenFile }: { sid: string; hidden: boolean; closing: boolean; dark: boolean; onOpenFile: (path: string) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-  const fromTeam = useIssueTeamTarget() != null;
+  const teamIssue = useIssueTeamTarget();
+  const fromTeam = teamIssue != null;
+  const trail = useAgentLiveTrail();
   const { live, session, error, loading, online, reload } = useAgentLive(sid);
   const { agents } = useAgents();
   const presence = Array.isArray(agents) ? (agents.find((a) => a.sid === sid) ?? null) : null;
@@ -76,6 +82,8 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
   }, [sid, hidden]);
 
   const name = session?.name ?? presence?.name ?? '';
+  // The working track under the head (#942): the same tone as this session's card.
+  const track = trackProps(trackTone(presence?.statusLabel ?? session?.activity?.label, state === 'working' || state === 'waiting' ? state : null));
   const d: SummaryData = {
     sid,
     name: name || '에이전트',
@@ -96,6 +104,8 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
       aria-label={`${name || '에이전트'} 작업 진행상황`}
       className="agent-live"
       data-agent-live={sid}
+      data-closing={closing || undefined}
+      inert={closing || undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) {
           e.preventDefault();
@@ -109,7 +119,22 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden
             <ArrowLeft aria-hidden className="size-4" />
           </button>
         )}
-        <LiveSummaryView d={d} now={now} titleId={titleId} plain />
+        <div className="grid min-w-0 gap-2">
+          {trail.length > 0 && (
+            <PanelTrail
+              steps={trail}
+              current={name || '에이전트'}
+              // The step right before the name is the team panel when opened from one: back there only; anything
+              // earlier goes back to the dashboard (both panels close, focus lands on the card or row).
+              onBack={(i) => {
+                closeAgentLive();
+                if (!fromTeam || i < trail.length - 1) closeIssueTeam();
+              }}
+            />
+          )}
+          <LiveSummaryView d={d} now={now} titleId={titleId} plain />
+          <span aria-hidden {...track} />
+        </div>
         {tab === 'chat' && !outside && (
           <Suspense fallback={null}><SessionActions sid={sid} onRemoved={closeAgentLive} /></Suspense>
         )}

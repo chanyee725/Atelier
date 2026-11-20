@@ -4,7 +4,8 @@ import { FileText } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { cn } from '../lib/utils';
 import { AgentTag, RoleBadge } from './AgentPanel';
-import { openAgentLive } from '../live/store';
+import { openAgentLive, useAgentLiveTarget } from '../live/store';
+import { trackProps, trackTone } from './trackTone';
 import { agentStateLabel, isBusy, isEditingDiagram, needsLook, type AgentPresence } from './agents';
 import { relativeTime } from './model';
 import type { TaskSummary } from './taskSummary';
@@ -32,8 +33,12 @@ export function SessionGrid({ label, children }: { label: string; children: Reac
  * (isEditingDiagram); otherwise the name is plain. The card's body opens the session's live view; the file it holds
  * is its own link under the body (shown once, there).
  */
-export function SessionCard({ agent: a, summary, title, onOpen }: { agent: AgentPresence; summary: TaskSummary | null; title: string | null; onOpen: (p: string) => void }) {
+export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent: AgentPresence; summary: TaskSummary | null; title: string | null; onOpen: (p: string) => void; trail: readonly string[] }) {
   const busy = isBusy(a);
+  // The card that opened the live view keeps a ring while it is open (#942, data-origin + aria-current).
+  const selected = useAgentLiveTarget() === a.sid;
+  const waiting = a.state ? a.state === 'waiting' : a.status === 'waiting';
+  const track = trackProps(trackTone(a.statusLabel, busy ? 'working' : waiting ? 'waiting' : null));
   const look = !busy && needsLook(a);
   const editing = isEditingDiagram(a);
   const model = a.modelLabel || a.model;
@@ -49,6 +54,8 @@ export function SessionCard({ agent: a, summary, title, onOpen }: { agent: Agent
       data-busy={busy || undefined}
       data-look={look || undefined}
       data-editing={editing || undefined}
+      data-origin
+      aria-current={selected || undefined}
       className={cn('flex min-w-0 flex-col rounded-card bg-background text-xs transition-colors hover:bg-accent/60', look && 'session-look')}
     >
       {/* The same live view a 세션 보드 card opens (#728, #785). */}
@@ -56,7 +63,7 @@ export function SessionCard({ agent: a, summary, title, onOpen }: { agent: Agent
         type="button"
         data-agent-live={a.sid}
         title={`${a.name} 진행상황 보기`}
-        onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board' })}
+        onClick={(e) => openAgentLive(a.sid, { trigger: e.currentTarget, from: 'board', trail })}
         className="press flex min-w-0 flex-col gap-2 rounded-card p-3 text-left focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <span className="flex min-w-0 flex-col gap-0.5">
@@ -77,8 +84,9 @@ export function SessionCard({ agent: a, summary, title, onOpen }: { agent: Agent
         <span className={cn('min-w-0 truncate', detail ? 'text-foreground/80' : 'text-muted-foreground')} title={detail ?? undefined}>
           {detail ?? (busy ? '작업 중이에요' : '다음 지시를 기다려요')}
         </span>
-        {/* Working: a sliver sweeps the track (the one moving thing on the dashboard); idle: a quiet line. */}
-        <span aria-hidden className={cn('session-track', busy && 'is-on')} />
+        {/* Working: a sliver sweeps the track in the tone of what it does now (trackTone); waiting: the track blinks;
+            idle: a quiet line. */}
+        <span aria-hidden {...track} />
         <span className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground tabular-nums">
           {model ? (
             <span className="inline-flex min-w-0 items-center gap-1" title={model}>

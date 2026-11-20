@@ -2,7 +2,8 @@
 // (agent-live in live.css) and shows who is on the issue and where it stands. 머리 (number, title, stage, host links),
 // 팀 (관리자, 팀원: model, role, state, what they do now; a row opens that session's live panel), 진행 (branch → PR,
 // review verdict, merged PRs), 비용 (team total, per model). Metadata only; it reads the dashboard's feeds, no request
-// of its own. Hidden while a session's live panel is open and back when that closes (issueStore.ts).
+// of its own. Hidden while a session's live panel is open and back when that closes (issueStore.ts). #942: a path line
+// in the head, the row that opened a live panel keeps a ring, and working rows use the dashboard's `.session-track`.
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { ExternalLink, GitBranch, GitPullRequest, X } from 'lucide-react';
 import type { Session } from '../../../shared/dispatch/types.ts';
@@ -19,18 +20,22 @@ import { cn } from '../lib/utils';
 import { liveStateLabel, liveStateTone } from './format';
 import { flowOf, teamCost, teamOf, verdict } from './issueTeam';
 import { closeIssueTeam } from './issueStore';
+import { PanelTrail } from './PanelTrail';
+import { TRAIL, teamTrail } from './origin';
+import { trackProps, trackTone } from '../home/trackTone';
 import { openAgentLive, useAgentLiveTarget } from './store';
 import './live.css';
 
 const DOT = { ok: 'bg-ok', warn: 'bg-warn', bad: 'bg-destructive', idle: 'bg-idle' } as const;
 const VERDICT_DOT = { clear: 'bg-ok', 'must-fix': 'bg-destructive', waiting: 'bg-warn', none: 'bg-idle' } as const;
 
-type Props = { issue: ActiveIssue; row: IssueRow; tasks: readonly BoardTask[]; answerOf: (branch: string) => Pr | null; now: number };
+type Props = { issue: ActiveIssue; row: IssueRow; tasks: readonly BoardTask[]; answerOf: (branch: string) => Pr | null; now: number; closing?: boolean };
 
-export function IssueTeamPanel({ issue, row, tasks, answerOf, now }: Props) {
+export function IssueTeamPanel({ issue, row, tasks, answerOf, now, closing = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
-  const hidden = !!useAgentLiveTarget();
+  const liveSid = useAgentLiveTarget();
+  const hidden = !!liveSid;
   const team = teamOf(issue);
   const cost = teamCost(team, now);
   const v = verdict(row.prs, answerOf);
@@ -58,6 +63,8 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now }: Props) {
       aria-label={`이슈 #${issue.number} 팀 모니터링`}
       className="agent-live"
       data-issue-team={issue.number}
+      data-closing={closing || undefined}
+      inert={closing || undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) {
           e.preventDefault();
@@ -67,6 +74,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now }: Props) {
     >
       <header className="agent-live-head">
         <div className="grid min-w-0 gap-1.5">
+          <PanelTrail steps={TRAIL.issues} current={`#${issue.number}`} onBack={closeIssueTeam} />
           <h2 className="m-0 flex min-w-0 items-baseline gap-2 text-[13px] font-normal">
             <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">#{issue.number}</span>
             <span className="min-w-0 truncate text-sm font-semibold" title={issue.title}>{issue.title || '제목 없음'}</span>
@@ -90,7 +98,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now }: Props) {
           {team.length ? (
             <ul className="m-0 grid list-none gap-1 p-0" data-team-rows>
               {team.map((s) => (
-                <TeamRow key={s.id} s={s} text={taskSummary(s, titleOf, tasks)?.text ?? null} />
+                <TeamRow key={s.id} s={s} issue={issue.number} selected={liveSid === s.id} text={taskSummary(s, titleOf, tasks)?.text ?? null} />
               ))}
             </ul>
           ) : (
@@ -169,15 +177,19 @@ function HostLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function TeamRow({ s, text }: { s: Session; text: string | null }) {
+function TeamRow({ s, issue, selected, text }: { s: Session; issue: number; selected: boolean; text: string | null }) {
   const state = stateOf(s);
   const tone = liveStateTone(state);
   const working = state === 'working';
+  const bar = trackTone(s.activity?.label, working ? 'working' : state === 'waiting' ? 'waiting' : null);
+  const track = bar ? trackProps(bar) : null;
   return (
     <li data-team-row={s.id}>
       <button
         type="button"
-        onClick={(e) => openAgentLive(s.id, { trigger: e.currentTarget, from: 'sheet' })}
+        data-origin
+        aria-current={selected || undefined}
+        onClick={(e) => openAgentLive(s.id, { trigger: e.currentTarget, from: 'sheet', trail: teamTrail(issue) })}
         className={cn('grid w-full min-w-0 gap-1 rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-inherit hover:bg-accent', FOCUS_RING)}
       >
         <span className="flex min-w-0 items-center gap-2">
@@ -190,7 +202,8 @@ function TeamRow({ s, text }: { s: Session; text: string | null }) {
           <span className="shrink-0 text-foreground">{liveStateLabel(state, false)}</span>
           {text && <span className="truncate" title={text}>{text}</span>}
         </span>
-        {working && <span aria-hidden className="ml-4 h-0.5 overflow-hidden rounded-full bg-foreground/8"><span className="team-bar block h-full w-1/3 rounded-full bg-ok" /></span>}
+        {/* The same working track as the dashboard cards (#942): one CSS, one tone mapping. */}
+        {track && <span aria-hidden {...track} className={cn(track.className, 'ml-4')} />}
       </button>
     </li>
   );

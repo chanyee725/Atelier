@@ -24,12 +24,20 @@
 .agent-live:popover-open {
   display: flex;
   flex-direction: column;
-  /* Enters from the right edge it docks to; under reduced motion only the fade stays. */
-  animation: agent-live-fade 180ms ease-out both;
+  /* #942: enters from the right edge it docks to (16px, 220ms ease-out) and leaves the same way in 160ms
+     ([data-closing], set by usePanelExit while the panel is still mounted). Reduced motion: opacity only. */
+  animation: agent-live-fade 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.agent-live:popover-open[data-closing] {
+  pointer-events: none;
+  animation: agent-live-out 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 @media (prefers-reduced-motion: no-preference) {
   .agent-live:popover-open {
-    animation: agent-live-fade 180ms ease-out both, agent-live-slide 180ms ease-out both;
+    animation: agent-live-fade 220ms cubic-bezier(0.23, 1, 0.32, 1) both, agent-live-slide 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  }
+  .agent-live:popover-open[data-closing] {
+    animation: agent-live-out 160ms cubic-bezier(0.23, 1, 0.32, 1) both, agent-live-slide-out 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
   }
 }
 @keyframes agent-live-fade {
@@ -37,9 +45,19 @@
     opacity: 0;
   }
 }
+@keyframes agent-live-out {
+  to {
+    opacity: 0;
+  }
+}
 @keyframes agent-live-slide {
   from {
-    translate: 12px 0;
+    translate: 16px 0;
+  }
+}
+@keyframes agent-live-slide-out {
+  to {
+    translate: 16px 0;
   }
 }
 @media (max-width: 719.98px) {
@@ -52,8 +70,16 @@
   }
   @media (prefers-reduced-motion: no-preference) {
     .agent-live:popover-open {
-      animation: agent-live-fade 180ms ease-out both, agent-live-rise 180ms ease-out both;
+      animation: agent-live-fade 220ms cubic-bezier(0.23, 1, 0.32, 1) both, agent-live-rise 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
     }
+    .agent-live:popover-open[data-closing] {
+      animation: agent-live-out 160ms cubic-bezier(0.23, 1, 0.32, 1) both, agent-live-sink 160ms cubic-bezier(0.23, 1, 0.32, 1) both;
+    }
+  }
+}
+@keyframes agent-live-sink {
+  to {
+    translate: 0 16px;
   }
 }
 @keyframes agent-live-rise {
@@ -502,14 +528,51 @@
   font-size: 12px;
 }
 
-/* Issue team panel (#925): the working teammate's thin progress line; one quiet slide, still under reduced motion. */
-.team-bar {
-  animation: team-bar 1.6s ease-in-out infinite alternate;
+/* Panel head path (#942): where the panel was opened from, one quiet line above the title. Earlier steps are
+   buttons that go back there; the last one is the current item. */
+.agent-live-trail {
+  margin: 0 0 4px;
+  min-width: 0;
 }
-@keyframes team-bar {
-  from { translate: 0 0; }
-  to { translate: 200% 0; }
+.agent-live-trail ol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
 }
-@media (prefers-reduced-motion: reduce) {
-  .team-bar { animation: none; width: 100%; opacity: 0.5; }
+.agent-live-trail li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.agent-live-trail li + li::before {
+  content: "›";
+  color: var(--muted-foreground);
+}
+.agent-live-trail button {
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+@media (hover: hover) {
+  .agent-live-trail button:hover {
+    color: var(--foreground);
+    text-decoration: underline;
+  }
+}
+.agent-live-trail [aria-current="page"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--foreground);
 }

@@ -2,6 +2,7 @@
 // it without a provider. The team panel hides while a session's live panel is open (one panel at a time) and shows
 // again when that closes, so 돌아가기 in the live panel lands back here.
 import { useSyncExternalStore } from 'react';
+import { returnToOrigin } from './origin.ts';
 
 let target: number | null = null;
 let trigger: HTMLElement | null = null;
@@ -22,7 +23,8 @@ export function closeIssueTeam(): void {
   const back = trigger;
   trigger = null;
   notify();
-  if (back?.isConnected) requestAnimationFrame(() => back.focus({ preventScroll: true }));
+  // Back to the row that opened it: scrolled into view and flashed once (#942).
+  if (back?.isConnected) requestAnimationFrame(() => returnToOrigin(back));
 }
 
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
