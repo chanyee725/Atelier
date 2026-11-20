@@ -13,7 +13,7 @@ test('each section shows its own fields', () => {
     const f = sectionFields(s);
     return [...f.numbers.map((n) => n.id), ...f.toggles.map((t) => t.id)];
   };
-  assert.deepEqual(ids('team'), ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec', 'autoRemoveDone']);
+  assert.deepEqual(ids('team'), ['rotateLead', 'rotateOthers', 'maxChildren', 'autoRemoveGraceSec', 'autoRemoveDone', 'autoRotateLong']);
   assert.deepEqual(ids('folders'), ['shareDeps', 'dropWorktrees']);
   assert.deepEqual(ids('stuck'), ['stuckFails', 'stuckSilentMinutes', 'stuckMismatchMinutes', 'stuckEtaRatio']);
 });

@@ -682,22 +682,7 @@ export class Hub extends EventEmitter {
         const n = ++this.store.data.seq;
         const slug = `${role.id}-${n}`;
         const wd = await prepareWorkdir(this.root, slug, worktree, { shareDeps: this.team().shareDeps, ...(this.store.layout && { worktrees: this.store.layout.worktrees }) });
-        const s = {
-          id: randomUUID(), n, name: this.pickName(n), role: role.id, roleName: role.name,
-          color: pickColor(this.sessions.map(x => x.color)),
-          provider: model.provider, model: model.id, modelLabel: model.label,
-          effort: it.effort || null, perm: it.perm || role.perm,
-          // The account label of the provider connection as it is now (#747): a snapshot, never an email or id.
-          accountLabel: this.accountLabel?.(model.provider) ?? null, issue: issueNumber(it.issue),
-          ...(it.mode && { mode: it.mode }), ...(it.lane && { lane: it.lane }), ...(it.profileNote && { profileNote: it.profileNote }),
-          prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
-          cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder: top,
-          status: "starting", startedAt: Date.now(), updatedAt: Date.now(),
-          last: "", turns: 0, ctx: 0, ctxWindow: model.contextWindow,
-          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          cost: model.provider === "claude" ? 0 : null,
-          providerSessionId: null, error: null,
-        };
+        const s = this.newSession({ n, role, model, it, wd, parent, folder: top });
         this.store.data.sessions[s.id] = s;
         if (wd.warning) this.push(s, { kind: "system", text: wd.warning });
         if (it.profileNote) this.push(s, { kind: "system", text: `모드 프로필: ${it.profileNote}` });
@@ -709,6 +694,26 @@ export class Hub extends EventEmitter {
       }
     }
     return made.map(s => this.publicSession(s));
+  }
+
+  /** A fresh session record (not stored yet): `wd` is its work folder { cwd, branch, worktree }. */
+  newSession({ n, role, model, it, wd, parent, folder }) {
+    return {
+      id: randomUUID(), n, name: this.pickName(n), role: role.id, roleName: role.name,
+      color: pickColor(this.sessions.map(x => x.color)),
+      provider: model.provider, model: model.id, modelLabel: model.label,
+      effort: it.effort || null, perm: it.perm || role.perm,
+      // The account label of the provider connection as it is now (#747): a snapshot, never an email or id.
+      accountLabel: this.accountLabel?.(model.provider) ?? null, issue: issueNumber(it.issue),
+      ...(it.mode && { mode: it.mode }), ...(it.lane && { lane: it.lane }), ...(it.profileNote && { profileNote: it.profileNote }),
+      prompt: it.prompt ?? role.prompt, canSpawn: !!role.canSpawn,
+      cwd: wd.cwd, branch: wd.branch, worktree: wd.worktree, parent, folder,
+      status: "starting", startedAt: Date.now(), updatedAt: Date.now(),
+      last: "", turns: 0, ctx: 0, ctxWindow: model.contextWindow,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      cost: model.provider === "claude" ? 0 : null,
+      providerSessionId: null, error: null,
+    };
   }
 
   /**
@@ -770,6 +775,8 @@ export class Hub extends EventEmitter {
   }
 
   deliver(s, r, text) {
+    // Past the length guard (#969): the message goes to a fresh session instead, with the handoff in front.
+    if (this.replaceDue(s) && this.replaceSession(s, { text })) return;
     // A pending length-guard note is attached here and cleared only on a path that delivers the message.
     const pend = s.longPending;
     if (pend) text = `${text}\n\n${pend}`;
@@ -846,11 +853,12 @@ export class Hub extends EventEmitter {
     this.store.save();
     if (s.parent) {
       // Rides on the teammate's next report: no extra turn for the lead, nothing to retry when it is busy.
-      s.longNote = `[Dispatch] ${s.name}(${s.roleName ?? s.role}) 세션이 누적 ${mtok}M 토큰을 넘었다. 지금 맡은 단계가 끝나면 stop_session(remove: true)으로 정리하고, 남은 일은 브랜치·커밋·다음 할 일만 적어 새 팀원에게 맡겨라. 이 세션에 새 일을 이어 붙이지 마라.`;
+      s.longNote = `[Dispatch] ${s.name}(${s.roleName ?? s.role}) 세션이 누적 ${mtok}M 토큰을 넘었다. 지금 맡은 단계가 끝나면 stop_session(remove: true)으로 정리하고, 남은 일은 브랜치·커밋·다음 할 일만 적어 새 팀원에게 맡겨라. 이 세션에 새 일을 이어 붙이지 마라.${this.team().autoRotateLong ? " 이 세션에 다시 지시하면 시스템이 같은 설정의 새 팀원으로 바꿔 그 지시를 넘긴다." : ""}`;
       this.push(s, { kind: "info", text: `누적 ${mtok}M 토큰: 다음 보고에 새 팀원으로 바꾸라는 안내를 붙여요` });
       return;
     }
-    const text = `[Dispatch] 이 세션이 누적 ${mtok}M 토큰을 넘었다. 새 일을 시작하지 마라. 남은 일을 40줄 이내로 인계(작업마다 담당·브랜치·커밋·단계·다음 할 일)해 답하고, 새 ${s.canSpawn ? "관리자" : "세션"}로 바꿔 달라고 요청하며 이 턴을 끝내라.`;
+    let text = `[Dispatch] 이 세션이 누적 ${mtok}M 토큰을 넘었다. 새 일을 시작하지 마라. 남은 일을 40줄 이내로 인계(작업마다 담당·브랜치·커밋·단계·다음 할 일)해 답하고, 새 ${s.canSpawn ? "관리자" : "세션"}로 바꿔 달라고 요청하며 이 턴을 끝내라.`;
+    if (this.team().autoRotateLong) text = `[Dispatch] 이 세션이 누적 ${mtok}M 토큰을 넘었다. 새 일을 시작하지 마라. 남은 일을 40줄 이내로 인계(작업마다 담당·브랜치·커밋·단계·다음 할 일)해 답하고 이 턴을 끝내라. 턴이 끝나면 시스템이 이 인계를 붙여 같은 설정의 새 ${s.canSpawn ? "관리자" : "세션"}로 바꾼다.`;
     this.push(s, { kind: "info", text: `누적 ${mtok}M 토큰: 인계하고 새 세션으로 바꾸라고 알렸어요` });
     const r = this.live.get(s.id);
     if (s.provider === "claude" && r?.proc && s.status === "running") {
@@ -860,6 +868,15 @@ export class Hub extends EventEmitter {
     }
   }
 
+  /** What a handoff carries over: the session's last answer and its open teammates (rotate, replaceSession). */
+  handoffParts(s, lastText) {
+    const kids = this.sessions.filter(c => c.parent === s.id && !["done"].includes(c.status));
+    const team = kids.length
+      ? `\n\n[팀원]\n${kids.map(c => `- ${c.name} (${c.roleName}, id ${c.id}, ${c.status}${c.branch ? `, 브랜치 ${c.branch}` : ""}): ${clip(c.last || "", 160)}`).join("\n")}`
+      : "";
+    return { last: clip(lastText || s.last || "", 2500), team };
+  }
+
   /** Ends the current CLI session and starts a fresh one with a handoff note plus `text`. */
   rotate(s, text) {
     const r = this.rt(s.id);
@@ -867,11 +884,7 @@ export class Hub extends EventEmitter {
     r.proc = null; // the exit handler ignores a process that is no longer current
     r.perms.clear();
     old?.kill("SIGTERM");
-    const kids = this.sessions.filter(c => c.parent === s.id && !["done"].includes(c.status));
-    const team = kids.length
-      ? `\n\n[팀원]\n${kids.map(c => `- ${c.name} (${c.roleName}, id ${c.id}, ${c.status}${c.branch ? `, 브랜치 ${c.branch}` : ""}): ${clip(c.last || "", 160)}`).join("\n")}`
-      : "";
-    const last = clip(r.lastText || s.last || "", 2500);
+    const { last, team } = this.handoffParts(s, r.lastText);
     const why = s.ctxHigh ? `컨텍스트를 ${s.ctxHigh.pct}% 써서` : `컨텍스트를 줄이려고 ${s.turnsSinceRotate ?? s.turns}턴 만에`;
     const note = `[Dispatch] ${why} 새 CLI 세션으로 이어 간다. 이전 대화는 이 세션에 없다. 필요한 상태는 작업 폴더·브랜치·git log·docs로 다시 확인하라.\n\n[직전 내 응답]\n${last || "(없음)"}${team}\n\n[이어서 할 일]\n${text}`;
     this.push(s, { kind: "info", text: s.ctxHigh
@@ -884,6 +897,83 @@ export class Hub extends EventEmitter {
     s.ctxHigh = null;
     r.ctxNoticed = false;
     this.start(s, note);
+  }
+
+  /* ---------------- Auto-replace long sessions (#969) ---------------- */
+
+  /**
+   * True when `s` should be swapped for a fresh session now: the auto swap is on, it is past `handoffMTokens`, it is
+   * between turns (idle, no permission asked), it can run (provider, model, limits) and, for a teammate, its lead was
+   * already told to replace it (the swap then comes with the teammate's next turn).
+   */
+  replaceDue(s) {
+    const t = this.team();
+    if (!s || !t.autoRotateLong || !longOver(s, t) || s.status !== "idle" || s._killed) return false;
+    const r = this.live.get(s.id);
+    if (r?.replacing || r?.perms?.size || s.asksUser) return false;
+    if (s.parent && !s.longRun?.told) return false;
+    if (this.paused || this.runBlock(s) || this.holdTeam?.(s.parent ?? s.id)) return false;
+    if (s.provider === "claude" && this.guardCheck(1)) return false;
+    return true;
+  }
+
+  /** A turn ended: report to the lead, then swap a lead (or a session without one) that is past the length guard. */
+  endTurn(s) {
+    const last = this.live.get(s.id)?.lastText ?? null;
+    this.reportToParent(s);
+    if (!s.parent && this.replaceDue(s)) this.replaceSession(s, { last });
+  }
+
+  /**
+   * Swaps `old` for a fresh session with the same role, model, effort, perm, work folder, branch, parent and project
+   * folder (#969). The new one starts with the rotate handoff (last answer, open teammates) plus `text`; teammates,
+   * board tasks, tickets and plans move to it; `old` is removed with its worktree kept (the new session works in it).
+   * Returns the new session, or null when it could not be made (the old one stays).
+   */
+  replaceSession(old, { last = null, text = null } = {}) {
+    const r = this.rt(old.id);
+    if (r.replacing) return null;
+    r.replacing = true;
+    let s;
+    try {
+      const roles = effectiveRoles(this.roles, this.store, this.models);
+      const role = roles.find(x => x.id === old.role) ?? { id: old.role, name: old.roleName, canSpawn: old.canSpawn, perm: old.perm };
+      const model = this.models.find(m => m.id === old.model && m.provider === old.provider);
+      if (!model) throw new Error("모델을 찾지 못했어요");
+      const n = ++this.store.data.seq;
+      s = this.newSession({ n, role: { ...role, canSpawn: old.canSpawn }, model,
+        it: { effort: old.effort, perm: old.perm, prompt: old.prompt, issue: old.issue, mode: old.mode, lane: old.lane },
+        wd: { cwd: old.cwd, branch: old.branch, worktree: old.worktree }, parent: old.parent ?? null, folder: old.folder ?? null });
+    } catch (e) {
+      r.replacing = false;
+      this.push(old, { kind: "info", text: `새 세션으로 바꾸지 못했어요: ${clip(e.message, 200)}` });
+      return null;
+    }
+    const mtok = Math.round(mtokens(old));
+    s.rotatedFrom = { id: old.id, name: old.name, mtok, at: Date.now() };
+    const { last: prev, team } = this.handoffParts(old, last ?? r.lastText);
+    const next = text || "인계 내용대로 하던 일을 이어 가라.";
+    const moved = old.canSpawn ? " 팀원과 작업 보드는 이 세션으로 옮겨졌다." : "";
+    const note = `[Dispatch] 이전 세션 ${old.name}이(가) 누적 ${mtok}M 토큰을 넘어 같은 설정의 새 세션인 너로 바꿨다.${moved} 이전 대화는 이 세션에 없다. 필요한 상태는 작업 폴더·브랜치·git log·docs로 다시 확인하라.\n\n[직전 응답]\n${prev || "(없음)"}${team}\n\n[이어서 할 일]\n${next}`;
+    this.store.data.sessions[s.id] = s;
+    // Teammates, the board, limit tickets and plans follow the lead; the old id is gone after remove().
+    for (const c of this.sessions) if (c.parent === old.id) c.parent = s.id;
+    for (const bag of [this.store.data.tasks, this.store.data.tickets, this.store.data.pipelines])
+      for (const v of Object.values(bag || {})) if (v?.lead === old.id) v.lead = s.id;
+    const nr = this.rt(s.id);
+    if (r.leadNotes?.length) nr.leadNotes = r.leadNotes.splice(0);
+    if (r.pendingReport) { nr.pendingReport = r.pendingReport; r.pendingReport = null; }
+    const said = `누적 ${mtok}M 토큰이라 새 세션 ${s.name}로 바꿨어요`;
+    this.push(s, { kind: "info", text: `${said} (이전 세션 ${old.name})` });
+    this.push(s, { kind: "user", text: note, label: "인계" });
+    this.touch(s);
+    // The work folder now belongs to the new session, so the old one goes without dropping it.
+    this.remove(old.id, { keepWorktree: true });
+    this.start(s, note);
+    for (const c of this.sessions) if (c.parent === s.id) this.touch(c);
+    if (s.parent) this.notifyLead(s.parent, `[Dispatch] ${old.name}(${old.roleName ?? old.role}) 세션이 누적 ${mtok}M 토큰을 넘어 같은 설정의 새 팀원 ${s.name}(id ${s.id})로 바꿨어요${s.branch ? `(브랜치 ${s.branch})` : ""}. 앞으로는 이 id로 지시하세요.`);
+    this.emit("tasks", this.tasks);
+    return s;
   }
 
   interrupt(id) {
@@ -921,7 +1011,7 @@ export class Hub extends EventEmitter {
     this.touch(s, { status: "done" });
   }
 
-  remove(id, { strict = false, info } = {}) {
+  remove(id, { strict = false, info, keepWorktree = false } = {}) {
     const gone = this.get(id);
     this.cancelAutoRemove(id);
     this.kill(id);
@@ -934,7 +1024,7 @@ export class Hub extends EventEmitter {
     this.store.save();
     this.emit("removed", { id });
     // Its worktree goes too when nothing uncommitted is left in it; the branch stays.
-    const dropped = gone?.worktree && this.team().dropWorktrees
+    const dropped = gone?.worktree && !keepWorktree && this.team().dropWorktrees
       ? new Promise(res => setTimeout(() => dropWorktree(this.root, gone.cwd, { strict, info }).then(res, () => res(false)), this.dropDelayMs).unref?.())
       : Promise.resolve(null);
     this.emit("tasks", this.tasks);
@@ -1213,6 +1303,8 @@ export class Hub extends EventEmitter {
       if ((s.stall?.reason ?? null) !== (stall?.reason ?? null)) this.mark(s, { stall });
       this.refreshStuck(s, now);
     }
+    // A lead left idle past the length guard (the setting just turned on, a failed try): swap it now (#969).
+    for (const s of this.sessions) if (!s.parent && this.replaceDue(s)) this.replaceSession(s);
     this.checkTaskStuck(now);
   }
 
@@ -1225,7 +1317,11 @@ export class Hub extends EventEmitter {
     if (!r?.lastText) return;
     r.pendingReport = `[${s.name}(${s.roleName}) 보고${s.branch ? ` · ${s.branch}` : ""}]\n${clip(r.lastText, 2500)}`;
     // The length-guard note (checkLong) travels with the report instead of waking the lead on its own.
-    if (s.longNote) { r.pendingReport += `\n\n${s.longNote}`; s.longNote = null; }
+    if (s.longNote) {
+      r.pendingReport += `\n\n${s.longNote}`; s.longNote = null;
+      // The lead has been told (#969): if it keeps the teammate, its next turn goes to a fresh session.
+      if (s.longRun) { s.longRun.told = true; this.store.save(); }
+    }
     r.lastText = null;
     this.deliverReport(s);
   }
@@ -1413,7 +1509,7 @@ export class Hub extends EventEmitter {
         if (win) s.ctxWindow = win;
         if (m.is_error) this.push(s, { kind: "error", text: clip(m.result || m.subtype, 400) });
         this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
-        this.reportToParent(s);
+        this.endTurn(s);
         break;
       }
     }
@@ -1474,7 +1570,7 @@ export class Hub extends EventEmitter {
         s.ctx = (u.input_tokens || 0) + (u.output_tokens || 0); this.checkCtx(s); this.checkLong(s);
         this.store.addDaily(s.model, s.role, delta);
         this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
-        this.reportToParent(s);
+        this.endTurn(s);
         break;
       }
       case "turn.failed":
@@ -1535,7 +1631,7 @@ export class Hub extends EventEmitter {
     s.last = redact(clip(text, 400));
     this.rt(s.id).lastText = text;
     this.touch(s, { status: "idle", turns: s.turns + 1, turnsSinceRotate: (s.turnsSinceRotate ?? s.turns ?? 0) + 1 });
-    this.reportToParent(s);
+    this.endTurn(s);
   }
 
   /** `turn` is the agy process's own turn; lines from a process that is no longer current (rotate) change no
