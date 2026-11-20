@@ -52,7 +52,7 @@ export function RoleBadge({ agent, className }: { agent: Pick<AgentPresence, 'ro
       data-role-tone={tone}
       style={{ '--role': ROLE_COLOR[tone] } as CSSProperties}
       className={cn(
-        'inline-flex h-[18px] max-w-full min-w-0 items-center rounded-[5px] bg-[color-mix(in_oklch,var(--role)_17%,transparent)] px-1.5 text-[11px] leading-none font-medium text-[var(--role)] [transform:translateZ(0)]',
+        'inline-flex h-[18px] max-w-full min-w-0 items-center rounded-[5px] bg-[color-mix(in_oklch,var(--role)_13%,transparent)] px-1.5 text-[11px] leading-none font-medium text-[color-mix(in_oklch,var(--role)_60%,var(--foreground))] [transform:translateZ(0)]',
         className,
       )}
     >
