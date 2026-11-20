@@ -8,19 +8,10 @@ import { cn } from './lib/utils';
 import { SAVED_STATUS, SAVING } from './fileSession';
 import type { Crumb } from './projectNav';
 
-import { isPipelineView, type View } from './viewMode';
+import { switchViews, type View } from './viewMode';
 
 export type { View };
 
-const VIEWS: { id: View; label: string }[] = [
-  { id: 'doc', label: '문서' },
-  { id: 'both', label: '둘 다' },
-  { id: 'canvas', label: '캔버스' },
-  { id: 'plan', label: '플랜' },
-  { id: 'run', label: '실행' },
-];
-// 390px: one pane at a time (design doc 6 §6).
-const NARROW_VIEWS = VIEWS.filter((v) => v.id !== 'both');
 
 /** Save state next to the path (design review P1-6): `clean` (nothing to save yet) and `saved` both read 저장됨. */
 type Save = 'clean' | 'saved' | 'saving' | 'note' | 'alert';
@@ -67,7 +58,7 @@ type Props = {
 export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onView, onTitle, narrow, onToggleNav, trail = [], onCrumb, exportMenu, onHistory, onSubDoc, onCommands, bell }: Props) {
   const save = saveState(status, statusAlert);
   return (
-    <header className="flex h-(--h-bar) shrink-0 items-center gap-2 border-b bg-sidebar px-2 md:gap-3 md:px-3">
+    <header className="flex h-(--h-bar) shrink-0 items-center gap-2 border-b px-2 md:pr-3 md:pl-5">
       {onToggleNav && (
         <Button variant="ghost" size="icon-sm" onClick={onToggleNav} aria-label="파일 목록 열기" className={cn(TOUCH, FOCUS_RING)}>
           <Menu />
@@ -97,7 +88,7 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
                 placeholder="제목 없는 파일"
                 aria-label="파일 제목"
                 aria-current="page"
-                className={`h-(--h-row) w-full min-w-24 rounded-md bg-transparent px-2 text-base font-medium text-foreground outline-none placeholder:text-muted-foreground hover:bg-accent focus-visible:bg-background md:w-56 ${FOCUS_RING}`}
+                className={`h-(--h-row) w-full min-w-24 rounded-control bg-transparent px-1.5 text-[15px] font-semibold tracking-[-0.01em] text-foreground outline-none placeholder:text-muted-foreground hover:bg-accent focus-visible:bg-background md:w-56 ${FOCUS_RING}`}
               />
             </li>
           </ol>
@@ -108,12 +99,13 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
       {hasFile && (
         <span
           data-save={save}
-          className={cn('min-w-0 shrink-0 items-center gap-1.5 truncate text-xs md:inline-flex md:shrink', statusAlert ? 'inline-flex font-medium text-destructive' : 'hidden text-muted-foreground')}
+          className={cn('min-w-0 shrink-0 items-center gap-1.5 truncate text-xs md:inline-flex md:shrink', statusAlert ? 'inline-flex font-medium text-destructive' : 'hidden text-2xs text-muted-foreground')}
           role={statusAlert ? 'alert' : undefined}
           aria-live="polite"
           title={status || SAVED}
         >
-          <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', DOT[save])} />
+          {/* Saved needs nothing from the user, so it is plain muted text; a dot shows only while saving or on a problem (#889). */}
+          {save !== 'saved' && save !== 'clean' && <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', DOT[save])} />}
           <span className="md:hidden">{statusAlert ? '저장 안 됨' : ''}</span>
           <span className="hidden truncate md:inline">{save === 'saved' || save === 'clean' ? SAVED : status}</span>
         </span>
@@ -127,8 +119,8 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
         role="toolbar"
         className={cn('shrink-0', narrow && 'h-12')}
       >
-        {(narrow ? NARROW_VIEWS : VIEWS).filter((v) => canRun || !isPipelineView(v.id)).map((v) => (
-          <ToggleGroupItem key={v.id} value={v.id} className={cn('px-2 md:px-3', narrow && 'h-11 min-w-11', FOCUS_RING)}>
+        {switchViews(!!narrow, !!canRun).map((v) => (
+          <ToggleGroupItem key={v.id} value={v.id} className={cn('h-6 px-2 md:px-2.5', narrow && 'h-11 min-w-11', FOCUS_RING)}>
             {v.label}
           </ToggleGroupItem>
         ))}
