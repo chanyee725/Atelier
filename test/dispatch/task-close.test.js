@@ -70,6 +70,10 @@ test("taskIssue: the branch's issue, else a #N that ends the title; mentions els
   assert.equal(taskIssue({ title: "E680: board (#930)" }), 930);
   assert.equal(taskIssue({ title: "fix lint #12" }), 12);
   assert.equal(taskIssue({ title: "E931: #930 후속" }), null);
+  // Leads' own titles start with the issue (2026-11-20); a leading "PR #N" is a PR, not an issue.
+  assert.equal(taskIssue({ title: "#879 세션 보드 대시보드 카드화" }), 879);
+  assert.equal(taskIssue({ title: "PR #907 리뷰 nit 정리" }), null);
+  assert.equal(taskIssue({ title: "#12abc 아님" }), null);
   assert.equal(taskIssue({ title: "board (#879 회귀 수정)" }), null);
   assert.equal(taskIssue({ title: "E680: no number", commit: "abc1234" }), null);
   assert.equal(taskIssue({ title: "a&#39;b" }), null);

@@ -8,8 +8,8 @@
 //   (b) a merged PR is tied to the task's own issue (it closes it, or its branch names it) or its head branch is the
 //       task's branch. PR numbers are never compared with issue numbers;
 //   (c) the task's own issue is closed.
-// The task's own issue is the one its branch names, else a `#N` that ends its title ("… (#930)"). Other `#N` in a
-// title ("#930 후속", "(#879 회귀 수정)") only mention other work and are no evidence.
+// The task's own issue is the one its branch names, else a `#N` that starts ("#879 세션 보드…") or ends ("… (#930)")
+// its title. Other `#N` in a title ("(#879 회귀 수정)", "PR #907 …") only mention other work and are no evidence.
 // Without evidence the task stays open and `autoCheck.reason` says why.
 import { issueNumber, issueOfBranch } from "./ledger.js";
 
@@ -19,13 +19,16 @@ export const AUTO_CLOSE_STAGES = new Set(["plan", "impl", "review", "test", "mer
 const HASH_STAGES = new Set(["review", "test", "merge"]);
 
 const TRAILING = /(?:^|[^\w&])\(?#(\d{1,7})\)?\s*$/;
+// Leads also start a task title with its issue ("#879 세션 보드 대시보드 카드화"); a leading "PR #N" is a PR, not an issue.
+const LEADING = /^\s*#(\d{1,7})(?=\s|$)/;
 const SHA = /^[0-9a-f]{7,40}$/i;
 
-/** The issue a task works on: the one its commit branch names, else a `#N` at the very end of its title; or null. */
+/** The issue a task works on: the one its commit branch names, else a `#N` that starts or ends its title; or null. */
 export function taskIssue(t) {
   const own = issueOfBranch(t?.commit);
   if (own) return own;
-  const m = TRAILING.exec(String(t?.title || ""));
+  const title = String(t?.title || "");
+  const m = LEADING.exec(title) ?? TRAILING.exec(title);
   return m ? issueNumber(Number(m[1])) || null : null;
 }
 
