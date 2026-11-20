@@ -39,10 +39,17 @@ test('a lone session or a parent that is gone gives a tree of one; an unknown id
   assert.equal(orgSize(null), 0);
 });
 
+test('a parent cycle shows each session once instead of recursing forever', () => {
+  const loop = [s('a', 1, 'b', true), s('b', 2, 'a', true), s('c', 3, 'a')];
+  assert.deepEqual(shape(orgTree(loop, 'a')), ['b', ['a*', ['c']]]);
+  assert.deepEqual(shape(orgTree(loop, 'b')), ['a', ['b*'], ['c']]);
+  assert.deepEqual(shape(orgTree([s('self', 1, 'self', true)], 'self')), ['self*']);
+});
+
 test('the role prompt falls back to the role default when the session prompt was cleared by a restart', () => {
   const roles = [{ id: 'lead', prompt: '너는 관리자다.' }];
   assert.deepEqual(shownPrompt({ prompt: '할 일', role: 'lead' }, roles), { text: '할 일', fallback: false });
   assert.deepEqual(shownPrompt({ prompt: '', role: 'lead' }, roles), { text: '너는 관리자다.', fallback: true });
-  assert.deepEqual(shownPrompt({ role: 'custom' }, roles), { text: '—', fallback: true });
+  assert.deepEqual(shownPrompt({ role: 'custom' }, roles), { text: '', fallback: true });
   assert.match(PROMPT_CLEARED, /서버 재시작/);
 });

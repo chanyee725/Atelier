@@ -322,10 +322,12 @@ export function Info({ s }: { s: Session }) {
           {/* Visible while folded too: says why the role default shows instead of the session's own task (#943). */}
           {prompt.fallback && <span data-prompt-cleared className="order-last basis-full text-xs font-normal text-muted-foreground">{PROMPT_CLEARED}</span>}
         </summary>
-        <p className="m-0 mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap text-muted-foreground" data-prompt-fallback={prompt.fallback || undefined}>
-          {prompt.fallback && prompt.text !== '—' && <span className="mb-1 block text-xs font-medium text-foreground/80">{s.roleName} 기본 프롬프트</span>}
-          {prompt.text}
-        </p>
+        {prompt.text && (
+          <p className="m-0 mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap text-muted-foreground" data-prompt-fallback={prompt.fallback || undefined}>
+            {prompt.fallback && <span className="mb-1 block text-xs font-medium text-foreground/80">{s.roleName} 기본 프롬프트</span>}
+            {prompt.text}
+          </p>
+        )}
       </details>
     </div>
   );
