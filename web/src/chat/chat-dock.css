@@ -22,22 +22,24 @@
   width: var(--chat-dock-fab);
   height: var(--chat-dock-fab);
   border-radius: 999px;
-  background: var(--card);
-  color: var(--card-foreground);
-  box-shadow: 0 0 0 1px var(--border), 0 6px 20px rgb(0 0 0 / 0.14);
+  /* Its own colour (2026-11-20): the helper is a lead-level session, so the button wears the lead role colour and
+     stands apart from the cards and panels around it. */
+  background: var(--role-lead);
+  color: white;
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--role-lead) 70%, black), 0 6px 20px color-mix(in oklch, var(--role-lead) 35%, transparent);
   cursor: pointer;
   transition: scale 140ms ease-out, background-color 150ms ease, right 200ms ease-out;
 }
 @media (hover: hover) {
   .chat-dock-fab:hover {
-    background: var(--accent);
+    background: color-mix(in oklch, var(--role-lead) 88%, black);
   }
 }
 .chat-dock-fab:active {
   scale: 0.96;
 }
 .chat-dock-fab[aria-expanded="true"] {
-  background: var(--accent);
+  background: color-mix(in oklch, var(--role-lead) 80%, black);
 }
 
 .chat-dock-badge {
