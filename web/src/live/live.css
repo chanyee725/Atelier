@@ -325,23 +325,79 @@
   border-radius: 4px;
   background: var(--muted);
 }
-/* 작업 보기 (E673, #905): the body shows the session's work (a document preview or its changed files). The panel
-   widens so a diff line reads; the footer's two buttons sit side by side, the pressed one on the sunken tone. */
-.agent-live[data-work] {
-  width: min(560px, 100vw - 2rem);
+/* Tabs (#905): 진행 · 작업 보기 · 대화 · 변경사항 · 정보 in one row under the header; the panel stays 460px for all of
+   them. The selected tab carries an underline (a border on a pseudo-element, so it survives forced colors), not color
+   alone, and nothing that changes its size. The row scrolls instead of wrapping on a narrow sheet. */
+.agent-live {
+  --overlay-x: 16px;
 }
-@media (max-width: 719.98px) {
-  .agent-live[data-work] {
-    width: 100%;
-  }
+.agent-live-tabs {
+  flex: 1;
+  min-height: 0;
+  gap: 0;
 }
-.agent-live-foot {
+.agent-live-tablist.agent-live-tablist {
+  justify-content: flex-start;
+  height: auto;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+}
+.agent-live-tab.agent-live-tab {
+  position: relative;
+  flex: none;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.agent-live-tab[aria-selected='true'] {
+  color: var(--foreground);
+}
+.agent-live-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset: auto 8px 0;
+  border-bottom: 2px solid var(--foreground);
+}
+.agent-live-body-session {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.agent-live-session {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.agent-live-session-scroll {
+  flex: 1;
+  min-height: 0;
+}
+.agent-live-controls {
   display: flex;
   gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
 }
-.agent-live-btn[aria-pressed='true'] {
-  border-color: var(--ring);
-  background: var(--accent);
+.agent-live-controls .agent-live-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-live-danger {
+  color: var(--destructive);
+}
+.agent-live-btn:disabled {
+  opacity: 0.5;
 }
 .agent-work-doc-head {
   grid-template-columns: auto 1fr auto;

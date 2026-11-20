@@ -2,13 +2,14 @@
 // on the right edge (a bottom sheet under 720px). The page stays usable behind it. One panel at a time; opening another
 // agent swaps the content. Closes with ✕, Esc while focus is inside, or the same trigger again; focus then goes back
 // to the trigger (store.ts). Hidden while a SessionSheet (modal) is open and shown again when it closes.
-// Shows metadata only (tool labels, short targets, shown paths, numbers), never the session folder or transcript text;
-// the one exception is the redacted question a waiting session asks (`ask`, #886).
+// Tabs (#905): 진행 (metadata only: tool labels, short targets, shown paths, numbers; the one exception is the redacted
+// question a waiting session asks, #886), 작업 보기, and the session's own 대화 · 변경사항 · 정보 (AgentLiveSession), so
+// no SessionSheet opens over the panel. Touched files link: a document opens in the editor, a code file in 작업 보기.
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Eye, FileText, Pencil, X } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Check, Code, Eye, FileText, Pencil, X } from 'lucide-react';
 import type { AgentLive, LiveAction, LiveFile } from '../../../shared/dispatch/live.ts';
 import type { Session, SessionState } from '../../../shared/dispatch/types.ts';
-import { connect } from '../dispatch/store.ts';
 import { fmtK, fmtUsd, stateOf, totalTok, ago } from '../dispatch/lib/format.ts';
 import { useAgents } from '../home/useAgents';
 import type { AgentPresence } from '../home/agents';
@@ -19,30 +20,23 @@ import { LiveSummaryView, useNow, type SummaryData } from './AgentLiveSummary';
 import { closeAgentLive, useAgentLiveTarget, useSheetOpen } from './store';
 import { useAgentLive } from './useAgentLive';
 import { AgentWorkView } from './AgentWorkView';
+import type { SessionTab } from './AgentLiveSession';
+import { actionFileLink, fileLink, type FileLink } from './workView';
 import './live.css';
 
-const SessionSheet = lazy(() => import('../dispatch/SessionSheet').then((m) => ({ default: m.SessionSheet })));
+const AgentLiveSession = lazy(() => import('./AgentLiveSession'));
 
-/** Mounted once in App.tsx. */
+type Tab = 'progress' | 'work' | SessionTab;
+const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기'], ['chat', '대화'], ['diff', '변경사항'], ['info', '정보']];
+
+/** Mounted once in App.tsx. A SessionSheet opened elsewhere (세션 보드) still hides the panel while it is open. */
 export function AgentLiveHost({ onOpenFile, dark = false }: { onOpenFile: (path: string) => void; dark?: boolean }) {
   const sid = useAgentLiveTarget();
   const sheetOpen = useSheetOpen();
-  const [chat, setChat] = useState<string | null>(null);
-  // SessionSheet reads the Dispatch store; keep it fed only while the sheet is open.
-  useEffect(() => (chat ? connect() : undefined), [chat]);
-  return (
-    <>
-      {sid && <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} dark={dark} onOpenFile={onOpenFile} onChat={() => setChat(sid)} />}
-      {chat && (
-        <Suspense fallback={null}>
-          <SessionSheet id={chat} onClose={() => setChat(null)} />
-        </Suspense>
-      )}
-    </>
-  );
+  return sid ? <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} dark={dark} onOpenFile={onOpenFile} /> : null;
 }
 
-function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string; hidden: boolean; dark: boolean; onOpenFile: (path: string) => void; onChat: () => void }) {
+function AgentLivePanel({ sid, hidden, dark, onOpenFile }: { sid: string; hidden: boolean; dark: boolean; onOpenFile: (path: string) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -52,9 +46,18 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string
   const outside = sid.startsWith('outside:');
   const state: SessionState | null = session ? stateOf(session) : ((presence?.state as SessionState | null) ?? null);
   const now = useNow(!!state && ticking(state));
-  // 작업 보기 (#905): the panel body shows what the session is making instead of its progress. Off for another agent.
-  const [work, setWork] = useState(false);
-  useEffect(() => setWork(false), [sid]);
+  // Back to 진행 for another agent. `reveal`: the code file a link asked 작업 보기 to unfold.
+  const [tab, setTab] = useState<Tab>('progress');
+  const [reveal, setReveal] = useState<string | null>(null);
+  useEffect(() => {
+    setTab('progress');
+    setReveal(null);
+  }, [sid]);
+  const openLink = (l: FileLink) => {
+    if (l.kind === 'doc') return onOpenFile(l.path);
+    setReveal(l.path);
+    setTab('work');
+  };
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -90,7 +93,6 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string
       aria-label={`${name || '에이전트'} 작업 진행상황`}
       className="agent-live"
       data-agent-live={sid}
-      data-work={work && !outside && error !== 'missing' ? '' : undefined}
       onKeyDown={(e) => {
         if (e.key === 'Escape' && !e.defaultPrevented) {
           e.preventDefault();
@@ -99,7 +101,7 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string
       }}
     >
       <header className="agent-live-head">
-        <LiveSummaryView d={d} now={now} titleId={titleId} />
+        <LiveSummaryView d={d} now={now} titleId={titleId} plain />
         <button ref={closeBtn} type="button" aria-label="닫기" onClick={closeAgentLive} className={cn('agent-live-icon', FOCUS_RING)}>
           <X aria-hidden className="size-4" />
         </button>
@@ -112,39 +114,49 @@ function AgentLivePanel({ sid, hidden, dark, onOpenFile, onChat }: { sid: string
           <button type="button" onClick={reload} className={cn('agent-live-link', FOCUS_RING)}>다시 시도</button>
         </p>
       )}
-      <div className="agent-live-body">
-        {error === 'missing' ? (
-          <Gone />
-        ) : outside ? (
-          <OutsideBody presence={presence} onOpenFile={onOpenFile} now={now} />
-        ) : error === 'failed' && !live ? (
-          <section>
-            <p className="agent-live-error">진행상황을 불러오지 못했어요</p>
-            <button type="button" onClick={reload} className={cn('agent-live-btn', FOCUS_RING)}>다시 시도</button>
-          </section>
-        ) : work ? (
-          <AgentWorkView
-            sid={sid}
-            file={presence?.file ?? null}
-            fileAt={presence?.at ?? null}
-            step={presence?.step}
-            statusLabel={presence?.statusLabel}
-            files={live?.files ?? []}
-            shown={!hidden}
-            dark={dark}
-            onOpenFile={onOpenFile}
-          />
-        ) : (
-          <Body live={live} session={session} loading={loading && !live} step={presence?.step} now={now} onOpenFile={onOpenFile} state={state} onChat={onChat} />
-        )}
-      </div>
-      {!outside && error !== 'missing' && (
-        <footer className="agent-live-foot">
-          <button type="button" onClick={onChat} className={cn('agent-live-btn', FOCUS_RING)}>대화 보기</button>
-          <button type="button" aria-pressed={work} onClick={() => setWork((w) => !w)} className={cn('agent-live-btn', FOCUS_RING)} data-work-toggle>
-            작업 보기
-          </button>
-        </footer>
+      {error === 'missing' ? (
+        <div className="agent-live-body"><Gone /></div>
+      ) : outside ? (
+        <div className="agent-live-body"><OutsideBody presence={presence} onOpenLink={openLink} now={now} /></div>
+      ) : (
+        <Tabs value={tab} onValueChange={(v) => { setTab(v as Tab); if (v !== 'work') setReveal(null); }} className="agent-live-tabs">
+          <TabsList aria-label="에이전트 보기" className="agent-live-tablist">
+            {TABS.map(([v, label]) => (
+              <TabsTrigger key={v} value={v} className="agent-live-tab" data-live-tab={v}>{label}</TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value="progress" className="agent-live-body">
+            {error === 'failed' && !live ? (
+              <section>
+                <p className="agent-live-error">진행상황을 불러오지 못했어요</p>
+                <button type="button" onClick={reload} className={cn('agent-live-btn', FOCUS_RING)}>다시 시도</button>
+              </section>
+            ) : (
+              <Body live={live} session={session} loading={loading && !live} step={presence?.step} now={now} onOpenLink={openLink} state={state} onChat={() => setTab('chat')} />
+            )}
+          </TabsContent>
+          <TabsContent value="work" className="agent-live-body">
+            <AgentWorkView
+              sid={sid}
+              file={presence?.file ?? null}
+              fileAt={presence?.at ?? null}
+              step={presence?.step}
+              statusLabel={presence?.statusLabel}
+              files={live?.files ?? []}
+              shown={!hidden}
+              dark={dark}
+              reveal={reveal}
+              onOpenFile={onOpenFile}
+            />
+          </TabsContent>
+          {(['chat', 'diff', 'info'] as const).map((v) => (
+            <TabsContent key={v} value={v} className="agent-live-body agent-live-body-session">
+              <Suspense fallback={<section><p className="agent-live-muted">불러오는 중이에요…</p></section>}>
+                <AgentLiveSession sid={sid} tab={v} onRemoved={closeAgentLive} />
+              </Suspense>
+            </TabsContent>
+          ))}
+        </Tabs>
       )}
     </dialog>
   );
@@ -167,9 +179,9 @@ function Skeleton() {
   );
 }
 
-function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: {
+function Body({ live, session, loading, step, now, state, onOpenLink, onChat }: {
   live: AgentLive | null; session: Session | null; loading: boolean; step?: string; now: number; state: SessionState | null;
-  onOpenFile: (path: string) => void; onChat: () => void;
+  onOpenLink: (l: FileLink) => void; onChat: () => void;
 }) {
   if (loading) return <section><Skeleton /></section>;
   const cur = live?.current ?? null;
@@ -195,7 +207,7 @@ function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: 
             {cur ? (
               <dd className="agent-live-row agent-live-current">
                 <span className="shrink-0">{cur.label}</span>
-                <span className="agent-live-target" title={cur.target}>{middle(cur.target)}</span>
+                <Target target={cur.target} link={actionFileLink(cur, live?.files ?? [])} onOpenLink={onOpenLink} />
                 <span className="agent-live-time">{clock(now - cur.at)}</span>
               </dd>
             ) : (
@@ -224,23 +236,39 @@ function Body({ live, session, loading, step, now, state, onOpenFile, onChat }: 
         <h3>최근 행동</h3>
         {live?.recent.length ? (
           <ol className="agent-live-list">
-            {live.recent.map((a) => <ActionRow key={a.id} a={a} />)}
+            {live.recent.map((a) => <ActionRow key={a.id} a={a} link={actionFileLink(a, live.files)} onOpenLink={onOpenLink} />)}
           </ol>
         ) : (
           <p className="agent-live-muted">아직 행동이 없어요</p>
         )}
       </section>
-      <Files files={live?.files ?? []} now={now} onOpenFile={onOpenFile} />
+      <Files files={live?.files ?? []} now={now} onOpenLink={onOpenLink} />
     </>
   );
 }
 
-function ActionRow({ a }: { a: LiveAction }) {
+/** A tool call's target: a button when it is a linkable file (in-panel action, so a button, not a link). */
+function Target({ target, link, max, onOpenLink }: { target: string; link: FileLink | null; max?: number; onOpenLink: (l: FileLink) => void }) {
+  if (!link) return <span className="agent-live-target" title={target}>{middle(target, max)}</span>;
+  return (
+    <button
+      type="button"
+      className={cn('agent-live-link agent-live-target', FOCUS_RING)}
+      title={link.kind === 'doc' ? `${link.path} 문서 열기` : `${link.path} 작업 보기에서 보기`}
+      data-live-link={link.kind}
+      onClick={() => onOpenLink(link)}
+    >
+      {middle(target, max)}
+    </button>
+  );
+}
+
+function ActionRow({ a, link, onOpenLink }: { a: LiveAction; link: FileLink | null; onOpenLink: (l: FileLink) => void }) {
   return (
     <li className="agent-live-row" data-live-action={a.id}>
       <span className="agent-live-at">{hhmm(a.at)}</span>
       <span className="shrink-0">{a.label}</span>
-      <span className="agent-live-target" title={a.target}>{middle(a.target, 36)}</span>
+      <Target target={a.target} link={link} max={36} onOpenLink={onOpenLink} />
       <span className="agent-live-ok">
         {a.ok === true ? (
           <><Check aria-hidden className="size-3.5 text-ok" /><span className="sr-only">성공</span></>
@@ -254,7 +282,7 @@ function ActionRow({ a }: { a: LiveAction }) {
   );
 }
 
-function Files({ files, now, onOpenFile }: { files: LiveFile[]; now: number; onOpenFile: (path: string) => void }) {
+function Files({ files, now, onOpenLink }: { files: LiveFile[]; now: number; onOpenLink: (l: FileLink) => void }) {
   return (
     <section>
       <h3>
@@ -263,21 +291,30 @@ function Files({ files, now, onOpenFile }: { files: LiveFile[]; now: number; onO
       </h3>
       {files.length ? (
         <ul className="agent-live-list">
-          {files.map((f) => (
-            <li key={f.path} className="agent-live-row agent-live-file" data-live-file={f.path}>
-              {f.edited ? <Pencil aria-hidden className="size-3.5 shrink-0" /> : <Eye aria-hidden className="size-3.5 shrink-0" />}
-              <span className="sr-only">{f.edited ? '수정함' : '읽음'}</span>
-              {f.doc ? (
-                <button type="button" className={cn('agent-live-link', FOCUS_RING)} title={`${f.path} 열기`} onClick={() => onOpenFile(f.path)}>
-                  {middle(f.path)}
-                  <FileText aria-hidden className="size-3.5 shrink-0" />
-                </button>
-              ) : (
-                <span className="agent-live-target" title={f.path}>{middle(f.path)}</span>
-              )}
-              <span className="agent-live-time">{ago(f.at, now)}</span>
-            </li>
-          ))}
+          {files.map((f) => {
+            const link = fileLink(f);
+            return (
+              <li key={f.path} className="agent-live-row agent-live-file" data-live-file={f.path}>
+                {f.edited ? <Pencil aria-hidden className="size-3.5 shrink-0" /> : <Eye aria-hidden className="size-3.5 shrink-0" />}
+                <span className="sr-only">{f.edited ? '수정함' : '읽음'}</span>
+                {link ? (
+                  <button
+                    type="button"
+                    className={cn('agent-live-link', FOCUS_RING)}
+                    title={link.kind === 'doc' ? `${f.path} 문서 열기` : `${f.path} 작업 보기에서 보기`}
+                    data-live-link={link.kind}
+                    onClick={() => onOpenLink(link)}
+                  >
+                    <span className="truncate">{middle(f.path)}</span>
+                    {link.kind === 'doc' ? <FileText aria-hidden className="size-3.5 shrink-0" /> : <Code aria-hidden className="size-3.5 shrink-0" />}
+                  </button>
+                ) : (
+                  <span className="agent-live-target" title={f.path}>{middle(f.path)}</span>
+                )}
+                <span className="agent-live-time">{ago(f.at, now)}</span>
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="agent-live-muted">건드린 파일이 없어요</p>
@@ -287,14 +324,14 @@ function Files({ files, now, onOpenFile }: { files: LiveFile[]; now: number; onO
 }
 
 /** Outside API writers: presence only. */
-function OutsideBody({ presence, now, onOpenFile }: { presence: AgentPresence | null; now: number; onOpenFile: (path: string) => void }) {
+function OutsideBody({ presence, now, onOpenLink }: { presence: AgentPresence | null; now: number; onOpenLink: (l: FileLink) => void }) {
   const files: LiveFile[] = presence?.file ? [{ path: presence.file, edited: true, at: presence.at ?? now, doc: presence.file.endsWith('.dpx.json') }] : [];
   return (
     <>
       <section>
         <p className="agent-live-muted">외부 에이전트라 자세한 진행상황이 없어요</p>
       </section>
-      <Files files={files} now={now} onOpenFile={onOpenFile} />
+      <Files files={files} now={now} onOpenLink={onOpenLink} />
     </>
   );
 }
