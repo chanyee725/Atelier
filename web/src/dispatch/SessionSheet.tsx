@@ -257,42 +257,67 @@ export function Chat({ s, report }: { s: Session; report: Report }) {
 }
 
 export function Info({ s }: { s: Session }) {
+  // One type family (Pretendard) throughout, ids included; numbers tabular. Grouped panels instead of one long list.
   const rows: [string, string][] = [
+    ['모델', `${s.modelLabel || s.model}${s.effort ? ` · effort ${s.effort}` : ''}`],
+    ['역할', `${s.roleName}${s.canSpawn ? ' · 팀원을 만들 수 있어요' : ''}`],
+    ['권한 모드', permLabel(s.perm)],
     ['세션 ID', s.id],
     ['CLI 세션', s.providerSessionId ?? '—'],
-    ['모델', `${s.model}${s.effort ? ` (effort ${s.effort})` : ''}`],
-    ['역할', `${s.roleName}${s.canSpawn ? ' · 다른 세션을 만들 수 있음' : ''}`],
-    ['권한 모드', permLabel(s.perm)],
-    ['컨텍스트', `${fmtK(s.ctx)} / ${fmtK(s.ctxWindow)} (${pct(s.ctxWindow ? s.ctx / s.ctxWindow : null)})`],
   ];
-  const usage: [string, number][] = [['입력', s.usage.input], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite], ['출력', s.usage.output]];
+  const ratio = s.ctxWindow ? s.ctx / s.ctxWindow : null;
+  const usage: [string, number][] = [['입력', s.usage.input], ['출력', s.usage.output], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite]];
   return (
-    <div className="flex h-full flex-col gap-6 overflow-y-auto overlay-body text-sm">
-      <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-2.5">
-        {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-muted-foreground">{k}</dt>
-            <dd className="font-mono text-[13px] break-all">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      <div>
-        <h3 className="mb-2 font-medium">토큰</h3>
-        <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5">
-          {usage.map(([k, v]) => (
-            <div key={k} className="contents">
+    <div className="flex h-full flex-col gap-4 overflow-y-auto overlay-body font-sans text-[13px] leading-[1.55]">
+      <section aria-label="세션" className="rounded-[10px] bg-muted/40 px-4 py-1">
+        <dl className="m-0 divide-y divide-border/60">
+          {rows.map(([k, v]) => (
+            <div key={k} className="grid grid-cols-[88px_minmax(0,1fr)] items-baseline gap-x-3 py-2.5">
               <dt className="text-muted-foreground">{k}</dt>
-              <dd className="tabular-nums">{fmtK(v)}</dd>
+              <dd className="m-0 min-w-0 break-all text-foreground tabular-nums">{v}</dd>
             </div>
           ))}
-          <dt className="text-muted-foreground">비용</dt>
-          <dd className="font-semibold tabular-nums">{fmtUsd(s.cost)}{s.cost == null && <span className="ml-2 font-normal text-muted-foreground">이 CLI는 비용을 알려주지 않아요</span>}</dd>
         </dl>
-      </div>
-      <div>
-        <h3 className="mb-2 font-medium">역할 프롬프트</h3>
-        <p className="rounded-lg border bg-muted/30 p-3 whitespace-pre-wrap text-muted-foreground">{s.prompt || '—'}</p>
-      </div>
+      </section>
+
+      <section aria-label="컨텍스트" className="rounded-[10px] bg-muted/40 px-4 py-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="m-0 text-[13px] font-semibold">컨텍스트</h3>
+          <span className="tabular-nums text-muted-foreground">
+            <span className="font-semibold text-foreground">{pct(ratio)}</span> · {fmtK(s.ctx)} / {fmtK(s.ctxWindow)}
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background" aria-hidden>
+          <div className={cn('h-full rounded-full', (ratio ?? 0) >= 0.85 ? 'bg-bad' : (ratio ?? 0) >= 0.6 ? 'bg-warn' : 'bg-ok')} style={{ width: `${Math.min(100, Math.round((ratio ?? 0) * 100))}%` }} />
+        </div>
+      </section>
+
+      <section aria-label="토큰과 비용" className="rounded-[10px] bg-muted/40 px-4 py-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="m-0 text-[13px] font-semibold">토큰</h3>
+          <span className="text-muted-foreground">
+            비용 <span className="text-[15px] font-semibold tracking-[-0.01em] text-foreground tabular-nums">{fmtUsd(s.cost)}</span>
+          </span>
+        </div>
+        <dl className="m-0 mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {usage.map(([k, v]) => (
+            <div key={k} className="rounded-md bg-background px-3 py-2">
+              <dt className="text-xs text-muted-foreground">{k}</dt>
+              <dd className="m-0 mt-0.5 text-[15px] font-semibold tracking-[-0.01em] tabular-nums">{fmtK(v)}</dd>
+            </div>
+          ))}
+        </dl>
+        {s.cost == null && <p className="m-0 mt-2 text-xs text-muted-foreground">이 CLI는 비용을 알려주지 않아요.</p>}
+      </section>
+
+      <details className="group rounded-[10px] bg-muted/40 px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[13px] font-semibold marker:hidden">
+          역할 프롬프트
+          <span className="text-xs font-normal text-muted-foreground group-open:hidden">펼치기</span>
+          <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">접기</span>
+        </summary>
+        <p className="m-0 mt-2.5 max-h-72 overflow-y-auto whitespace-pre-wrap text-muted-foreground">{s.prompt || '—'}</p>
+      </details>
     </div>
   );
 }
