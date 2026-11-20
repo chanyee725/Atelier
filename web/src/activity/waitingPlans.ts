@@ -2,10 +2,10 @@
 // `pipeline` event (write_plan, start, reopen, a trashed plan), on file deletes and moves, and on a reconnect. While
 // something waits, also when a session goes (its lead: 시작하기 turns into 정리) and when limits or providers change
 // (blockers). A plan
-// that starts waiting after the first load raises one 알림함 item; what was already waiting when the page opened does not.
+// that starts waiting after the first load raises one browser notification; what was already waiting when the page opened does not.
 import { useSyncExternalStore } from 'react';
 import { events } from '../lib/events';
-import { notifyInbox } from './appInbox';
+import { notifyApp } from './appNotify';
 import { newlyWaiting, parseWaiting, planTitle, planWaitingText, type WaitingPlan } from './plans';
 
 let plans: WaitingPlan[] = [];
@@ -25,7 +25,7 @@ function load() {
       const next = parseWaiting(d);
       if (loaded) {
         for (const p of newlyWaiting(new Set(plans.map((x) => x.path)), next)) {
-          notifyInbox({ type: 'plan-waiting', file: p.path, text: `${planWaitingText(p)}: ${planTitle(p)}` });
+          notifyApp({ type: 'plan-waiting', file: p.path, text: `${planWaitingText(p)}: ${planTitle(p)}` });
         }
       }
       loaded = true;

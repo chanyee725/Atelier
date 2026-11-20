@@ -1,4 +1,4 @@
-// Plans that wait for 시작하기 in the 알림함 (E579, #786): GET /api/pipeline/waiting as the bell shows it. Pure (no
+// Plans that wait for 시작하기 (E579, #786): GET /api/pipeline/waiting as the page shows it. Pure (no
 // React or DOM), so it runs under `node --test`. Metadata only: path, title, the lead's session name, since when.
 import { fileStemOf } from '../../../shared/dispatch/agent-activity.ts';
 

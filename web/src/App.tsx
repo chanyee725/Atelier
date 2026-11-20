@@ -8,10 +8,9 @@ import { Sidebar } from './Sidebar';
 import { Home, type CreateKind } from './home/Home';
 import { CHORD_MS, chord, folderPrefix } from './home/model';
 import { Alert } from './components/ui/alert';
-import { Button, buttonVariants } from './components/ui/button';
+import { Button } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
-import { ActivityBell } from './activity/ActivityBell';
 import { AgentLiveHost } from './live/AgentLivePanel';
 import { ChatDock } from './chat/ChatDock';
 import { toastAction, toastResult } from './activity/actionToast';
@@ -233,7 +232,6 @@ export function App() {
   // The one project this server belongs to (#778): its folder name, shown top-left.
   const [projectName, setProjectName] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const treePaths = useMemo(() => filesOf(tree).map((f) => f.path), [tree]);
   const [projects, setProjects] = useState<ProjectsView | null>(null);
   // What the main panel shows; opening a file switches to the document screen.
   const [section, setSection] = useState<Section>(() => {
@@ -924,7 +922,7 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [showSection, showBoard]);
 
-  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise. A Sonner toast (#899), not the 알림함.
+  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise. A Sonner toast (#899).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.code !== 'KeyS') return;
@@ -964,9 +962,6 @@ export function App() {
     />
   );
 
-  // The 알림함 sits at the right end of whichever top bar is on screen (#786); a step larger than the other top-bar
-  // icons (#880): 32px target, 19px bell.
-  const bell = <ActivityBell className={buttonVariants({ variant: 'ghost', size: 'icon', className: 'shrink-0 text-muted-foreground max-md:size-11 [&>svg]:size-[19px]' })} onOpen={openFile} onSession={openBoardSession} files={treePaths} />;
   return (
     <CommandRegistryContext.Provider value={registry}>
       <SidebarProvider openMobile={navOpen} onOpenMobileChange={setNavOpen}>
@@ -1002,14 +997,14 @@ export function App() {
           {section.kind === 'board' ? (
             <LazyBoundary>
               <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">불러오는 중이에요…</p>}>
-                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} bell={bell} narrow={narrow} />
+                <SessionBoard tab={section.tab} folder={section.folder} onRoute={routeBoard} openRequest={boardOpen} extra={boardExtra} onExtraDone={extraDone} narrow={narrow} />
               </Suspense>
             </LazyBoundary>
           ) : !docScreen ? (
             <Home
               projectName={projectName}
               narrow={narrow}
-              bell={bell}
+             
               project={homeProject}
               recent={homeSection.kind === 'recent'}
               onArchive={() => setTrashOpen(true)}
@@ -1039,7 +1034,7 @@ export function App() {
             onSubDoc={() => void newFile(undefined, 'doc', true)}
             onTitle={(title) => edit({ title })}
             onHistory={() => setHistoryOpen(true)}
-            bell={bell}
+           
           onCommands={() => {
             setExportOpen(false);
             setPaletteGroup(undefined);

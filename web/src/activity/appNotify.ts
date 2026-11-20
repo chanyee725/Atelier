@@ -1,13 +1,11 @@
-// App events into the 알림함 (E540 #671, #899). Not a toast system: the results of what the person just did pop up as
-// Sonner toasts (actionToast.ts); everything the workspace and the agents do goes here. notifyInbox(event) drops it
-// when its category is off (설정 > 일반 > 알림, this browser only; an event of a category turned off is not kept in the
-// 알림함 either) or it repeats within DEDUPE_MS and keeps it in the 알림함 (inboxStore.ts, #797). While the page is
-// hidden and notifications are on it also goes out as a browser notification. watchAppEvents() turns the server's
+// App events as browser notifications (E540 #671, #899; the 알림함 is gone, #977). Results of what the person just did
+// are Sonner toasts (actionToast.ts); everything the workspace and the agents do arrives here. notifyApp(event) drops it
+// when its category is off (설정 > 일반 > 알림, this browser only) or it repeats within DEDUPE_MS. While the page is
+// hidden and notifications are on it goes out as a browser notification. watchAppEvents() turns the server's
 // SSE `session`, `providers`, `settings` and `run` events into app events for the whole app. Metadata only.
 import { useSyncExternalStore } from 'react';
 import { alertsOn } from '../dispatch/lib/notify';
 import { events } from '../lib/events';
-import { addToastToInbox } from './inboxStore';
 import {
   createDedupe,
   parseOff,
@@ -51,13 +49,12 @@ export const useToastOff = () =>
 
 /** Where a browser notification's click goes (set by ActivityAlerts). */
 let openTarget: (t: AppToast) => void = () => {};
-export const setInboxOpener = (fn: (t: AppToast) => void) => void (openTarget = fn);
+export const setNotifyOpener = (fn: (t: AppToast) => void) => void (openTarget = fn);
 
-export function notifyInbox(e: AppEvent) {
+export function notifyApp(e: AppEvent) {
   const t = toastOf(e);
   if (!t || !categoryOn(t.category) || !dedupe(t.key, Date.now())) return;
-  // The 알림함 is where every event shows (#797, #811); a hidden page may also get a browser notification.
-  addToastToInbox(t);
+  // Nothing pops up on the page; a hidden page may get a browser notification.
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
     if (!alertsOn()) return;
     try {
@@ -88,7 +85,7 @@ export function watchAppEvents() {
   // Runs that started before this moment were already going when the page opened: no 시작했어요 for them.
   const openedAt = Date.now();
   const prs = new Map<string, string>();
-  const emit = (list: AppEvent[]) => list.forEach(notifyInbox);
+  const emit = (list: AppEvent[]) => list.forEach(notifyApp);
 
   // What is already there when the page opens (or reconnects) never pops up.
   const baseline = () =>
@@ -115,7 +112,7 @@ export function watchAppEvents() {
     providers = p;
   });
   // Every POST /api/settings is announced to every page; the switch that sent it also says 저장했어요 in place.
-  events.subscribe('settings', () => notifyInbox({ type: 'settings-saved' }));
+  events.subscribe('settings', () => notifyApp({ type: 'settings-saved' }));
   events.subscribeJson<Parameters<typeof runEvents>[2]>('run', (e) => {
     if (!e || typeof e.file !== 'string' || typeof e.runId !== 'string') return;
     emit(runEvents(runs, prs, e, openedAt));

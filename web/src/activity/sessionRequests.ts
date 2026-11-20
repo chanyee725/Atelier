@@ -1,7 +1,6 @@
 // 세션 요청 (#880): what agent sessions asked a person for, as one list for the dashboard card — plans waiting for
 // 시작하기, permission prompts, questions (a prompt for the CLI's AskUserQuestion tool) and sessions the server marks as
-// waiting for a person. Built from what the 알림함 already holds (waitingPlans, permissionAsksStore, the sessions
-// list): no new server API. Pure (no React or DOM), so it runs under `node --test`. Metadata only: session names,
+// waiting for a person. Built from waitingPlans, permissionAsksStore and the sessions list (no new server API). Pure (no React or DOM), so it runs under `node --test`. Metadata only: session names,
 // provider ids, tool names, plan titles, times.
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { PermissionAsk } from './approvals.ts';
@@ -16,7 +15,7 @@ export const REQUEST_LABEL: Record<RequestKind, string> = {
   waiting: '사람 기다림',
 };
 
-/** Where a click goes, the same place the 알림함's 확인하기 goes: a plan's 시작하기 confirm, or the session on the board. */
+/** Where a click goes, where a click goes: a plan's 시작하기 confirm, or the session on the board. */
 export type RequestTarget = { plan: string } | { session: string };
 
 export interface SessionRequest {

@@ -35,8 +35,6 @@ export type HomeProps = {
   onFind: () => void;
   /** Narrow screen: the sidebar is a drawer, so the header carries its button. */
   narrow?: boolean;
-  /** The 알림함 bell, alone on the right of the header (#786, #793). */
-  bell?: React.ReactNode;
   /** Show the 최근 page (#889) instead of the dashboard. */
   recent?: boolean;
   /** Opens the 보관함 dialog, from the 최근 page's 보관함 card. */
@@ -119,7 +117,7 @@ export function Home(props: HomeProps) {
   );
   if (props.recent && !props.project) return (
     <main className="flex min-h-0 flex-1 flex-col overflow-auto">
-      <RecentPage data={data} version={props.version} narrow={props.narrow} bell={props.bell} onOpen={props.onOpen} onNewDoc={() => props.onCreate('doc', null)} onArchive={props.onArchive} />
+      <RecentPage data={data} version={props.version} narrow={props.narrow} onOpen={props.onOpen} onNewDoc={() => props.onCreate('doc', null)} onArchive={props.onArchive} />
     </main>
   );
   return (
@@ -140,7 +138,7 @@ function Dashboard({ data, ...p }: Shared) {
   const whole = useMemo(() => wholeProject(data, p.projectName ?? '이 프로젝트'), [data, p.projectName]);
   return (
     <>
-      <PageHeader title="대시보드" narrow={p.narrow} bell={p.bell} />
+      <PageHeader title="대시보드" narrow={p.narrow} />
       <ProjectDashboard project={whole} onOpen={p.onOpen} onBoard={p.onBoard} onSession={p.onSession} fill approvals />
     </>
   );
@@ -215,7 +213,6 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
         <Button size="sm" className="ml-auto" onClick={() => p.onCreate('doc', project.id)}>
           <Plus /> 새 문서
         </Button>
-        {p.bell}
       </header>
       <ProjectHeader project={project} running={runningIn(project, p.running)} />
       <div className="flex grow flex-col pb-3">

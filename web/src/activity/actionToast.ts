@@ -1,9 +1,9 @@
 // Toasts for the result of what the person just did (#899): 저장, 만들기·지우기·옮기기, 허용/거절, 시작하기, 복사.
 // The one toast system (Sonner; <Toaster /> in components/ui/sonner.tsx). Agent and workspace events never pop up:
-// they go to the 알림함 (appInbox.ts). Texts are short metadata only — never a transcript, a question or a name.
+// they only go out as browser notifications (appNotify.ts). Texts are short metadata only — never a transcript, a question or a name.
 import { toast } from 'sonner';
 import { actionToastOf, type AppEvent } from './appEvents';
-import { categoryOn } from './appInbox';
+import { categoryOn } from './appNotify';
 
 /** A file action's result (category switches in 설정 > 일반 > 알림 still apply). */
 export function toastAction(e: AppEvent) {

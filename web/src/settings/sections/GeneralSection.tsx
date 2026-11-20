@@ -7,7 +7,7 @@ import { turnAlertsOff, turnAlertsOn, useAlertStatus } from '../../dispatch/lib/
 import { useDispatch } from '../../dispatch/store';
 import { cn } from '../../lib/utils';
 import { TOAST_CATEGORIES } from '../../activity/appEvents';
-import { setCategoryOn, useToastOff } from '../../activity/appInbox';
+import { setCategoryOn, useToastOff } from '../../activity/appNotify';
 import { useSettingsLoad } from '../context';
 import { LoadNote, OffNote, ThemeField } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
@@ -79,7 +79,7 @@ export default function GeneralSection() {
       <fieldset className="flex flex-col" aria-describedby={toastHint} data-testid="settings-toast-categories">
         <legend className="text-sm font-medium">알림 종류</legend>
         <span id={toastHint} className="pt-1 pb-2 text-xs text-muted-foreground">
-          켠 알림만 알림함에 쌓여요. 끈 알림은 알림함에도 남지 않아요.
+          꺼 두면 그 종류의 알림은 뜨지 않아요.
         </span>
         {TOAST_CATEGORIES.map((c) => (
           <label key={c.id} className="settings-row py-2.5 text-sm">
