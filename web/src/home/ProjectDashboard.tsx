@@ -27,6 +27,7 @@ import { useIssues, usePrTracking, usePrs, useBranches, useProjectState, useSess
 import { ActiveIssuesCard } from './ActiveIssuesCard';
 import { issueTitles, taskSummary, type TaskSummary } from './taskSummary';
 import { SessionCard, SessionGrid } from './SessionCard';
+import { TRAIL } from '../live/origin';
 
 type Props = {
   project: ProjectInfo;
@@ -123,7 +124,7 @@ function SessionsCard({ agents, summaryOf, onRetry, titleOf, onOpen, folder, onB
       ) : (
         <SessionGrid label="실행 중인 세션">
           {list.map((a) => (
-            <SessionCard key={a.sid} agent={a} summary={summaryOf(a.sid)} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} />
+            <SessionCard key={a.sid} agent={a} summary={summaryOf(a.sid)} title={a.file ? titleOf(a.file) ?? fileStem(a.file) : null} onOpen={onOpen} trail={TRAIL.sessions} />
           ))}
         </SessionGrid>
       )}

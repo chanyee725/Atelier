@@ -844,16 +844,40 @@ body {
   .plan-badge { background: Canvas !important; color: CanvasText; border-color: CanvasText; }
 }
 
-/* Dashboard session cards (#889 refresh mock): a 2px track; while the session works a sliver sweeps it and the state
-   dot breathes. Reduced motion stops the sweep (the track fills at half strength) and keeps the gentle dot pulse. */
+/* Working track (#889, #942): a 2px track; while the session works a sliver sweeps it and the state dot breathes. The
+   colour, speed and sliver width come from what it does now (trackTone() in home/trackTone.ts sets the --track-* vars);
+   the defaults are the plain green sweep. Waiting (.is-wait): no sweep, the whole track blinks softly. Reduced motion
+   stops both: the track fills halfway in its colour. */
 .session-track { display: block; height: 2px; border-radius: 2px; background: var(--muted); overflow: hidden; position: relative; }
 .session-track.is-on::after {
-  content: ""; position: absolute; inset: 0; width: 28%; border-radius: 2px; background: var(--ok);
-  animation: session-sweep 2.4s linear infinite;
+  content: ""; position: absolute; inset: 0; width: var(--track-width, 28%); border-radius: 2px;
+  background: var(--track-color, var(--ok)); opacity: var(--track-opacity, 1);
+  animation: session-sweep var(--track-speed, 2.4s) linear infinite;
+}
+.session-track.is-wait::after {
+  content: ""; position: absolute; inset: 0; border-radius: 2px; background: var(--track-color, var(--warn));
+  animation: session-blink var(--track-speed, 1.6s) ease-in-out infinite;
 }
 .session-dot.is-on { animation: session-breathe 2.6s ease-in-out infinite; }
-@keyframes session-sweep { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
+@keyframes session-sweep { from { transform: translateX(-100%); } to { transform: translateX(var(--track-end, 360%)); } }
+@keyframes session-blink { 0%, 100% { opacity: .25; } 50% { opacity: .7; } }
 @keyframes session-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) {
-  .session-track.is-on::after { animation: none; width: 100%; opacity: .5; }
+  .session-track:is(.is-on, .is-wait)::after { animation: none; transform: none; width: 50%; opacity: .5; }
+}
+
+/* Panel origin (#942, live/origin.ts): the card or row that opened the right panel keeps a 2px ink ring and a slightly
+   darker fill while the panel is open (aria-current), and flashes once when the panel closes (the ring fades out over
+   600ms). The flash only fades, so it also runs under reduced motion. */
+[data-origin][aria-current="true"] {
+  box-shadow: inset 0 0 0 2px var(--primary);
+  background-color: color-mix(in oklch, var(--accent), var(--foreground) 6%);
+}
+[data-origin][data-origin-flash] { animation: origin-flash 600ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+@keyframes origin-flash {
+  from { box-shadow: inset 0 0 0 2px var(--primary); }
+  to { box-shadow: inset 0 0 0 2px transparent; }
+}
+@media (forced-colors: active) {
+  [data-origin][aria-current="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
 }

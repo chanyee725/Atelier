@@ -3,6 +3,7 @@
 // The open sid is mirrored into the URL hash (`#file=…&agent=<sid>`, or `#agent=<sid>` with no file) with
 // replaceState, so a reload keeps the panel. The sid is an opaque hub id: no personal data in the URL.
 import { useSyncExternalStore } from 'react';
+import { returnToOrigin } from './origin.ts';
 
 export type LiveFrom = 'sidebar' | 'doc' | 'board' | 'node' | 'palette' | 'sheet';
 
@@ -28,6 +29,8 @@ export function withAgent(hash: string, sid: string | null): string {
 
 let target: string | null = null;
 let trigger: HTMLElement | null = null;
+/** The path the panel head shows before the agent's name (#942), e.g. ['대시보드', '실행 중인 세션']. */
+let trail: readonly string[] = [];
 let hashRead = false;
 let sheets = 0;
 const subs = new Set<() => void>();
@@ -64,29 +67,35 @@ export function followHash(): void {
   if (!sid) return closeAgentLive();
   target = sid;
   trigger = null;
+  trail = [];
   notify();
 }
 
 /** Opens the live view of `sid`. Opening the one already open closes it (a toggle from the same trigger). */
-export function openAgentLive(sid: string, opts: { trigger?: HTMLElement | null; from?: LiveFrom } = {}): void {
+export function openAgentLive(sid: string, opts: { trigger?: HTMLElement | null; from?: LiveFrom; trail?: readonly string[] } = {}): void {
   readHashOnce();
   if (!sid) return;
   if (target === sid && opts.from !== 'sheet') return closeAgentLive();
   target = sid;
   trigger = opts.trigger !== undefined ? opts.trigger : (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  trail = opts.trail ?? [];
   writeHash(sid);
   notify();
 }
 
-/** Closes the panel and gives focus back to the trigger that opened it (when it is still on the page). */
+/**
+ * Closes the panel and gives focus back to the trigger that opened it (when it is still on the page): scrolled into
+ * view when off screen, and its card flashes once (#942, origin.ts).
+ */
 export function closeAgentLive(): void {
   if (!target) return;
   target = null;
   const back = trigger;
   trigger = null;
+  trail = [];
   writeHash(null);
   notify();
-  if (back?.isConnected) requestAnimationFrame(() => back.focus({ preventScroll: true }));
+  if (back?.isConnected) requestAnimationFrame(() => returnToOrigin(back));
 }
 
 const subscribe = (f: () => void) => {
@@ -95,10 +104,15 @@ const subscribe = (f: () => void) => {
   return () => void subs.delete(f);
 };
 const read = () => target;
+const readTrail = () => trail;
 const readSheets = () => sheets > 0;
 
 /** Which sid is open (for aria-expanded on triggers), null when closed. */
 export const useAgentLiveTarget = () => useSyncExternalStore(subscribe, read, read);
+/** The open panel's path (empty when opened from somewhere without one, e.g. a reload or the address bar). */
+export const useAgentLiveTrail = () => useSyncExternalStore(subscribe, readTrail, readTrail);
+/** Not a hook; tests and non-React callers. */
+export const liveTrail = (): readonly string[] => trail;
 
 /**
  * A modal session sheet (SessionSheet) is open: the panel hides under it and shows again when it closes.
@@ -122,6 +136,7 @@ export const useSheetOpen = () => useSyncExternalStore(subscribe, readSheets, re
 export function resetLiveStore() {
   target = null;
   trigger = null;
+  trail = [];
   hashRead = true;
   sheets = 0;
   notify();

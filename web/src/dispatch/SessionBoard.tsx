@@ -25,6 +25,7 @@ import { CreateSessionDialog } from './CreateSessionDialog';
 import { boardGroups, type BoardGroup } from './lib/boardGroups.ts';
 import { presenceOf } from './lib/presence.ts';
 import { SessionCard, SessionGrid } from '../home/SessionCard';
+import { TRAIL } from '../live/origin';
 import { knownFolders, scopePending, type Scope } from './lib/folder.ts';
 import { isOpen, stateOf } from './lib/format.ts';
 import { ScopeProvider, useScope, useScoped } from './scope';
@@ -368,7 +369,7 @@ function Group({ g, scoped, summaries }: { g: BoardGroup<Session>; scoped: boole
         <div className="-mx-2">
           <SessionGrid label={`${g.label} 세션`}>
             {shown.map((s) => (
-              <SessionCard key={s.id} agent={presenceOf(s, stateOf)} summary={summaries.get(s.id) ?? null} title={null} onOpen={() => undefined} />
+              <SessionCard key={s.id} agent={presenceOf(s, stateOf)} summary={summaries.get(s.id) ?? null} title={null} onOpen={() => undefined} trail={TRAIL.board} />
             ))}
           </SessionGrid>
         </div>

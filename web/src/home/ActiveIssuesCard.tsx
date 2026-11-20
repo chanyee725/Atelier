@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { Card } from './dash';
 import { IssueTeamPanel } from '../live/IssueTeamPanel';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
+import { usePanelExit } from '../live/usePanelExit';
 import { ACTIVE_STAGE, activeIssues, issueEta, type ActiveIssue } from './activeIssues';
 import { issueRows, type IssuesAnswer } from './issueBoard';
 import type { Feed, PrAnswer } from './projectFeeds';
@@ -26,6 +27,8 @@ type Props = {
 export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now() }: Props) {
   const rows = useMemo(() => (issues && issues !== 'failed' && issues.ok && Array.isArray(sessions) ? issueRows(issues.issues, sessions) : []), [issues, sessions]);
   const open = useIssueTeamTarget();
+  // Kept mounted for the 160ms slide-out after closing (#942).
+  const exit = usePanelExit(open);
   const list = useMemo(() => {
     if (!rows.length || !Array.isArray(sessions)) return [];
     const approved = (b: string) => {
@@ -38,7 +41,7 @@ export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now(
     const a = prs && prs !== 'failed' ? prs.get(b) : undefined;
     return a?.ok ? a.pr : null;
   };
-  const shown = open != null ? list.find((x) => x.number === open) : undefined;
+  const shown = exit.shown != null ? list.find((x) => x.number === exit.shown) : undefined;
   const shownRow = shown ? rows.find((r) => r.number === shown.number) : undefined;
   if (!list.length) return null;
   return (
@@ -49,7 +52,7 @@ export function ActiveIssuesCard({ issues, sessions, tasks, prs, now = Date.now(
           <ActiveLine key={x.number} issue={x} now={now} open={open === x.number} />
         ))}
       </ul>
-      {shown && shownRow && <IssueTeamPanel issue={shown} row={shownRow} tasks={tasks} answerOf={answerOf} now={now} />}
+      {shown && shownRow && <IssueTeamPanel issue={shown} row={shownRow} tasks={tasks} answerOf={answerOf} now={now} closing={exit.closing} />}
     </Card>
   );
 }
@@ -75,7 +78,8 @@ function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: number; 
     </>
   );
   return (
-    <li data-active-issue={x.number} className="grid min-w-0 gap-1.5 px-3 py-2 text-sm">
+    // data-origin + aria-current (#942): the row that opened the team panel keeps a ring while it is open.
+    <li data-active-issue={x.number} data-origin aria-current={open || undefined} className="grid min-w-0 gap-1.5 px-3 py-2 text-sm">
       <div className="flex min-w-0 items-center gap-2">
         <button type="button" aria-expanded={open} aria-label={`#${x.number} 팀 모니터링 열기`} onClick={(e) => openIssueTeam(x.number, e.currentTarget)} className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-inherit hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
           {title}
