@@ -521,6 +521,35 @@ body {
   .doc-diagram-stage { animation: none; }
   .doc-diagram-stage[data-wide] { --stage-fade-end: var(--stage-fade); }
 }
+/* The block's own scroll bar under a wide picture (#1043, doc/StageBar.tsx): always drawn while the picture is wider
+   than the column, so overlay scrollbars (macOS, headless) no longer hide that there is more. The stage's native bar
+   is hidden then, so classic scrollbars do not show a second one. The thumb is `--bar-share` of the track and follows
+   the stage's scroll through a named scroll timeline (timeline-scope on the block: the bar is the stage's sibling);
+   without scroll-driven animations StageBar moves it on scroll. */
+.doc-diagram:has(.doc-diagram-stage[data-wide]) { timeline-scope: --stage-x; }
+.doc-diagram-stage[data-wide] { scrollbar-width: none; scroll-timeline: --stage-x inline; }
+.doc-diagram-bar { display: none; position: relative; height: 14px; margin: 0 12px; cursor: default; touch-action: none; }
+.doc-diagram-bar[data-shown] { display: block; }
+.doc-diagram-bar::before { content: ''; position: absolute; inset: 5px 0; border-radius: 999px; background: var(--border); }
+.doc-diagram-thumb {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: 6px;
+  width: calc(var(--bar-share, 1) * 100%);
+  border-radius: 999px;
+  background: var(--muted-foreground);
+  opacity: 0.7;
+  transition: opacity 120ms;
+}
+.doc-diagram-bar:hover .doc-diagram-thumb, .doc-diagram-bar:active .doc-diagram-thumb { opacity: 1; }
+@supports (animation-timeline: scroll()) {
+  .doc-diagram-thumb {
+    animation: stage-bar-thumb linear both;
+    animation-timeline: --stage-x;
+  }
+}
+@keyframes stage-bar-thumb { to { transform: translateX(calc((1 / var(--bar-share, 1) - 1) * 100%)); } }
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: var(--text-sm); padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DOC_MAX_SCALE, DOC_MIN_SCALE, docPicWidths, picBox, stageWide } from '../../web/src/doc/diagramScale.ts';
+import { DOC_MAX_SCALE, DOC_MIN_SCALE, barScrollAt, barShare, docPicWidths, picBox, stageWide } from '../../web/src/doc/diagramScale.ts';
 
 test('docPicWidths: a document picture stays between 60% and 100% of its size (#987)', () => {
   assert.equal(DOC_MIN_SCALE, 0.6);
@@ -28,4 +28,16 @@ test('stageWide (#1005): only a picture held at its floor past the stage gets th
   assert.equal(stageWide(1000, 800), false);
   assert.equal(stageWide(1000, 0), false, 'hidden stage');
   assert.equal(stageWide(NaN, 500), false);
+});
+
+test('the scroll bar under a wide picture: thumb share and where a track press scrolls to (#1043)', () => {
+  // The issue's picture: 797px of content in a 474px column.
+  assert.ok(Math.abs(barShare(474, 797) - 474 / 797) < 1e-9);
+  assert.equal(barShare(474, 474), 1, 'nothing scrolls: full thumb');
+  assert.equal(barShare(0, 797), 1, 'hidden column');
+  // A press at the middle of the track centres the content's middle; the ends clamp.
+  assert.equal(barScrollAt(225, 450, 474, 797), 797 / 2 - 474 / 2);
+  assert.equal(barScrollAt(0, 450, 474, 797), 0);
+  assert.equal(barScrollAt(450, 450, 474, 797), 797 - 474);
+  assert.equal(barScrollAt(10, 0, 474, 797), 0);
 });

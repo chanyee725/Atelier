@@ -32,3 +32,19 @@ type Rect = { left: number; top: number; width: number };
 export function picBox(stage: Rect, img: Rect, scroll: { left: number; top: number }, picWidth: number): { left: number; top: number; scale: number } {
   return { left: img.left - stage.left + scroll.left, top: img.top - stage.top + scroll.top, scale: picWidth > 0 ? img.width / picWidth : 1 };
 }
+
+/**
+ * The scroll bar under a wide picture (#1043): overlay scrollbars (macOS, a headless browser) show nothing until the
+ * user scrolls, so the block draws its own. The thumb's share of the track, the stage's visible share of its content,
+ * in (0, 1]; 1 when nothing scrolls.
+ */
+export function barShare(clientWidth: number, scrollWidth: number): number {
+  return clientWidth > 0 && scrollWidth > clientWidth ? clientWidth / scrollWidth : 1;
+}
+
+/** Stage scroll offset that centres the view on a press `x` px into a track `trackWidth` wide, clamped to the ends. */
+export function barScrollAt(x: number, trackWidth: number, clientWidth: number, scrollWidth: number): number {
+  const max = Math.max(scrollWidth - clientWidth, 0);
+  if (!(trackWidth > 0)) return 0;
+  return Math.min(max, Math.max(0, (x / trackWidth) * scrollWidth - clientWidth / 2));
+}
