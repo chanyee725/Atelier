@@ -18,3 +18,6 @@ export function whenLabel(at: number, now = Date.now()): string {
   const md = `${x.getMonth() + 1}월 ${x.getDate()}일`;
   return x.getFullYear() === new Date(now).getFullYear() ? md : `${x.getFullYear()}년 ${md}`;
 }
+
+/** Exact date and time, e.g. "2026. 11. 21. 오후 3:05", for version and trash lists. */
+export const dateTimeLabel = (t: number) => new Date(t).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });

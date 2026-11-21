@@ -8,6 +8,7 @@ import { Button } from './components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './components/ui/dialog';
 import { cn } from './lib/utils';
 import { askConfirm } from './appDialog';
+import { dateTimeLabel } from './lib/when';
 
 type Props = {
   path: string;
@@ -22,7 +23,6 @@ const LABEL_TEXT: Record<VersionLabel, string> = { draft: '계획 초안', appro
 export const versionLabels = (ls: readonly string[] | undefined): string[] =>
   (Object.keys(LABEL_TEXT) as VersionLabel[]).filter((l) => ls?.includes(l)).map((l) => LABEL_TEXT[l]);
 
-const when = (t: number) => new Date(t).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
 // Server messages are English; show Korean copy by status, never the raw message.
 const errText = (e: unknown, fallback: string) => {
   const status = e instanceof ApiError ? e.status : 0;
@@ -68,7 +68,7 @@ export function HistoryDialog({ path, dark, onClose, onRestore }: Props) {
 
   const restore = async () => {
     if (!picked || !preview || busy) return;
-    const ok = await askConfirm({ title: `${when(preview.time)} 버전으로 되돌릴까요?`, body: '지금 내용도 버전 기록에 남겨 둬요.', ok: '되돌리기' });
+    const ok = await askConfirm({ title: `${dateTimeLabel(preview.time)} 버전으로 되돌릴까요?`, body: '지금 내용도 버전 기록에 남겨 둬요.', ok: '되돌리기' });
     if (!ok) return;
     setBusy(true);
     setMessage(null);
@@ -105,7 +105,7 @@ export function HistoryDialog({ path, dark, onClose, onRestore }: Props) {
                   onClick={() => setPicked(v.id)}
                   className={cn('h-auto min-h-(--h-row) w-full flex-wrap justify-start gap-x-1.5 gap-y-0.5 px-2.5 py-1 tabular-nums', picked === v.id && 'bg-muted font-semibold text-foreground')}
                 >
-                  <span>{when(v.time)}</span>
+                  <span>{dateTimeLabel(v.time)}</span>
                   {versionLabels(v.labels).map((l) => (
                     <span key={l} className="rounded-sm border px-1 text-xs font-normal text-muted-foreground">
                       {l}

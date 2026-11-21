@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, ApiError, type TrashItem } from './api';
 import { Button } from './components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './components/ui/dialog';
+import { dateTimeLabel } from './lib/when';
 
 type Props = {
   onClose: () => void;
@@ -10,7 +11,6 @@ type Props = {
   onRestored: (path: string) => void;
 };
 
-const when = (t: number) => new Date(t).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
 const label = (path: string) => path.replace(/\.dpx\.json$/, '');
 // Server messages are English; show Korean copy by status, never the raw message.
 const errText = (e: unknown) => {
@@ -82,7 +82,7 @@ export function TrashDialog({ onClose, onRestored }: Props) {
                 <div className="truncate text-sm" title={label(i.path)}>
                   {label(i.path)}
                 </div>
-                <div className="text-xs text-muted-foreground tabular-nums">{when(i.deletedAt)}에 지웠어요</div>
+                <div className="text-xs text-muted-foreground tabular-nums">{dateTimeLabel(i.deletedAt)}에 지웠어요</div>
                 {i.fromSnapshot && <div className="text-xs text-muted-foreground">앱 밖에서 지워서 마지막 버전 기록으로 돌아와요. 마지막으로 저장한 내용보다 오래됐을 수 있어요</div>}
               </div>
               <Button size="sm" className="shrink-0" disabled={busy !== null} onClick={() => void restore(i)}>
