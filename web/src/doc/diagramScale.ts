@@ -14,6 +14,14 @@ export function docPicWidths(width: number): { minWidth: number; maxWidth: numbe
   return { minWidth: Math.round(w * DOC_MIN_SCALE), maxWidth: w * DOC_MAX_SCALE };
 }
 
+/**
+ * Whether a picture `width` wide is held at its 60% floor past a stage `stageWidth` wide, so the stage scrolls
+ * sideways and gets the end gap (#1005). The gap sits past the picture, so adding it never flips the answer back.
+ */
+export function stageWide(width: number, stageWidth: number): boolean {
+  return stageWidth > 0 && docPicWidths(width).minWidth > stageWidth;
+}
+
 type Rect = { left: number; top: number; width: number };
 
 /**

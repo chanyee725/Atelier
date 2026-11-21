@@ -33,7 +33,7 @@ import { diagramChildren, parse } from '../../../shared/dsl/index.ts';
 import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
-import { PANE_FIT, openingView, refitView, rememberView } from './initialView';
+import { PANE_FIT, fitMinZoom, openingView, refitView, rememberView, type FitOptions } from './initialView';
 import { refitTexts, type FitEl } from './refit';
 import { RefitQueue } from './refitQueue';
 import './clean.css';
@@ -66,6 +66,11 @@ const theme = (dark: boolean) => (dark ? 'dark' : 'light') as 'dark' | 'light';
 // Excalidraw's dark mode puts a filter over the whole canvas, images included: dark pictures are drawn pre-corrected
 // for it (shared/render/darkFilter.ts), so they come out in the dark palette instead of an inverted light one.
 const picTheme = (dark: boolean): PicTheme => (dark ? 'dark-canvas' : 'light');
+/** Fit options for `live`: the 60% floor only when it is one block alone (frames do not count), #1005. */
+const fitFor = (live: readonly ExcalidrawElement[], base?: FitOptions): FitOptions => ({
+  ...base,
+  minZoom: fitMinZoom(live.filter((e) => e.type !== 'frame' && e.type !== 'magicframe').map((e) => blockIdOf(e as unknown as SceneEl))),
+});
 const newElId = (blockId: string) => `blk_${blockId}_${Math.random().toString(36).slice(2, 8)}`;
 const liveRects = (els: readonly ExcalidrawElement[]): Rect[] => els.filter((e) => !e.isDeleted).map((e) => rectOf(e));
 
@@ -426,7 +431,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       // First open fits everything (at most 100%); a view the user left the file at is kept (E494).
       const live = elements.filter((e) => !e.isDeleted);
       const box = wrap.current?.getBoundingClientRect();
-      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0, inSplit() ? PANE_FIT : undefined);
+      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0, fitFor(live, inSplit() ? PANE_FIT : undefined));
       const files = Object.fromEntries(pics.map((p) => [p.fileId, fileData(p)]));
       if (!view) return { elements, files, appState: CLEAN_APP_STATE, scrollToContent: true };
       return { elements, files, appState: { ...CLEAN_APP_STATE, scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom as NormalizedZoomValue } } };
@@ -607,7 +612,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       if (!live.length) return;
       const box = el.getBoundingClientRect();
       const st = api.getAppState();
-      const next = refitView(pathRef.current, getCommonBounds(live), box.width, box.height, { scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom.value }, PANE_FIT);
+      const next = refitView(pathRef.current, getCommonBounds(live), box.width, box.height, { scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom.value }, fitFor(live, PANE_FIT));
       if (next) api.updateScene({ appState: { scrollX: next.scrollX, scrollY: next.scrollY, zoom: { value: next.zoom as NormalizedZoomValue } }, captureUpdate: CaptureUpdateAction.NEVER });
     };
     const ro = new ResizeObserver(() => {

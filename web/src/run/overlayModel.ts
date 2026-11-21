@@ -294,7 +294,7 @@ export type Size = { width: number; height: number };
 
 /**
  * Smallest and largest scale of the canvas legend (#987). Not as small as the picture's 60% floor: the card sits under
- * the picture, never beside a node, so it can stay big enough to read.
+ * the picture or in a clear spot at the pane bottom, never over a node, so it can stay big enough to read.
  */
 export const LEGEND_SCALE = { min: 0.8, max: 1 } as const;
 
@@ -311,15 +311,37 @@ export const legendOpen = (agents: number, canvas?: boolean): boolean => !canvas
 /** Margin kept between the canvas legend and the overlay's edges. */
 const EDGE = 8;
 
+/** Every node of the picture in overlay px, with the run-mark band above it (#987), for `legendSpot` to keep clear. */
+export function nodeBoxes(scene: Scene, left: number, top: number, scale: number): Box[] {
+  return [...nodeRects(scene).values()].map((r) => ({ left: left + r.x * scale, top: top + (r.y - RUN_BAND) * scale, width: r.w * scale, height: (r.h + RUN_BAND) * scale }));
+}
+
+/** Whether two boxes overlap (touching edges do not). */
+const overlaps = (a: Box, b: Box): boolean => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
 /**
- * Where the canvas legend goes, in overlay px (§5.1, #987): always under the picture (below the step labels), lined
- * up with its left edge, the same place the document puts its run card. It is moved sideways to stay inside the
- * overlay but never up over the picture: when the picture reaches the pane's bottom the card is below the fold and
- * shows when the canvas is scrolled, instead of covering nodes.
+ * Where the canvas legend goes, in overlay px (§5.1, #987, #1005): under the picture (below the step labels), lined
+ * up with its left edge, the same place the document puts its run card, when it fits there on screen. When the
+ * picture reaches the pane's bottom (a tall plan at the 60% floor) the card is pinned to the pane's bottom instead,
+ * so the progress and time left show without scrolling, at the spot nearest that left edge where it covers no node
+ * (`nodes`, overlay px, the mark band above each included). Only when no such spot exists does it stay under the
+ * picture, below the fold. It is moved sideways to stay inside the overlay, and a picture scrolled out of view takes
+ * the card with it, so it never sits over another block.
  */
-export function legendSpot(pic: Box, size: Size, area: Size, gap = 12, below = 0): { left: number; top: number } {
-  const left = Math.max(EDGE, Math.min(pic.left, area.width - size.width - EDGE));
-  return { left, top: Math.max(EDGE, pic.top + pic.height + below + gap) };
+export function legendSpot(pic: Box, size: Size, area: Size, gap = 12, below = 0, nodes: readonly Box[] = []): { left: number; top: number } {
+  const clampX = (x: number) => Math.max(EDGE, Math.min(x, area.width - size.width - EDGE));
+  const left = clampX(pic.left);
+  const under = { left, top: pic.top + pic.height + below + gap };
+  const bottom = area.height - size.height - EDGE;
+  // Fits under the picture on screen, or the picture is off screen (the card goes with it).
+  if (under.top <= bottom || pic.top + pic.height <= 0 || pic.top >= area.height) return under;
+  // Pinned to the pane's bottom, never above the picture's top (that is another block's room).
+  if (bottom < Math.max(EDGE, pic.top)) return under;
+  const xs = [left, EDGE, area.width - size.width - EDGE, ...nodes.flatMap((n) => [n.left + n.width + gap, n.left - gap - size.width])].map(clampX);
+  const clear = xs
+    .sort((a, b) => Math.abs(a - left) - Math.abs(b - left))
+    .find((x) => !nodes.some((n) => overlaps({ left: x, top: bottom, width: size.width, height: size.height }, n)));
+  return clear === undefined ? under : { left: clear, top: bottom };
 }
 
 /** SVG path data through the edge's points (straight segments; the overlay traces, it does not redraw the connector). */

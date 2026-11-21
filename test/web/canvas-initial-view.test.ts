@@ -1,7 +1,7 @@
 // E494: the canvas fits every block on a file's first open, and keeps the view the user left it at afterwards.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FIT_MAX_ZOOM, FIT_MIN_ZOOM, PANE_FIT, fitView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
+import { FIT_ALL_MIN_ZOOM, FIT_MAX_ZOOM, FIT_MIN_ZOOM, PANE_FIT, fitMinZoom, fitView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
 
 beforeEach(() => forgetViews());
 
@@ -44,6 +44,27 @@ test('a wide drawing stops at 60% (#987), centred, the rest a scroll away', () =
     const c = onScreen(v, 5e5, 5e5);
     assert.ok(Math.abs(c.x - 500) < 1e-6 && Math.abs(c.y - 500) < 1e-6, 'centred');
   }
+});
+
+test('the 60% floor is for a lone block only; several blocks or free shapes all come into view (#1005)', () => {
+  assert.equal(fitMinZoom(['plan']), FIT_MIN_ZOOM);
+  assert.equal(fitMinZoom(['plan', 'plan']), FIT_MIN_ZOOM, 'one block, however many elements');
+  assert.equal(fitMinZoom(['a', 'b']), FIT_ALL_MIN_ZOOM);
+  assert.equal(fitMinZoom(['a', null]), FIT_ALL_MIN_ZOOM, 'a block plus a free shape');
+  assert.equal(fitMinZoom([null, null]), FIT_ALL_MIN_ZOOM);
+  assert.equal(fitMinZoom([]), FIT_ALL_MIN_ZOOM);
+  // Three blocks spread over 6000px: every corner on screen at the lower floor.
+  const bounds = [0, 0, 6000, 2400] as const;
+  for (const opts of [{ minZoom: FIT_ALL_MIN_ZOOM }, { ...PANE_FIT, minZoom: FIT_ALL_MIN_ZOOM }]) {
+    const v = fitView(bounds, 1440, 900, opts)!;
+    assert.ok(v.zoom < FIT_MIN_ZOOM && v.zoom >= FIT_ALL_MIN_ZOOM, `zoom ${v.zoom}`);
+    for (const [x, y] of [[0, 0], [6000, 2400]] as const) {
+      const p = onScreen(v, x, y);
+      assert.ok(p.x >= 0 && p.x <= 1440 && p.y >= 0 && p.y <= 900, `(${x},${y}) on screen at ${p.x},${p.y}`);
+    }
+  }
+  // Too big even for that: stops at Excalidraw's lowest zoom.
+  assert.equal(fitView([0, 0, 1e6, 1e6], 1000, 1000, { minZoom: FIT_ALL_MIN_ZOOM })!.zoom, FIT_ALL_MIN_ZOOM);
 });
 
 test('nothing to fit: no shapes, a hidden canvas or broken bounds', () => {

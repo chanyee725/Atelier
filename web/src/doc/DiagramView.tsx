@@ -17,7 +17,7 @@ import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
 import { createShownMemory } from './shownMemory';
-import { docPicWidths, picBox } from './diagramScale';
+import { docPicWidths, picBox, stageWide } from './diagramScale';
 import type { CanvasEl } from './model';
 
 export type DocCtx = {
@@ -138,6 +138,17 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   const scene = pic?.scene;
   // The board draws only when a step links to a node, the same rule as on the canvas. No legend in the document (#971).
   const board = useMemo(() => (steps && scene && boardShown(scene, steps) ? { scene, steps } : null), [steps, scene]);
+  // A picture held at its floor scrolls sideways: the stage then keeps a 12px gap after it (#1005), set on the DOM
+  // so a resize does not re-render the block.
+  useEffect(() => {
+    const s = stage.current;
+    if (!s || !pic) return;
+    const mark = () => s.toggleAttribute('data-wide', stageWide(pic.width, s.clientWidth));
+    mark();
+    const ro = new ResizeObserver(mark);
+    ro.observe(s);
+    return () => ro.disconnect();
+  }, [pic]);
   useEffect(() => {
     const s = stage.current;
     const i = img.current;

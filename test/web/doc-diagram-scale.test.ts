@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DOC_MAX_SCALE, DOC_MIN_SCALE, docPicWidths, picBox } from '../../web/src/doc/diagramScale.ts';
+import { DOC_MAX_SCALE, DOC_MIN_SCALE, docPicWidths, picBox, stageWide } from '../../web/src/doc/diagramScale.ts';
 
 test('docPicWidths: a document picture stays between 60% and 100% of its size (#987)', () => {
   assert.equal(DOC_MIN_SCALE, 0.6);
@@ -19,4 +19,13 @@ test('picBox: the overlay follows the picture in the scrolled stage (#987)', () 
   // Scrolled 300px to the right: the img moved left on screen, but in the stage's content it is where it was.
   assert.deepEqual(picBox(stage, { left: -188, top: 63, width: 1200 }, { left: 300, top: 0 }, 2000), { left: 12, top: 13, scale: 0.6 });
   assert.equal(picBox(stage, { left: 0, top: 0, width: 10 }, { left: 0, top: 0 }, 0).scale, 1);
+});
+
+test('stageWide (#1005): only a picture held at its floor past the stage gets the end gap', () => {
+  // 1000px picture: its floor is 600px.
+  assert.equal(stageWide(1000, 500), true);
+  assert.equal(stageWide(1000, 600), false, 'fits exactly at the floor');
+  assert.equal(stageWide(1000, 800), false);
+  assert.equal(stageWide(1000, 0), false, 'hidden stage');
+  assert.equal(stageWide(NaN, 500), false);
 });
