@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendScale, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -173,7 +173,7 @@ export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number)
 
 /**
  * The canvas legend: placed in overlay px on the side of the picture with room (`legendSpot`), measured after it
- * renders so the clamp knows its size. Shown only when the board is (`boardShown`), like the document's.
+ * renders so the clamp knows its size, and scaled with the picture between 60% and 100% (`legendScale`, #987). Shown only when the board is (`boardShown`), like the document's.
  */
 export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Props, 'motionInside'> & { area: Size }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -190,8 +190,11 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   }, [shown]);
   if (!shown) return null;
   const pic = { left, top, width: scene.width * scale, height: scene.height * scale };
-  const at = size && area.width > 0 ? legendSpot(pic, size, area, 12) : null;
-  return <RunLegend ref={ref} steps={steps} canvas style={at ? { left: at.left, top: at.top } : { visibility: 'hidden' }} />;
+  // Scaled with the picture (#987); the transform leaves the measured size alone, so place it by the scaled size.
+  const k = legendScale(scale);
+  const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12) : null;
+  const zoom: CSSProperties = k === 1 ? {} : { transform: `scale(${k})`, transformOrigin: '0 0' };
+  return <RunLegend ref={ref} steps={steps} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;
 }
 
 /**

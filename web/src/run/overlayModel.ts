@@ -292,6 +292,15 @@ export const boardShown = (scene: Scene, steps: readonly RunStep[]): boolean => 
 export type Box = { left: number; top: number; width: number; height: number };
 export type Size = { width: number; height: number };
 
+/** Smallest and largest scale of the canvas legend (#987). */
+export const LEGEND_SCALE = { min: 0.6, max: 1 } as const;
+
+/**
+ * Scale of the canvas legend for a picture drawn at `scale` CSS px per scene unit: the same as the picture, so the
+ * card never looks bigger than the diagram, but within LEGEND_SCALE (never blown up, never too small to read).
+ */
+export const legendScale = (scale: number): number => (Number.isFinite(scale) ? Math.min(LEGEND_SCALE.max, Math.max(LEGEND_SCALE.min, scale)) : 1);
+
 /** Margin kept between the canvas legend and the overlay's edges. */
 const EDGE = 8;
 

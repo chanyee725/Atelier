@@ -39,6 +39,12 @@ export const DocContext = createContext<DocCtx>({ path: '', blocks: [], frameSce
 // The picture each block showed last (E520), per file (#557).
 const lastShown = createShownMemory<BlockPicture>();
 
+/**
+ * Largest scale of a picture in the document (#987): it fills the column when it is wider, but a small one (a
+ * single node) stays at its real size instead of being blown up to the column width.
+ */
+export const DOC_MAX_SCALE = 1;
+
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
 /** 시작하기 at the end of the plan diagram's head row: the same confirm dialog the 알림함 opens. Blocked, it stays
@@ -166,7 +172,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       {block ? (
         <div ref={stage} className="doc-diagram-stage">
           <button type="button" className="doc-diagram-pic" title="캔버스에서 보기" aria-label={`${label}, 캔버스에서 보기`} onClick={() => onShow(id)}>
-            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', maxWidth: pic.width * 2, ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
+            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', maxWidth: pic.width * DOC_MAX_SCALE, ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
           {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
           {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} hideEta />}

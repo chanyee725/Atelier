@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendScale, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 import { RUN_BAND } from '../../shared/render/badge.ts';
 
@@ -290,4 +290,11 @@ test('run-mark band (#987): `runMarks on` keeps a free band above every node and
     };
     assert.equal(gap(rects as never) - gap(plain as never), RUN_BAND);
   }
+});
+
+test('canvas legend scale (#987): follows the picture between 60% and 100%', () => {
+  assert.equal(legendScale(0.8), 0.8);
+  assert.equal(legendScale(0.2), 0.6, 'never too small to read');
+  assert.equal(legendScale(2), 1, 'never bigger than its real size');
+  assert.equal(legendScale(Number.NaN), 1);
 });

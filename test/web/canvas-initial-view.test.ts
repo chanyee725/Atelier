@@ -1,7 +1,7 @@
 // E494: the canvas fits every block on a file's first open, and keeps the view the user left it at afterwards.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FIT_MAX_ZOOM, fitView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
+import { FIT_MAX_ZOOM, FIT_MIN_ZOOM, PANE_FIT, fitView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
 
 beforeEach(() => forgetViews());
 
@@ -36,8 +36,14 @@ test('a small drawing is not blown up past 100%', () => {
   assert.ok(Math.abs(c.x - 720) < 1e-6 && Math.abs(c.y - 450) < 1e-6);
 });
 
-test('a huge drawing stops at the smallest zoom', () => {
-  assert.equal(fitView([0, 0, 1e6, 1e6], 1000, 1000)!.zoom, 0.1);
+test('a wide drawing stops at 60% (#987), centred, the rest a scroll away', () => {
+  assert.equal(FIT_MIN_ZOOM, 0.6);
+  for (const opts of [undefined, PANE_FIT]) {
+    const v = fitView([0, 0, 1e6, 1e6], 1000, 1000, opts)!;
+    assert.equal(v.zoom, FIT_MIN_ZOOM);
+    const c = onScreen(v, 5e5, 5e5);
+    assert.ok(Math.abs(c.x - 500) < 1e-6 && Math.abs(c.y - 500) < 1e-6, 'centred');
+  }
 });
 
 test('nothing to fit: no shapes, a hidden canvas or broken bounds', () => {
@@ -92,10 +98,10 @@ test('an empty file opened at the default view fits once an agent adds blocks to
   assert.equal(openingView('a.dpx.json', null, 1440, 900), null);
   rememberView('a.dpx.json', { scrollX: 720, scrollY: 450, zoom: 1 });
   assert.equal(rememberedView('a.dpx.json'), null);
-  // An outside edit adds blocks at x=3000 and x=6000: the reload fits them.
-  const v = openingView('a.dpx.json', [3000, 0, 6900, 420], 1440, 900)!;
+  // An outside edit adds blocks at x=3000 and x=4600: the reload fits them.
+  const v = openingView('a.dpx.json', [3000, 0, 4600, 420], 1440, 900)!;
   assert.ok(v.zoom < 1);
-  for (const x of [3000, 6900]) {
+  for (const x of [3000, 4600]) {
     const p = onScreen(v, x, 0);
     assert.ok(p.x >= 0 && p.x <= 1440, `x=${x} on screen at ${p.x}`);
   }
@@ -120,12 +126,12 @@ test('a view the user moved to after an empty open is kept', () => {
 });
 
 test('fitView with a pixel margin leaves 48px each side and may enlarge a small drawing', async () => {
-  const { PANE_FIT, refitView } = await import('../../web/src/canvas/initialView.ts');
+  const { refitView } = await import('../../web/src/canvas/initialView.ts');
   const v = fitView([0, 0, 200, 100], 1000, 600, PANE_FIT)!;
   assert.equal(v.zoom, 2);
   assert.equal(fitView([0, 0, 200, 100], 1000, 600)!.zoom, 1);
-  const big = fitView([0, 0, 2000, 1000], 1000, 600, PANE_FIT)!;
-  assert.ok(2000 * big.zoom <= 1000 - 96 + 1e-6 && 1000 * big.zoom <= 600 - 96 + 1e-6);
+  const big = fitView([0, 0, 1500, 700], 1000, 600, PANE_FIT)!;
+  assert.ok(1500 * big.zoom <= 1000 - 96 + 1e-6 && 700 * big.zoom <= 600 - 96 + 1e-6);
   // refit: follows a resize until the user moves the view, then keeps it
   forgetViews();
   const first = openingView('a.dpx.json', [0, 0, 2000, 1000], 1000, 600, PANE_FIT)!;
