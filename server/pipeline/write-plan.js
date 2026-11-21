@@ -1,4 +1,4 @@
-// Pipeline section (write): write_plan: the lead writes or revises its draft plan file.
+// Pipeline section (write_plan): the lead writes or revises its draft plan file.
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { FILE_EXT } from '../workspace/model.js';

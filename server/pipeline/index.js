@@ -13,10 +13,10 @@
 // E28: once the board closes every step the run ends `done`, the server writes the 완료 summary block into the
 // document once, and the history labels the draft, approved and done versions. A done plan is a record: running it
 // again means 복제해서 새 계획 (POST /api/pipeline/duplicate), a fresh draft without the summary.
+//
+// #1000: setup keeps the shared state, the hub hooks, status and the routes; each section lives in its own file
+// (write-plan.js, start.js, pause.js, finish.js, note.js) and gets that state through the context object `c`.
 import { StoreError } from '../workspace/store.js';
-import { FILE_EXT } from '../workspace/model.js';
-import { redact } from '../dispatch/redact.js';
-import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
 import { planFileName } from './shared.js';
@@ -25,13 +25,9 @@ import { createFinish } from './finish.js';
 import { createPause } from './pause.js';
 import { createStart } from './start.js';
 import { createWritePlan } from './write-plan.js';
-import { resolvePlanRoles } from './plan-roles.js';
-import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
-import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
+import { planChanges } from '../../shared/dispatch/plan-write.ts';
 import { resolvedStep } from '../../shared/dispatch/plan.ts';
-import { applyStepOverrides } from '../../shared/dispatch/plan-overrides.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
-import { nodeLabels, summaryNodes, withSummary, withoutSummary } from '../../shared/dispatch/run-summary.ts';
 
 export { planFileName };
 
@@ -313,17 +309,12 @@ export async function setup(ctx) {
   // Each section file adds its functions to `c`; sections call each other through `c` at call time (#1000).
   const c = { ctx, ws, recorder, dispatch, drafts, entries, save, changed, leadEntries, readOrNull, check, status };
 
-  createWritePlan(c);
-
-  createStart(c);
-
-  createPause(c);
-
-  createFinish(c);
-
-  createNote(c);
-
-  const { note, unclosed, resultsOf, finish, finishClosed, duplicate, closedTasks, openSteps, resumeBlockers, quietly, pauseEntry, interruptTeam, stop, resumeEntry, resume, dismiss, reopen, carryOf, syncLimit, limitTimer, start, freePath, writePlan } = c;
+  createWritePlan(c); // ---- write_plan ----
+  createStart(c); // ---- 시작하기 ----
+  createPause(c); // ---- 멈추기 · 이어서 하기 · 계획 다시 열기 (E27) ----
+  createFinish(c); // ---- 완료 · 복제해서 새 계획 (E28) ----
+  createNote(c); // ---- note_step ----
+  const { writePlan, start, openSteps, resumeBlockers, pauseEntry, interruptTeam, stop, resume, dismiss, reopen, syncLimit, limitTimer, finishClosed, duplicate, note } = c;
 
   const route = (method, path, fn) => ({
     method,

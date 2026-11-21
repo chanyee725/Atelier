@@ -1,4 +1,4 @@
-// Pipeline section (finish): 완료 · 복제해서 새 계획 (E28): a run whose steps the board closed ends done; a done plan is duplicated.
+// Pipeline section (완료 · 복제해서 새 계획, E28): a run whose steps the board closed ends done; a done plan is duplicated.
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { effectiveRoles } from '../dispatch/settings.js';
@@ -102,5 +102,5 @@ export function createFinish(c) {
     return { path: r.path, revision: r.revision, lead: all?.[r.path]?.lead ?? null };
   }
 
-  Object.assign(c, { unclosed, resultsOf, finish, finishClosed, duplicate });
+  Object.assign(c, { resultsOf, finishClosed, duplicate });
 }

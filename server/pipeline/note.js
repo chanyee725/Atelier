@@ -1,4 +1,4 @@
-// Pipeline section (note): note_step: one line a lead leaves on a running step.
+// Pipeline section (note_step): one line a lead leaves on a running step.
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { redact } from '../dispatch/redact.js';

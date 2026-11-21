@@ -1,4 +1,4 @@
-// Pipeline section (start): 시작하기: the person approves a plan revision and the run starts.
+// Pipeline section (시작하기): the person approves a plan revision and the run starts.
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { topFolder } from '../dispatch/session-folder.js';

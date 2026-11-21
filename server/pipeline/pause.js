@@ -1,4 +1,4 @@
-// Pipeline section (pause): 멈추기 · 이어서 하기 · 계획 다시 열기 (E27), and the usage-limit guard that pauses and resumes runs.
+// Pipeline section (멈추기 · 이어서 하기 · 계획 다시 열기, E27): stop, resume and reopen, plus the usage-limit guard.
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { mergeResult, pickResult } from '../runs/record.js';
@@ -230,5 +230,5 @@ export function createPause(c) {
   const limitTimer = setInterval(() => void syncLimit(), 30_000);
   limitTimer.unref?.();
 
-  Object.assign(c, { closedTasks, openSteps, resumeBlockers, quietly, pauseEntry, interruptTeam, stop, resumeEntry, resume, dismiss, reopen, carryOf, syncLimit, limitTimer });
+  Object.assign(c, { closedTasks, openSteps, resumeBlockers, quietly, pauseEntry, interruptTeam, stop, resume, dismiss, reopen, carryOf, syncLimit, limitTimer });
 }
