@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DONE_LIMIT, attentionTaskIds, etaLine, groupByStage, span, stageSpans, stageStep, taskWarn as warnOf, visibleTasks } from '../../web/src/dispatch/lib/board.ts';
+import { DONE_LIMIT, attentionTaskIds, etaCardText, etaLine, groupByStage, span, stageSpans, stageStep, taskWarn as warnOf, visibleTasks } from '../../web/src/dispatch/lib/board.ts';
 import type { BoardTask } from '../../web/src/dispatch/types.ts';
 
 const MIN = 60_000;
@@ -82,4 +82,12 @@ test('stageStep: 계획 → 구현 → 리뷰 → 테스트 → 머지 as N/5; n
   assert.equal(stageStep('merge')!.text, '머지 · 5/5');
   assert.equal(stageStep('done'), null);
   assert.equal(stageStep('blocked'), null);
+});
+
+test('etaCardText: the card says 예상 once for estimated, recorded and passed ETAs (#1028)', () => {
+  const text = (etaAt: number, now: number, etaEstimated?: boolean) => etaCardText(etaLine({ stage: 'impl', etaAt, etaEstimated }, now)!);
+  assert.equal(text(100 * MIN, 88 * MIN, true), '약 12분 남음(예상)');
+  assert.equal(text(100 * MIN, 88 * MIN), '12분 남음');
+  assert.equal(text(100 * MIN, 106 * MIN, true), '예상보다 6분 지남');
+  for (const s of [text(100 * MIN, 88 * MIN, true), text(100 * MIN, 106 * MIN)]) assert.equal(s.split('예상').length - 1, 1);
 });

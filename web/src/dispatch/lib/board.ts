@@ -78,6 +78,11 @@ export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt' | 'etaEstimated'>, 
   return left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지남`, late: true };
 }
 
+/** The 작업 보드 card's ETA text, saying 예상 once: 약 N분 남음(예상), N분 남음, 곧 끝나요 or 예상보다 N분 지남 (#1028). */
+export function etaCardText(eta: { text: string; late: boolean }): string {
+  return eta.late ? `예상보다 ${eta.text}` : eta.text;
+}
+
 /** The five stages a task works through, as the step count shows them (#1028). */
 export const WORK_STEPS: { id: TaskStage; label: string }[] = [
   { id: 'plan', label: '계획' },

@@ -10,7 +10,7 @@ import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { AttentionGroup, useAttention, useNow } from './AttentionStrip';
 import { StageStep } from './StageStep';
-import { DONE_LIMIT, STAGES, STAGE_BG, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
+import { DONE_LIMIT, STAGES, STAGE_BG, etaCardText, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
 
@@ -42,7 +42,7 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
         <span className="min-w-0 truncate" title={owner}>{owner}</span>
         <span data-in-stage className="ml-auto shrink-0" title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>
       </div>
-      {eta && <p data-eta className={cn('text-2xs tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>예상 {eta.text}</p>}
+      {eta && <p data-eta className={cn('text-2xs tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>{etaCardText(eta)}</p>}
       <div role="img" aria-label={`단계별 시간: ${spans.map(s => `${stageLabel(s.stage)} ${span(s.ms)}`).join(', ')}`} className="flex h-1.5 gap-px overflow-clip rounded-full bg-sunken">
         {spans.map((s, i) => <span key={i} data-bar={s.stage} style={{ flexGrow: s.ms / total }} className={cn('min-w-px basis-0', BAR[s.stage])} />)}
       </div>

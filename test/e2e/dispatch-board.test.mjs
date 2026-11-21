@@ -94,7 +94,7 @@ test('작업 보드 shows tasks by stage and follows live changes', { skip: !ON 
     at('owner, eta and time in stage');
     const impl = card('로그인 화면 만들기');
     await impl.getByText('Ivy', { exact: true }).waitFor();
-    assert.match(await impl.locator('[data-eta]').innerText(), /^예상 (\d+분 남음|곧 끝나요)$/);
+    assert.match(await impl.locator('[data-eta]').innerText(), /^(약 \d+분 남음\(예상\)|\d+분 남음|곧 끝나요)$/);
     assert.match(await impl.locator('[data-in-stage]').innerText(), /^구현 (방금|.+째)$/);
     assert.ok(await impl.locator('[data-bar]').count() >= 1, 'a stage-time bar');
     await card('배포 막힘').getByText('맡은 사람 없음').waitFor();
