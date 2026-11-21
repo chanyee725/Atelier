@@ -14,3 +14,42 @@ export function enterStage(t, stage, at = Date.now()) {
   return t;
 }
 
+
+/** Stages a default ETA is estimated for; done and blocked have no time left to guess. */
+const ESTIMATED = new Set(["plan", "impl", "review", "test", "merge"]);
+const RECENT = 20;
+
+/**
+ * Median minutes the finished tasks in `tasks` spent in `stage` (#1028): each visit lasts from its entry to the
+ * next entry in `stages`. Uses the latest RECENT visits; null when there are none or the stage gets no estimate.
+ */
+export function stageMedianMinutes(tasks, stage) {
+  if (!ESTIMATED.has(stage)) return null;
+  const visits = [];
+  for (const t of tasks || []) {
+    if (t?.stage !== "done" || !Array.isArray(t.stages)) continue;
+    for (let i = 0; i < t.stages.length - 1; i++) {
+      const a = t.stages[i], b = t.stages[i + 1];
+      if (a.stage !== stage || !(b.at >= a.at)) continue;
+      visits.push({ at: a.at, ms: b.at - a.at });
+    }
+  }
+  if (!visits.length) return null;
+  const ms = visits.sort((x, y) => y.at - x.at).slice(0, RECENT).map(v => v.ms).sort((x, y) => x - y);
+  const mid = ms.length >> 1;
+  const med = ms.length % 2 ? ms[mid] : (ms[mid - 1] + ms[mid]) / 2;
+  return Math.max(1, Math.round(med / 60_000));
+}
+
+/**
+ * After `t` entered a new stage without `eta_minutes` (#1028): an ETA the lead set that is still ahead stays;
+ * otherwise etaAt becomes the stage median of finished tasks, flagged `etaEstimated`, or null without history.
+ */
+export function defaultEta(t, tasks, now = Date.now()) {
+  if (t.etaAt && !t.etaEstimated && t.etaAt > now) return t;
+  const min = stageMedianMinutes(tasks, t.stage);
+  t.etaAt = min == null ? null : now + min * 60_000;
+  t.etaSetAt = t.etaAt ? now : null;
+  t.etaEstimated = min != null;
+  return t;
+}

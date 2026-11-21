@@ -9,7 +9,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { AttentionGroup, useAttention, useNow } from './AttentionStrip';
-import { DONE_LIMIT, STAGES, STAGE_BG, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
+import { StageProgress } from './StageProgress';
+import { DONE_LIMIT, STAGES, STAGE_BG, etaLine, groupByStage, span, stageLabel, stageProgress, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
 
@@ -41,7 +42,8 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
         <span className="min-w-0 truncate" title={owner}>{owner}</span>
         <span data-in-stage className="ml-auto shrink-0" title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>
       </div>
-      {eta && <p data-eta className={cn('text-2xs tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>예상 {eta.text}</p>}
+      <StageProgress stage={t.stage} className="text-2xs" />
+      {eta && <p data-eta data-estimated={eta.estimated || undefined} className={cn('text-2xs tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>{eta.estimated ? eta.text : `예상 ${eta.text}`}</p>}
       <div role="img" aria-label={`단계별 시간: ${spans.map(s => `${stageLabel(s.stage)} ${span(s.ms)}`).join(', ')}`} className="flex h-1.5 gap-px overflow-clip rounded-full bg-sunken">
         {spans.map((s, i) => <span key={i} data-bar={s.stage} style={{ flexGrow: s.ms / total }} className={cn('min-w-px basis-0', BAR[s.stage])} />)}
       </div>
@@ -181,12 +183,14 @@ function TaskRow({ t, now }: { t: BoardTask; now: number }) {
   return (
     <li data-row={t.id} className="flex min-w-0 flex-col gap-0.5 px-4 py-2">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span role="img" aria-label={stageLabel(t.stage)} title={stageLabel(t.stage)} className={cn('size-2 shrink-0 rounded-full', BAR[t.stage])} />
+        {/* Open stages show their colour in the progress segments; done and blocked keep the dot. */}
+        {!stageProgress(t.stage) && <span role="img" aria-label={stageLabel(t.stage)} title={stageLabel(t.stage)} className={cn('size-2 shrink-0 rounded-full', BAR[t.stage])} />}
         <span className="min-w-0 flex-1 truncate text-sm" title={t.title}>{t.title}</span>
+        <StageProgress stage={t.stage} />
         <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="이 단계에 있은 시간">{inStage(now - t.stageAt)}</span>
       </div>
       {warn && (
-        <p data-warn className={cn('m-0 flex min-w-0 items-center gap-1 pl-[1.125rem] text-xs', warn.tone === 'bad' ? 'text-destructive' : 'text-muted-foreground')}>
+        <p data-warn className={cn('m-0 flex min-w-0 items-center gap-1 text-xs', warn.tone === 'bad' ? 'text-destructive' : 'text-muted-foreground')}>
           <TriangleAlert aria-hidden className={cn('size-3 shrink-0', warn.tone === 'warn' && 'text-warn')} />
           <span className="truncate" title={warn.text}>{warn.text}</span>
         </p>

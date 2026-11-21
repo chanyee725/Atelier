@@ -10,6 +10,8 @@ export interface BoardTask {
   id: string; lead: string | null; title: string; stage: TaskStage; owner: string | null;
   createdAt: number; stageAt: number; updatedAt: number; etaAt: number | null; note: string;
   stages?: { stage: TaskStage; at: number }[];
+  /** etaAt is the server's guess from finished tasks' stage times (#1028), not one the lead set. */
+  etaEstimated?: boolean;
   mergeCheck?: MergeCheck | null;
   stuck?: TaskStuck | null;
   /** Why the server's auto close (#930) left this open task as it is. */
