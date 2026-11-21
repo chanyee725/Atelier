@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { runCli, spawnCli } from "./cli.js";
 import { redact } from "./redact.js";
@@ -21,6 +20,7 @@ import { issueNumber } from "./ledger.js";
 import {
   mixin, badRequest, PROVIDERS, UNSUPPORTED_MODEL, PROVIDER_NAMES, checkPerm, checkEffort, MAX_TRANSCRIPT, RESUME_TEXT, isOpenStatus, clip, RESUME_ID, userContent, activityOf, maskedPerm,
 } from "./hub-util.js";
+import { HubAutoRemove } from "./hub-auto-remove.js";
 import { HubTickets } from "./hub-tickets.js";
 import { HubRunners } from "./hub-runners.js";
 export { AGY_MODES, CODEX_SANDBOX, PROVIDERS, PROVIDER_NAMES, UNSUPPORTED_MODEL, activityOf, checkEffort, checkPerm, userContent } from "./hub-util.js";
@@ -939,63 +939,6 @@ export class Hub extends EventEmitter {
     return dropped; // true: worktree removed, false: kept (uncommitted changes), null: not tried
   }
 
-  /* ---------------- Auto-remove finished teammates (Dispatch #39, Drawing #632) ---------------- */
-  // Leads forgot stop_session(remove: true), so finished teammates piled up holding worktrees and slots.
-  // Once a teammate's report has reached its lead and nothing waits on a person, the server removes it
-  // after a grace period unless the lead writes to it. The timer lives in memory only: after a restart
-  // nothing is armed until the teammate's next report.
-
-  /** Why `s` must not be auto-removed now, or null when it may be. */
-  autoRemoveBlocked(s) {
-    if (!s || !this.team().autoRemoveDone) return "off";
-    if (!s.parent || s.canSpawn) return "lead"; // only teammates; a lead is never removed by the server
-    if (s.status !== "idle") return s.status; // running, waiting, error, done
-    if (s.asksUser) return "asks";
-    const r = this.live.get(s.id);
-    if (r?.perms.size) return "perm";
-    if (r?.pendingReport) return "report"; // not delivered yet
-    return null;
-  }
-
-  /** Starts (or restarts) the grace timer for a teammate whose report just reached its lead. */
-  armAutoRemove(s) {
-    this.cancelAutoRemove(s.id);
-    if (this.autoRemoveBlocked(s)) return;
-    const r = this.rt(s.id);
-    // Transcript entries counted at arming time: any entry after it means the teammate is working again.
-    r.armedSeq = r.seq;
-    r.autoRemove = setTimeout(() => { r.autoRemove = null; this.autoRemove(s.id).catch(() => {}); }, this.team().autoRemoveGraceSec * 1000);
-    r.autoRemove.unref?.();
-  }
-
-  cancelAutoRemove(id) {
-    const r = this.live.get(id);
-    if (r?.autoRemove) { clearTimeout(r.autoRemove); r.autoRemove = null; }
-  }
-
-  /** The grace period ran out: stop and remove the teammate, then tell its lead. */
-  async autoRemove(id) {
-    const s = this.get(id);
-    if (!s || this.autoRemoveBlocked(s)) return false;
-    const { parent, name, branch, cwd, worktree } = s;
-    const who = `${name}(${s.roleName ?? s.role})`;
-    // Work since the report (a queued message started another turn, events with status still idle) keeps it.
-    const r = this.live.get(id);
-    if (r?.armedSeq !== undefined && r.seq !== r.armedSeq) return false;
-    const info = {};
-    const dropped = this.remove(id, { strict: true, info });
-    const kept = worktree && (await dropped) === false && existsSync(cwd);
-    // The project-relative path (.atelier/worktrees/<slug>) is shorter for the lead and does not spell out the home folder.
-    const rel = cwd && path.relative(this.root, cwd);
-    const where = rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? rel : cwd;
-    const why = info.detached ? ` 분리된 HEAD라 worktree를 남겼어요${info.sha ? ` (커밋 ${info.sha})` : ""}. 작업 폴더는 ${where}예요.`
-      : info.unknown ? ` git 상태를 확인하지 못해 작업 폴더 ${where}는 남겼어요.`
-      : ` 커밋 안 된 변경이나 git이 무시하는 파일이 있거나 상태를 확인하지 못해 작업 폴더 ${where}는 남겼어요.`;
-    this.notifyLead(parent, `[Dispatch] ${who} 세션을 정리했어요${branch ? `(브랜치 ${branch})` : ""}.`
-      + (kept ? why : ""));
-    return true;
-  }
-
   /** A teammate stopped with an error: it is not removed, and its lead hears about it at once. */
   noticeError(s) {
     if (s._killed || !this.team().autoRemoveDone || !s.parent || s.canSpawn) return;
@@ -1098,4 +1041,4 @@ export class Hub extends EventEmitter {
   }
 }
 
-mixin(Hub, HubRunners, HubTickets);
+mixin(Hub, HubRunners, HubTickets, HubAutoRemove);
