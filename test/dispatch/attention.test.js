@@ -93,6 +93,8 @@ test("task.stuck over-eta: one late row with the server's sentence", () => {
   assert.equal(run({ tasks: [t({ etaAt: NOW - MIN, stuck: null })] })[0].reason, "예상 시간을 넘겼어요 · Remy");
   assert.equal(run({ tasks: [t({ etaAt: NOW - MIN })] }).length, 1);
   assert.equal(run({ tasks: [t({ etaAt: NOW + MIN })] }).length, 0);
+  // A past estimated ETA (#1028, stage median) raises no late row or alert.
+  assert.equal(run({ tasks: [t({ etaAt: NOW - 30 * MIN, etaEstimated: true, stuck: null })] }).length, 0);
 });
 
 test("task.stuck stage-mismatch: its own row, unless the owner session already shows", () => {

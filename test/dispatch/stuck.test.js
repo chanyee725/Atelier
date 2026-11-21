@@ -84,6 +84,8 @@ test("taskStuck: over-eta at 1.5× the stage eta", () => {
     { reason: "over-eta", label: "예상 20분의 1.5배를 넘겼어요", stage: "impl", etaMinutes: 20, sinceMs: 30 * MIN });
   assert.equal(taskStuck({ ...t, stage: "done" }, null, null, 99 * MIN, cfg), null);
   assert.equal(taskStuck({ ...t, etaAt: null }, null, null, 99 * MIN, cfg), null);
+  // The server's stage-median guess (#1028) is not the lead's promise: never over-eta.
+  assert.equal(taskStuck({ ...t, etaEstimated: true }, null, null, 99 * MIN, cfg), null);
 });
 
 test("taskStuck: board says 구현 while the owner loops on e2e", () => {
