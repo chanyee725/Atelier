@@ -180,3 +180,33 @@ test('relay.sh with the issue held by a board task of a live lead starts nothing
     tree.cleanup();
   }
 });
+
+test('relay.sh keeps the old merge role while another live lead may use it (#1034)', async () => {
+  const sessions = [...oldTeam(), { id: 'merge-a', name: 'Mia', role: 'merge', canSpawn: false, parent: 'lead-a', status: 'idle' },
+    { id: 'lead-x', name: 'Xan', role: 'lead', canSpawn: true, parent: null, status: 'running', issue: 7 }];
+  const stub = await stubServer({ sessions });
+  const tree = pluginTree();
+  try {
+    const r = await runScript(join(tree.scripts, 'relay.sh'), [tree.dir, 'Dino', 'small', 'Issue #1031'], { DISPATCH_PORT: String(stub.port) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(stub.sessions.some((s) => s.id === 'merge-a'), 'Mia stays for the other team');
+    assert.ok(!stub.sessions.some((s) => s.id === 'lead-a'), 'the old lead is gone');
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
+
+test('relay.sh prints the queue it did not hand over when another team holds its first issue (#1034)', async () => {
+  const sessions = [...oldTeam(), { id: 'lead-n', name: 'Nova', role: 'lead', canSpawn: true, parent: null, status: 'running', issue: 1031 }];
+  const stub = await stubServer({ sessions });
+  const tree = pluginTree();
+  try {
+    const r = await runScript(join(tree.scripts, 'relay.sh'), [tree.dir, 'Dino', 'small', 'Issues #1031, #1032'], { DISPATCH_PORT: String(stub.port) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /Queue not handed over; start it again without #1031: Issues #1031, #1032/);
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});

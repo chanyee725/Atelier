@@ -7,7 +7,7 @@ Team rules (the project's CLAUDE.md / AGENTS.md wins where it differs):
   - normal (one feature): lead + implementer + 1 fresh reviewer.
   - risky (auth, data, delete, structure): 2 reviewers.
 - Review is a PR comment whose first line is `<last commit hash> — must-fix 없음` or `<last commit hash> — must-fix 있음`. A must-fix blocks the PR; should-fixes and nits go to the branch owner or a follow-up.
-- PRs and merges have their own roles. Leads and implementers open no PR and merge nothing (no `gh pr create`, no `gh pr merge`).
+- PRs and merges have their own roles. Leads and implementers open no PR and merge nothing (no `gh pr create`, no `gh pr merge`). A Claude session outside those roles has both refused by its CLI; Codex and Gemini sessions keep the rule themselves.
   - PR role (`pr`): changes no code. Before opening, `gh pr list --state open --json number,headRefName,body`; when a PR for the same branch or the same `Closes #<n>` is open, it opens nothing and reports that PR number.
   - Merge role (`merge`, one per project): the only one who runs `gh pr merge --merge`. It merges only with a `must-fix 없음` review on the last commit, no other open PR for the same issue (two or more: stop and report), and for risky the main session's OK. Then `git merge --ff-only origin/develop` in the project folder and the task set to done.
 - Every PR, quickfix included, is ready only with a `must-fix 없음` review on its last commit.

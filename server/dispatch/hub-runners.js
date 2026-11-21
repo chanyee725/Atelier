@@ -7,6 +7,14 @@ import { isQuotaError } from "./limits.js";
 import { checkKey } from "./state.js";
 import { badRequest, EFFORT_WORDS, AGY_MODES, CODEX_SANDBOX, checkPerm, checkEffort, MCP_SCRIPT, sessionEnv, clip, userContent, onJsonLines, activityOf } from "./hub-util.js";
 
+/** Bash rules the Claude CLI refuses for a role: `gh pr create` outside the PR role, `gh pr merge` outside the merge role. */
+export function ghPrDenied(role) {
+  const out = [];
+  if (role !== "pr") out.push("Bash(gh pr create:*)");
+  if (role !== "merge") out.push("Bash(gh pr merge:*)");
+  return out;
+}
+
 // Hub's CLI runners (claude / codex / gemini): start a turn, read its stream, end it.
 // Mixed into Hub.prototype by hub.js, so `this` is the Hub.
 export class HubRunners {
@@ -100,6 +108,10 @@ export class HubRunners {
     args.push("--mcp-config", JSON.stringify({ mcpServers: { dispatch: {
       command: process.execPath, args: [MCP_SCRIPT], env: this.mcpEnv(s) } } }),
       "--allowedTools", "mcp__dispatch");
+    // Only the PR and merge roles open or merge PRs (#1031); for Claude the CLI itself refuses it to the rest (#1034).
+    // Codex and agy have no per-command deny, so there the rule stays in the prompt.
+    const gh = ghPrDenied(s.role);
+    if (gh.length) args.push("--disallowedTools", ...gh);
     // DISPATCH_URL / DISPATCH_SESSION let the plugin's length hook (hooks/long-session.mjs) find this session.
     const proc = this.spawnCli("claude", args, { cwd: s.cwd, env: { ...sessionEnv(s), DISPATCH_URL: `http://127.0.0.1:${this.port}`, DISPATCH_SESSION: s.id }, stdio: ["pipe", "pipe", "pipe"] });
     s._costBase = s.cost;
