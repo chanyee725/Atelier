@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stubServer, pluginTree, runScript } from './helpers/atelier-team.mjs';
 
 const RELAY = new URL('../plugin/skills/atelier-team/scripts/relay.sh', import.meta.url).pathname;
 
@@ -97,3 +98,65 @@ test('relay.sh refuses an unknown lead without starting or removing anything', (
     assert.equal(existsSync(join(dir, 'team-args')), false);
     assert.deepEqual(removed, []);
   }));
+
+// #1031: the real team.sh behind relay.sh against a stub that keeps the sessions it makes.
+const oldTeam = () => [
+  { id: 'lead-a', name: 'Dino', role: 'lead', canSpawn: true, parent: null, status: 'idle', issue: 1000, task: '#1000 끝 · 다음 #1031' },
+  { id: 'impl-a', name: 'Iris', role: 'impl', canSpawn: false, parent: 'lead-a', status: 'idle' },
+];
+
+test('relay.sh run twice for one issue leaves one lead: the second run prints it and creates nothing', async () => {
+  const stub = await stubServer({ sessions: oldTeam() });
+  const tree = pluginTree();
+  try {
+    const relay = join(tree.scripts, 'relay.sh');
+    const env = { DISPATCH_PORT: String(stub.port) };
+    const a = await runScript(relay, [tree.dir, 'Dino', 'small', 'Issue #1031'], env);
+    assert.equal(a.status, 0, a.stderr);
+    assert.equal(stub.posts.length, 2, 'lead, then its team; the old lead naming #1031 in its task line is left out of the check');
+    assert.deepEqual(stub.sessions.filter((s) => s.canSpawn).map((s) => s.name), ['S1']);
+    // After a server restart the same relay runs again; the old lead is already gone.
+    const b = await runScript(relay, [tree.dir, 'Dino', 'small', 'Issue #1031'], env);
+    assert.equal(b.status, 0, b.stderr);
+    assert.equal(b.stdout.trim(), 'S1');
+    assert.match(b.stderr, /Issue #1031 already has a live lead \(S1\)/);
+    assert.equal(stub.posts.length, 2, 'no second team');
+    assert.equal(stub.sessions.filter((s) => s.role === 'lead').length, 1);
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
+
+test('relay.sh with the issue already held still removes the old team it replaces, and starts nothing', async () => {
+  const sessions = [...oldTeam(), { id: 'lead-n', name: 'Nova', role: 'lead', canSpawn: true, parent: null, status: 'running', issue: 1031 }];
+  const stub = await stubServer({ sessions });
+  const tree = pluginTree();
+  try {
+    const r = await runScript(join(tree.scripts, 'relay.sh'), [tree.dir, 'Dino', 'small', 'Issues #1031, #1032'], { DISPATCH_PORT: String(stub.port) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), 'Nova');
+    assert.equal(stub.posts.length, 0);
+    assert.deepEqual(stub.sessions.map((s) => s.name), ['Nova']);
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
+
+test('relay.sh with the issue held by a board task of a live lead starts nothing; an unknown old lead is then no error', async () => {
+  const stub = await stubServer({
+    sessions: [{ id: 'lead-n', name: 'Nova', role: 'lead', canSpawn: true, parent: null, status: 'waiting', issue: null }],
+    tasks: [{ id: 't', lead: 'lead-n', title: 'E716 #1031 역할', stage: 'review' }],
+  });
+  const tree = pluginTree();
+  try {
+    const r = await runScript(join(tree.scripts, 'relay.sh'), [tree.dir, 'Gone', 'small', 'Issue #1031'], { DISPATCH_PORT: String(stub.port) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), 'Nova');
+    assert.equal(stub.posts.length, 0);
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
