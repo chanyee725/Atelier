@@ -34,8 +34,7 @@ import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/rende
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
 import { PANE_FIT, fitMinZoom, openingView, refitView, rememberView, type FitOptions } from './initialView';
-import { refitTexts, type FitEl } from './refit';
-import { RefitQueue } from './refitQueue';
+import { useFontRefit } from './useFontRefit';
 import './clean.css';
 import { CodePanel } from './CodePanel';
 import { LayoutBar } from './LayoutBar';
@@ -102,20 +101,6 @@ const withLayout = (cd: Record<string, unknown> | undefined, layout: BlockLayout
 const isGraphType = (type: string | undefined) => type === 'architecture' || type === 'flowchart';
 
 
-/** Texts measured by Excalidraw (it measures only with repairBindings set). */
-const measureTexts = (els: FitEl[]) => restoreElements(els as unknown as ExcalidrawElement[], null, { repairBindings: true, refreshDimensions: true }) as unknown as FitEl[];
-
-/** The texts in `ids` measured again; nothing else changes. */
-function refit(els: readonly ExcalidrawElement[], ids: Iterable<string>, apply?: (e: FitEl, patch: Partial<FitEl>) => FitEl) {
-  return refitTexts(els as unknown as readonly FitEl[], new Set(ids), measureTexts, apply) as unknown as { elements: readonly ExcalidrawElement[]; changed: boolean };
-}
-
-/** A measured element as a new version, so it is saved. */
-const bumped = (e: FitEl, patch: Partial<FitEl>) => newElementWith(e as unknown as ExcalidrawElement, patch as never) as unknown as FitEl;
-
-/** Whether Excalidraw's copy of the clean font has loaded; until then text is measured with a fallback font. */
-const cleanFontLoaded = () => Array.from(document.fonts).some((f) => f.family.replace(/["']/g, '') === 'Liberation Sans' && f.status === 'loaded');
-
 export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange, handle, path, look = null }: Props) {
   // Blocks are drawn and laid out with the plan look in their code (planStyle.ts); writes keep the saved code.
   const lookRef = useRef(look);
@@ -177,17 +162,6 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const seenLayouts = useRef(new Map<string, string>());
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   apiRef.current = api;
-  // Texts that changed font before the clean font had loaded: measured once it has. One queue per mount
-  // (CanvasPane remounts on file switch), cleared on unmount too.
-  const [refitLater] = useState(() => new RefitQueue(cleanFontLoaded));
-  useEffect(() => () => refitLater.clear(), [refitLater]);
-  /** The texts in `ids` measured now if the clean font is in, else queued for refitPending. `bump`: a new version
-   * (a paste, saved then); otherwise versions stay (opening writes nothing). */
-  const refitNowOrLater = (els: readonly ExcalidrawElement[], ids: readonly string[], bump: boolean) => {
-    if (cleanFontLoaded()) return refit(els, ids, bump ? bumped : undefined).elements;
-    refitLater.wait(ids, bump);
-    return els;
-  };
   const pathRef = useRef(path);
   pathRef.current = path;
   const focusRef = useRef(focus);
@@ -392,19 +366,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   }, []);
   useEffect(tryFocus, [api, focus, tryFocus]);
 
-  // Excalidraw loads the clean font after the scene is set: texts that changed font before that are measured once it
-  // is in. Opened texts keep their versions (the new size is saved with the next edit); pasted ones are bumped.
-  // Texts not in the scene yet keep waiting, and handleChange runs the queue again once they are (#305).
-  const refitPending = useCallback(() => {
-    const xapi = apiRef.current;
-    const out = refitLater.take(xapi ? (xapi.getSceneElementsIncludingDeleted() as unknown as readonly FitEl[]) : null, measureTexts, bumped);
-    if (xapi && out?.changed) xapi.updateScene({ elements: out.elements as unknown as ExcalidrawElement[], captureUpdate: CaptureUpdateAction.NEVER });
-  }, [refitLater]);
-  useEffect(() => {
-    document.fonts.addEventListener('loadingdone', refitPending);
-    refitPending();
-    return () => document.fonts.removeEventListener('loadingdone', refitPending);
-  }, [api, refitPending]);
+  const { refitNowOrLater, refitWaiting } = useFontRefit(api, apiRef);
 
   // Built once per mount (CanvasPane remounts on file switch/reload).
   const initialData = useMemo(
@@ -661,10 +623,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     let elements = sceneEls;
     let cur = blocksRef.current;
     // Texts that waited for the clean font while the scene was still empty are measured once they are in (#305).
-    if (refitLater.size && apiRef.current) {
-      const late = refitLater.take(elements as unknown as readonly FitEl[], measureTexts, bumped);
+    if (apiRef.current) {
+      const late = refitWaiting(elements);
       if (late?.changed) {
-        elements = late.elements as unknown as readonly ExcalidrawElement[];
+        elements = late.elements;
         apiRef.current.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
       }
     }
