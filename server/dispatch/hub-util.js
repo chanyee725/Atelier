@@ -123,3 +123,12 @@ export function activityOf(name = "", text = "") {
 export function maskedPerm(req) {
   return { ...req, input: redactDeep(req.input), description: redact(req.description), suggestions: redactDeep(req.suggestions) };
 }
+
+// Copies a mixin class's methods and getters onto target.prototype (non-enumerable, like class members),
+// so the split-out parts of Hub stay plain Hub.prototype members.
+export function mixin(target, ...sources) {
+  for (const src of sources) {
+    const { constructor: _c, ...members } = Object.getOwnPropertyDescriptors(src.prototype);
+    Object.defineProperties(target.prototype, members);
+  }
+}
