@@ -13,7 +13,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import { ChevronRight } from 'lucide-react';
 import { Card, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
-import { windowSpans, type Entry } from '../../../shared/dispatch/timeline.js';
+import { windowSpans, type Entry } from '../../../shared/dispatch/timeline.ts';
 import { ToggleGroup, ToggleGroupItem } from '../components/ui/toggle-group';
 import { STATE, stateOf } from './lib/format.ts';
 import { rowHistory } from './lib/usage.ts';

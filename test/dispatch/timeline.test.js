@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { recordState, trimToWindow, windowSpans } from "../../shared/dispatch/timeline.js";
+import { recordState, trimToWindow, windowSpans } from "../../shared/dispatch/timeline.ts";
 
 const H = 3600_000;
 

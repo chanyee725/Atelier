@@ -12,7 +12,7 @@ import * as dispatch from '../../server/dispatch/index.js';
 import * as userDefaults from '../../server/user-defaults.js';
 import { issueAccounts, issueOfBranch, Ledger } from '../../server/dispatch/ledger.js';
 import { pickSession } from '../../server/runs/record.js';
-import { accountLabelOf, accountsSummary, checkAccountLabel, cleanAccountLabels } from '../../shared/dispatch/accounts.js';
+import { accountLabelOf, accountsSummary, checkAccountLabel, cleanAccountLabels } from '../../shared/dispatch/accounts.ts';
 import { fakeCliBin, fakeSpawner, until } from '../fixtures/fake-cli/index.mjs';
 
 const dirs = [];

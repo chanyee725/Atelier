@@ -14,7 +14,7 @@ import { replyStyle } from "./style.js";
 import { checkLane, etaHint, laneItems, recordRunTime } from "./lanes.js";
 import { codexGuard, effectiveRoles, teamSettings } from "./settings.js";
 import { codexLimits, geminiResetFrom, geminiUsage, isQuotaError, SharedLimits } from "./limits.js";
-import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.js";
+import { recordState, trimToWindow, WINDOW_MS } from "../../shared/dispatch/timeline.ts";
 import { askOf, attentionOf, checkKey, ctxOver, ctxShare, longOver, mtokens, recordCheck, sessionState, sessionStuck, stuckSig, taskStuck } from "./state.js";
 import { AGENT_COLORS, pickColor } from "./colors.js";
 import { deriveFolder } from "./session-folder.js";

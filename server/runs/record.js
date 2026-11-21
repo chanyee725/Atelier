@@ -2,7 +2,7 @@
 // Metadata only: step states, times, model, token counts, cost, branch, commit, PR number.
 // Never transcripts, prompts, a session's answers, questions, tool output, emails or keys.
 
-import { checkAccountLabel } from '../../shared/dispatch/accounts.js';
+import { checkAccountLabel } from '../../shared/dispatch/accounts.ts';
 
 export const RECORD_VERSION = 1;
 export const RUN_ID = /^\d{13}-[0-9a-f]{6,16}$/;

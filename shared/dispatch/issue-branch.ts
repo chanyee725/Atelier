@@ -10,7 +10,7 @@ const TYPES = "feat|fix|docs|chore|refactor|test|perf|ci|build|style|revert|hotf
 const BRANCH = new RegExp(`^(?:${TYPES})/(?:issue-|gh-)?(\\d{1,7})(?!-\\d{1,2}-\\d{1,2}(?:\\D|$))(?:-|$)`, "i");
 
 /** The issue number a branch names, else null. */
-export function issueOfBranch(branch) {
+export function issueOfBranch(branch: string | null | undefined): number | null {
   if (typeof branch !== "string") return null;
   const m = branch.match(BRANCH);
   const n = m ? Number(m[1]) : 0;

@@ -14,7 +14,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { ACCOUNT_KEYS, checkAccountLabel, cleanAccountLabels } from '../shared/dispatch/accounts.js';
+import { ACCOUNT_KEYS, checkAccountLabel, cleanAccountLabels } from '../shared/dispatch/accounts.ts';
 import { userDir } from './dispatch/paths.js';
 import { isObj } from '../shared/is-obj.ts';
 

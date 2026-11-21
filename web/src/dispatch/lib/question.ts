@@ -1,6 +1,6 @@
 // Reads the question a session ended its turn with, for the "답할 것" card.
-// Pure (its only import is shared/dispatch/ask.js); the text it reads stays in the browser.
-import { ITEM, askIndex, linesOf, plain } from '../../../../shared/dispatch/ask.js';
+// Pure (its only import is shared/dispatch/ask.ts); the text it reads stays in the browser.
+import { ITEM, askIndex, linesOf, plain } from '../../../../shared/dispatch/ask.ts';
 
 export interface Question {
   /** The asking line, markdown stripped. */
