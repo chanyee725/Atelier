@@ -4,7 +4,6 @@
 import { PROVIDERS } from '../../modelConnect.ts';
 
 export type ModelOption = { id: string; label: string; provider: string };
-export type RoleLike = { id: string; name: string; model: string };
 type ProviderLike = { name?: string; connected?: boolean } | undefined;
 
 /** Korean subject particle for a name (Codex가, ...): 이 after a final consonant in Hangul, else 가. */

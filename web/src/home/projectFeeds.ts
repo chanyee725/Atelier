@@ -63,9 +63,6 @@ export function useProjectState(folder: string): { sessions: Feed<Session[]>; ta
   return state;
 }
 
-/** The project's sessions only (see useProjectState). */
-export const useProjectSessions = (folder: string): Feed<Session[]> => useProjectState(folder).sessions;
-
 export type BranchTip = { branch: string; ahead: number; behind: number; lastAt: number | null; state: 'open' | 'merged' | 'empty' | null; base: boolean; active?: boolean };
 export type Branches = { base: string; tips: ReadonlyMap<string, BranchTip> };
 

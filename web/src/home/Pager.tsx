@@ -5,49 +5,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { clampPage, pageCount, pageSlice, pagerItems, rowsThatFit } from './paging';
 
-type Fit = {
-  /** One row's height in px, divider included. */
-  rowHeight: number;
-  /** Space kept below the list (pager, card and page padding), px. */
-  reserve: number;
-  min: number;
-  max: number;
-  /** True while the list is on screen; the observers attach when it turns true. */
-  active: boolean;
-};
-
-/**
- * Rows a page that fit between the list's top and the bottom of its scroll pane (the closest <main>, else the window),
- * measured again when the window or the list's column resizes.
- */
-export function useFitRows(ref: RefObject<HTMLElement | null>, { rowHeight, reserve, min, max, active }: Fit): number {
-  const [size, setSize] = useState(max);
-  const measure = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const pane = el.closest('main');
-    const paneTop = pane ? pane.getBoundingClientRect().top : 0;
-    const paneHeight = pane ? pane.clientHeight : window.innerHeight;
-    // Distance from the pane's content top, so a scrolled pane measures the same as an unscrolled one.
-    const top = el.getBoundingClientRect().top - paneTop + (pane?.scrollTop ?? 0);
-    setSize(rowsThatFit(paneHeight - top - reserve, rowHeight, min, max));
-  }, [ref, rowHeight, reserve, min, max]);
-  useLayoutEffect(measure);
-  useEffect(() => {
-    const el = ref.current;
-    // The pane (window-driven) and the column (a card above growing moves the list down).
-    const watched = [el?.closest('main'), el?.closest('[role=region]')].filter((x): x is Element => !!x);
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure());
-    for (const w of watched) ro?.observe(w);
-    window.addEventListener('resize', measure);
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, [ref, measure, active]);
-  return size;
-}
-
 /**
  * Rows a page that fit in `ref`'s own height (#819), for a list box that fills the rest of its card. Measured only while
  * the box scrolls (overflow-y auto: the dashboard side by side); otherwise, e.g. stacked on a phone where the box is as

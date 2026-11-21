@@ -1,17 +1,15 @@
 // Client for the E1 workspace API (docs/workspace-api.md).
 // Node position overrides for a block (docs/design/block-drag-edit.md §2.1). Keys of `items` are node or empty-group names.
-export type { BlockLayout } from '../../shared/render/block-layout.ts';
 import type { BlockLayout } from '../../shared/render/block-layout.ts';
 import type { BlockCode } from '../../shared/render/block-code.ts';
-export type { BlockCode } from '../../shared/render/block-code.ts';
 // Newest file format this web build understands; a 422 on a file above it means a newer app wrote it.
 export const FILE_FORMAT_VERSION = 6;
 // Pipeline steps (format v4). The web only carries it through saves for now; docs/workspace-api.md "Pipeline `plan`".
-export type { Plan, PlanStep } from '../../shared/dispatch/plan.ts';
+export type { Plan } from '../../shared/dispatch/plan.ts';
 import type { UsageDay } from '../../shared/dispatch/types.ts';
 import type { Plan } from '../../shared/dispatch/plan.ts';
 import type { Discussion, Discussions } from '../../shared/dispatch/discussions.ts';
-export type { Discussion, Discussions } from '../../shared/dispatch/discussions.ts';
+export type { Discussion } from '../../shared/dispatch/discussions.ts';
 export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; codeRefs?: BlockCode; frameId?: string };
 export type DpxFile = {
   version: number;
@@ -145,8 +143,6 @@ export type WorkspaceFolders = {
   switchable: boolean;
   error: string | null;
 };
-/** Sub-folder names of a folder on the server machine (GET /api/local-folders, E554). `parent` is null at the root. */
-export type LocalFolders = { path: string; parent: string | null; home: string; root: string; sep: string; folders: string[]; truncated: boolean };
 
 export const api = {
   /** `project`: the git project's folder name when the server sends it (#773); else the workspace folder's name. */
@@ -192,17 +188,8 @@ export const api = {
     call<DpxFile>('PUT', `/api/file${q(path)}`, f, keepalive),
   /** `withSubdocs`: the document's sub-documents folder (`X/` next to `X.dpx.json`) goes to the trash with it. */
   removeFile: (path: string, withSubdocs = false) => call<unknown>('DELETE', `/api/file${q(path)}${withSubdocs ? '&withSubdocs=1' : ''}`),
-  createFolder: (path: string) => call<unknown>('POST', '/api/folder', { path }),
-  /** Folder picker for 새 프로젝트: no path = the server user's home folder. */
-  localFolders: (path?: string) => call<LocalFolders>('GET', `/api/local-folders${path ? q(path) : ''}`),
   /** The workspace folders this server can switch between (E554); the open one has `current`. */
   workspaces: () => call<WorkspaceFolders>('GET', '/api/workspaces'),
-  /** Adds a server folder to the list and switches the server to it. Reload the page afterwards. */
-  addWorkspace: (path: string) => call<WorkspaceFolders>('POST', '/api/workspaces', { path }),
-  /** Switches the server to a folder already in the list. Reload the page afterwards. */
-  openWorkspace: (path: string) => call<WorkspaceFolders>('POST', '/api/workspaces/open', { path }),
-  /** Takes a folder off the list; its files stay. */
-  removeWorkspace: (path: string) => call<WorkspaceFolders>('DELETE', `/api/workspaces${q(path)}`),
   removeFolder: (path: string) => call<unknown>('DELETE', `/api/folder${q(path)}`),
   history: (path: string) => call<{ versions: HistoryEntry[] }>('GET', `/api/history${q(path)}`).then((r) => r.versions),
   historyVersion: (path: string, id: string) => call<HistoryVersion>('GET', `/api/history/version${q(path)}&id=${encodeURIComponent(id)}`),

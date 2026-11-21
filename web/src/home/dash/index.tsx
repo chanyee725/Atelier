@@ -141,42 +141,6 @@ export function CardGrid({ children, label }: { children: ReactNode; label?: str
 }
 
 /**
- * One cell of a <CardGrid>: icon and main line on top, then the muted second line, then the meta line. Same props as
- * <CardRow>; `onClick` or `href` makes the whole tile the target.
- * `footer` (#747) sits under the target inside the same frame, outside the link or button, so it can hold its own
- * controls (e.g. a <details>).
- */
-export function CardTile({ icon, title, sub, meta, onClick, href, className, data, footer }: { icon?: ReactNode; title: ReactNode; sub?: ReactNode; meta?: ReactNode; onClick?: () => void; href?: string; className?: string; data?: string; footer?: ReactNode }) {
-  const body = (
-    <>
-      <span className="flex min-w-0 items-center gap-2">
-        {icon && <span aria-hidden className="grid size-4 shrink-0 place-items-center text-muted-foreground [&_svg]:size-3.5">{icon}</span>}
-        <span className="min-w-0 truncate text-sm">{title}</span>
-      </span>
-      {sub && <span className="block truncate text-xs text-muted-foreground">{sub}</span>}
-      {meta && <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground tabular-nums">{meta}</span>}
-    </>
-  );
-  // With a footer the frame (border) moves to the cell and the target fills its top part.
-  const cls = cn('grid w-full min-w-0 content-start gap-1 rounded-card px-3 py-2 text-left', footer ? 'grow' : 'h-full bg-background');
-  const hit = 'hover:bg-accent/60 focus-visible:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none';
-  const target = href ? (
-    <a href={href} target="_blank" rel="noreferrer" className={cn(cls, hit, 'text-inherit no-underline')}>{body}</a>
-  ) : onClick ? (
-    <button type="button" onClick={onClick} className={cn(cls, hit)}>{body}</button>
-  ) : (
-    <div className={cls}>{body}</div>
-  );
-  return (
-    // An open <details> in the footer widens the tile to the whole row, so its list is not squeezed into a third.
-    <li data-row={data} className={cn('min-w-0', footer && 'flex flex-col rounded-card bg-background has-[details[open]]:col-span-full', className)}>
-      {target}
-      {footer}
-    </li>
-  );
-}
-
-/**
  * One row: leading icon, a main line and a muted second line, trailing meta. Pass `onClick` (a button) or `href`
  * (a link) to make the whole row the target.
  */
@@ -215,15 +179,6 @@ export function Stat({ value, label, tone }: { value: ReactNode; label: ReactNod
         {value}
       </div>
       <div className="truncate text-xs text-muted-foreground">{label}</div>
-    </div>
-  );
-}
-
-/** A row of <Stat>s. */
-export function StatRow({ children, label }: { children: ReactNode; label?: string }) {
-  return (
-    <div role="group" aria-label={label} className="grid grid-cols-[repeat(auto-fit,minmax(6rem,1fr))] gap-4">
-      {children}
     </div>
   );
 }

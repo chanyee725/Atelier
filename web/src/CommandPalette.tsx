@@ -8,9 +8,6 @@ import { FolderClosed, X } from 'lucide-react';
 import { cn } from './lib/utils';
 import { filterCommands, groupCommands, type Command as Cmd } from './commands';
 
-export { filterCommands } from './commands';
-export type { Command } from './commands';
-
 type Props = {
   commands: Cmd[];
   onClose: () => void;

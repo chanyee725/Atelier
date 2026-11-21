@@ -4,7 +4,6 @@
 // the PR's branch stand in.
 import { useEffect, useState } from 'react';
 import { isOpen, totalTok } from '../dispatch/lib/format.ts';
-import { issueOfBranch } from './issueBoard.ts';
 import { shownAccount, type AccountLabels } from '../accountLabels';
 import type { IssueSession as ApiIssueSession } from '../../../shared/dispatch/accounts.js';
 import type { Session } from '../../../shared/dispatch/types.ts';
@@ -13,10 +12,6 @@ import type { IssueSession } from './issueTotals.ts';
 export { fmtDuration, providersOf, totals, type IssueSession } from './issueTotals.ts';
 
 export { issueOfBranch } from './issueBoard.ts';
-
-/** The issue of a PR's branch: a session's own `issue` when the server set one, else the branch name. */
-export const issueOf = (sessions: readonly Session[], branch: string) =>
-  sessions.find((s) => s.branch === branch && s.issue)?.issue ?? issueOfBranch(branch);
 
 /** The live sessions on one branch (the stand-in before the server's list arrives). */
 export function fromSessions(sessions: readonly Session[], branch: string, labels: AccountLabels): IssueSession[] {
