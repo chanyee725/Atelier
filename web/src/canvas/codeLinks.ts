@@ -181,9 +181,17 @@ export type Badge = { blockId: string; node: string; label: string; x: number; y
 export type BadgeEl = SceneEl & { opacity?: number; angle?: number; fileId?: string | null; containerId?: string | null; text?: string };
 export type BadgeView = { scrollX: number; scrollY: number; zoom: { value: number }; offsetLeft: number; offsetTop: number };
 
+/** A badge's box on screen (px, `</>` in the 2xs mono face plus padding): badges closer than this overlap. */
+export const BADGE_W = 28;
+export const BADGE_H = 16;
+/** A block node narrower than this on screen gets no badge (#1043): at a small zoom it would cover the node. */
+export const BADGE_MIN_NODE_PX = 40;
+
 /**
  * Badges for the nodes with code of every block picture on the canvas (rotated, hidden or deleted images, the
  * block in edit mode and later copies of a block are skipped). Free-form shapes with code get one too.
+ * Zoomed out, a block's nodes get too small for their badges and the badges pile up (#1043): a node narrower than
+ * BADGE_MIN_NODE_PX gets none, and a badge that would overlap one placed before it is left out.
  */
 export function placeBadges(
   els: readonly BadgeEl[],
@@ -213,11 +221,18 @@ export function placeBadges(
     seen.add(blockId);
     const f = layoutFrame(e, { width: pic.width, origin: { x: 0, y: 0 } }, view);
     for (const h of pic.scene.handles) {
-      if (h.kind !== 'node' || !Object.hasOwn(info.nodes, h.id)) continue;
+      if (h.kind !== 'node' || !Object.hasOwn(info.nodes, h.id) || h.w * f.k < BADGE_MIN_NODE_PX) continue;
       out.push({ blockId, node: h.id, label: h.id, x: f.x + (h.x + h.w) * f.k, y: f.y + h.y * f.k });
     }
   }
-  return out;
+  return apart(out);
+}
+
+/** `list` without the badges that overlap an earlier one. */
+function apart(list: Badge[]): Badge[] {
+  const kept: Badge[] = [];
+  for (const b of list) if (!kept.some((k) => Math.abs(k.x - b.x) < BADGE_W && Math.abs(k.y - b.y) < BADGE_H)) kept.push(b);
+  return kept;
 }
 
 export const sameBadges = (a: readonly Badge[], b: readonly Badge[]) =>

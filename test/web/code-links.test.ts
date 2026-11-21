@@ -179,3 +179,17 @@ test('BPMN blocks: nodes in lanes carry their code and labels (#841)', () => {
   assert.deepEqual(info.nodes.Call!.refs, [{ path: 'src/call.ts', start: 3, end: 9 }]);
   assert.deepEqual(info.orphans, []);
 });
+
+test('zoomed out, block node badges skip nodes too small for them and never overlap (#1043)', () => {
+  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 100, h: 30 }, { kind: 'node', id: 'Api', x: 130, y: 20, w: 100, h: 30 }] } };
+  const two: BlockCodeInfo = { ...info, nodes: { ...info.nodes, Api: info.nodes.Web! } };
+  const image = { id: 'img', type: 'image', customData: { blockId: 'b1' }, x: 0, y: 0, width: 400, height: 200, fileId: 'f' };
+  const at = (zoom: number) => placeBadges([image] as never, { scrollX: 0, scrollY: 0, zoom: { value: zoom }, offsetLeft: 0, offsetTop: 0 }, { left: 0, top: 0 }, () => two, () => pic as never, null);
+  assert.deepEqual(at(1).map((b) => b.node), ['Web', 'Api'], 'at 100% both nodes get a badge');
+  assert.deepEqual(at(0.3), [], 'a 30px node gets none');
+  // Two shapes with code side by side: the second badge would sit on the first, so it is left out.
+  const s1 = { ...SHAPE, id: 'a', x: 0, y: 0, width: 60, height: 20 };
+  const s2 = { ...SHAPE, id: 'b', x: 10, y: 2, width: 60, height: 20 };
+  const out = placeBadges([s1, s2] as never, { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 }, { left: 0, top: 0 }, () => undefined, () => undefined, null);
+  assert.deepEqual(out.map((b) => b.node), ['a']);
+});
