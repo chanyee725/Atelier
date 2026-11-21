@@ -132,11 +132,11 @@ function Owners({ sessions }: { sessions: Session[] }) {
     <span data-issue-owners className="flex shrink-0 items-center" title={names}>
       <span className="sr-only">맡은 세션 {names}</span>
       {shown.map((s) => (
-        <span key={s.id} aria-hidden className="-ml-1 grid size-5 place-items-center rounded-full bg-muted text-[9px] font-semibold text-foreground ring-2 ring-card first:ml-0">
+        <span key={s.id} aria-hidden className="-ml-1 grid size-5 place-items-center rounded-full bg-muted text-2xs font-semibold text-foreground ring-2 ring-card first:ml-0">
           {initials(s.name)}
         </span>
       ))}
-      {sessions.length > 3 && <span aria-hidden className="ml-1 text-[11px] text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
+      {sessions.length > 3 && <span aria-hidden className="ml-1 text-2xs text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
     </span>
   );
 }

@@ -34,7 +34,7 @@ export function IssueSessionList({ sessions, issue = null, onToggle, now = Date.
             <ProviderIcon key={p} provider={p} className="size-3" />
           ))}
         </span>
-        <span className="ml-auto shrink-0 pl-1 text-[13px] font-semibold text-foreground tabular-nums">{fmtUsd(sum.cost)}</span>
+        <span className="ml-auto shrink-0 pl-1 text-xs font-semibold text-foreground tabular-nums">{fmtUsd(sum.cost)}</span>
       </summary>
       <ul className="m-0 mt-2 grid list-none grid-cols-1 gap-1.5 p-0 sm:grid-cols-[repeat(auto-fill,minmax(13rem,1fr))]">
         {sessions.map((s) => (
@@ -44,7 +44,7 @@ export function IssueSessionList({ sessions, issue = null, onToggle, now = Date.
               <span className="sr-only">{providerName(s.provider)} </span>
               <span className="shrink-0 font-medium text-foreground">{ROLE[s.role] ?? s.role}</span>
               {s.shared && (
-                <span data-issue-shared className="shrink-0 rounded-full bg-background px-1.5 text-[10px] leading-4 text-muted-foreground" title="다른 이슈와 함께 쓴 세션이라 합계에서 빼요">
+                <span data-issue-shared className="shrink-0 rounded-full bg-background px-1.5 text-2xs leading-4 text-muted-foreground" title="다른 이슈와 함께 쓴 세션이라 합계에서 빼요">
                   공유
                 </span>
               )}

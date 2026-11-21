@@ -35,7 +35,7 @@ function HistoryRow({ chat }: { chat: ChatSummary }) {
       >
         <MessageSquare className="size-[15px]! text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate">{title}</span>
-        <time className="shrink-0 text-[11px] tabular-nums text-muted-foreground" dateTime={new Date(chat.updatedAt).toISOString()}>
+        <time className="shrink-0 text-2xs tabular-nums text-muted-foreground" dateTime={new Date(chat.updatedAt).toISOString()}>
           {ago(chat.updatedAt)}
         </time>
       </SidebarMenuButton>

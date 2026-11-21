@@ -17,7 +17,7 @@ export function AgentTag({ agent, size = 'md', className }: { agent: Pick<AgentP
       <span
         className={cn(
           'truncate rounded-[5px] bg-[var(--agent)] font-medium text-white',
-          size === 'sm' ? 'mt-[5px] -ml-px px-1.5 text-[11px] leading-4' : 'mt-[7px] -ml-0.5 px-[7px] text-[13px] leading-5',
+          size === 'sm' ? 'mt-[5px] -ml-px px-1.5 text-2xs leading-4' : 'mt-[7px] -ml-0.5 px-[7px] text-xs leading-5',
         )}
       >
         {agent.name}
@@ -45,7 +45,7 @@ export function RoleBadge({ agent, className }: { agent: Pick<AgentPresence, 'ro
       data-role-tone={tone}
       style={{ '--role': ROLE_COLOR[tone] } as CSSProperties}
       className={cn(
-        'inline-flex h-[18px] max-w-full min-w-0 items-center rounded-[5px] bg-[color-mix(in_oklch,var(--role)_13%,transparent)] px-1.5 text-[11px] leading-none font-medium text-[color-mix(in_oklch,var(--role)_60%,var(--foreground))] [transform:translateZ(0)]',
+        'inline-flex h-[18px] max-w-full min-w-0 items-center rounded-[5px] bg-[color-mix(in_oklch,var(--role)_13%,transparent)] px-1.5 text-2xs leading-none font-medium text-[color-mix(in_oklch,var(--role)_60%,var(--foreground))] [transform:translateZ(0)]',
         className,
       )}
     >

@@ -183,7 +183,7 @@ function Axis({ geo, bucketMs, labelMs, trackRef }: { geo: Geo; bucketMs: number
   return (
     <div aria-hidden className={cn('grid', COLS)}>
       <span className="@max-[560px]:hidden" />
-      <div ref={trackRef} data-axis className="relative h-5 text-[11px] leading-4 text-muted-foreground tabular-nums">
+      <div ref={trackRef} data-axis className="relative h-5 text-2xs leading-4 text-muted-foreground tabular-nums">
         {width > 0 && gridTicks(now, windowMs, width, bucketMs).map(x => (
           <span key={x} data-tick className="absolute top-0 h-1 w-px bg-border" style={{ left: x }} />
         ))}
@@ -203,7 +203,7 @@ function Axis({ geo, bucketMs, labelMs, trackRef }: { geo: Geo; bucketMs: number
 function Updated({ at, now }: { at: number | null; now: number }) {
   if (at === null) return null;
   return (
-    <p data-updated className={cn('grid text-[11px] leading-4 text-muted-foreground', COLS)}>
+    <p data-updated className={cn('grid text-2xs leading-4 text-muted-foreground', COLS)}>
       <span className="@max-[560px]:hidden" />
       <span className="flex items-center justify-end gap-1.5 tabular-nums">
         <span key={at} aria-hidden className="size-1.5 rounded-full bg-ok forced-colors:bg-[CanvasText] motion-safe:animate-[timeline-blink_600ms_ease-out_1]" />

@@ -14,7 +14,7 @@
   min-height: 0;
   background: var(--background);
   color: var(--foreground);
-  font-size: 13px;
+  font-size: var(--text-xs);
   line-height: 1.45;
   block-size: 100%;
   max-block-size: inherit;
@@ -32,7 +32,7 @@
   border-block-end: 1px solid var(--border);
 }
 .margin-panel[data-collapsed] .margin-head { border-block-end: 0; padding: 0; }
-.margin-title { flex: 1; min-width: 0; margin: 0; font-size: 12px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.margin-title { flex: 1; min-width: 0; margin: 0; font-size: var(--text-2xs); font-weight: 500; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .margin-toggle,
 .margin-rail,
 .margin-sheet-bar,
@@ -86,7 +86,7 @@
 }
 .margin-sheet-bar:hover { background: var(--accent); }
 .margin-sheet-dots { display: flex; align-items: center; gap: 4px; }
-.margin-dots-more { font-size: 10.5px; line-height: 1; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.margin-dots-more { font-size: var(--text-2xs); line-height: 1; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .margin-sheet-bar .margin-title { flex: 0 1 auto; }
 .margin-sheet-doing { flex: 1; min-width: 0; color: var(--margin-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .margin-toggle-icon { inline-size: 15px; block-size: 15px; color: var(--muted-foreground); flex: none; }
@@ -101,7 +101,7 @@
   gap: 6px;
   margin: 0;
   padding: 10px 14px 2px;
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--muted-foreground);
 }
@@ -131,7 +131,7 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--margin-ink);
 }
@@ -160,15 +160,15 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
 
 /* Details of one agent, indented past its dot. */
 .margin-detail { padding: 0 14px 12px 30px; }
-.margin-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; color: var(--muted-foreground); }
+.margin-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: var(--text-2xs); color: var(--muted-foreground); }
 .margin-model { flex: none; display: inline-flex; align-items: center; gap: 4px; }
 .margin-model svg { inline-size: 12px; block-size: 12px; }
 
 /* Small labels over "지금" and "최근 단계". */
-.margin-label { display: block; font-size: 11px; font-weight: 500; color: var(--muted-foreground); margin-block-end: 2px; }
+.margin-label { display: block; font-size: var(--text-2xs); font-weight: 500; color: var(--muted-foreground); margin-block-end: 2px; }
 .margin-now { margin: 6px 0 0; }
 .margin-doing { margin: 0; text-wrap: pretty; }
-.margin-sub { margin: 2px 0 0; font-size: 12px; color: var(--muted-foreground); }
+.margin-sub { margin: 2px 0 0; font-size: var(--text-2xs); color: var(--muted-foreground); }
 .margin-steps { margin: 10px 0 0; }
 .margin-steps .margin-changes { margin-inline-start: -12px; }
 
@@ -181,7 +181,7 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   border: 0;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-2xs);
   color: var(--muted-foreground);
   text-align: start;
   cursor: pointer;
@@ -196,7 +196,7 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   border-radius: 6px;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-2xs);
   color: var(--muted-foreground);
   cursor: pointer;
 }
@@ -249,11 +249,11 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   padding: 3px 6px 3px 14px;
   border-radius: 5px;
   text-align: start;
-  font-size: 12px;
+  font-size: var(--text-2xs);
 }
 .margin-change:hover { background: var(--accent); }
 .margin-change-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.margin-change-ago { flex: none; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.margin-change-ago { flex: none; font-size: var(--text-2xs); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 
 /* A jump outlines the agent's cursor (the block's flash is .doc-margin-flash, index.css). */
 .doc-agent-cursor[data-margin-flash] .agent-cursor-tag { animation: margin-flash-tag 1.6s ease-out; }
@@ -280,7 +280,7 @@ button.margin-name:focus-visible { outline: 2px solid var(--primary); outline-of
   border-radius: calc(var(--radius) - 2px);
   background: transparent;
   color: var(--foreground);
-  font-size: 11px;
+  font-size: var(--text-2xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   cursor: pointer;

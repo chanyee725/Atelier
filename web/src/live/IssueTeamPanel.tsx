@@ -76,7 +76,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now, closing = fal
       <header className="agent-live-head">
         <div className="grid min-w-0 gap-1.5">
           <PanelTrail steps={TRAIL.issues} current={`#${issue.number}`} onBack={closeIssueTeam} />
-          <h2 className="m-0 flex min-w-0 items-baseline gap-2 text-[13px] font-normal">
+          <h2 className="m-0 flex min-w-0 items-baseline gap-2 text-xs font-normal">
             <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">#{issue.number}</span>
             <span className="min-w-0 truncate text-sm font-semibold" title={issue.title}>{issue.title || '제목 없음'}</span>
           </h2>

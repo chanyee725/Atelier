@@ -311,7 +311,7 @@ export default function RolesSection() {
                               }}
                               className={cn('h-8 min-w-0 flex-1 rounded-control border border-(--line-strong) bg-card px-2 text-sm max-md:h-11', FOCUS)}
                             />
-                            {custom && <span className="shrink-0 rounded-full bg-(--sunken) px-2 text-[11px] text-muted-foreground">직접 씀</span>}
+                            {custom && <span className="shrink-0 rounded-full bg-(--sunken) px-2 text-2xs text-muted-foreground">직접 씀</span>}
                           </div>
                         </fieldset>
                       );

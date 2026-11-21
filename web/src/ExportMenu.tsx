@@ -34,8 +34,8 @@ type Props = {
 // (the raised background alone did not change). Below md the pills grow to a 40px touch target.
 const track = 'flex h-7 items-center rounded-md bg-muted p-0.5 max-md:h-11';
 const segment =
-  'h-6 flex-none justify-center rounded-[5px] border border-transparent px-2 text-[13px] text-muted-foreground max-md:h-10 max-md:px-3 focus:bg-background/60 focus:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-ring forced-colors:focus-visible:outline-[Highlight] data-[state=checked]:border-border data-[state=checked]:bg-background data-[state=checked]:font-medium data-[state=checked]:text-foreground data-[state=checked]:shadow-xs';
-const label = 'mr-auto px-1 text-[13px] text-muted-foreground';
+  'h-6 flex-none justify-center rounded-[5px] border border-transparent px-2 text-xs text-muted-foreground max-md:h-10 max-md:px-3 focus:bg-background/60 focus:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-ring forced-colors:focus-visible:outline-[Highlight] data-[state=checked]:border-border data-[state=checked]:bg-background data-[state=checked]:font-medium data-[state=checked]:text-foreground data-[state=checked]:shadow-xs';
+const label = 'mr-auto px-1 text-xs text-muted-foreground';
 
 export function ExportMenu({ open, onOpen, canvasReady, selected, options, onOptions, onImage, onMarkdown, pdfScope, onPdf, disabled, narrow }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -99,7 +99,7 @@ export function ExportMenu({ open, onOpen, canvasReady, selected, options, onOpt
               ))}
               </DropdownMenuRadioGroup>
             </div>
-            <DropdownMenuCheckboxItem data-export-transparent checked={options.transparent} className="h-7 text-[13px]" onCheckedChange={(c) => onOptions({ ...options, transparent: c === true })} onSelect={(e) => e.preventDefault()}>
+            <DropdownMenuCheckboxItem data-export-transparent checked={options.transparent} className="h-7 text-xs" onCheckedChange={(c) => onOptions({ ...options, transparent: c === true })} onSelect={(e) => e.preventDefault()}>
               배경을 투명하게
             </DropdownMenuCheckboxItem>
           </div>
@@ -108,7 +108,7 @@ export function ExportMenu({ open, onOpen, canvasReady, selected, options, onOpt
             <DropdownMenuItem key={it.id} data-export={it.id} disabled={it.off} onSelect={() => it.run()} className="items-start max-md:min-h-11">
               <div className="flex min-w-0 flex-1 flex-col">
                 <span>{it.label}</span>
-                <span className="text-[13px] leading-[18px] text-muted-foreground">{it.off ? '캔버스가 보이는 보기에서 쓸 수 있어요' : it.hint}</span>
+                <span className="text-xs leading-[18px] text-muted-foreground">{it.off ? '캔버스가 보이는 보기에서 쓸 수 있어요' : it.hint}</span>
               </div>
               {it.kbd && <Kbd className="mt-0.5 shrink-0">{it.kbd}</Kbd>}
             </DropdownMenuItem>

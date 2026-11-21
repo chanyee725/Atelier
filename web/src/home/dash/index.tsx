@@ -105,7 +105,7 @@ export function CardHeader({ id, title, count, actions, hint, lead }: { id?: str
   return (
     <header className="flex min-h-[44px] items-center gap-2 px-4 pt-2.5 pb-1.5">
       <div className={cn('min-w-0', lead && 'sr-only')}>
-        <h2 id={id} className="m-0 flex items-baseline gap-2 text-[13px] font-semibold">
+        <h2 id={id} className="m-0 flex items-baseline gap-2 text-xs font-semibold">
           <span className="truncate">{title}</span>
           {count !== undefined && <span className="font-normal text-muted-foreground tabular-nums">{count}</span>}
         </h2>

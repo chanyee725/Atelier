@@ -77,7 +77,7 @@ export function CreateSessionDialog({ folder, onClose, onCreated }: { folder?: s
         onSubmit={e => { e.preventDefault(); if (!busy) void submit(); }}
       >
         <header className="px-5 pt-5 pb-1">
-          <h2 id={titleId} className="text-[15px] font-semibold">새 세션</h2>
+          <h2 id={titleId} className="text-base font-semibold">새 세션</h2>
           {project.name && <p className="mt-1 truncate text-sm text-muted-foreground"><span className="font-medium text-foreground">{project.name}</span>에서 실행돼요</p>}
         </header>
 
