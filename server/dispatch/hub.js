@@ -4,7 +4,7 @@ import path from "node:path";
 import { runCli, spawnCli } from "./cli.js";
 import { redact } from "./redact.js";
 import { branchStatus, dropWorktree, integrationBranch, prepareWorkdir, verifyMerged } from "./git.js";
-import { enterStage } from "./tasks.js";
+import { defaultStageEta, enterStage } from "./tasks.js";
 import { AUTO_CLOSE_STAGES, closeEvidence } from "./task-close.js";
 import { NAMES } from "./roles.js";
 import { MODE_IDS } from "./mode-profiles.js";
@@ -363,6 +363,7 @@ export class Hub extends EventEmitter {
       if (why) throw Object.assign(new Error(why), { status: 409 });
     }
     let t = (input.id && all[input.id]) || Object.values(all).find(x => x.lead === lead && x.title === title && x.stage !== "done");
+    let created = false;
     if (!t) {
       if (!title) throw new Error("title이 필요해요");
       // Closing work by creating a fresh "done" task left the real one open with a stale eta.
@@ -373,6 +374,7 @@ export class Hub extends EventEmitter {
       const now = Date.now();
       t = { id: randomUUID(), lead, title, stage: "plan", createdAt: now, stageAt: now, stages: [{ stage: "plan", at: now }], owner: null, etaAt: null, note: "" };
       all[t.id] = t;
+      created = true;
     }
     if (title) t.title = title;
     if (input.commit !== undefined) t.commit = input.commit ? String(input.commit).trim().slice(0, 80) || null : null;
@@ -397,6 +399,10 @@ export class Hub extends EventEmitter {
     if (input.eta_minutes !== undefined) {
       t.etaAt = input.eta_minutes == null ? null : Date.now() + Math.max(0, Number(input.eta_minutes)) * 60_000;
       t.etaSetAt = t.etaAt ? Date.now() : null;
+      t.etaEstimated = false;
+    } else if (stage || created) {
+      // A stage entered without eta_minutes gets this project's median for it (#1028); no history keeps it empty.
+      defaultStageEta(t, Object.values(all));
     }
     if (t.stage === "done") t.etaAt = null;
     if (input.note !== undefined) t.note = redact(String(input.note || "")).slice(0, 200);
