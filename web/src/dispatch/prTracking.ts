@@ -1,4 +1,4 @@
-// PR/CI tracking switch logic shared by the workspace settings and the run screen's PrTrackingToggle (#425), over the
+// PR/CI tracking switch logic used by the workspace settings (#425), over the
 // /api/workspace/pr-tracking route. Framework-free so it is unit-tested without a DOM (test/web/pr-tracking.test.ts);
 // the React hook is in usePrTracking.ts.
 import { api, ApiError } from '../api.ts';
