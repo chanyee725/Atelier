@@ -14,6 +14,11 @@ installed() { command -v "$1" >/dev/null 2>&1; }
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 home=${DRAWING_HOME:-$(cd "$here/../../../.." && pwd -P)}
+if [ -z "${DRAWING_HOME:-}" ] && [ ! -f "$home/server/index.js" ]; then
+  # A plugin copy in Claude Code's or Codex's plugin cache: fall back to the installed release (atelier-update).
+  inst="${DRAWING_INSTALL_BASE:-$HOME/.dispatch/drawing}/current"
+  if [ -f "$inst/server/index.js" ]; then home=$(cd "$inst" && pwd -P); fi
+fi
 
 # A release bundle ships public/ built; a git checkout needs npm ci + npm run build once (and after updates that
 # remove public/). Output goes to stderr so --install can be chained with other commands.
