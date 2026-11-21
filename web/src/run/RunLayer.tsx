@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendOpen, legendScale, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendOpen, legendScale, legendSpot, MARK_INSET, nodeBoxes, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -175,7 +175,8 @@ export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number)
 }
 
 /**
- * The canvas legend: one card under the picture (`legendSpot`, #987), never over a node, with the progress, the
+ * The canvas legend: one card under the picture, or at the pane's bottom when that is below the fold (`legendSpot`,
+ * #987, #1005), never over a node, with the progress, the
  * per-agent time left (the document shows the same rows in its card under the picture) and the legend. Measured
  * after it renders so the clamp knows its size, and scaled with the picture between 80% and 100% (`legendScale`).
  * Shown only when the board is (`boardShown`), like the document's.
@@ -185,6 +186,7 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   const [size, setSize] = useState<Size | null>(null);
   const shown = useMemo(() => boardShown(scene, steps), [scene, steps]);
   const etas = useMemo(() => etaPanel(steps), [steps]);
+  const boxes = useMemo(() => nodeBoxes(scene, left, top, scale), [scene, left, top, scale]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -198,7 +200,7 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   const pic = { left, top, width: scene.width * scale, height: scene.height * scale };
   // Scaled with the picture (#987); the transform leaves the measured size alone, so place it by the scaled size.
   const k = legendScale(scale);
-  const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12) : null;
+  const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12, 0, boxes) : null;
   // The individual `scale` property, set even at 1 so the stacking context never flips as the zoom changes.
   const zoom: CSSProperties = { scale: String(k), transformOrigin: '0 0' };
   return <RunLegend ref={ref} steps={steps} etas={etas} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;

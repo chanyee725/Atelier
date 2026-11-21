@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendOpen, legendScale, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendOpen, legendScale, legendSpot, liveTargets, nodeBoxes, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 import { RUN_BAND } from '../../shared/render/badge.ts';
 
@@ -150,22 +150,41 @@ test('boardShown: the legend shows only when a step links to a node', async () =
   assert.equal(boardShown(s, []), false);
 });
 
-test('legendSpot (#987): always under the picture, moved sideways into the overlay, never up over a node', () => {
+test('legendSpot (#987, #1005): under the picture when that is on screen, else pinned to the pane bottom clear of nodes', () => {
   const size = { width: 200, height: 120 };
   const area = { width: 1000, height: 700 };
   // Under the picture, lined up with its left edge (the label reach is left free).
   assert.deepEqual(legendSpot({ left: 100, top: 100, width: 300, height: 200 }, size, area, 12, 20), { left: 100, top: 332 });
-  // Picture at the bottom: still under it (below the fold), never left, right or above it.
+  // Picture at the bottom: the card would land below the fold, so it is pinned to the pane bottom instead (#1005).
   const bottom = { left: 400, top: 500, width: 300, height: 190 };
-  const p = legendSpot(bottom, size, area);
-  assert.deepEqual(p, { left: 400, top: 702 });
-  assert.ok(p.top >= bottom.top + bottom.height, 'never over the picture');
+  assert.deepEqual(legendSpot(bottom, size, area), { left: 400, top: 572 });
+  // A tall plan reaching past the bottom, one column of nodes: pinned beside the column, never over a node.
+  const tall = { left: 300, top: 40, width: 260, height: 1400 };
+  const column = Array.from({ length: 12 }, (_, i) => ({ left: 330, top: 60 + i * 115, width: 200, height: 90 }));
+  const p = legendSpot(tall, size, area, 12, 0, column);
+  assert.equal(p.top, 572, 'on the first screen');
+  assert.ok(p.top + size.height <= area.height);
+  for (const n of column) {
+    const hit = p.left < n.left + n.width && n.left < p.left + size.width && p.top < n.top + n.height && n.top < p.top + size.height;
+    assert.ok(!hit, `covers node at ${n.left},${n.top}`);
+  }
+  assert.deepEqual(p, { left: 118, top: 572 }, 'nearest clear spot to the picture\'s left edge');
+  // No clear spot at the bottom: stays under the picture (below the fold) rather than cover a node.
+  const wall = [{ left: 0, top: 500, width: 1000, height: 200 }];
+  assert.deepEqual(legendSpot({ left: 0, top: 0, width: 1000, height: 900 }, size, area, 12, 0, wall), { left: 8, top: 912 });
   // Picture past the right edge: moved left to stay inside the overlay.
   assert.deepEqual(legendSpot({ left: 900, top: 100, width: 300, height: 200 }, size, area), { left: 792, top: 312 });
   // Picture past the left edge: kept at the margin.
   assert.equal(legendSpot({ left: -50, top: 100, width: 1200, height: 200 }, size, area).left, 8);
-  // Picture scrolled up out of view: the card stays at the top margin instead of going off the pane.
-  assert.equal(legendSpot({ left: 10, top: -500, width: 300, height: 200 }, size, area).top, 8);
+  // Picture scrolled up out of view: the card goes with it instead of sitting over another block.
+  assert.equal(legendSpot({ left: 10, top: -500, width: 300, height: 200 }, size, area).top, -288);
+  // Picture below the fold: the card stays with it too.
+  assert.equal(legendSpot({ left: 10, top: 800, width: 300, height: 200 }, size, area).top, 1012);
+});
+
+test('nodeBoxes: node rects in overlay px with the mark band above each', () => {
+  const scene = { width: 400, height: 300, items: [{ kind: 'box', role: 'node', id: 'a', x: 50, y: 60, w: 100, h: 40 }], handles: [] } as never;
+  assert.deepEqual(nodeBoxes(scene, 10, 20, 2), [{ left: 110, top: 140 - 2 * RUN_BAND, width: 200, height: 80 + 2 * RUN_BAND }]);
 });
 
 test('eta panel (#735): working agents only, goal step left out, extra rows fold into +N', async () => {
