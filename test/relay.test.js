@@ -128,6 +128,26 @@ test('relay.sh run twice for one issue leaves one lead: the second run prints it
   }
 });
 
+test('relay.sh: the new team makes its own merge role; the old lead\'s merge role is removed, not reused', async () => {
+  const sessions = [...oldTeam(), { id: 'merge-a', name: 'Mia', role: 'merge', canSpawn: false, parent: 'lead-a', status: 'idle' }];
+  const stub = await stubServer({ sessions });
+  const tree = pluginTree();
+  try {
+    const r = await runScript(join(tree.scripts, 'relay.sh'), [tree.dir, 'Dino', 'small', 'Issue #1031'], { DISPATCH_PORT: String(stub.port) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(stub.posts[1].items.some((i) => i.role === 'merge'), 'the new team has a merge role');
+    assert.doesNotMatch(stub.posts[0].commonPrompt, /The merge role of this project is/);
+    assert.doesNotMatch(stub.posts[0].commonPrompt, /Mia/);
+    const merge = stub.sessions.filter((s) => s.role === 'merge');
+    assert.equal(merge.length, 1, 'only the new merge role is left');
+    assert.equal(merge[0].parent, 'id-1', 'it is the new lead\'s child');
+    assert.deepEqual(stub.sessions.map((s) => s.id).filter((id) => /-a$/.test(id)), [], 'the old team is gone');
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
+
 test('relay.sh with the issue already held still removes the old team it replaces, and starts nothing', async () => {
   const sessions = [...oldTeam(), { id: 'lead-n', name: 'Nova', role: 'lead', canSpawn: true, parent: null, status: 'running', issue: 1031 }];
   const stub = await stubServer({ sessions });

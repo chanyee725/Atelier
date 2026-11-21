@@ -122,4 +122,12 @@ test('a live merge role in the project is reused: the new team gets none and the
   assert.match(r.posts[0].commonPrompt, /The merge role of this project is Max/);
   const gone = await runTeam('small', {}, { sessions: [{ id: 'M', name: 'Max', role: 'merge', canSpawn: false, status: 'done' }] });
   assert.deepEqual(roles(gone.posts).slice(-1), ['merge']);
+  // A child of the lead being replaced (DISPATCH_TEAM_IGNORE_LEAD) is about to be removed, so it is not reused.
+  const relayed = await runTeam('small', { DISPATCH_TEAM_IGNORE_LEAD: 'L' }, { sessions: [
+    { id: 'L', name: 'Leo', role: 'lead', canSpawn: true, status: 'idle', parent: null },
+    { id: 'M', name: 'Max', role: 'merge', canSpawn: false, status: 'idle', parent: 'L' },
+  ] });
+  assert.equal(relayed.status, 0, relayed.stderr);
+  assert.deepEqual(roles(relayed.posts).slice(-1), ['merge']);
+  assert.doesNotMatch(relayed.posts[0].commonPrompt, /The merge role of this project is/);
 });

@@ -10,7 +10,8 @@
 # One team per issue (#1031): the issue is DISPATCH_TEAM_ISSUE, else the first #<n> in the task. When a live lead
 # already holds it (its sessions' issue, its session task line or an open board task names it), no team starts and
 # that lead's name is printed instead. DISPATCH_TEAM_IGNORE_LEAD (name or id) is left out of that check (relay.sh
-# passes the lead it replaces). Every session records the issue. A live merge role in the project is reused, not doubled.
+# passes the lead it replaces). Every session records the issue. A live merge role in the project is reused, not doubled,
+# unless it is a child of DISPATCH_TEAM_IGNORE_LEAD (relay.sh removes those).
 set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -83,11 +84,15 @@ if [ -n "$holder" ]; then
   echo "Issue #$issue already has a live lead ($holder); no new team started." >&2
   exit 0
 fi
-# One merge role per project: a live one stays the project's merger, so this team gets none.
+# One merge role per project: a live one stays the project's merger, so this team gets none. The ignored lead's
+# children do not count: relay.sh removes them once this team is up, so this team makes its own merge role.
 merger="$(node -e '
-  const s = (JSON.parse(process.argv[1]).sessions || []).find((x) => x.role === "merge" && ["starting", "running", "waiting", "idle"].includes(x.status));
+  const [raw, ignore] = process.argv.slice(1);
+  const sessions = JSON.parse(raw).sessions || [];
+  const old = ignore ? sessions.find((x) => x.id === ignore || x.name === ignore) : null;
+  const s = sessions.find((x) => x.role === "merge" && ["starting", "running", "waiting", "idle"].includes(x.status) && !(old && x.parent === old.id));
   if (s) console.log(s.name);
-' "$state")"
+' "$state" "${DISPATCH_TEAM_IGNORE_LEAD:-}")"
 if [ -n "$merger" ]; then
   items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter((i) => i.role !== "merge")))' "$items")"
 fi
