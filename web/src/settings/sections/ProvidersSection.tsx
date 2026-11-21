@@ -45,12 +45,14 @@ const ACTION_BTN = cn(
   FOCUS,
 );
 
-/** Logged-in emails per provider, asked again whenever a CLI's login state changes. Memory only. */
-function useAccounts(models: Models): Record<string, string | null> {
-  const [accounts, setAccounts] = useState<Record<string, string | null>>({});
+/** Logged-in emails per provider, asked again whenever a CLI's login state changes. Memory only.
+ *  `undefined` until the answer for the current login state arrives (the row then says it is checking). */
+function useAccounts(models: Models): Record<string, string | null> | undefined {
+  const [accounts, setAccounts] = useState<Record<string, string | null>>();
   const loggedIn = PROVIDERS.map((m) => (models.providers[m.id]?.cliLoggedIn ? '1' : '0')).join('');
   useEffect(() => {
     let live = true;
+    setAccounts(undefined);
     const load = () =>
       api.providerAccounts().then(
         (a) => live && setAccounts(a),
@@ -82,7 +84,7 @@ export default function ProvidersSection() {
       ) : (
         <ul className="flex flex-col gap-3">
           {PROVIDERS.map((meta) => (
-            <ProviderRow key={meta.id} meta={meta} models={models} email={accounts[meta.id] ?? null} describedBy={off ? offId : undefined} />
+            <ProviderRow key={meta.id} meta={meta} models={models} email={accounts ? (accounts[meta.id] ?? null) : undefined} describedBy={off ? offId : undefined} />
           ))}
         </ul>
       )}
@@ -90,7 +92,7 @@ export default function ProvidersSection() {
   );
 }
 
-function ProviderRow({ meta, models, email, describedBy }: { meta: ProviderMeta; models: Models; email: string | null; describedBy?: string }) {
+function ProviderRow({ meta, models, email, describedBy }: { meta: ProviderMeta; models: Models; email: string | null | undefined; describedBy?: string }) {
   const { status, limits } = models;
   const p = models.providers[meta.id];
   const enabled = !!status?.enabled;
@@ -275,13 +277,14 @@ function ProviderRow({ meta, models, email, describedBy }: { meta: ProviderMeta;
   );
 }
 
-
 // Codex and agy print no account email without reading their credential files, which Atelier never does.
 const NO_EMAIL: Record<string, string> = { openai: 'Codex CLI는 로그인한 이메일을 알려주지 않아요.', gemini: 'agy는 로그인한 이메일을 알려주지 않아요.' };
 
-/** 로그인 계정: the email the provider's CLI is logged in with, read only and selectable. */
-function AccountEmail({ meta, email, loggedIn }: { meta: ProviderMeta; email: string | null; loggedIn: boolean }) {
-  const text = email ? null : NO_EMAIL[meta.id] ?? (loggedIn ? '로그인한 이메일을 읽지 못했어요.' : '연결하면 로그인한 이메일이 보여요.');
+/** 로그인 계정: the email the provider's CLI is logged in with, read only and selectable. `email` undefined: still asking. */
+function AccountEmail({ meta, email, loggedIn }: { meta: ProviderMeta; email: string | null | undefined; loggedIn: boolean }) {
+  const text = email
+    ? null
+    : (NO_EMAIL[meta.id] ?? (!loggedIn ? '연결하면 로그인한 이메일이 보여요.' : email === undefined ? '확인하고 있어요.' : '로그인한 이메일을 읽지 못했어요.'));
   return (
     <div data-testid="settings-provider-account" className="ml-11 flex min-w-0 items-baseline gap-2">
       <span className="shrink-0 text-xs text-muted-foreground">로그인 계정</span>
@@ -290,7 +293,7 @@ function AccountEmail({ meta, email, loggedIn }: { meta: ProviderMeta; email: st
           {email}
         </span>
       ) : (
-        <span className="min-w-0 text-xs text-muted-foreground">{text}</span>
+        <span className="min-w-0 text-xs break-keep text-muted-foreground">{text}</span>
       )}
     </div>
   );
