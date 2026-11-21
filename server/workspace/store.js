@@ -151,7 +151,7 @@ export function createStore(
     },
   };
   for (const make of [createHistory, createRunsSidecar, createTrash, createTree, createFileOps, createWatch]) Object.assign(c, make(c));
-  const { tree, createdAt, createFile, readFileAt, fileExists, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runsApi } = c;
+  const { matchFolderCase, tree, createdAt, createFile, readFileAt, fileExists, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runsApi } = c;
 
-  return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
+  return { root: fsr.root, matchFolderCase, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
