@@ -1,46 +1,21 @@
 // Workspace file store: one `*.dpx.json` per diagram file, sub-folders = folders.
 // Writes are atomic (temp file in the same dir + rename) and serialized; stale writes are refused by revision.
+// The sections live in store-<name>.js (history); each gets the shared context `c`.
 import { lstatSync, readdirSync, watch } from 'node:fs';
 import { pollWatch } from './poll-watch.js';
 import { link, mkdir, readdir, readFile, rename, rm, rmdir, stat, lstat, unlink, writeFile } from 'node:fs/promises';
-import { createHash, randomBytes } from 'node:crypto';
-import { basename, dirname, join, sep } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
 import { ensureDirInside, LockPathError } from '../lock.js';
 import { createResolver, parseWorkspacePath, PathError } from './paths.js';
 import { FILE_EXT, FORMAT_VERSION, newFile, normalizeContent, parseStored, ValidationError } from './model.js';
 import { applyPlanOps } from './plan-ops.js';
 import { PLAN_VERSION } from '../../shared/dispatch/plan.ts';
 import { DISCUSSIONS_VERSION, openQuestions } from '../../shared/dispatch/discussions.ts';
+import { StoreError, sha, MAX_TOMBSTONES, isDpx, HISTORY_INTERVAL_MS, HISTORY_MAX, TRASH_DIR, TRASH_DAYS, TRASH_MAX, TRASH_ID, RUNS_DIR } from './store-shared.js';
+import { createHistory } from './store-history.js';
 
-export class StoreError extends Error {
-  constructor(status, message, extra = {}) {
-    super(message);
-    this.status = status;
-    Object.assign(this, extra);
-  }
-}
-
-const sha = (text) => createHash('sha256').update(text).digest('hex');
-const MAX_TOMBSTONES = 1000;
-const isDpx = (name) => name.endsWith(FILE_EXT) && name.length > FILE_EXT.length;
-
-// Version history: snapshots of saved files live in a hidden folder inside the workspace (never listed in the tree).
-export const HISTORY_DIR = ['.drawing', 'history'];
-export const HISTORY_INTERVAL_MS = 5 * 60 * 1000;
-export const HISTORY_MAX = 50;
-const SNAPSHOT_ID = /^\d{13}$/;
-const BORN_FILE = 'born';
-// Pipeline milestones a version stands for (E28): `labels.json` in the history dir maps a snapshot id to its labels.
-// It moves with the history dir (move, trash); the history list shows them ("계획 초안", "승인", "완료").
-const LABELS_FILE = 'labels.json';
-export const VERSION_LABELS = ['draft', 'approved', 'done'];
-// Deleted files keep their version history (and last content) in `.drawing/trash/<id>/` for 30 days.
-export const TRASH_DIR = ['.drawing', 'trash'];
-export const TRASH_DAYS = 30;
-export const TRASH_MAX = 200;
-const TRASH_ID = /^\d{13}-[0-9a-f]{8}$/;
-// Pipeline run records (server/runs/) live beside history and follow the file the same way on move, delete and restore.
-export const RUNS_DIR = ['.drawing', 'runs'];
+export { StoreError, HISTORY_DIR, HISTORY_INTERVAL_MS, HISTORY_MAX, VERSION_LABELS, TRASH_DIR, TRASH_DAYS, TRASH_MAX, RUNS_DIR } from './store-shared.js';
 
 // Normal runs use the real recursive fs.watch. Only the test harness sets DRAW_WORKSPACE_WATCH=poll (no inotify instance per server).
 export function pickWatchFn(env = process.env) {
@@ -166,221 +141,25 @@ export function createStore(
 
   const serialize = (file) => JSON.stringify(file, null, 2) + '\n';
 
-  // ---- version history ----
-  // `.drawing/history/<file path>/<ms timestamp>.json` holds the file as it was on disk just before a save
-  // overwrote it (the timestamp is that save's time), so the end of each edit session is kept.
-  // History is a convenience: a failure here never fails the save, delete or move it belongs to.
-  const sidecarDirOf = async (root, rel) => {
-    try {
-      return await fsr.resolveInternal(...root, ...rel.split('/'));
-    } catch (err) {
-      if (err instanceof PathError) throw new StoreError(400, err.message);
-      throw err;
-    }
-  };
-  const historyDirOf = (rel) => sidecarDirOf(HISTORY_DIR, rel);
-  const runsDirOf = (rel) => sidecarDirOf(RUNS_DIR, rel);
-
-  async function snapshotIds(dir) {
-    try {
-      return (await readdir(dir)).filter((n) => n.endsWith('.json') && SNAPSHOT_ID.test(n.slice(0, -5))).map((n) => n.slice(0, -5)).sort();
-    } catch {
-      return [];
-    }
-  }
-
-  const sameContent = (a, b) => {
-    try {
-      const { revision: _a, ...x } = parseStored(a);
-      const { revision: _b, ...y } = parseStored(b);
-      return JSON.stringify(x) === JSON.stringify(y);
-    } catch {
-      return false;
-    }
-  };
-
-  // Keep `text` as a snapshot of `rel` unless the newest one is younger than the interval (or `force`) or has the same content.
-  async function snapshot(rel, text, { force = false } = {}) {
-    const dir = await historyDirOf(rel);
-    const ids = await snapshotIds(dir);
-    const last = ids[ids.length - 1];
-    if (last !== undefined) {
-      if (!force && now() - Number(last) < historyIntervalMs) return null;
-      try {
-        if (sameContent(await readFile(join(dir, `${last}.json`), 'utf8'), text)) return last;
-      } catch {}
-    }
-    let id = Math.max(now(), last === undefined ? 0 : Number(last) + 1);
-    id = String(id).padStart(13, '0');
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, `${id}.json`), text, { mode: 0o644 });
-    ids.push(id);
-    for (const old of ids.slice(0, Math.max(0, ids.length - historyMax))) await unlink(join(dir, `${old}.json`)).catch(() => {});
-    return id;
-  }
-
-  const snapshotQuietly = (rel, text) => snapshot(rel, text).catch(() => null);
-
-  // When a file was made: saves replace the file, so its own birth time is lost. A `born` file (ms as text) in its
-  // history dir keeps it; it moves with the history (move), and goes through the trash in meta.json (delete, restore).
-  async function markBorn(rel, t) {
-    try {
-      const dir = await historyDirOf(rel);
-      await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, BORN_FILE), `${t}\n`, { mode: 0o644 });
-    } catch {}
-  }
-  async function readBorn(dir) {
-    try {
-      if (!(await plainFile(join(dir, BORN_FILE)))) return null;
-      const t = Number((await readFile(join(dir, BORN_FILE), 'utf8')).trim());
-      return Number.isSafeInteger(t) && t > 0 ? t : null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function readLabels(dir) {
-    try {
-      if (!(await plainFile(join(dir, LABELS_FILE)))) return {};
-      const raw = JSON.parse(await readFile(join(dir, LABELS_FILE), 'utf8'));
-      const out = {};
-      for (const [id, ls] of Object.entries(raw ?? {})) {
-        if (!SNAPSHOT_ID.test(id) || !Array.isArray(ls)) continue;
-        const ok = [...new Set(ls.filter((l) => VERSION_LABELS.includes(l)))];
-        if (ok.length) out[id] = ok;
-      }
-      return out;
-    } catch {
-      return {};
-    }
-  }
-
-  async function history(rel) {
-    rel = checkedFileRel(rel);
-    await wrapPath(rel);
-    const dir = await historyDirOf(rel);
-    const labels = await readLabels(dir);
-    const versions = [];
-    for (const id of (await snapshotIds(dir)).reverse()) {
-      try {
-        const st = await lstat(join(dir, `${id}.json`));
-        if (st.isFile()) versions.push({ id, time: Number(id), bytes: st.size, ...(labels[id] && { labels: labels[id] }) });
-      } catch {}
-    }
-    return { path: rel, versions };
-  }
-
-  /**
-   * Keep the file as it is on disk now as a version and mark it with a pipeline milestone (`draft`, `approved`,
-   * `done`). Best effort like all history: returns the snapshot id, or null when it could not be kept.
-   */
-  async function labelVersion(rel, label) {
-    if (!VERSION_LABELS.includes(label)) throw new StoreError(400, 'invalid version label');
-    rel = checkedFileRel(rel);
-    const abs = await wrapPath(rel);
-    return serial(async () => {
-      try {
-        const { text } = await loadStored(abs);
-        const id = await snapshot(rel, text, { force: true });
-        if (!id) return null;
-        const dir = await historyDirOf(rel);
-        const kept = new Set(await snapshotIds(dir));
-        const labels = Object.fromEntries(Object.entries(await readLabels(dir)).filter(([k]) => kept.has(k)));
-        labels[id] = [...new Set([...(labels[id] ?? []), label])];
-        const tmp = join(dir, `.${LABELS_FILE}.${randomBytes(6).toString('hex')}.tmp`);
-        await writeFile(tmp, JSON.stringify(labels) + '\n', { mode: 0o644 });
-        await rename(tmp, join(dir, LABELS_FILE));
-        return id;
-      } catch {
-        return null;
-      }
-    });
-  }
-
-  async function historyVersion(rel, id) {
-    rel = checkedFileRel(rel);
-    await wrapPath(rel);
-    if (typeof id !== 'string' || !SNAPSHOT_ID.test(id)) throw new StoreError(400, 'invalid version id');
-    const dir = await historyDirOf(rel);
-    let text;
-    try {
-      // The snapshot itself must be a plain file: a link there could point at anything the server can read.
-      const st = await lstat(join(dir, `${id}.json`));
-      if (!st.isFile()) throw new StoreError(404, 'version not found');
-      text = await readFile(join(dir, `${id}.json`), 'utf8');
-    } catch (err) {
-      if (err.code === 'ENOENT') throw new StoreError(404, 'version not found');
-      throw err;
-    }
-    try {
-      return { path: rel, id, time: Number(id), ...parseStored(text) };
-    } catch (err) {
-      if (err instanceof ValidationError) throw new StoreError(422, `unreadable version: ${err.message}`);
-      throw err;
-    }
-  }
-
-  // Snapshot what is on disk now, ignoring the interval (before a restore).
-  async function historySnapshotNow(rel) {
-    rel = checkedFileRel(rel);
-    const abs = await wrapPath(rel);
-    return serial(async () => {
-      const { text } = await loadStored(abs);
-      return { path: rel, id: await snapshot(rel, text, { force: true }) };
-    });
-  }
-
-  // A file or folder moved: its history and runs move with it (best effort); one deleted: its history goes too.
-  async function moveSidecar(root, from, to) {
-    try {
-      const fromDir = await sidecarDirOf(root, from);
-      if (!(await statOrNull(fromDir))) return;
-      const toDir = await sidecarDirOf(root, to);
-      await rm(toDir, { recursive: true, force: true });
-      await mkdir(dirname(toDir), { recursive: true });
-      await rename(fromDir, toDir);
-      await pruneEmptyParents(root, fromDir);
-    } catch {}
-  }
-  async function moveHistory(from, to) {
-    await moveSidecar(HISTORY_DIR, from, to);
-    await moveSidecar(RUNS_DIR, from, to);
-    sidecarEvent({ kind: 'move', from, to });
-  }
-  // Remove now-empty parent folders of a sidecar dir that moved or went away, up to (not including) `.drawing/<kind>`.
-  async function pruneEmptyParents(rootSegs, dir) {
-    try {
-      const root = await fsr.resolveInternal(...rootSegs);
-      for (let d = dirname(dir); d.startsWith(root + sep) && d !== root; d = dirname(d)) await rmdir(d); // throws (ENOTEMPTY) at the first non-empty one
-    } catch {}
-  }
-  const pruneEmptyHistoryParents = (dir) => pruneEmptyParents(HISTORY_DIR, dir);
-  const dropSidecar = (root, rel) =>
-    sidecarDirOf(root, rel)
-      .then(async (d) => {
-        await rm(d, { recursive: true, force: true });
-        await pruneEmptyParents(root, d);
-      })
-      .catch(() => {});
-  const dropHistory = async (rel) => {
-    await dropSidecar(HISTORY_DIR, rel);
-    await dropSidecar(RUNS_DIR, rel);
-  };
-  const nonEmptyDir = async (dir) => {
-    try {
-      return (await readdir(dir)).length > 0;
-    } catch {
-      return false;
-    }
-  };
+  // Moved sections, called through the shared context.
+  const dropHistory = (...a) => c.dropHistory(...a); // store-history.js
+  const historyDirOf = (...a) => c.historyDirOf(...a); // store-history.js
+  const markBorn = (...a) => c.markBorn(...a); // store-history.js
+  const moveHistory = (...a) => c.moveHistory(...a); // store-history.js
+  const nonEmptyDir = (...a) => c.nonEmptyDir(...a); // store-history.js
+  const pruneEmptyHistoryParents = (...a) => c.pruneEmptyHistoryParents(...a); // store-history.js
+  const pruneEmptyParents = (...a) => c.pruneEmptyParents(...a); // store-history.js
+  const readBorn = (...a) => c.readBorn(...a); // store-history.js
+  const runsDirOf = (...a) => c.runsDirOf(...a); // store-history.js
+  const snapshotIds = (...a) => c.snapshotIds(...a); // store-history.js
+  const snapshotQuietly = (...a) => c.snapshotQuietly(...a); // store-history.js
 
   // ---- run record sidecars: server/runs/ owns their content; the store owns where they live ----
-  let treeMark = null; // (rel) => Promise<{ state } | null>, set by the runs module
+  // c.treeMark: (rel) => Promise<{ state } | null>, set by the runs module
   const runsApi = {
     // The runs module tells the tree a pipeline file's run state (running / paused / done).
     setTreeMark: (fn) => {
-      treeMark = typeof fn === 'function' ? fn : null;
+      c.treeMark = typeof fn === 'function' ? fn : null;
     },
     // Run `fn` in the store's mutation queue, so a run write never interleaves with a move, delete or restore.
     serial,
@@ -632,7 +411,7 @@ export function createStore(
           title = f.title;
           revision = f.revision;
           // A file with a plan is a draft (plan) until the runs module says it is running, paused or done.
-          if (f.plan) pipeline = (treeMark && (await treeMark(rel).catch(() => null))) || { state: 'plan' };
+          if (f.plan) pipeline = (c.treeMark && (await c.treeMark(rel).catch(() => null))) || { state: 'plan' };
           // Open questions for the sidebar badge (#738).
           questions = openQuestions(f.discussions).length;
         } catch {
@@ -1294,8 +1073,23 @@ export function createStore(
     watcher?.close();
     for (const t of timers.values()) clearTimeout(t);
     timers.clear();
-    return queue;
+    return c.queue;
   }
+
+  // Shared context for the sections: state, helpers and options above, then every section's functions (store-*.js).
+  const c = {
+    fsr, parseRelPath, skip, known, knownDirs, tombstones, sidecarListeners, sidecarEvent, serial, wrapPath, fileRel, checkFolderNames,
+    checkedFileRel, atomicWrite, statOrNull, asParentClash, ensureDir, ensureParent, loadStored, serialize,
+    onExternalChange, watchDebounceMs, watchRestartMs, watchFn, now, historyIntervalMs, historyMax, reserved,
+    treeMark: null, // (rel) => Promise<{ state } | null>, set by the runs module
+    get queue() {
+      return queue;
+    },
+    // Sections not split out yet.
+    runsApi, trashRoot, entryDir, plainFile, trashQuietly, trashMany, readEntry, trashEntries, purgeTrash, trash, restoreTrash, mergeHistory, mergeRuns, collectFiles, walk, tree, createdAt, createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget, scan, reconcile, reconcileNow, startWatching, close,
+  };
+  for (const make of [createHistory]) Object.assign(c, make(c));
+  const { history, historyVersion, historySnapshotNow, labelVersion } = c;
 
   return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
