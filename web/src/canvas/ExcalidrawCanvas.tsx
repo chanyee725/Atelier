@@ -7,15 +7,9 @@ import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalid
 import '@excalidraw/excalidraw/index.css';
 import type { Block } from '../api';
 import type { BlockLayout, Scene } from '../../../shared/render/index.ts';
-import { BlockEditor, type BlockEditorHandle } from '../BlockEditor';
-import { IconPicker } from './IconPicker';
-import { setLineIcon } from '../dsl/iconPick';
-import { BlockProps } from '../BlockProps';
-import { Button } from '../components/ui/button';
-import { NativeSelect } from '../components/ui/native-select';
 import { CanvasInsertMenu } from './CanvasInsertMenu';
-import { DIAGRAM_TYPES, TEMPLATES, isDiagramType, type DiagramType } from '../dsl/templates';
-import { analyzeDiagram, prunedLayout } from '../dsl/adapter';
+import { DIAGRAM_TYPES } from '../dsl/templates';
+import { prunedLayout } from '../dsl/adapter';
 import { blockLabel, brokenNotice, type BrokenBlock } from './notice';
 import { renderBlock, type BlockPicture } from './render';
 import { baseFileId } from './resolution';
@@ -37,6 +31,7 @@ import { useFontRefit } from './useFontRefit';
 import './clean.css';
 import { CodePanel } from './CodePanel';
 import { LayoutBar } from './LayoutBar';
+import { BlockCodePanel } from './BlockCodePanel';
 import { useCanvasHandle } from './useCanvasHandle';
 import { useSharpen } from './useSharpen';
 import { NO_EMBEDS, UI_OPTIONS, fileData, fitFor, isGraphType, liveRects, newElId, picTheme, ready, theme, withLayout, type Edit, type Sess } from './canvasHelpers';
@@ -72,7 +67,6 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const drawnOf = useCallback(<B extends Block>(b: B): B => drawnBlock(b, lookRef.current), []);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const editorRef = useRef<BlockEditorHandle>(null);
   // Only diagram blocks are selected: hide Excalidraw's "double-click to crop" hint, since that opens the code.
   const [blockSelected, setBlockSelected] = useState(false);
   // Excalidraw's "move the canvas" hint is for an empty canvas; with elements on it the hint only covers them (#438).
@@ -916,59 +910,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           }}
         />
       )}
-      {block && (
-        <aside
-          aria-label="다이어그램 코드"
-          className="absolute right-3 top-16 bottom-3 z-10 flex w-[min(28rem,calc(100%-1.5rem))] flex-col gap-2 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-(--shadow-pop)"
-          // CodeMirror marks Escape it already used (closing the autocomplete popup) as handled; leave the panel open then.
-          onKeyDown={(e) => e.key === 'Escape' && !e.defaultPrevented && setEditing(null)}
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <span className="shrink-0 whitespace-nowrap text-sm font-semibold">다이어그램 코드</span>
-            <NativeSelect aria-label="종류" value={block.type} onChange={(e) => patchBlock({ type: e.target.value })}>
-              {!isDiagramType(block.type) && <option value={block.type}>{block.type}</option>}
-              {DIAGRAM_TYPES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </NativeSelect>
-            {isDiagramType(block.type) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-input"
-                onClick={async () => {
-                  const t = TEMPLATES[block.type as DiagramType];
-                  if (!block.code.trim() || block.code === t || (await askConfirm({ title: '지금 코드를 예시로 바꿀까요?', body: '지금 코드는 예시 코드로 덮어써져요.', ok: '바꾸기', danger: true }))) patchBlock({ code: t });
-                }}
-              >
-                예시 넣기
-              </Button>
-            )}
-            {(block.type === 'architecture' || block.type === 'flowchart' || block.type === 'sequence' || block.type === 'erd') && (
-              <IconPicker onPick={(name) => patchBlock({ code: setLineIcon(block.code, editorRef.current?.cursorLine() ?? Number.MAX_SAFE_INTEGER, name).code })} />
-            )}
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setEditing(null)}>
-              닫기
-            </Button>
-          </div>
-          <BlockProps type={block.type} code={block.code} onChange={(code) => patchBlock({ code })} />
-          <div className="min-h-0 flex-1 overflow-auto">
-            <BlockEditor ref={editorRef} key={block.id} code={block.code} type={block.type} dark={dark} onChange={(code) => patchBlock({ code })} />
-          </div>
-          {resets.has(block.id) && (
-            <p className="text-xs text-muted-foreground">
-              코드가 많이 바뀌어서 자동 배치로 그려요. 패널을 닫으면 옮긴 배치가 지워져요
-            </p>
-          )}
-          {!analyzeDiagram(block.type, block.code).parsed && (
-            <p className="text-xs text-muted-foreground">
-              이 종류는 아직 문법 검사를 지원하지 않아요.
-            </p>
-          )}
-        </aside>
-      )}
+      {block && <BlockCodePanel block={block} dark={dark} reset={resets.has(block.id)} onPatch={patchBlock} onClose={() => setEditing(null)} />}
     </div>
   );
 }
