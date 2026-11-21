@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, rowTitle, sortChats, type ChatSummary } from '../../web/src/shell/chatHistory.ts';
+import { ago, OPEN_CHAT_SESSION, rowTitle, sortChats, type ChatSummary } from '../../web/src/shell/chatHistory.ts';
 
 const NOW = Date.UTC(2026, 10, 20, 12);
 const c = (id: string, updatedAt: number, title = 't'): ChatSummary => ({ id, title, createdAt: updatedAt, updatedAt, sessionId: 's' + id, count: 2 });
@@ -28,8 +28,8 @@ test('openChatSession fires the window event with the CLI session id', async () 
   const target = new EventTarget();
   (globalThis as any).window = target;
   (globalThis as any).CustomEvent ??= class extends Event { detail: unknown; constructor(t: string, i?: { detail?: unknown }) { super(t); this.detail = i?.detail; } };
-  target.addEventListener('atelier:open-chat-session', (e) => seen.push((e as CustomEvent).detail));
-  const { openChatSession } = await import('../../web/src/shell/chatOpen.ts');
+  target.addEventListener(OPEN_CHAT_SESSION, (e) => seen.push((e as CustomEvent).detail));
+  const { openChatSession } = await import('../../web/src/chat/index.ts');
   openChatSession('abc-1');
   assert.deepEqual(seen, [{ cliSessionId: 'abc-1' }]);
 });

@@ -4,9 +4,9 @@ import { useSyncExternalStore } from 'react';
 
 export type ChatSummary = { id: string; title: string; createdAt: number; updatedAt: number; sessionId: string | null; count: number };
 
-/** Fired (by the chat, or by anything else that saved a conversation) to make the list reload. */
+/** Fired after a conversation is saved (ChatDock save) to make the list reload; heard by the store below. */
 export const HISTORY_CHANGED = 'atelier:chat-history-changed';
-/** Asks the chat dock to resume a conversation: detail = { cliSessionId } (see chatOpen.ts). */
+/** Asks the chat dock to resume a conversation: detail = { cliSessionId } (sent by openChatSession in web/src/chat/index.ts, heard by ChatDock). */
 export const OPEN_CHAT_SESSION = 'atelier:open-chat-session';
 
 async function call<T>(method: string, url: string): Promise<T> {
