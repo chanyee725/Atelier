@@ -1,27 +1,20 @@
 // The infinite canvas: Excalidraw (MIT) with diagram blocks shown as image elements.
 // Loaded lazily from CanvasPane so the editor shell does not wait for it.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, exportToBlob, exportToSvg, getCommonBounds, newElementWith, restoreElements, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw';
-import type { AppState, ExcalidrawImperativeAPI, BinaryFileData, NormalizedZoomValue } from '@excalidraw/excalidraw/types';
+import { CaptureUpdateAction, Excalidraw, convertToExcalidrawElements, getCommonBounds, newElementWith, restoreElements, viewportCoordsToSceneCoords } from '@excalidraw/excalidraw';
+import type { AppState, ExcalidrawImperativeAPI, NormalizedZoomValue } from '@excalidraw/excalidraw/types';
 import type { ExcalidrawElement, ExcalidrawImageElement, FileId } from '@excalidraw/excalidraw/element/types';
 import '@excalidraw/excalidraw/index.css';
 import type { Block } from '../api';
 import type { BlockLayout, Scene } from '../../../shared/render/index.ts';
-import { BlockEditor, type BlockEditorHandle } from '../BlockEditor';
-import { IconPicker } from './IconPicker';
-import { setLineIcon } from '../dsl/iconPick';
-import { BlockProps } from '../BlockProps';
-import { Button } from '../components/ui/button';
-import { NativeSelect } from '../components/ui/native-select';
 import { CanvasInsertMenu } from './CanvasInsertMenu';
-import { DIAGRAM_TYPES, TEMPLATES, isDiagramType, type DiagramType } from '../dsl/templates';
-import { analyzeDiagram, prunedLayout } from '../dsl/adapter';
+import { DIAGRAM_TYPES } from '../dsl/templates';
+import { prunedLayout } from '../dsl/adapter';
 import { blockLabel, brokenNotice, type BrokenBlock } from './notice';
-import { renderBlock, type BlockPicture, type PicTheme } from './render';
-import { baseFileId, exportVariants, pictureScale, scaleSvg, svgDataURL, variantId } from './resolution';
+import { renderBlock, type BlockPicture } from './render';
+import { baseFileId } from './resolution';
 import type { CanvasHandle } from '../export/types';
-import { DEFAULT_EXPORT, type ExportOptions } from '../export/options';
-import { applyScene, blockIdOf, blockImageSkeleton, findCopies, freeSignature, hash, layoutSig, layoutsFromImages, liveFrames, newBlockId, picturesFor, placeBlocks, rectOf, sameDrawing, shiftForOrigin, splitScene, type PictureCache, type Rect, type SceneEl } from './sync';
+import { applyScene, blockIdOf, blockImageSkeleton, findCopies, freeSignature, hash, layoutSig, layoutsFromImages, liveFrames, newBlockId, picturesFor, placeBlocks, sameDrawing, shiftForOrigin, splitScene, type PictureCache, type SceneEl } from './sync';
 import { LayoutEditOverlay, focusCanvas, type EditStart } from './LayoutEditOverlay';
 import { RunOverlay } from './RunOverlay';
 import { MorphOverlay, MORPH_OPACITY, type Morphs } from './MorphOverlay';
@@ -33,11 +26,15 @@ import { diagramChildren, parse } from '../../../shared/dsl/index.ts';
 import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
-import { PANE_FIT, fitMinZoom, openingView, refitView, rememberView, type FitOptions } from './initialView';
-import { refitTexts, type FitEl } from './refit';
-import { RefitQueue } from './refitQueue';
+import { PANE_FIT, openingView, refitView, rememberView } from './initialView';
+import { useFontRefit } from './useFontRefit';
 import './clean.css';
 import { CodePanel } from './CodePanel';
+import { LayoutBar } from './LayoutBar';
+import { BlockCodePanel } from './BlockCodePanel';
+import { useCanvasHandle } from './useCanvasHandle';
+import { useSharpen } from './useSharpen';
+import { NO_EMBEDS, UI_OPTIONS, fileData, fitFor, isGraphType, liveRects, newElId, picTheme, ready, theme, withLayout, type Edit, type Sess } from './canvasHelpers';
 import { CodeBadges } from './CodeBadges';
 import { codeInfoCache, shapeCode, shapeLabel, targetAfterNodes, targetAfterSelection, withoutOrphans, type CodeEl, type CodeTarget } from './codeLinks';
 import { hitHandle, imageReason, layoutFrame, layoutHandles, toLayout, type LayoutFrame } from './layoutEdit';
@@ -62,59 +59,6 @@ type Props = {
   look?: PlanLook | null;
 };
 
-const theme = (dark: boolean) => (dark ? 'dark' : 'light') as 'dark' | 'light';
-// Excalidraw's dark mode puts a filter over the whole canvas, images included: dark pictures are drawn pre-corrected
-// for it (shared/render/darkFilter.ts), so they come out in the dark palette instead of an inverted light one.
-const picTheme = (dark: boolean): PicTheme => (dark ? 'dark-canvas' : 'light');
-/** Fit options for `live`: the 60% floor only when it is one block alone (frames do not count), #1005. */
-const fitFor = (live: readonly ExcalidrawElement[], base?: FitOptions): FitOptions => ({
-  ...base,
-  minZoom: fitMinZoom(live.filter((e) => e.type !== 'frame' && e.type !== 'magicframe').map((e) => blockIdOf(e as unknown as SceneEl))),
-});
-const newElId = (blockId: string) => `blk_${blockId}_${Math.random().toString(36).slice(2, 8)}`;
-const liveRects = (els: readonly ExcalidrawElement[]): Rect[] => els.filter((e) => !e.isDeleted).map((e) => rectOf(e));
-
-const fileData = (p: BlockPicture, k = 1): BinaryFileData => ({
-  id: variantId(p.fileId, k) as FileId,
-  mimeType: 'image/svg+xml',
-  dataURL: (k === 1 ? p.dataURL : svgDataURL(scaleSvg(p.svg, k))) as BinaryFileData['dataURL'],
-  created: Date.now(),
-});
-
-const UI_OPTIONS = {
-  canvasActions: { loadScene: false, saveToActiveFile: false, export: false as const, saveAsImage: false, toggleTheme: false },
-  tools: { image: false },
-};
-// Web embeds load third-party pages in iframes; the canvas makes no outbound requests.
-const NO_EMBEDS = () => false;
-
-/** The layout session made for one block's code (or why there is none). */
-type Sess = { blockId: string; key: string; s: LayoutSession | { reason: string } };
-/** Layout edit mode for a block; `start` is the press that entered it on a node, continued as a drag. */
-type Edit = { blockId: string; start: EditStart | null };
-/** `b` is the block as drawn (`drawnBlock`), like the code its session was opened for. */
-const ready = (s: Sess | null, b: Block | undefined): LayoutSession | null => (s && b && s.blockId === b.id && s.key === sessionKey(b) && !('reason' in s.s) ? s.s : null);
-const withLayout = (cd: Record<string, unknown> | undefined, layout: BlockLayout | undefined) => {
-  const { layout: _old, ...rest } = cd ?? {};
-  return layout ? { ...rest, layout } : rest;
-};
-const isGraphType = (type: string | undefined) => type === 'architecture' || type === 'flowchart';
-
-
-/** Texts measured by Excalidraw (it measures only with repairBindings set). */
-const measureTexts = (els: FitEl[]) => restoreElements(els as unknown as ExcalidrawElement[], null, { repairBindings: true, refreshDimensions: true }) as unknown as FitEl[];
-
-/** The texts in `ids` measured again; nothing else changes. */
-function refit(els: readonly ExcalidrawElement[], ids: Iterable<string>, apply?: (e: FitEl, patch: Partial<FitEl>) => FitEl) {
-  return refitTexts(els as unknown as readonly FitEl[], new Set(ids), measureTexts, apply) as unknown as { elements: readonly ExcalidrawElement[]; changed: boolean };
-}
-
-/** A measured element as a new version, so it is saved. */
-const bumped = (e: FitEl, patch: Partial<FitEl>) => newElementWith(e as unknown as ExcalidrawElement, patch as never) as unknown as FitEl;
-
-/** Whether Excalidraw's copy of the clean font has loaded; until then text is measured with a fallback font. */
-const cleanFontLoaded = () => Array.from(document.fonts).some((f) => f.family.replace(/["']/g, '') === 'Liberation Sans' && f.status === 'loaded');
-
 export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange, handle, path, look = null }: Props) {
   // Blocks are drawn and laid out with the plan look in their code (planStyle.ts); writes keep the saved code.
   const lookRef = useRef(look);
@@ -123,7 +67,6 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const drawnOf = useCallback(<B extends Block>(b: B): B => drawnBlock(b, lookRef.current), []);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const editorRef = useRef<BlockEditorHandle>(null);
   // Only diagram blocks are selected: hide Excalidraw's "double-click to crop" hint, since that opens the code.
   const [blockSelected, setBlockSelected] = useState(false);
   // Excalidraw's "move the canvas" hint is for an empty canvas; with elements on it the hint only covers them (#438).
@@ -176,17 +119,6 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   const seenLayouts = useRef(new Map<string, string>());
   const apiRef = useRef<ExcalidrawImperativeAPI | null>(null);
   apiRef.current = api;
-  // Texts that changed font before the clean font had loaded: measured once it has. One queue per mount
-  // (CanvasPane remounts on file switch), cleared on unmount too.
-  const [refitLater] = useState(() => new RefitQueue(cleanFontLoaded));
-  useEffect(() => () => refitLater.clear(), [refitLater]);
-  /** The texts in `ids` measured now if the clean font is in, else queued for refitPending. `bump`: a new version
-   * (a paste, saved then); otherwise versions stay (opening writes nothing). */
-  const refitNowOrLater = (els: readonly ExcalidrawElement[], ids: readonly string[], bump: boolean) => {
-    if (cleanFontLoaded()) return refit(els, ids, bump ? bumped : undefined).elements;
-    refitLater.wait(ids, bump);
-    return els;
-  };
   const pathRef = useRef(path);
   pathRef.current = path;
   const focusRef = useRef(focus);
@@ -391,19 +323,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
   }, []);
   useEffect(tryFocus, [api, focus, tryFocus]);
 
-  // Excalidraw loads the clean font after the scene is set: texts that changed font before that are measured once it
-  // is in. Opened texts keep their versions (the new size is saved with the next edit); pasted ones are bumped.
-  // Texts not in the scene yet keep waiting, and handleChange runs the queue again once they are (#305).
-  const refitPending = useCallback(() => {
-    const xapi = apiRef.current;
-    const out = refitLater.take(xapi ? (xapi.getSceneElementsIncludingDeleted() as unknown as readonly FitEl[]) : null, measureTexts, bumped);
-    if (xapi && out?.changed) xapi.updateScene({ elements: out.elements as unknown as ExcalidrawElement[], captureUpdate: CaptureUpdateAction.NEVER });
-  }, [refitLater]);
-  useEffect(() => {
-    document.fonts.addEventListener('loadingdone', refitPending);
-    refitPending();
-    return () => document.fonts.removeEventListener('loadingdone', refitPending);
-  }, [api, refitPending]);
+  const { refitNowOrLater, refitWaiting } = useFontRefit(api, apiRef);
 
   // Built once per mount (CanvasPane remounts on file switch/reload).
   const initialData = useMemo(
@@ -542,64 +462,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, drawn, draw, tryFocus, refreshFrame]);
 
-  // Block pictures follow the zoom and screen scale: each image shows the variant of its picture that is
-  // sharp at the size it covers on screen (resolution.ts). Checked shortly after the view or the images change.
-  const sharpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const sharpenView = useRef('');
-  const sharpen = useCallback(() => {
-    sharpenTimer.current = null;
-    const xapi = apiRef.current;
-    if (!xapi) return;
-    const zoom = xapi.getAppState().zoom.value;
-    const dpr = window.devicePixelRatio || 1;
-    const files = xapi.getFiles();
-    const add = new Map<string, BinaryFileData>();
-    const swaps = new Map<string, string>();
-    for (const el of xapi.getSceneElements()) {
-      if (el.type !== 'image' || blockIdOf(el as unknown as SceneEl) === null) continue;
-      const img = el as ExcalidrawImageElement;
-      const p = sizes.current.get(baseFileId(img.fileId ?? ''));
-      if (!p) continue;
-      const k = pictureScale(Math.max(Math.abs(img.width) / p.width, Math.abs(img.height) / p.height) * zoom * dpr, p.width, p.height);
-      const id = variantId(p.fileId, k);
-      if (id === img.fileId) continue;
-      if (!files[id] && !add.has(id)) add.set(id, fileData(p, k));
-      swaps.set(img.id, id);
-    }
-    if (!swaps.size) return;
-    // Decode the new variants before showing them, so a block does not flash its loading placeholder.
-    void Promise.all(
-      [...add.values()].map((f) => {
-        const im = new Image();
-        im.src = f.dataURL;
-        return im.decode().catch(() => undefined);
-      }),
-    ).then(() => {
-      if (apiRef.current !== xapi) return;
-      if (add.size) xapi.addFiles([...add.values()]);
-      let changed = false;
-      const els = xapi.getSceneElementsIncludingDeleted().map((el) => {
-        const id = swaps.get(el.id);
-        // Skip an image whose picture changed meanwhile (a code edit); the next check handles it.
-        const img = el as ExcalidrawImageElement;
-        if (!id || el.isDeleted || baseFileId(img.fileId ?? '') !== baseFileId(id)) return el;
-        changed = true;
-        return newElementWith(img, { fileId: id as FileId });
-      });
-      if (changed) xapi.updateScene({ elements: els, captureUpdate: CaptureUpdateAction.NEVER });
-    });
-  }, []);
-  const scheduleSharpen = useCallback(() => {
-    if (sharpenTimer.current) clearTimeout(sharpenTimer.current);
-    sharpenTimer.current = setTimeout(sharpen, 120);
-  }, [sharpen]);
-  useEffect(() => {
-    window.addEventListener('resize', scheduleSharpen);
-    return () => {
-      window.removeEventListener('resize', scheduleSharpen);
-      if (sharpenTimer.current) clearTimeout(sharpenTimer.current);
-    };
-  }, [scheduleSharpen]);
+  const sharpenFor = useSharpen(apiRef, sizes);
 
   // The pane's size changed (divider dragged, window resized): fit again, unless the user has zoomed or panned.
   useEffect(() => {
@@ -630,10 +493,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     if (!appState.isLoading) rememberView(pathRef.current, { scrollX: appState.scrollX, scrollY: appState.scrollY, zoom: appState.zoom.value });
     const sel = sceneEls.filter((e) => appState.selectedElementIds[e.id] && !e.isDeleted);
     const view = `${appState.zoom.value}|${sceneEls.map((e) => (e.type === 'image' && !e.isDeleted && blockIdOf(e as unknown as SceneEl) !== null ? `${e.id}:${(e as ExcalidrawImageElement).fileId}:${Math.round(e.width)}` : '')).join('')}`;
-    if (view !== sharpenView.current) {
-      sharpenView.current = view;
-      scheduleSharpen();
-    }
+    sharpenFor(view);
     // Only the idle case (selection tool, nothing selected, no box drag) shows that hint; other hints (arrow, erase) stay.
     // Text editing and an active search keep their own hints (type text, Escape closes search).
     const searching = appState.openSidebar?.name === 'default' && appState.openSidebar.tab === 'search' && !!appState.searchMatches?.length;
@@ -660,10 +520,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     let elements = sceneEls;
     let cur = blocksRef.current;
     // Texts that waited for the clean font while the scene was still empty are measured once they are in (#305).
-    if (refitLater.size && apiRef.current) {
-      const late = refitLater.take(elements as unknown as readonly FitEl[], measureTexts, bumped);
+    if (apiRef.current) {
+      const late = refitWaiting(elements);
       if (late?.changed) {
-        elements = late.elements as unknown as readonly ExcalidrawElement[];
+        elements = late.elements;
         apiRef.current.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
       }
     }
@@ -907,95 +767,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     );
   }, []);
 
-  // What export, the palette and shortcuts can do with this canvas.
-  useEffect(() => {
-    if (!api || !handle) return;
-    // The selection (with the text bound to selected shapes), or everything when nothing is selected.
-    const scope = () => {
-      const st = api.getAppState();
-      const all = api.getSceneElements();
-      const picked = all.filter((e) => st.selectedElementIds[e.id]);
-      const ids = new Set(picked.map((e) => e.id));
-      const sel = picked.length ? all.filter((e) => ids.has(e.id) || (e.type === 'text' && e.containerId && ids.has(e.containerId))) : [];
-      return { selected: sel.length > 0, elements: sel.length ? sel : all };
-    };
-    // Excalidraw inverts the white background itself in dark mode; a transparent export skips the background.
-    const opts = (o: ExportOptions) => ({ exportBackground: !o.transparent, viewBackgroundColor: '#ffffff', exportWithDarkMode: o.dark });
-    // Block images show the pictures drawn for the canvas theme. A dark export gets the same filter as the dark canvas,
-    // so it needs the pre-corrected pictures, a light one the light pictures: swap them in when the canvas differs.
-    const forTheme = async (elements: readonly ExcalidrawElement[], dark: boolean) => {
-      const want = picTheme(dark);
-      if (want === shownTheme.current) return { elements: [...elements], pictureOf: (id: string) => sizes.current.get(id) };
-      const byId = new Map(blocksRef.current.map((b) => [b.id, b]));
-      const pics = new Map<string, BlockPicture>();
-      const out = await Promise.all(
-        elements.map(async (el) => {
-          const bid = el.type === 'image' ? blockIdOf(el as unknown as SceneEl) : null;
-          const b = bid === null ? undefined : byId.get(bid);
-          if (!b) return el;
-          const p = await renderBlock(drawnOf(b), want);
-          pics.set(p.fileId, p);
-          return { ...el, fileId: p.fileId as FileId } as ExcalidrawElement;
-        }),
-      );
-      return { elements: out, pictureOf: (id: string) => pics.get(id) };
-    };
-    handle.current = {
-      scope: () => {
-        const s = scope();
-        return { selected: s.selected, count: s.elements.length };
-      },
-      svg: async (o = DEFAULT_EXPORT) => {
-        const { elements } = scope();
-        if (!elements.length) return null;
-        const t = await forTheme(elements, o.dark);
-        const files = { ...api.getFiles() };
-        for (const e of t.elements) {
-          const p = e.type === 'image' && e.fileId ? t.pictureOf(e.fileId) : undefined;
-          if (p && !files[p.fileId]) files[p.fileId] = fileData(p);
-        }
-        const el = await exportToSvg({ elements: t.elements, appState: opts(o), files, exportPadding: 16 });
-        el.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        return { svg: new XMLSerializer().serializeToString(el), width: parseFloat(el.getAttribute('width') ?? '0'), height: parseFloat(el.getAttribute('height') ?? '0') };
-      },
-      png: async (o = DEFAULT_EXPORT) => {
-        const { elements } = scope();
-        if (!elements.length) return null;
-        // Block images carry the variant picked for the view; the export uses the one sharp at its own scale.
-        const t = await forTheme(elements, o.dark);
-        const ex = exportVariants(t.elements, o.scale, t.pictureOf);
-        const files = { ...api.getFiles() };
-        for (const { picture, k } of ex.need) {
-          const p = t.pictureOf(picture.fileId);
-          const id = variantId(picture.fileId, k);
-          if (p && !files[id]) files[id] = fileData(p, k);
-        }
-        return await exportToBlob({ elements: ex.elements, appState: opts(o), files, mimeType: 'image/png', exportPadding: 16, getDimensions: (w: number, h: number) => ({ width: w * o.scale, height: h * o.scale, scale: o.scale }) });
-      },
-      key: ({ key, code, ctrl, meta, shift, alt }) => {
-        const target = wrap.current?.querySelector<HTMLElement>('.excalidraw');
-        if (!target) return;
-        target.focus({ preventScroll: true });
-        target.dispatchEvent(new KeyboardEvent('keydown', { key, code, ctrlKey: !!ctrl, metaKey: !!meta, shiftKey: !!shift, altKey: !!alt, bubbles: true, cancelable: true }));
-      },
-      layout: {
-        state: () => {
-          const id = editRef.current?.blockId ?? selRef.current;
-          const b = id ? blocksRef.current.find((x) => x.id === id) : undefined;
-          return { block: !!b, graph: isGraphType(b?.type), editing: !!editRef.current, moved: !!b?.layout };
-        },
-        edit: () => void tryEdit(),
-        freeform: () => void toFreeform(),
-        reset: () => {
-          const id = editRef.current?.blockId ?? selRef.current;
-          if (id) resetLayout(id);
-        },
-      },
-    };
-    return () => {
-      handle.current = null;
-    };
-  }, [api, handle, tryEdit, resetLayout, toFreeform]);
+  useCanvasHandle(api, handle, { wrap, shownTheme, sizes, blocksRef, editRef, selRef, drawnOf }, { tryEdit, toFreeform, resetLayout });
 
   const block = editing ? blocks.find((b) => b.id === editing) : undefined;
   blockPanelRef.current = !!block;
@@ -1138,88 +910,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           }}
         />
       )}
-      {block && (
-        <aside
-          aria-label="다이어그램 코드"
-          className="absolute right-3 top-16 bottom-3 z-10 flex w-[min(28rem,calc(100%-1.5rem))] flex-col gap-2 rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-(--shadow-pop)"
-          // CodeMirror marks Escape it already used (closing the autocomplete popup) as handled; leave the panel open then.
-          onKeyDown={(e) => e.key === 'Escape' && !e.defaultPrevented && setEditing(null)}
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <span className="shrink-0 whitespace-nowrap text-sm font-semibold">다이어그램 코드</span>
-            <NativeSelect aria-label="종류" value={block.type} onChange={(e) => patchBlock({ type: e.target.value })}>
-              {!isDiagramType(block.type) && <option value={block.type}>{block.type}</option>}
-              {DIAGRAM_TYPES.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </NativeSelect>
-            {isDiagramType(block.type) && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-input"
-                onClick={async () => {
-                  const t = TEMPLATES[block.type as DiagramType];
-                  if (!block.code.trim() || block.code === t || (await askConfirm({ title: '지금 코드를 예시로 바꿀까요?', body: '지금 코드는 예시 코드로 덮어써져요.', ok: '바꾸기', danger: true }))) patchBlock({ code: t });
-                }}
-              >
-                예시 넣기
-              </Button>
-            )}
-            {(block.type === 'architecture' || block.type === 'flowchart' || block.type === 'sequence' || block.type === 'erd') && (
-              <IconPicker onPick={(name) => patchBlock({ code: setLineIcon(block.code, editorRef.current?.cursorLine() ?? Number.MAX_SAFE_INTEGER, name).code })} />
-            )}
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setEditing(null)}>
-              닫기
-            </Button>
-          </div>
-          <BlockProps type={block.type} code={block.code} onChange={(code) => patchBlock({ code })} />
-          <div className="min-h-0 flex-1 overflow-auto">
-            <BlockEditor ref={editorRef} key={block.id} code={block.code} type={block.type} dark={dark} onChange={(code) => patchBlock({ code })} />
-          </div>
-          {resets.has(block.id) && (
-            <p className="text-xs text-muted-foreground">
-              코드가 많이 바뀌어서 자동 배치로 그려요. 패널을 닫으면 옮긴 배치가 지워져요
-            </p>
-          )}
-          {!analyzeDiagram(block.type, block.code).parsed && (
-            <p className="text-xs text-muted-foreground">
-              이 종류는 아직 문법 검사를 지원하지 않아요.
-            </p>
-          )}
-        </aside>
-      )}
-    </div>
-  );
-}
-
-/** Bottom-centre bar for layout edit mode (design §5.5): what the mode does, or that a block has a moved layout, or why it cannot be edited. */
-function LayoutBar({ editing, broken, moved, notice, convertible, onReset, onDone, onFreeform }: { editing: boolean; broken: boolean; moved: boolean; notice: string | null; convertible: boolean; onReset: () => void; onDone: () => void; onFreeform: () => void }) {
-  if (!editing && !notice && !moved && !convertible) return null;
-  return (
-    <div
-      role="status"
-      aria-label="레이아웃 안내"
-      className="absolute bottom-16 left-1/2 z-10 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-2 rounded-lg border bg-background px-3 py-1.5 text-xs shadow"
-    >
-      {(editing || notice || moved) && <span>{editing ? (broken ? '코드 오류를 고치면 옮길 수 있어요' : '노드를 끌어 옮겨요 · Alt를 누르면 맞춤이 꺼져요') : (notice ?? '직접 옮긴 배치예요')}</span>}
-      {(editing || (!notice && moved)) && (
-        <Button variant="outline" size="sm" disabled={!moved} onClick={onReset}>
-          레이아웃 초기화
-        </Button>
-      )}
-      {convertible && !notice && (
-        <Button variant="outline" size="sm" onClick={onFreeform}>
-          자유 도형으로 바꾸기
-        </Button>
-      )}
-      {editing && (
-        <Button variant="outline" size="sm" onClick={onDone}>
-          완료
-        </Button>
-      )}
+      {block && <BlockCodePanel block={block} dark={dark} reset={resets.has(block.id)} onPatch={patchBlock} onClose={() => setEditing(null)} />}
     </div>
   );
 }
