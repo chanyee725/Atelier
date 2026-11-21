@@ -11,6 +11,7 @@ export class HubAutoRemove {
   // nothing is armed until the teammate's next report.
 
   /** Why `s` must not be auto-removed now, or null when it may be. */
+  /** @this {import("./hub-util.js").HubThis} */
   autoRemoveBlocked(s) {
     if (!s || !this.team().autoRemoveDone) return "off";
     if (!s.parent || s.canSpawn) return "lead"; // only teammates; a lead is never removed by the server
@@ -23,6 +24,7 @@ export class HubAutoRemove {
   }
 
   /** Starts (or restarts) the grace timer for a teammate whose report just reached its lead. */
+  /** @this {import("./hub-util.js").HubThis} */
   armAutoRemove(s) {
     this.cancelAutoRemove(s.id);
     if (this.autoRemoveBlocked(s)) return;
@@ -33,12 +35,14 @@ export class HubAutoRemove {
     r.autoRemove.unref?.();
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   cancelAutoRemove(id) {
     const r = this.live.get(id);
     if (r?.autoRemove) { clearTimeout(r.autoRemove); r.autoRemove = null; }
   }
 
   /** The grace period ran out: stop and remove the teammate, then tell its lead. */
+  /** @this {import("./hub-util.js").HubThis} */
   async autoRemove(id) {
     const s = this.get(id);
     if (!s || this.autoRemoveBlocked(s)) return false;

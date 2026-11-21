@@ -13,12 +13,14 @@ export class HubRunners {
   /* ---------------- runners ---------------- */
 
   // Leads get the session-management tools; everyone else gets message_lead only.
+  /** @this {import("./hub-util.js").HubThis} */
   mcpEnv(s) {
     return s.canSpawn
       ? { DISPATCH_URL: `http://127.0.0.1:${this.port}`, DISPATCH_PARENT: s.id }
       : { DISPATCH_URL: `http://127.0.0.1:${this.port}`, DISPATCH_SELF: s.id, DISPATCH_MODE: "child" };
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   systemPrompt(s) {
     // A lead works in its own worktree; without the project folder spelled out it merged into its own branch.
     // Since #768 the lead merges the PR on GitHub, then fast-forwards the project folder.
@@ -32,6 +34,7 @@ export class HubRunners {
     return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   start(s, prompt, images = null) {
     s._killed = false;
     // Turn clock and token baseline for the web "thinking" line.
@@ -60,6 +63,7 @@ export class HubRunners {
     }
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   attach(s, proc) {
     const r = this.rt(s.id);
     r.proc = proc;
@@ -84,6 +88,7 @@ export class HubRunners {
     });
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   startClaude(s, prompt, images = null) {
     const args = ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
       "--model", s.model, "--permission-mode", s.perm, "--permission-prompt-tool", "stdio"];
@@ -104,6 +109,7 @@ export class HubRunners {
     this.touch(s, { status: "running", error: null });
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   onClaude(s, m) {
     const r = this.rt(s.id);
     // Work signals end an auto-remove grace period (a queued message may start a turn while status is idle).
@@ -186,6 +192,7 @@ export class HubRunners {
     }
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   startCodex(s, prompt) {
     // checkPerm (in start) already refused manual and acceptEdits; the sandbox never runs looser than the mode.
     const sandbox = CODEX_SANDBOX[s.perm];
@@ -210,6 +217,7 @@ export class HubRunners {
     this.touch(s, { status: "running", error: null });
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   onCodex(s, m) {
     if (/^(item|turn\.started)/.test(m.type || "")) this.cancelAutoRemove(s.id);
     switch (m.type) {
@@ -254,6 +262,7 @@ export class HubRunners {
     }
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   startGemini(s, prompt) {
     // agy has no approval channel in headless mode: checkPerm (in start) refused manual, and the other
     // modes map to agy's own --mode. --dangerously-skip-permissions is never passed (CLAUDE.md: no
@@ -288,6 +297,7 @@ export class HubRunners {
    *  replaces `last` and reports, even one with no answer: agy ends a turn whose tool needed a permission
    *  headless mode cannot ask for with an empty response (denied_actions), and keeping the previous answer
    *  left the lead waiting for a report that never came (#846). */
+  /** @this {import("./hub-util.js").HubThis} */
   endGeminiTurn(s, turn, response, denied) {
     turn.ended = true;
     let text = response && response.trim() ? response : turn.text.trim() ? turn.text : "";
@@ -307,6 +317,7 @@ export class HubRunners {
 
   /** `turn` is the agy process's own turn; lines from a process that is no longer current (rotate) change no
    *  text, state or report, only add their token usage. Without `turn` the current one is used. */
+  /** @this {import("./hub-util.js").HubThis} */
   onGemini(s, m, turn) {
     const r = this.rt(s.id);
     const cur = r.agyTurn ??= { text: "", ended: false };

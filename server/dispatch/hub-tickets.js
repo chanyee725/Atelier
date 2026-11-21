@@ -16,6 +16,7 @@ export class HubTickets {
   }
 
   /** Which guard window is over its threshold now, if any. */
+  /** @this {import("./hub-util.js").HubThis} */
   limitHit() {
     const g = this.store.data.settings.guard;
     if (!g?.enabled) return null;
@@ -30,6 +31,7 @@ export class HubTickets {
    * At the guard threshold: save every unfinished board task (plus each lead's last word) as an
    * open ticket, once per limit window. After the reset, hand open tickets back to their leads.
    */
+  /** @this {import("./hub-util.js").HubThis} */
   checkTickets(now = Date.now()) {
     const all = (this.store.data.tickets ||= {});
     const hit = this.limitHit();
@@ -75,6 +77,7 @@ export class HubTickets {
   }
 
   /** Sends a ticket back to its lead as the next instruction and marks it resumed. */
+  /** @this {import("./hub-util.js").HubThis} */
   resumeTicket(id) {
     const t = (this.store.data.tickets ||= {})[id];
     if (!t || t.status !== "open") return false;
@@ -95,6 +98,7 @@ export class HubTickets {
     return true;
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   checkTeams(now = Date.now()) {
     this.checkTickets(now);
     const leads = this.sessions.filter(s => s.canSpawn && isOpenStatus(s.status));
@@ -122,6 +126,7 @@ export class HubTickets {
   // waiting to poll. Children have no Dispatch tools of their own to report with.
   // A report waits in pendingReport until it reaches a lead: a session attached later, or a Codex lead
   // busy mid-turn, gets it from setParent() or the watchdog.
+  /** @this {import("./hub-util.js").HubThis} */
   reportToParent(s) {
     const r = this.live.get(s.id);
     if (!r?.lastText) return;
@@ -136,6 +141,7 @@ export class HubTickets {
     this.deliverReport(s);
   }
 
+  /** @this {import("./hub-util.js").HubThis} */
   deliverReport(s) {
     const r = this.live.get(s.id), parent = s.parent && this.get(s.parent);
     if (!r?.pendingReport || !parent || parent.status === "done") return;

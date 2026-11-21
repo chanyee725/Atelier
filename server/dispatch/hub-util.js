@@ -126,9 +126,16 @@ export function maskedPerm(req) {
 
 // Copies a mixin class's methods and getters onto target.prototype (non-enumerable, like class members),
 // so the split-out parts of Hub stay plain Hub.prototype members.
+/** @param {Function} target @param {...Function} sources */
 export function mixin(target, ...sources) {
   for (const src of sources) {
     const { constructor: _c, ...members } = Object.getOwnPropertyDescriptors(src.prototype);
     Object.defineProperties(target.prototype, members);
   }
 }
+
+/**
+ * `this` inside the mixin methods (type-only, for checkJs): Hub with every mixin's members.
+ * @typedef {import("./hub.js").Hub & import("./hub-runners.js").HubRunners & import("./hub-tickets.js").HubTickets
+ *   & import("./hub-auto-remove.js").HubAutoRemove} HubThis
+ */
