@@ -1,19 +1,26 @@
 // An issue a team works on now (#898), as one block at the top of the 이슈 card (#1025; it was the 진행 중 card's 이슈
 // tab, which listed the same issues a second time): number and title with the stage chip (구현, 리뷰, 머지 대기, 머지됨),
 // then who has it (관리자, 팀원), the PR counts, a merged-of-total bar when the issue is split into several PRs, and the
-// time left only when a board task set an ETA. Quiet on purpose: the dashboard's standout is the working-session number.
+// time left when a board task has an ETA (set by the lead, or estimated from past runs: #1028). The chip shows the
+// step count (리뷰 · 3/5). Quiet on purpose: the dashboard's standout is the working-session number.
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { openIssueTeam } from '../live/issueStore';
+import { StageStep } from '../dispatch/StageStep';
 import { ACTIVE_STAGE, issueEta, type ActiveIssue } from './activeIssues';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
-function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
+/** The stage chip: the step count (리뷰 · 3/5, #1028) when the issue has one, else its stage (머지됨). */
+function StageChip({ stage, step }: { stage: ActiveIssue['stage']; step: ActiveIssue['step'] }) {
   const st = ACTIVE_STAGE[stage];
   return (
-    <span data-active-stage={stage} className="inline-flex h-6 w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
-      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', st.dot)} />
-      <span className="truncate">{st.label}</span>
+    <span data-active-stage={stage} className="inline-flex h-6 min-w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
+      {step ? <StageStep stage={step} /> : (
+        <>
+          <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', st.dot)} />
+          <span className="truncate">{st.label}</span>
+        </>
+      )}
     </span>
   );
 }
@@ -21,7 +28,7 @@ function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
 const names = (list: readonly Session[]) => list.map((s) => s.name).join(', ');
 
 export function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: number; open: boolean }) {
-  const eta = issueEta(x.etaAt, now);
+  const eta = issueEta(x.etaAt, now, x.etaEstimated);
   const title = (
     <>
       <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">#{x.number}</span>
@@ -35,7 +42,7 @@ export function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: n
         <button type="button" aria-expanded={open} aria-label={`#${x.number} 팀 모니터링 열기`} onClick={(e) => openIssueTeam(x.number, e.currentTarget)} className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-inherit hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
           {title}
         </button>
-        <StageChip stage={x.stage} />
+        <StageChip stage={x.stage} step={x.step} />
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {x.leads.length > 0 && (

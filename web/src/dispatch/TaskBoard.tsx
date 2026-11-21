@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Card, CardList, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
 import { AttentionGroup, useAttention, useNow } from './AttentionStrip';
+import { StageStep } from './StageStep';
 import { DONE_LIMIT, STAGES, STAGE_BG, etaLine, groupByStage, span, stageLabel, stageSpans, taskWarn, visibleTasks } from './lib/board.ts';
 import { useScoped } from './scope';
 import type { BoardTask, TaskStage } from './types';
@@ -183,6 +184,7 @@ function TaskRow({ t, now }: { t: BoardTask; now: number }) {
       <div className="flex min-w-0 items-center gap-2.5">
         <span role="img" aria-label={stageLabel(t.stage)} title={stageLabel(t.stage)} className={cn('size-2 shrink-0 rounded-full', BAR[t.stage])} />
         <span className="min-w-0 flex-1 truncate text-sm" title={t.title}>{t.title}</span>
+        <StageStep stage={t.stage} dot={false} className="text-xs text-muted-foreground" />
         <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums" title="이 단계에 있은 시간">{inStage(now - t.stageAt)}</span>
       </div>
       {warn && (

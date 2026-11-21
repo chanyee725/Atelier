@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIVE_STAGE, activeIssues, activeStage, issueEta, issueTasks, taskStage } from '../../web/src/home/activeIssues.ts';
+import { ACTIVE_STAGE, activeIssues, activeStage, issueEta, issueStep, issueTasks, taskStage } from '../../web/src/home/activeIssues.ts';
 import { issueRows, type ApiIssue } from '../../web/src/home/issueBoard.ts';
 import type { Session } from '../../shared/dispatch/types.ts';
 import type { BoardTask } from '../../web/src/dispatch/types.ts';
@@ -94,4 +94,21 @@ test('ETA only when a task on the issue set one: the latest open one', () => {
   assert.equal(issueEta(null, now), null);
   assert.deepEqual(issueEta(now + 40 * 60_000, now), { text: '40분 남음', late: false });
   assert.equal(issueEta(now - 5 * 60_000, now)!.late, true);
+});
+
+test('step count shows without lead input and agrees with the stage (#1028)', () => {
+  assert.equal(issueStep('impl', []), 'impl');
+  assert.equal(issueStep('review', []), 'review');
+  assert.equal(issueStep('merge', []), 'merge');
+  assert.equal(issueStep('merged', []), null);
+  assert.equal(issueStep('impl', [task('a', 'plan'), task('a', 'impl')]), 'plan');
+  assert.equal(issueStep('review', [task('a', 'test')]), 'test');
+  assert.equal(issueStep('impl', [task('a', 'merge')]), 'impl');
+  const now = 1_000_000;
+  const tasks = [{ ...task('impl-a', 'review', now + 12 * 60_000), etaEstimated: true }];
+  const x = activeIssues(issueRows(ISSUES, SESSIONS), SESSIONS, tasks).find((i) => i.number === 702)!;
+  assert.equal(x.etaEstimated, true);
+  assert.equal(x.step, 'impl'); // an open working session without a PR keeps it at 구현
+  assert.deepEqual(issueEta(x.etaAt, now, x.etaEstimated), { text: '약 12분 남음(예상)', late: false });
+  assert.deepEqual(issueEta(now - 14 * 60_000, now), { text: '14분 지남', late: true });
 });

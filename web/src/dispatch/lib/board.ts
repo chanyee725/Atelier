@@ -67,20 +67,39 @@ export function span(ms: number): string {
   return `${m}분`;
 }
 
-/** The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done. */
-export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt'>, now: number): { text: string; late: boolean } | null {
+/**
+ * The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done. An
+ * ETA the server estimated from past runs (#1028) reads 약 N분 남음(예상).
+ */
+export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; late: boolean } | null {
   if (t.stage === 'done' || t.etaAt == null) return null;
   const left = t.etaAt - now;
-  return left >= 60_000
-    ? { text: `${span(left)} 남음`, late: false }
-    : left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지났어요`, late: true };
+  if (left >= 60_000) return { text: t.etaEstimated ? `약 ${span(left)} 남음(예상)` : `${span(left)} 남음`, late: false };
+  return left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지남`, late: true };
+}
+
+/** The five stages a task works through, as the step count shows them (#1028). */
+export const WORK_STEPS: { id: TaskStage; label: string }[] = [
+  { id: 'plan', label: '계획' },
+  { id: 'impl', label: '구현' },
+  { id: 'review', label: '리뷰' },
+  { id: 'test', label: '테스트' },
+  { id: 'merge', label: '머지' },
+];
+
+/** Where a task stands among 계획 → 구현 → 리뷰 → 테스트 → 머지 (e.g. 리뷰 · 3/5); null when done or blocked. */
+export function stageStep(stage: TaskStage): { stage: TaskStage; label: string; n: number; total: number; text: string } | null {
+  const i = WORK_STEPS.findIndex(s => s.id === stage);
+  if (i < 0) return null;
+  const { label } = WORK_STEPS[i]!;
+  return { stage, label, n: i + 1, total: WORK_STEPS.length, text: `${label} · ${i + 1}/${WORK_STEPS.length}` };
 }
 
 /**
  * The one small warning a 작업 보드 row may carry (#919): why a task is blocked, or why it is late or stuck. Quiet
  * rows (on time, in progress) get none. `tone` picks the colour (막힘 red, 지연 amber).
  */
-export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt'>, now: number): { text: string; tone: 'bad' | 'warn' } | null {
+export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; tone: 'bad' | 'warn' } | null {
   if (t.stage === 'blocked') return { text: t.note || '막혔어요', tone: 'bad' };
   if (t.stuck) return { text: t.stuck.label, tone: 'warn' };
   const eta = etaLine(t, now);

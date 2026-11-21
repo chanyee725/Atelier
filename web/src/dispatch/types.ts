@@ -9,6 +9,8 @@ export type TaskStage = 'plan' | 'impl' | 'review' | 'test' | 'merge' | 'done' |
 export interface BoardTask {
   id: string; lead: string | null; title: string; stage: TaskStage; owner: string | null;
   createdAt: number; stageAt: number; updatedAt: number; etaAt: number | null; note: string;
+  /** The server filled etaAt from past runs of this stage (#1028), not the lead. */
+  etaEstimated?: boolean;
   stages?: { stage: TaskStage; at: number }[];
   mergeCheck?: MergeCheck | null;
   stuck?: TaskStuck | null;
