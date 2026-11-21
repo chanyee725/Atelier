@@ -1,12 +1,11 @@
 // Workspace file store: one `*.dpx.json` per diagram file, sub-folders = folders.
 // Writes are atomic (temp file in the same dir + rename) and serialized; stale writes are refused by revision.
-// The sections live in store-<name>.js (history); each gets the shared context `c`.
+// The sections live in store-<name>.js (history, runs); each gets the shared context `c`.
 import { lstatSync, readdirSync, watch } from 'node:fs';
 import { pollWatch } from './poll-watch.js';
 import { link, mkdir, readdir, readFile, rename, rm, rmdir, stat, lstat, unlink, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
-import { ensureDirInside, LockPathError } from '../lock.js';
 import { createResolver, parseWorkspacePath, PathError } from './paths.js';
 import { FILE_EXT, FORMAT_VERSION, newFile, normalizeContent, parseStored, ValidationError } from './model.js';
 import { applyPlanOps } from './plan-ops.js';
@@ -14,6 +13,7 @@ import { PLAN_VERSION } from '../../shared/dispatch/plan.ts';
 import { DISCUSSIONS_VERSION, openQuestions } from '../../shared/dispatch/discussions.ts';
 import { StoreError, sha, MAX_TOMBSTONES, isDpx, HISTORY_INTERVAL_MS, HISTORY_MAX, TRASH_DIR, TRASH_DAYS, TRASH_MAX, TRASH_ID, RUNS_DIR } from './store-shared.js';
 import { createHistory } from './store-history.js';
+import { createRunsSidecar } from './store-runs.js';
 
 export { StoreError, HISTORY_DIR, HISTORY_INTERVAL_MS, HISTORY_MAX, VERSION_LABELS, TRASH_DIR, TRASH_DAYS, TRASH_MAX, RUNS_DIR } from './store-shared.js';
 
@@ -153,34 +153,6 @@ export function createStore(
   const runsDirOf = (...a) => c.runsDirOf(...a); // store-history.js
   const snapshotIds = (...a) => c.snapshotIds(...a); // store-history.js
   const snapshotQuietly = (...a) => c.snapshotQuietly(...a); // store-history.js
-
-  // ---- run record sidecars: server/runs/ owns their content; the store owns where they live ----
-  // c.treeMark: (rel) => Promise<{ state } | null>, set by the runs module
-  const runsApi = {
-    // The runs module tells the tree a pipeline file's run state (running / paused / done).
-    setTreeMark: (fn) => {
-      c.treeMark = typeof fn === 'function' ? fn : null;
-    },
-    // Run `fn` in the store's mutation queue, so a run write never interleaves with a move, delete or restore.
-    serial,
-    fileRel: checkedFileRel,
-    dirOf: runsDirOf,
-    // The `runs` folder inside a trash entry must be a real folder inside the workspace (not a link out of it).
-    trashDirOf: async (trashId) => {
-      const dir = join(await entryDir(trashId), 'runs');
-      try {
-        await ensureDirInside(fsr.root, dir);
-      } catch (err) {
-        if (err instanceof LockPathError) throw new StoreError(400, err.message);
-        throw err;
-      }
-      return dir;
-    },
-    onChange(fn) {
-      sidecarListeners.add(fn);
-      return () => sidecarListeners.delete(fn);
-    },
-  };
 
   // ---- trash: deleted files stay restorable for TRASH_DAYS ----
   // `.drawing/trash/<ms>-<hex>/` holds `meta.json` {path, deletedAt}, `file.json` (the content when we saw it go)
@@ -1086,10 +1058,10 @@ export function createStore(
       return queue;
     },
     // Sections not split out yet.
-    runsApi, trashRoot, entryDir, plainFile, trashQuietly, trashMany, readEntry, trashEntries, purgeTrash, trash, restoreTrash, mergeHistory, mergeRuns, collectFiles, walk, tree, createdAt, createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget, scan, reconcile, reconcileNow, startWatching, close,
+    trashRoot, entryDir, plainFile, trashQuietly, trashMany, readEntry, trashEntries, purgeTrash, trash, restoreTrash, mergeHistory, mergeRuns, collectFiles, walk, tree, createdAt, createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget, scan, reconcile, reconcileNow, startWatching, close,
   };
-  for (const make of [createHistory]) Object.assign(c, make(c));
-  const { history, historyVersion, historySnapshotNow, labelVersion } = c;
+  for (const make of [createHistory, createRunsSidecar]) Object.assign(c, make(c));
+  const { history, historyVersion, historySnapshotNow, labelVersion, runsApi } = c;
 
   return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
