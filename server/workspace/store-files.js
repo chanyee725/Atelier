@@ -54,9 +54,9 @@ export function createFileOps(c) {
   // ---- file operations ----
   // `body` may carry starting content (document, canvas, blocks, plan), e.g. a pipeline template; it is checked like a save.
   async function createFile(rel, body = {}) {
-    rel = await matchFolderCase(checkedFileRel(rel));
+    rel = checkedFileRel(rel);
     checkFolderNames(rel.split('/').slice(0, -1));
-    const abs = await wrapPath(rel).catch((err) => {
+    await wrapPath(rel).catch((err) => {
       throw asParentClash(err);
     });
     const { title } = body ?? {};
@@ -71,6 +71,11 @@ export function createFileOps(c) {
       }
     }
     return serial(async () => {
+      // Inside the queue, so the folder lookup sees every earlier create and move (#1026).
+      rel = await matchFolderCase(rel);
+      const abs = await wrapPath(rel).catch((err) => {
+        throw asParentClash(err);
+      });
       await ensureParent(abs);
       const file = { ...fresh, revision: Math.max(fresh.revision, (tombstones.get(rel) ?? 0) + 1) };
       const text = serialize(file);
@@ -238,10 +243,11 @@ export function createFileOps(c) {
 
   async function createFolder(rel) {
     parseOrThrow(rel);
-    rel = await matchFolderCase(rel, { last: true });
     checkFolderNames(rel.split('/'));
-    const abs = await wrapPath(rel);
+    await wrapPath(rel);
     return serial(async () => {
+      rel = await matchFolderCase(rel, { last: true });
+      const abs = await wrapPath(rel);
       if (await statOrNull(abs)) throw new StoreError(409, 'already exists');
       await mkdir(abs, { recursive: true });
       knownDirs.add(rel);
@@ -268,13 +274,13 @@ export function createFileOps(c) {
   async function move(from, to, type, { withSubdocs = false } = {}) {
     parseOrThrow(from);
     parseOrThrow(to);
-    to = await matchFolderCase(to);
     if (type !== undefined && type !== 'file' && type !== 'folder') throw new StoreError(400, 'type must be "file" or "folder"');
     if (withSubdocs) {
       if (type !== 'file') throw new StoreError(400, 'withSubdocs needs type "file"');
-      return serial(() => moveWithSubdocs(from, to));
+      return serial(async () => moveWithSubdocs(from, await matchFolderCase(to)));
     }
     return serial(async () => {
+      to = await matchFolderCase(to);
       if (type !== 'folder') {
         const fileFrom = checkedFileRel(from);
         const fromAbs = await wrapPath(fileFrom);
