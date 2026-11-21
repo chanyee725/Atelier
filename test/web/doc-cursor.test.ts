@@ -149,3 +149,16 @@ test('applyDocCursor: a live caret never fades; a canvas-only edit lets it go; s
   assert.equal(pruneDocGone(m, 60_000 + FADE_MS).size, 0);
   assert.ok(FADE_AFTER_MS > 0);
 });
+
+test('a code-only diagram write lands on the embedded diagram block in the document, then leaves with the session (E712, #1039)', () => {
+  const d = doc(h('Plan'), p('intro'), { type: 'diagram', attrs: { blockId: 'b1' } });
+  let m = applyDocCursor(new Map(), ev({ index: 2, offset: 0 }, { x: 100, y: 50, live: true, diagram: { id: 'b1', line: 3, node: 'B' } }), 0);
+  const c = m.get('s1')!;
+  assert.deepEqual(c.diagram, { id: 'b1', line: 3, node: 'B' });
+  // The diagram is an atom: the caret sits on the block itself.
+  const at = docPos(d, c.spot)!;
+  assert.equal(at.atom, true);
+  assert.equal(d.nodeAt(at.pos)?.type.name, 'diagram');
+  m = applyDocCursor(m, { sid: 's1', gone: true } as never, 1000);
+  assert.equal(m.size, 0);
+});

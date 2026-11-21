@@ -62,7 +62,8 @@ export function shapesOf(file) {
   for (const b of Array.isArray(file?.blocks) ? file.blocks : []) {
     if (!b || typeof b.id !== 'string') continue;
     const box = boxOf(b.x, b.y, b.w, b.h);
-    if (box) out.set(`block:${b.id}`, { sig: JSON.stringify(b), box });
+    // `code` kept for the diagram place of a change (changedDiagram): which line and node of the block changed.
+    if (box) out.set(`block:${b.id}`, { sig: JSON.stringify(b), box, code: typeof b.code === 'string' ? b.code : '' });
   }
   return out;
 }
@@ -117,7 +118,11 @@ export function docBlocksOf(file) {
   const c = file?.document?.content;
   if (!Array.isArray(c)) return [];
   // The signature is kept per file between changes (server/cursor/index.js): a hash, not a second copy of the JSON.
-  return c.map((b) => ({ sig: hash(blockSig(b)), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) }));
+  return c.map((b) => {
+    const type = typeof b?.type === 'string' ? b.type : '';
+    const blockId = type === 'diagram' && typeof b?.attrs?.blockId === 'string' ? b.attrs.blockId : null;
+    return { sig: hash(blockSig(b)), type, text: blockText(b), ...(blockId ? { blockId } : {}) };
+  });
 }
 
 /**
@@ -166,3 +171,67 @@ export function sectionAt(blocks = [], index) {
   }
   return null;
 }
+
+// Diagram place (E712, #1039): which diagram block an agent changed, the first changed line of its code (1-based) and
+// the node named on that line, so the document's diagram block, the code panel and the canvas can show the cursor there.
+
+/** Longest node name sent, in characters. */
+const NODE_MAX = 60;
+
+/**
+ * The node a DSL line names (Eraser-style diagram-as-code): `Name [attrs]`, `Group {`, or the last end of a connection
+ * `A > B: label` (B). Null for blank lines, comments, closing braces and attribute lines (`direction right`).
+ */
+export function nodeOfLine(line) {
+  if (typeof line !== 'string') return null;
+  let t = line.trim();
+  if (!t || t.startsWith('//') || /^[}\]]/.test(t)) return null;
+  // Diagram settings ("direction right", "colorMode bold") name no node.
+  if (/^(direction|colorMode|styleMode|typeface|title|notation|autoNumber|layout)\s/.test(t)) return null;
+  t = t.replace(/\[[^\]]*\]?/g, ' ').replace(/\{\s*$/, '');
+  // A connection: the part after the last arrow, its label (": …") left out.
+  const parts = t.split(/\s*(?:<-->|<->|-->|<--|->|<-|--|>|<)\s*/).filter((p) => p.trim());
+  const name = (parts.at(-1) ?? '').replace(/:.*$/, '').trim().replace(/^["']|["']$/g, '');
+  if (!name) return null;
+  const cs = [...name];
+  return cs.length > NODE_MAX ? cs.slice(0, NODE_MAX).join('') : name;
+}
+
+/** First line (1-based) where `after` differs from `before`; the last line when `after` only lost lines at its end. */
+export function changedLine(before = '', after = '') {
+  const a = after.split('\n');
+  const b = before.split('\n');
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (i === a.length && i === b.length) return null;
+  return Math.min(i, a.length - 1) + 1;
+}
+
+/**
+ * The diagram block a change from `before` to `after` (maps from shapesOf) is in: { id, line?, node? } of the first
+ * added or changed `block:` entry (removed blocks have no place left). `line` and `node` only when its code changed.
+ */
+export function changedDiagram(before, after) {
+  for (const [k, s] of after) {
+    if (!k.startsWith('block:')) continue;
+    const old = before.get(k);
+    if (old?.sig === s.sig) continue;
+    const id = k.slice('block:'.length);
+    const code = s.code ?? '';
+    const prev = old?.code ?? '';
+    if (old && prev === code) return { id };
+    const lines = code.split('\n');
+    // A new block: where its code ends (its last line with text); else the first changed line.
+    let line = old ? changedLine(prev, code) : lines.length;
+    if (!old) while (line > 1 && !lines[line - 1].trim()) line--;
+    if (line === null) return { id };
+    // The changed line, else the nearest one above it that names a node.
+    let node = null;
+    for (let i = line - 1; i >= 0 && !node; i--) node = nodeOfLine(lines[i]);
+    return { id, line, ...(node ? { node } : {}) };
+  }
+  return null;
+}
+
+/** Index of the document's top-level diagram block that shows block `id` (docBlocksOf list), or -1. */
+export const docIndexOfBlock = (blocks = [], id) => blocks.findIndex((b) => b?.blockId === id);

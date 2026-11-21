@@ -9,8 +9,13 @@ import { DIAGRAM_TYPES, TEMPLATES, isDiagramType, type DiagramType } from '../ds
 import { analyzeDiagram } from '../dsl/adapter';
 import { askConfirm } from '../appDialog';
 import { IconPicker } from './IconPicker';
+import { roleLabel } from '../run/overlayModel';
+import { codeLineMarks } from './agentCursor';
+import { now, useCursors } from './cursorStore';
 
 type Props = {
+  /** The workspace file the block is in (its live agent marks are per file). */
+  file: string;
   block: Block;
   dark: boolean;
   /** The block is drawn with its saved layout left out (design §4.2). */
@@ -20,8 +25,11 @@ type Props = {
 };
 
 /** The "다이어그램 코드" panel: a block's type, code and properties. */
-export function BlockCodePanel({ block, dark, reset, onPatch, onClose }: Props) {
+export function BlockCodePanel({ file, block, dark, reset, onPatch, onClose }: Props) {
   const editorRef = useRef<BlockEditorHandle>(null);
+  // The newest live agent that changed a line of this block's code (E712, #1039); its cursor store also drives the
+  // canvas cursor, so the mark comes and goes with it (a `gone` event, a move elsewhere, a reconnect).
+  const agent = codeLineMarks(useCursors(), file, block.id, now())[0] ?? null;
   return (
     <aside
       aria-label="다이어그램 코드"
@@ -61,7 +69,7 @@ export function BlockCodePanel({ block, dark, reset, onPatch, onClose }: Props) 
       </div>
       <BlockProps type={block.type} code={block.code} onChange={(code) => onPatch({ code })} />
       <div className="min-h-0 flex-1 overflow-auto">
-        <BlockEditor ref={editorRef} key={block.id} code={block.code} type={block.type} dark={dark} onChange={(code) => onPatch({ code })} />
+        <BlockEditor ref={editorRef} key={block.id} code={block.code} type={block.type} dark={dark} mark={agent && { line: agent.line, name: agent.name || roleLabel(agent.role), color: agent.color }} onChange={(code) => onPatch({ code })} />
       </div>
       {reset && (
         <p className="text-xs text-muted-foreground">

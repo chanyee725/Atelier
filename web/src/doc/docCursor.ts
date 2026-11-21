@@ -4,7 +4,7 @@
 // a live session's caret (E536) stays at its last place until the session leaves, with its status in the tag.
 // Pure (no React or DOM), so it runs under `node --test`. Memory only: nothing here is stored.
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { cursorColor, easeOut, letGoOf, phaseOf, statusAfter, type CursorEvent } from '../canvas/agentCursor.ts';
+import { cursorColor, diagramSpot, easeOut, letGoOf, phaseOf, statusAfter, type CursorEvent, type DiagramSpot } from '../canvas/agentCursor.ts';
 
 export type DocSpot = { index: number; offset: number };
 
@@ -24,6 +24,8 @@ export type DocCursor = {
   live: boolean;
   /** Short status label shown in the tag, or ''. */
   status: string;
+  /** The diagram block its place is on, with the node it wrote (E712, #1039): the caret sits by that node. */
+  diagram?: DiagramSpot;
 };
 
 /** Glide length (ms) with an ease-out. */
@@ -65,6 +67,7 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
     if (!old || old.file !== file || (Number.isFinite(e.x) && Number.isFinite(e.y))) return letGoOf(cursors, e.sid, now);
     return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now, live: e.live ?? old.live, status: statusAfter(e, old.status) });
   }
+  const diagram = diagramSpot(e.diagram);
   return new Map(cursors).set(e.sid, {
     sid: e.sid,
     name: e.name ?? old?.name ?? '',
@@ -76,6 +79,7 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
     editAt: now,
     live: e.live === true,
     status: statusAfter(e, old?.file === file ? old.status : undefined),
+    ...(diagram ? { diagram } : {}),
   });
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, keymap, tooltips, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view';
+import { EditorState, Compartment, StateEffect, StateField, type Text } from '@codemirror/state';
+import { Decoration, EditorView, WidgetType, keymap, tooltips, lineNumbers, highlightActiveLine, drawSelection, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -13,7 +13,46 @@ import { dslCompletionSource } from './dsl/completion';
 /** What the code panel asks of the editor: the line the caret is on (0-based), or null before it was focused. */
 export type BlockEditorHandle = { cursorLine: () => number | null };
 
-type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void; ref?: Ref<BlockEditorHandle> };
+/** A live agent session changed this line (E712, #1039): marked until the session leaves or moves on. */
+export type AgentLineMark = { line: number; name: string; color: string };
+
+type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void; mark?: AgentLineMark | null; ref?: Ref<BlockEditorHandle> };
+
+const setAgentMark = StateEffect.define<AgentLineMark | null>();
+class AgentTag extends WidgetType {
+  constructor(readonly name: string) {
+    super();
+  }
+  eq(other: AgentTag) {
+    return other.name === this.name;
+  }
+  toDOM() {
+    const el = document.createElement('span');
+    el.className = 'cm-agent-tag';
+    el.setAttribute('aria-hidden', 'true');
+    el.textContent = this.name;
+    return el;
+  }
+}
+/** The marked line (clamped to the text) with the agent's name at its end. */
+function agentMarkDecos(doc: Text, m: AgentLineMark | null): DecorationSet {
+  if (!m) return Decoration.none;
+  const line = doc.line(Math.min(Math.max(m.line, 1), doc.lines));
+  const attributes = m.color ? { style: `--agent: ${m.color}` } : undefined;
+  return Decoration.set([
+    Decoration.line({ class: 'cm-agent-line', attributes }).range(line.from),
+    Decoration.widget({ widget: new AgentTag(m.name), side: 1 }).range(line.to),
+  ]);
+}
+const agentMarkField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    let next = deco.map(tr.changes);
+    for (const e of tr.effects) if (e.is(setAgentMark)) next = agentMarkDecos(tr.state.doc, e.value);
+    return next;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 const baseTheme = EditorView.theme({
   '&': { fontSize: 'var(--text-xs)', background: 'var(--muted)', color: 'var(--foreground)' },
@@ -28,9 +67,11 @@ const baseTheme = EditorView.theme({
   '.cm-completionDetail': { color: 'var(--muted-foreground)', marginLeft: '0.75em', fontStyle: 'normal' },
 });
 
-export function BlockEditor({ code, type, dark, onChange, ref }: Props) {
+export function BlockEditor({ code, type, dark, onChange, mark = null, ref }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const markRef = useRef(mark);
+  markRef.current = mark;
   const focused = useRef(false);
   useImperativeHandle(ref, () => ({
     cursorLine: () => {
@@ -71,6 +112,7 @@ export function BlockEditor({ code, type, dark, onChange, ref }: Props) {
           indentOnInput(),
           dslLanguage,
           hl.current.of(highlightFor(dark)),
+          agentMarkField,
           baseTheme,
           tooltips({ parent: document.body }),
           autocompletion({ override: [dslCompletionSource(() => typeRef.current)], icons: false }),
@@ -102,6 +144,12 @@ export function BlockEditor({ code, type, dark, onChange, ref }: Props) {
   useEffect(() => {
     view.current?.dispatch({ effects: hl.current.reconfigure(highlightFor(dark)) });
   }, [dark]);
+
+  // The mark is a decoration, not text: it never reaches onChange or the saved code.
+  const markKey = mark ? `${mark.line}\n${mark.name}\n${mark.color}` : '';
+  useEffect(() => {
+    view.current?.dispatch({ effects: setAgentMark.of(markRef.current) });
+  }, [markKey]);
 
   useEffect(() => {
     const v = view.current;

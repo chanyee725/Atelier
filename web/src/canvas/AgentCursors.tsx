@@ -12,7 +12,7 @@
 import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { roleLabel } from '../run/overlayModel';
-import { moving, nextPhaseAt, phaseOf, positionAt, shownCursor, toScreen } from './agentCursor';
+import { blockShift, moving, nextPhaseAt, phaseOf, positionAt, shownCursor, toScreen } from './agentCursor';
 import { cursorsNow, glideClocks, now, pruneCursors, reducedMotion, subscribeCursors, useCursors } from './cursorStore';
 
 type Props = { api: ExcalidrawImperativeAPI; wrap: HTMLElement; file: string };
@@ -51,7 +51,11 @@ export function AgentCursors({ api, wrap, file }: Props) {
         if (!el || c.file !== file) continue;
         // The glide runs on the clock of the frames that show it (a remount must not use it up unseen).
         const shown = shownCursor(glideClocks, c, t);
-        const p = toScreen(positionAt(shown, t, reduced), st, rect);
+        // A diagram change: on the block's picture as the canvas has it now (it may have been placed or moved here
+        // since the server saw it, E712 #1039).
+        const at = positionAt(shown, t, reduced);
+        const d = blockShift(c, api.getSceneElements());
+        const p = toScreen({ x: at.x + d.x, y: at.y + d.y }, st, rect);
         el.style.translate = `${Math.round(p.x * 10) / 10}px ${Math.round(p.y * 10) / 10}px`;
         el.style.visibility = '';
         const phase = phaseOf(c, t);
