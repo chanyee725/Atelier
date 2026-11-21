@@ -20,7 +20,7 @@
 ### Added
 
 - 저장소 루트에 Claude Code와 Codex용 marketplace를 두었어요. `/plugin marketplace add chanyee725/Atelier`, `codex plugin marketplace add chanyee725/Atelier`로 설치해요. (#1037)
-- README 맨 위에 데모 영상(GIF·MP4)을 넣고, 다시 찍는 스크립트 `scripts/record-demo.mjs`를 두었어요. (#1037)
+- README 맨 위에 데모 영상(MP4)을 넣고, 다시 찍는 스크립트 `scripts/record-demo.mjs`를 두었어요. (#1037)
 - 팀에 PR 담당과 병합 담당이 생겼어요. 같은 이슈에 팀이 둘 생기지 않아요. (#1031)
 - 대시보드와 작업 보드에 단계 진행과 예상 남은 시간이 나와요. (#1028)
 
