@@ -22,7 +22,7 @@ import { api, useDispatch } from './store';
 import { useScope } from './scope';
 import type { Scope } from './lib/folder.ts';
 import {
-  INTERVALS, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy,
+  INTERVALS, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy, timelinePolls,
   timelineTeams, trackX, writeFolded, writeInterval,
   type IntervalId, type Span, type Team,
 } from './lib/timeline.ts';
@@ -259,9 +259,11 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
     ref.current?.scrollIntoView({ block: 'start' });
   }, [focus]);
 
-  // Every 5s while the page is visible (#944): reload the history and move 지금 along. A hidden page stops both and
-  // catches up the moment it shows again.
+  // Every 5s while the card is unfolded and the page is visible (#944, #1048): reload the history and move 지금 along.
+  // A folded card loads nothing (its rows are not drawn); a hidden page stops both. Either catches up the moment the
+  // card opens or the page shows again.
   useEffect(() => {
+    if (folded) return;
     let alive = true;
     let timer: ReturnType<typeof setInterval> | undefined;
     const load = () => api<Timeline>('GET', '/api/timeline').then(d => {
@@ -274,11 +276,11 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
     const step = () => { setNow(Date.now()); load(); };
     const start = () => { if (timer === undefined) { step(); timer = setInterval(step, REFRESH_MS); } };
     const stop = () => { clearInterval(timer); timer = undefined; };
-    const onVis = () => (document.hidden ? stop() : start());
+    const onVis = () => (timelinePolls(folded, document.hidden) ? start() : stop());
     if (document.hidden) load(); else start();
     document.addEventListener('visibilitychange', onVis);
     return () => { alive = false; stop(); document.removeEventListener('visibilitychange', onVis); };
-  }, []);
+  }, [folded]);
 
   // The server keeps two hours; the card shows the last 30 minutes of it whatever the interval (#944).
   const windowMs = Math.min(WINDOW_MS, data?.windowMs ?? WINDOW_MS);

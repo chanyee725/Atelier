@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FOLDED_KEY, INTERVALS, INTERVAL_KEY, MIN_MARK, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeFolded, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
+import { FOLDED_KEY, INTERVALS, INTERVAL_KEY, MIN_MARK, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy, timelinePolls, timelineTeams, trackX, writeFolded, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
 
 const mk = (id: string, role: string, folder: string | null, startedAt: number, parent: string | null = null) => ({ id, role, folder, startedAt, parent });
 const roles = [{ id: 'lead' }, { id: 'impl' }, { id: 'review' }];
@@ -187,4 +187,11 @@ test('every interval keeps whole-pixel ticks, labels and boxes on the same x (#9
     assert.ok(labels.length >= 1);
     for (const l of labels) assert.ok(grid.includes(l.x), `${iv.id}: label at ${l.x} sits on a tick`);
   }
+});
+
+test('the timeline polls only while the card is unfolded and the page is visible (#944, #1048)', () => {
+  assert.equal(timelinePolls(false, false), true);
+  assert.equal(timelinePolls(true, false), false, 'folded');
+  assert.equal(timelinePolls(false, true), false, 'hidden page');
+  assert.equal(timelinePolls(true, true), false);
 });
