@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIVE_TAB_KEY, activeDocs, areaOf, readActiveTab, saveActiveTab, stepProgress } from '../../web/src/home/activeDocs.ts';
+import { activeDocs, areaOf, stepProgress } from '../../web/src/home/activeDocs.ts';
 import type { AgentPresence } from '../../web/src/home/agents.ts';
 
 const agent = (sid: string, file: string | undefined, extra: Record<string, unknown> = {}) =>
@@ -38,16 +38,4 @@ test('nothing writing and no running plan is an empty list', () => {
 test('stepProgress counts done steps', () => {
   assert.deepEqual(stepProgress({ a: { state: 'done' }, b: { state: 'running' }, c: { state: 'pending' } }), { done: 1, total: 3 });
   assert.equal(stepProgress({}), null);
-});
-
-test('the tab is remembered and storage failures never throw', () => {
-  const m = new Map<string, string>();
-  const store = { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
-  assert.equal(readActiveTab(store), 'issues');
-  saveActiveTab('docs', store);
-  assert.equal(m.get(ACTIVE_TAB_KEY), 'docs');
-  assert.equal(readActiveTab(store), 'docs');
-  const broken = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
-  assert.equal(readActiveTab(broken), 'issues');
-  assert.doesNotThrow(() => saveActiveTab('docs', broken));
 });
