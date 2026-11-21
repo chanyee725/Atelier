@@ -46,7 +46,3 @@ export async function codexModels(run = runCli) {
     return [];
   }
 }
-
-export async function loadModels(run = runCli) {
-  return [...staticModels(), ...(await codexModels(run))];
-}

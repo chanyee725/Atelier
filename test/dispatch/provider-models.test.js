@@ -2,7 +2,7 @@
 // from its own CLI. Replaces the Fable-only rules of E505a (docs/design/fable-only-projects.md, superseded).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { codexModels, loadModels, staticModels } from "../../server/dispatch/models.js";
+import { codexModels, staticModels } from "../../server/dispatch/models.js";
 import { ROLES } from "../../server/dispatch/roles.js";
 import { AGENT_CLIS, ALLOWED } from "../../server/dispatch/cli.js";
 import { effectiveRoles, patchTeam } from "../../server/dispatch/settings.js";
@@ -34,8 +34,6 @@ test("codexModels reads `codex debug models`: listed models only, by priority; [
   assert.equal(list[1].contextWindow, 400000);
   assert.deepEqual(await codexModels(async () => { throw new Error("no codex"); }), []);
   assert.deepEqual(await codexModels(async () => ({ stdout: "not json" })), []);
-  const all = await loadModels(run);
-  assert.equal(all.length, staticModels().length + 2);
 });
 
 test("role defaults: lead/test/design Sonnet, impl/review Opus, docs Haiku; agent CLIs are claude, codex and agy", () => {
