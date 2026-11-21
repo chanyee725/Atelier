@@ -65,19 +65,6 @@ export function linkSteps(steps: readonly PlanStepRef[], nodes: Iterable<string>
   return { linked, missing };
 }
 
-/**
- * After a code edit: when exactly one step lost its node and exactly one new, unclaimed node appeared,
- * offer to relink that step ("이 단계를 새 노드에 연결할까요?"). Never relinks by itself.
- */
-export function relinkOffer(steps: readonly PlanStepRef[], before: Iterable<string>, after: Iterable<string>): { step: string; node: string } | null {
-  const old = new Set(before);
-  const now = new Set(after);
-  const claimed = new Set(steps.map(stepNode));
-  const lost = steps.filter((s) => old.has(stepNode(s)) && !now.has(stepNode(s)));
-  const fresh = [...now].filter((n) => !old.has(n) && !claimed.has(n));
-  return lost.length === 1 && fresh.length === 1 ? { step: lost[0]!.id, node: fresh[0]! } : null;
-}
-
 /** The display state of one step. */
 export function stepView(s: StepInput): StepView {
   if (s.stage === 'done') return 'done';
@@ -88,11 +75,6 @@ export function stepView(s: StepInput): StepView {
   // No board stage: fall back to the sessions alone. A finished session is not a merge (§5.1: `done` is board
   // stage `done` only), so all-finished means waiting for review, never `done`.
   return s.sessions.every((x) => x.state === 'done') ? 'review' : 'active';
-}
-
-/** A session waits on a person: a "사람 기다림" tag on an active/review step, not a progress state. */
-export function waitingOnPerson(s: StepInput, view: StepView = stepView(s)): boolean {
-  return (view === 'active' || view === 'review') && s.sessions.some((x) => x.state === 'waiting');
 }
 
 /**
