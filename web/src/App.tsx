@@ -1,12 +1,11 @@
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type Block, type DocNode, type DpxFile, type Project, type ProjectsView, type TreeNode } from './api';
-import type { CanvasData, CanvasFocus } from './canvas/ExcalidrawCanvas';
-import { newBlockId, sameDrawing } from './canvas/sync';
+import type { CanvasFocus } from './canvas/ExcalidrawCanvas';
+import { newBlockId } from './canvas/sync';
 import { pipelineTemplate, planPath } from './pipelineTemplate';
-import { blocksInFrame, frameScene as sceneOf, frameSceneSig, type CanvasEl } from './doc/model';
 import { Sidebar } from './Sidebar';
 import { Home, type CreateKind } from './home/Home';
-import { CHORD_MS, chord, folderPrefix } from './home/model';
+import { folderPrefix } from './home/model';
 import { Alert } from './components/ui/alert';
 import { Button } from './components/ui/button';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
@@ -16,45 +15,33 @@ import { ChatDock } from './chat/ChatDock';
 import { toastAction, toastResult } from './activity/actionToast';
 import { Toaster } from './components/ui/sonner';
 import type { EntryKind } from './activity/appEvents';
-import { asTreeNode, boardHash, docPlace, newFileDir, paletteScope, parseBoardHash, shellKey, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
+import { asTreeNode, docPlace, newFileDir, paletteScope, subFolderOf, type BoardExtra, type BoardSection, type Crumb, type Section } from './projectNav';
 import { SubDocs } from './SubDocs';
 import { DocMargin } from './doc/DocMargin';
 import { Questions, QUESTIONS_ID } from './doc/Questions';
 import { useAskingSteps } from './run/useAskingSteps';
 import { openQuestions } from '../../shared/dispatch/discussions.ts';
-import type { Editor } from '@tiptap/core';
 import { moveTarget, subdocsMove, type MoveItem } from './sidebarMove';
 import { isPipelineView, shownView, toCanvas } from './viewMode';
-import { createFileSession, type FilePatch, type FileSession } from './fileSession';
+import { createFileSession, type FilePatch } from './fileSession';
 import { useSession } from './useSession';
 import { noteTree } from './freshPaths';
-import { canApplyLive, type WorkspaceEvent } from './externalChange';
 import { TopBar, type View } from './TopBar';
 import { Splitter } from './Splitter';
 import { STORAGE_KEY, defaultShare, loadShare, saveShare } from './splitRatio';
 import { RunStrip } from './run/RunStrip';
-import { onRunEvent, reloadRun, watchRun } from './run/runData';
-import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from './canvas/cursorStore';
-import { applyDocCursorEvent, applyDocCursorStatusEvent, clearDocCursors } from './doc/docCursorStore';
-import type { CursorEvent, CursorStatusEvent } from './canvas/agentCursor';
-import type { RunEvent } from './run/runModel';
+import { watchRun } from './run/runData';
 // The run view (E22) loads when it is first shown.
 const RunView = lazy(() => import('./run/RunView'));
 // The 플랜 view (#729) too.
 const PlanView = lazy(() => import('./run/PlanView'));
 // The 세션 보드 (#731) loads only when opened, so the editor bundle does not carry the Dispatch screens.
 const SessionBoard = lazy(() => import('./dispatch/SessionBoard'));
-// TipTap and the diagram renderer are big; they load when a file is first opened.
-const DocPane = lazy(() => import('./DocPane').then((m) => ({ default: m.DocPane })));
-import { CanvasPane } from './CanvasPane';
-import { lookKey, planLookOf, type PlanLook } from './canvas/planStyle';
 import { LazyBoundary } from './LazyBoundary';
 import { CHUNK_MESSAGE, isChunkLoadError } from './chunkError';
 import { useTheme } from './theme';
 import { fileStem } from './fileName';
 import { moveErrorText, nameProblem, pathAfterMove, renameInitial, renameTarget } from './movePaths';
-import { parseHash } from './doc/outline';
-import { agentFromHash, withAgent } from './live/store';
 import { ExportMenu } from './ExportMenu';
 import { DEFAULT_EXPORT, type ExportOptions } from './export/options';
 import { HistoryDialog } from './HistoryDialog';
@@ -70,174 +57,26 @@ import {
 import { exportBlock, exportCanvas, exportDocumentPdf, exportMarkdown, type ImageKind } from './export/actions';
 import { blockExportTitle } from './export/markdown';
 import type { CanvasHandle } from './export/types';
-import { COPY_IMAGE_SHORTCUT, EXPORT_MENU_QUERY, IS_MAC } from './platform';
+import { COPY_IMAGE_SHORTCUT, IS_MAC } from './platform';
 import { PlanStrip } from './run/PlanStrip';
-import { events } from './lib/events';
 import { askConfirm, askText } from './appDialog';
 import { AppDialogHost } from './AppDialogHost';
+import { CanvasSlot } from './root/CanvasSlot';
+import { DocSlot } from './root/DocSlot';
+import { useNarrow } from './root/useNarrow';
+import { useHashNavigation } from './root/useHashNavigation';
+import { useSaveShortcut, useGlobalShortcuts, useShellShortcuts } from './root/useShortcuts';
+import { useStartup } from './root/useStartup';
+import { useUnloadGuard } from './root/useUnloadGuard';
+import { useWorkspaceEvents } from './root/useWorkspaceEvents';
+import { initialBoard, setBoardHash, setHashPath } from './root/hashRoute';
 
-const NARROW = '(max-width: 767px)';
 /** A top-level folder is a project (design doc 6 §1). */
 const entryKind = (n: TreeNode): EntryKind => (n.type === 'file' ? 'doc' : n.path.includes('/') ? 'folder' : 'project');
-
-// The open file lives in the URL hash so a reload reopens it. Only the workspace-relative path is kept, plus the
-// open agent live view (`&agent=<sid>`, web/src/live/store.ts), which survives a file change.
-// Leaving the 세션 보드 adds a history entry, so 뒤로 goes back to the board (#731).
-const setHashPath = (p: string | null) => {
-  const sid = agentFromHash(window.location.hash);
-  const url = `${window.location.pathname}${window.location.search}${withAgent(p ? `#file=${encodeURIComponent(p)}` : '', sid)}`;
-  if (parseBoardHash(window.location.hash)) window.history.pushState({ drawing: 1 }, '', url);
-  else window.history.replaceState({ drawing: 1 }, '', url);
-};
-// The 세션 보드's address: a new history entry when it changes, so back/forward walk the board's tabs and scope.
-const setBoardHash = (b: BoardSection, replace = false) => {
-  const url = `${window.location.pathname}${window.location.search}${withAgent(boardHash(b), agentFromHash(window.location.hash))}`;
-  if (`${window.location.pathname}${window.location.search}${window.location.hash}` === url) return;
-  if (replace) window.history.replaceState({ drawing: 1 }, '', url);
-  else window.history.pushState({ drawing: 1 }, '', url);
-};
-/** The board route of the address this page opened with, if any. */
-const initialBoard = () => parseBoardHash(window.location.hash);
-// A link followed in this tab was cancelled or failed: the browser already added a history entry for it.
-// Step back over that entry (state is null on entries the browser made) so history has no duplicate of the open file.
-const undoLinkEntry = (current: string | null) => {
-  if (window.history.state === null) window.history.back();
-  else setHashPath(current);
-};
-
-function useNarrow() {
-  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(NARROW);
-    const h = () => setNarrow(mq.matches);
-    mq.addEventListener('change', h);
-    return () => mq.removeEventListener('change', h);
-  }, []);
-  return narrow;
-}
-
-const NO_BLOCKS: Block[] = [];
 
 type TreeFile = Extract<TreeNode, { type: 'file' }>;
 /** Every file in the tree, depth first (folders in tree order). */
 const filesOf = (nodes: TreeNode[]): TreeFile[] => nodes.flatMap((n) => (n.type === 'folder' ? filesOf(n.children) : [n]));
-
-// The panes read the file from the session themselves, so a canvas drag or a keystroke in the document
-// re-renders only the pane that changed, not the whole app.
-type DocSlotProps = {
-  session: FileSession;
-  dark: boolean;
-  tree: TreeNode[];
-  jump: { id: string; n: number } | null;
-  onOpenFile: (path: string) => void;
-  onShow: (blockId: string) => void;
-  onShowFrame: (frameId: string) => void;
-  onExportBlock: (b: Block, kind: ImageKind) => void;
-  onFail: () => Promise<boolean>;
-  /** The document's editor, for the agent margin (E532). */
-  onEditor?: (editor: Editor | null) => void;
-};
-const elementsOf = (canvas: unknown): CanvasEl[] => {
-  const els = (canvas as { elements?: unknown } | null | undefined)?.elements;
-  return Array.isArray(els) ? (els as CanvasEl[]) : [];
-};
-const inFrames = (blocks: Block[], els: CanvasEl[]): Block[] => {
-  const frames = els.filter((e) => !e.isDeleted && (e.type === 'frame' || e.type === 'magicframe'));
-  if (!frames.length) return NO_BLOCKS;
-  return blocks.filter((b) => frames.some((f) => blocksInFrame({ x: f.x ?? 0, y: f.y ?? 0, width: f.width ?? 0, height: f.height ?? 0 }, [b]).length));
-};
-const sameFrameBlocks = (a: Block[], b: Block[]) => sameDrawing(a, b) && a.every((x, i) => x.x === b[i].x && x.y === b[i].y && x.w === b[i].w && x.h === b[i].h);
-/** `value` once it has stopped changing for `ms`; a new `reset` key (another file) takes the live value at once. */
-function useSettled<T>(value: T, ms: number, reset: string): T {
-  const [v, setV] = useState({ value, reset });
-  useEffect(() => {
-    const t = setTimeout(() => setV({ value, reset }), ms);
-    return () => clearTimeout(t);
-  }, [value, ms, reset]);
-  return v.reset === reset ? v.value : value;
-}
-const DocSlot = memo(function DocSlot({ session, dark, tree, jump, onOpenFile, onShow, onShowFrame, onExportBlock, onFail, onEditor }: DocSlotProps) {
-  const path = useSession(session, (s) => s.path ?? '');
-  const key = useSession(session, (s) => `${s.path}#${s.loadSeq}`);
-  const live = useSession(session, (s) => s.live);
-  const remount = useCallback(() => session.remount(), [session]);
-  // Blocks as drawn: a new array only when a block's id, type or code changes, not when it moves.
-  const blocks = useSession(session, (s) => s.file?.blocks ?? NO_BLOCKS, sameDrawing);
-  // Frames and their contents: a new array only when one of those changes (not when a block or other drawing does).
-  const liveFrameScene = useSession(session, (s) => sceneOf(elementsOf(s.file?.canvas)), (a, b) => frameSceneSig(a) === frameSceneSig(b));
-  // Blocks inside a frame, with where they sit: the frame preview draws them (they are not canvas elements).
-  const liveFrameBlocks = useSession(session, (s) => inFrames(s.file?.blocks ?? NO_BLOCKS, elementsOf(s.file?.canvas)), sameFrameBlocks);
-  // A block dragged inside a frame changes this many times a second; the preview (and the pane's context) follows once it settles.
-  // Frames and their blocks settle together, so a moved frame and its blocks never draw out of step.
-  const framePair = useMemo(() => ({ scene: liveFrameScene, blocks: liveFrameBlocks }), [liveFrameScene, liveFrameBlocks]);
-  const { scene: frameScene, blocks: frameBlocks } = useSettled(framePair, 250, key);
-  const getBlocks = useCallback(() => session.getState().file?.blocks ?? NO_BLOCKS, [session]);
-  const getCanvas = useCallback(() => session.getState().file?.canvas, [session]);
-  const look = usePlanLook(session);
-  const onDocument = useCallback((d: unknown) => session.edit({ document: d }), [session]);
-  const onBlocks = useCallback((b: Block[]) => session.edit({ blocks: b }), [session]);
-  return (
-    <LazyBoundary key={key} onFail={onFail}>
-      <Suspense
-        fallback={
-          <p className="p-6 text-sm text-muted-foreground">
-            문서를 불러오는 중이에요…
-          </p>
-        }
-      >
-        <DocPane
-          key={key}
-          // Read once when the pane starts (it is remounted per load).
-          document={session.getState().file?.document}
-          live={live}
-          onLiveFail={remount}
-          blocks={blocks}
-          getBlocks={getBlocks}
-          getCanvas={getCanvas}
-          dark={dark}
-          path={path}
-          tree={tree}
-          onOpenFile={onOpenFile}
-          jump={jump}
-          onDocument={onDocument}
-          onBlocks={onBlocks}
-          onShow={onShow}
-          frameScene={frameScene}
-          frameBlocks={frameBlocks}
-          onShowFrame={onShowFrame}
-          onExportBlock={onExportBlock}
-          onEditor={onEditor}
-          look={look}
-        />
-      </Suspense>
-    </LazyBoundary>
-  );
-});
-
-/** The open file's plan look (#971), kept while only unrelated plan fields change. */
-function usePlanLook(session: FileSession): PlanLook | null {
-  const plan = useSession(session, (s) => s.file?.plan);
-  const look = planLookOf(plan);
-  const key = lookKey(look);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => look, [key]);
-}
-
-type CanvasSlotProps = {
-  session: FileSession;
-  focus: CanvasFocus | null;
-  dark: boolean;
-  handle: { current: CanvasHandle | null };
-  onFail: () => Promise<boolean>;
-};
-const CanvasSlot = memo(function CanvasSlot({ session, focus, dark, handle, onFail }: CanvasSlotProps) {
-  const fileKey = useSession(session, (s) => (s.file && s.path ? `${s.path}#${s.loadSeq}` : null));
-  const canvas = useSession(session, (s) => s.file?.canvas);
-  const blocks = useSession(session, (s) => s.file?.blocks ?? NO_BLOCKS);
-  const onChange = useCallback((patch: { canvas?: CanvasData; blocks?: Block[] }) => session.edit(patch), [session]);
-  const look = usePlanLook(session);
-  return <CanvasPane fileKey={fileKey} canvas={canvas} blocks={blocks} focus={focus} dark={dark} onChange={onChange} handle={handle} onFail={onFail} look={look} />;
-});
 
 export function App() {
   const [theme, toggleTheme, themePref, setThemePref, systemTheme] = useTheme();
@@ -358,53 +197,9 @@ export function App() {
   );
   const openFile = useCallback((p: string) => void open(p), [open]);
 
-  useEffect(() => {
-    api.info().then((i) => setProjectName(i.project || i.workspace || null)).catch(() => {});
-    void refreshTree();
-    const link = parseHash(window.location.hash);
-    if (link)
-      api
-        .readFile(link.path)
-        .then((f) => {
-          load(link.path, f);
-          setSection({ kind: 'doc' });
-          jumpTo(link.heading);
-        })
-        .catch(() => setHashPath(null));
-  }, [refreshTree, load, jumpTo]);
+  useStartup({ refreshTree, load, jumpTo, setProjectName, setSection });
 
-  // A heading link pasted into the address bar of this tab (only the hash changes, so the page does not reload).
-  useEffect(() => {
-    const onHash = () => {
-      // Back/forward into or within the 세션 보드 (#731).
-      const board = parseBoardHash(window.location.hash);
-      if (board) {
-        setSection({ kind: 'board', tab: board.tab, folder: board.folder });
-        if (board.extra) setBoardExtra(board.extra);
-        return;
-      }
-      const link = parseHash(window.location.hash);
-      if (!link) {
-        // Back from the board to an entry without a file: the dashboard.
-        setSection((s) => (s.kind === 'board' ? { kind: 'all' } : s));
-        return;
-      }
-      // Drop `&h=` (same file) or restore the open file's hash (cancelled or failed open), so the
-      // address bar always names the open file and following the same link again fires `hashchange`.
-      const current = session.getState().path;
-      if (link.path === current) {
-        setSection({ kind: 'doc' });
-        setHashPath(current);
-        return jumpTo(link.heading);
-      }
-      void open(link.path).then((ok) => {
-        if (ok) jumpTo(link.heading);
-        else undoLinkEntry(session.getState().path);
-      });
-    };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, [session, open, jumpTo]);
+  useHashNavigation({ session, open, jumpTo, setSection, setBoardExtra });
 
   // 409 choices: drop local edits and re-read, or re-send local edits against the server's revision.
   const reload = async () => {
@@ -439,22 +234,7 @@ export function App() {
     }
   };
 
-  // Warn before leaving with unsaved edits; on pagehide send them with keepalive.
-  useEffect(() => {
-    const before = (e: BeforeUnloadEvent) => {
-      if (session.hasUnsaved()) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    const hide = () => session.saveOnHide();
-    window.addEventListener('beforeunload', before);
-    window.addEventListener('pagehide', hide);
-    return () => {
-      window.removeEventListener('beforeunload', before);
-      window.removeEventListener('pagehide', hide);
-    };
-  }, [session]);
+  useUnloadGuard(session);
 
   /** `folder` = project path the file goes into; undefined = the project shown (or the open file's), null = workspace root. */
   // `sub`: a sub-document of the open document, in the folder named after it (design doc 6 §1).
@@ -484,72 +264,16 @@ export function App() {
       setError(e instanceof ApiError && e.status === 409 ? '같은 이름의 파일이 이미 있어요' : e instanceof Error ? e.message : '만들지 못했어요');
     }
   };
-  // The server now runs in another folder: everything on screen belongs to the old one, so start over at home.
-  const reloadForWorkspace = () => window.location.assign('/');
   // The open file is gone (deleted or moved away): drop it and its pending save.
   const closeOpenFile = useCallback(() => {
     session.close();
     setHashPath(null);
   }, [session]);
 
-  // Other tabs and outside edits: keep the file list current, reload the open file when it changed and holds no unsaved edits.
-  useEffect(() => {
-    // Another tab switched the server to another folder (E554).
-    const offSwitch = events.subscribeJson('workspace-switch', reloadForWorkspace);
-    const offWorkspace = events.subscribeJson<WorkspaceEvent>('workspace', (e) => {
-      // This tab's own move already renames the open file; the echo must not close it.
-      if (e.kind === 'tree' && e.from !== undefined && ownMoves.current.delete(e.from)) {
-        void refreshTree();
-        return;
-      }
-      if (session.external(e, (p) => api.readFile(p), (p, f) => (canApplyLive(session.getState().file, f) ? session.applyLive(p, f) : load(p, f))) === 'close') {
-        setHashPath(null);
-        // Our own delete can be announced before its response arrives: that close needs no error.
-        if (!removing.current) setError('열어 둔 파일이 지워졌거나 옮겨졌어요');
-      }
-      void refreshTree();
-    });
-    // Runs of the open file; a run starting or ending also changes its tree badge.
-    const offRun = events.subscribeJson<RunEvent>('run', (e) => {
-      onRunEvent(e);
-      if (e.run) void refreshTree();
-      // A run that ended: no agent is editing its file any more.
-      if (e.run?.endedAt) {
-        clearCursors(e.file);
-        clearDocCursors(e.file);
-      }
-    });
-    // Live agent cursors (E56): where an agent session is editing a diagram. A malformed event moves nothing.
-    // The same events place agent cursors in the document (E529) when they carry a document place.
-    const offCursor = events.subscribeJson<CursorEvent>('cursor', (e) => {
-      applyCursorEvent(e);
-      applyDocCursorEvent(e);
-    });
-    // A session's status label changed (E536): the tag text only, the cursor stays where it is.
-    const offStatus = events.subscribeJson<CursorStatusEvent>('cursor-status', (e) => {
-      applyCursorStatusEvent(e);
-      applyDocCursorStatusEvent(e);
-    });
-    // Events missed while the stream was down: read the run again. Cursors from before the gap are stale; the server
-    // sends the cursors of sessions still at work to the new connection (live cursors only leave on `gone`).
-    const offOpen = events.onConnection((online) => {
-      if (!online) return;
-      clearCursors();
-      clearDocCursors();
-      void reloadRun();
-    });
-    return () => {
-      offSwitch();
-      offWorkspace();
-      offRun();
-      offCursor();
-      offStatus();
-      offOpen();
-    };
-  }, [session, load, refreshTree]);
-
   // Moves started here, by their `from` path: the server's SSE echo of them is not an outside move.
   const ownMoves = useRef(new Set<string>());
+  useWorkspaceEvents({ session, load, refreshTree, ownMoves, removing, setError });
+
   // `title`: a renamed file takes the new name as its title too, because the sidebar shows the title.
   // `sub`: a document's sub-documents folder that moves along in the same request (sidebar drag, 옮기기 menu).
   const move = async (n: TreeNode, to: string, title?: string, sub?: { from: string; to: string }): Promise<boolean> => {
@@ -697,53 +421,7 @@ export function App() {
     [report, session],
   );
 
-  // Global shortcuts (capture phase, so they win over the canvas and the editor): Ctrl/Cmd+K palette,
-  // Ctrl/Cmd+E export, Shift+Alt+C copy as image. Tool keys, zoom, undo/redo, duplicate, delete and
-  // select all are the canvas's own keys, active while the canvas has focus.
-  const fileOpen = hasFile;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing) return;
-      // A native modal <dialog> (settings) owns the keyboard: no palette, G P or export behind it.
-      if (document.querySelector('dialog:modal')) return;
-      // Mac uses only Cmd, everything else only Ctrl, so Mac's Ctrl+E/K stay with text fields.
-      const mod = IS_MAC ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      const k = e.code;
-      // Inside a text field, the document editor or the code editor these keys belong to the editor
-      // (Ctrl+E is "code" in the document), so the export shortcuts step aside; the menu and palette still work.
-      const editing = e.target instanceof Element && !!e.target.closest('.ProseMirror, input, textarea, select, .cm-editor, [contenteditable="true"], [contenteditable=""]');
-      if (!mod && !e.shiftKey && !e.altKey && !editing && !e.isComposing && !e.repeat && !(e.target instanceof Element && e.target.closest('[role=dialog], [role=menu]'))) {
-        if (k === 'KeyG') chord.g = Date.now();
-        else if (k === 'KeyP' && Date.now() - chord.g < CHORD_MS) {
-          e.preventDefault();
-          e.stopPropagation(); // the canvas must not also take P as its own tool key
-          setTimeout(() => (chord.g = 0));
-          setExportOpen(false);
-          setPaletteGroup('project');
-          setPaletteOpen(true);
-          return;
-        }
-      }
-      if (mod && !e.shiftKey && !e.altKey && k === 'KeyK') {
-        e.preventDefault();
-        e.stopPropagation();
-        setExportOpen(false);
-        setPaletteGroup(undefined);
-        setPaletteOpen((o) => !o);
-      } else if (mod && !e.shiftKey && !e.altKey && k === 'KeyE' && fileOpen && !editing && window.matchMedia(EXPORT_MENU_QUERY).matches) {
-        e.preventDefault();
-        e.stopPropagation();
-        setPaletteOpen(false);
-        openExport(true);
-      } else if (!mod && e.shiftKey && e.altKey && k === 'KeyC' && fileOpen && !editing) {
-        e.preventDefault();
-        e.stopPropagation();
-        void report(exportCanvas(canvasHandle.current, 'copy', session.getState().file?.title ?? '', exportOptionsRef.current));
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [fileOpen, openExport, report, session]);
+  useGlobalShortcuts({ fileOpen: hasFile, session, canvasHandle, exportOptions: exportOptionsRef, openExport, report, setExportOpen, setPaletteGroup, setPaletteOpen });
 
   const commands = (): Command[] => {
     const h = canvasHandle.current;
@@ -931,41 +609,11 @@ export function App() {
   }, []);
   const openCrumb = (c: Crumb) => (c.kind === 'project' ? showSection({ kind: 'project', path: c.path }) : void open(c.path));
 
-  // Shell shortcuts (doc 6 §5): A 홈, R 최근, B 보관함, N 새 파일. Never inside a text field,
-  // an editor, the canvas (its own tool keys) or a dialog: see shellKey.
   const newFileRef = useRef(newFile);
   newFileRef.current = newFile;
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const k = shellKey(e);
-      if (!k) return;
-      e.preventDefault();
-      if (k === 'all') showSection({ kind: 'all' });
-      else if (k === 'recent') showSection({ kind: 'recent' });
-      else if (k === 'board') showBoard();
-      else if (k === 'archive') setTrashOpen(true);
-      else if (k === 'new') void newFileRef.current();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [showSection, showBoard]);
+  useShellShortcuts({ showSection, showBoard, onArchive: () => setTrashOpen(true), newFile: newFileRef });
 
-  // Ctrl/Cmd+S (E540, #671): save now and say so. Autosave stays quiet: a toast per pause in typing would be noise. A Sonner toast (#899).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.code !== 'KeyS') return;
-      e.preventDefault();
-      const p = session.getState().path;
-      if (!p) return;
-      void session.flush().then(() => {
-        const st = session.getState();
-        if (st.path !== p) return;
-        toastAction(st.statusAlert ? { type: 'save-failed', path: p } : { type: 'saved', path: p });
-      });
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [session]);
+  useSaveShortcut(session);
 
   const sidebar = (
     <Sidebar
