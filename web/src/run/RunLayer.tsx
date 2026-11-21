@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendSpot, MARK_INSET, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -121,14 +121,14 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
 }
 
 /**
- * Agents on the step as round initial badges on the node's top edge at the left, overlapping, in their role colour (#687).
+ * Agents on the step as round initial badges in the band above the node, at the left, overlapping, in their role colour (#687).
  * Hover shows the full name, role, model and state (native SVG tooltip); the step's accessible name already lists them.
  * The first agent is drawn last so it sits on top.
  */
 function Badges({ n }: { n: OverlayNode }) {
   const { shown, more } = n.badges;
   if (!shown.length) return null;
-  const cy = n.rect.y;
+  const cy = markY(n.rect);
   const cx = (i: number) => n.rect.x + MARK_INSET + BADGE_R + i * BADGE_STEP;
   return (
     <g className="run-badges" aria-hidden="true">
@@ -163,7 +163,7 @@ const MIN_HIT = 24;
 export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number): { left: number; top: number; width: number; height: number } {
   const count = Math.max(1, n.badges.shown.length + (n.badges.more > 0 ? 1 : 0));
   const x = n.rect.x + MARK_INSET;
-  const y = n.rect.y - BADGE_R;
+  const y = markY(n.rect) - BADGE_R;
   const w = BADGE_R * 2 + (count - 1) * BADGE_STEP;
   const h = BADGE_R * 2;
   const width = Math.max(MIN_HIT, w * scale);

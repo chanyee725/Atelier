@@ -5,6 +5,7 @@ import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts'
 import type { Scene } from '../../shared/render/index.ts';
 import { agentColors, boardShown, legendOf, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
+import { RUN_BAND } from '../../shared/render/badge.ts';
 
 async function scene(code: string): Promise<Scene> {
   const { ast } = parse(code, 'flowchart');
@@ -195,8 +196,9 @@ test('badges (#687): initial in role colour per agent, hover title with role, mo
   const five = ['A', 'B', 'C', 'D', 'E'].map((name) => ({ name, role: 'test' }));
   const b = nodeBadges(five, new Map());
   assert.deepEqual([b.shown.length, b.more], [3, 2]);
-  // One over the limit is drawn, not folded into "+1".
-  assert.deepEqual(nodeBadges(five.slice(0, 4), new Map()).more, 0);
+  // Past three the rest fold into "+N" (#987): four agents draw three badges and "+1".
+  assert.deepEqual([nodeBadges(five.slice(0, 4), new Map()).shown.length, nodeBadges(five.slice(0, 4), new Map()).more], [3, 1]);
+  assert.deepEqual(nodeBadges(five.slice(0, 3), new Map()).more, 0);
   assert.deepEqual(overlayModel(await scene('a'), [{ id: 'a', view: 'pending' }]).nodes[0]!.badges, { shown: [], more: 0 });
 });
 
@@ -233,11 +235,11 @@ test('step marks (#935): chips and a progress line only, never a fill or ring ov
   const idle = stepMarks({ rect, glyph: '○', text: '대기', live: false }, true);
   assert.deepEqual(Object.keys(idle).sort(), ['chip', 'label']);
   assert.equal(idle.label!.text, '○ 대기');
-  // #971: every mark straddles the top edge inside the node's width, so none reaches the next node or its marks.
+  // #971: inside the node's width; #987: in the band above the top edge, so no mark covers the node's text.
   for (const r of [idle.chip, idle.label!]) {
     assert.ok(r.x >= rect.x && r.x + r.w <= rect.x + rect.w, 'inside the node horizontally');
-    assert.ok(r.y < rect.y && r.y + r.h > rect.y, 'on the top edge');
-    assert.ok(r.y + r.h < rect.y + rect.h, 'never below the node');
+    assert.ok(r.y + r.h <= rect.y, 'above the top edge, never over the text');
+    assert.ok(r.y >= rect.y - RUN_BAND, 'inside the band the layout keeps free');
   }
   // Beside two agent badges the long label falls back to the state word, then to the glyph chip alone.
   const busy = { rect, glyph: '✓', text: '완료 · Juno · Tali · Oren · Pell', live: false };
@@ -262,4 +264,30 @@ test('role names that are Object.prototype keys are not roles (#948)', () => {
   assert.equal(roleLabel('constructor'), 'constructor');
   assert.equal(roleColor('toString'), 'var(--idle)');
   assert.notEqual(roleLabel('impl'), 'impl');
+});
+
+test('run-mark band (#987): `runMarks on` keeps a free band above every node and widens the gaps by it', async () => {
+  for (const dir of ['down', 'right'] as const) {
+    const code = `direction ${dir}\na\nb\nc\na > b\na > c`;
+    const plain = nodeRects(await scene(code));
+    const marked = await scene(`${code}\nrunMarks on`);
+    const rects = nodeRects(marked);
+    // The top row has the band inside the picture.
+    const top = Math.min(...[...rects.values()].map((r) => r.y));
+    assert.ok(top >= RUN_BAND, `${dir}: band above the top row`);
+    // Every band is free: no other node reaches into the RUN_BAND above a node.
+    for (const [id, r] of rects)
+      for (const [other, o] of rects) {
+        if (id === other) continue;
+        const overlapX = o.x < r.x + r.w && o.x + o.w > r.x;
+        const overlapY = o.y < r.y && o.y + o.h > r.y - RUN_BAND;
+        assert.ok(!(overlapX && overlapY), `${dir}: ${other} is clear of ${id}'s band`);
+      }
+    // The gap that runs vertically grew by the band.
+    const gap = (m: Map<string, { y: number; h: number }>) => {
+      const ys = [...m.values()].sort((p, q) => p.y - q.y);
+      return ys.at(-1)!.y - (ys[0]!.y + ys[0]!.h);
+    };
+    assert.equal(gap(rects as never) - gap(plain as never), RUN_BAND);
+  }
 });

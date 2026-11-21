@@ -8,7 +8,7 @@ import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
-import { BADGE_H, badgeRect } from '../../../shared/render/badge.ts';
+import { BADGE_H, RUN_BAND, badgeRect } from '../../../shared/render/badge.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -126,8 +126,8 @@ export function nodeBadges(agents: readonly RunAgent[], colors: ReadonlyMap<stri
     color: colors.get(a.name) ?? roleColor(a.role),
     title: [a.name, roleLabel(a.role), ...(a.model ? [a.model] : []), ...(a.state ? [AGENT_STATE[a.state] ?? a.state] : [])].join(' · '),
   }));
-  // With one over the limit, drawing it beats a "+1" badge of the same size.
-  const n = all.length > max + 1 ? max : all.length;
+  // Past the limit the rest fold into one "+N" badge (#987), so the row never grows past max + 1 badges.
+  const n = Math.min(all.length, max);
   return { shown: all.slice(0, n), more: all.length - n };
 }
 
@@ -319,10 +319,15 @@ export function pathData(points: readonly Point[]): string {
 }
 
 /**
- * How far in from a node's left and right corners its marks sit (scene units). Every mark straddles the node's top
- * edge inside its width (#971), so nothing reaches into the gap where the next node, an edge or a neighbour's marks are.
+ * How far in from a node's left and right corners its marks sit (scene units). Every mark stays inside the node's
+ * width (#971), so nothing reaches sideways into the gap where the next node, an edge or a neighbour's marks are.
  */
 export const MARK_INSET = 10;
+/**
+ * Centre line of the marks: the middle of the band above the node's top edge (#987), outside the box, so the badges
+ * and chips never cover the node's title. The layout keeps that band free (`runMarks on`, shared/render/badge.ts).
+ */
+export const markY = (rect: Pick<Rect, 'y'>): number => rect.y - RUN_BAND / 2;
 /** Agent badge radius and the step between overlapping badges (scene units). */
 export const BADGE_R = 9;
 export const BADGE_STEP = 13;
@@ -352,17 +357,18 @@ export function badgeSpan(count: number): number {
 /**
  * What the run layer draws for a step (#935): only chips and a progress line, never a fill or a ring over the node,
  * so the node keeps the diagram's own look (eraser-diagrams rules) and the state never reshapes it.
- * The chips sit on the node's top edge, inside its width (#971): the agent badges at the left (`lead` is their span),
+ * The chips sit in the band above the node's top edge (#987), inside its width (#971): the agent badges at the left (`lead` is their span),
  * the state at the right. The label says "glyph state · agents" when that fits beside the badges, else the state
  * word alone, else only the glyph chip shows.
  */
 export function stepMarks(n: Pick<OverlayNode, 'rect' | 'glyph' | 'text' | 'live'>, labels: boolean, lead = 0): StepMarks {
   const { x, y, w, h } = n.rect;
   const right = x + w - MARK_INSET;
-  const chip = badgeRect(right - BADGE_H / 2, y, textWidth(n.glyph));
+  const my = markY(n.rect);
+  const chip = badgeRect(right - BADGE_H / 2, my, textWidth(n.glyph));
   const room = right - (x + MARK_INSET + lead + (lead ? 4 : 0));
   const fit = labels ? [`${n.glyph} ${n.text}`, `${n.glyph} ${n.text.split(' · ')[0]}`].find((t) => textWidth(t) + 12 <= room) : undefined;
-  const label = fit ? { x: right - (textWidth(fit) + 12), y: y - BADGE_H / 2, w: textWidth(fit) + 12, h: BADGE_H, text: fit } : undefined;
+  const label = fit ? { x: right - (textWidth(fit) + 12), y: my - BADGE_H / 2, w: textWidth(fit) + 12, h: BADGE_H, text: fit } : undefined;
   const inset = Math.min(6, w / 4);
   const progress = n.live ? { x1: x + inset, x2: x + w - inset, y: y + h - 2 } : undefined;
   return { chip, ...(label ? { label } : {}), ...(progress ? { progress } : {}) };

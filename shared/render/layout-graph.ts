@@ -6,7 +6,7 @@ import type { ElementStyle, Label } from './common.ts';
 import { absolutePositions, edgeOffset, runElk } from './elk.ts';
 import type { ElkExtendedEdge, ElkNode } from './elk.ts';
 import { PLATE_PAD, textWidth } from './text.ts';
-import { BADGE_FONT_SIZE, BADGE_FONT_WEIGHT, badgeRect } from './badge.ts';
+import { BADGE_FONT_SIZE, BADGE_FONT_WEIGHT, RUN_BAND, badgeRect } from './badge.ts';
 import { sanitizeColor } from './theme.ts';
 import { BLOCK_LAYOUT_VERSION } from './block-layout.ts';
 import type { BlockLayout } from './block-layout.ts';
@@ -490,9 +490,12 @@ function measureGroup(d: GraphDiagram, group: GraphGroup): GroupGeom {
   const size = fontSize(style);
   const label = measureLabel(group.label, size, style.typeface, false, Infinity, true);
   const iconSize = group.attrs.icon ? Math.round(size * 1.4) : 0;
-  const header = Math.max(GROUP_PAD.top, Math.max(label.h, iconSize) + 22);
+  const header = Math.max(GROUP_PAD.top, Math.max(label.h, iconSize) + 22) + runBand(d);
   return { group, style, label, iconSize, header, minW: Math.ceil(label.w + (iconSize ? iconSize + 8 : 0) + 40) };
 }
+
+/** Extra room above every node for the run marks (`runMarks on`, #987), else 0. */
+export const runBand = (d: Pick<GraphDiagram, 'styles'>): number => (d.styles.runMarks === 'on' ? RUN_BAND : 0);
 
 /** Clip the segment from the centre of `r` towards `p` at the rectangle border. */
 function clipToRect(r: { x: number; y: number; w: number; h: number }, p: Point): Point {
@@ -728,11 +731,14 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
 
   // ELK reads spacing per parent, so every group gets its own values (else ELK's 20 px default).
   const vertical = d.direction === 'down' || d.direction === 'up';
+  // The run-mark band sits above each node, so it widens whichever gap runs vertically: between layers in a
+  // vertical flow, between stacked neighbours in a horizontal one (#987).
+  const band = runBand(d);
   const spacingFor = (kids: readonly GraphChild[]): Record<string, string> => ({
     'elk.spacing.nodeNode': String(
-      kids.some((c) => c.kind === 'group') ? SPACING.block : vertical ? SPACING.neighbour : SPACING.list,
+      (kids.some((c) => c.kind === 'group') ? SPACING.block : vertical ? SPACING.neighbour : SPACING.list) + (vertical ? 0 : band),
     ),
-    'elk.layered.spacing.nodeNodeBetweenLayers': String(SPACING.layer),
+    'elk.layered.spacing.nodeNodeBetweenLayers': String(SPACING.layer + (vertical ? band : 0)),
     'elk.spacing.edgeNode': '24',
     'elk.spacing.edgeEdge': '16',
     'elk.layered.spacing.edgeNodeBetweenLayers': '24',
@@ -948,11 +954,11 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
    */
   const leafGrid = (leaves: Piece[]): Piece => {
     const isDivider = (p: Piece): boolean => [...p.rects.keys()].some((id) => nodes.get(id)?.divider);
-    if (!leaves.some(isDivider)) return packGrid(leaves, gridColumns(leaves.length), GRID_GAP.x, GRID_GAP.y, true);
+    if (!leaves.some(isDivider)) return packGrid(leaves, gridColumns(leaves.length), GRID_GAP.x, GRID_GAP.y + band, true);
     const rows: Piece[] = [];
     let run: Piece[] = [];
     const flush = (): void => {
-      if (run.length) rows.push(packGrid(run, gridColumns(run.length), GRID_GAP.x, GRID_GAP.y, true));
+      if (run.length) rows.push(packGrid(run, gridColumns(run.length), GRID_GAP.x, GRID_GAP.y + band, true));
       run = [];
     };
     for (const leaf of leaves) {
@@ -963,7 +969,7 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
       }
     }
     flush();
-    return packGrid(rows, 1, GRID_GAP.x, GRID_GAP.y, true);
+    return packGrid(rows, 1, GRID_GAP.x, GRID_GAP.y + band, true);
   };
 
   /**
@@ -983,7 +989,7 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
     }
     if (leaves.length > 0) bands.unshift(leafGrid(leaves));
     if (bands.length === 1) return bands[0]!;
-    return packGrid(bands, bandColumns(bands), BAND_GAP.row, BAND_GAP.stack, false);
+    return packGrid(bands, bandColumns(bands), BAND_GAP.row, BAND_GAP.stack + band, false);
   };
 
   const placed = await layoutScope(d.children);

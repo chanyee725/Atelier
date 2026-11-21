@@ -5,10 +5,11 @@ import { parseFlowchart } from '../../shared/dsl/index.ts';
 
 const errors = (code: string) => parseFlowchart(code).diagnostics.filter((d) => d.severity === 'error');
 
-test('decorateCode puts the role look inside the declaration line and keeps the line count', () => {
+test('decorateCode puts the role look inside the declaration line and keeps every line number', () => {
   const code = 'direction right\n\ns1 [label: "웹: 대화"]\ns2\n\ns1 > s2\ns2 > s3\n';
   const out = decorateCode(code, 'flowchart', { s1: 'impl', s2: 'review', s3: 'merge' });
-  assert.equal(out.split('\n').length, code.split('\n').length);
+  // One line more at the end (runMarks, #987); every written line keeps its number.
+  assert.equal(out.split('\n').length, code.split('\n').length + 1);
   assert.deepEqual(out.split('\n'), [
     'direction right',
     '',
@@ -19,7 +20,9 @@ test('decorateCode puts the role look inside the declaration line and keeps the 
     // s3 is created by this connection, so its look goes there.
     's2 > s3 [icon: git-merge, styleMode: plain]',
     '',
+    'runMarks on',
   ]);
+  assert.equal(parseFlowchart(out).ast.styles.runMarks, 'on');
   assert.deepEqual(errors(out), []);
   const nodes = parseFlowchart(out).ast.children;
   assert.equal(nodes.find((n) => n.name === 's1')?.attrs.icon, 'code-xml');
@@ -29,22 +32,22 @@ test('decorateCode puts the role look inside the declaration line and keeps the 
 
 test('decorateCode keeps attributes the node already has and flattens nodes without a step', () => {
   const out = decorateCode('a [color: red, icon: bot]\nb\na > b', 'flowchart', { a: 'lead' });
-  assert.equal(out, 'a [styleMode: plain, color: red, icon: bot]\nb [styleMode: plain]\na > b');
+  assert.equal(out, 'a [styleMode: plain, color: red, icon: bot]\nb [styleMode: plain]\na > b\nrunMarks on');
   assert.deepEqual(errors(out), []);
 });
 
 test('decorateCode handles nodes in groups, quoted names, a type marker and unknown roles', () => {
   const code = 'flowchart-diagram\ng {\n  "x y" [label: X]\n}\nz\n"x y" > z';
   const out = decorateCode(code, 'flowchart', { 'x y': 'test', z: 'someone' });
-  assert.equal(out, 'flowchart-diagram\ng {\n  "x y" [icon: flask-conical, styleMode: plain, label: X]\n}\nz [styleMode: plain]\n"x y" > z');
+  assert.equal(out, 'flowchart-diagram\ng {\n  "x y" [icon: flask-conical, styleMode: plain, label: X]\n}\nz [styleMode: plain]\n"x y" > z\nrunMarks on');
   assert.deepEqual(errors(out), []);
 });
 
 test('decorateCode leaves other diagram types and unchanged looks alone', () => {
   const seq = 'a > b: hi';
   assert.equal(decorateCode(seq, 'sequence', { a: 'impl' }), seq);
-  assert.equal(decorateCode('a', 'architecture', { a: 'docs' }), 'a [icon: file-text, styleMode: plain]');
-  const plain = 'a [styleMode: plain]';
+  assert.equal(decorateCode('a', 'architecture', { a: 'docs' }), 'a [icon: file-text, styleMode: plain]\nrunMarks on');
+  const plain = 'a [styleMode: plain]\nrunMarks off';
   assert.equal(decorateCode(plain, 'flowchart', {}), plain);
 });
 
@@ -61,7 +64,7 @@ test('drawnBlock decorates only the plan block and keeps its identity otherwise'
   assert.equal(drawnBlock(other, look), other);
   assert.equal(drawnBlock({ id: 'p', type: 'flowchart', code: 'a' }, null).code, 'a');
   const d = drawnBlock({ id: 'p', type: 'flowchart', code: 'a', layout: undefined }, look);
-  assert.equal(d.code, 'a [icon: code-xml, styleMode: plain]');
+  assert.equal(d.code, 'a [icon: code-xml, styleMode: plain]\nrunMarks on');
   assert.equal(d.id, 'p');
   assert.notEqual(lookKey(look), lookKey(planLookOf({ block: 'p', steps: [{ id: 'a', node: 'a', role: 'test' }] })));
   assert.equal(lookKey(null), '');
