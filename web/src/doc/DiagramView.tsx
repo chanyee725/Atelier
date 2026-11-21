@@ -17,6 +17,7 @@ import { boardShown } from '../run/overlayModel';
 import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
 import { createShownMemory } from './shownMemory';
+import { docPicWidths, picBox } from './diagramScale';
 import type { CanvasEl } from './model';
 
 export type DocCtx = {
@@ -38,12 +39,6 @@ export const DocContext = createContext<DocCtx>({ path: '', blocks: [], frameSce
 
 // The picture each block showed last (E520), per file (#557).
 const lastShown = createShownMemory<BlockPicture>();
-
-/**
- * Largest scale of a picture in the document (#987): it fills the column when it is wider, but a small one (a
- * single node) stays at its real size instead of being blown up to the column width.
- */
-export const DOC_MAX_SCALE = 1;
 
 export const typeLabel = (type: string) => DIAGRAM_TYPES.find((t) => t.id === type)?.label ?? type;
 
@@ -94,9 +89,8 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
         const s = stageRef.current;
         const i = imgRef.current;
         if (old?.scene && p?.scene && old.fileId !== p.fileId && s && i && willMorph(old.scene, p.scene, dark)) {
-          const a = s.getBoundingClientRect();
-          const b = i.getBoundingClientRect();
-          setMorph({ from: old.scene, to: p.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / old.width });
+          const at = picBox(s.getBoundingClientRect(), i.getBoundingClientRect(), { left: s.scrollLeft, top: s.scrollTop }, old.width);
+          setMorph({ from: old.scene, to: p.scene, ...at });
         } else setMorph(null);
         setPic(p!);
       }),
@@ -112,9 +106,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
     const s = stageRef.current;
     const i = imgRef.current;
     if (from && pic.scene && s && i && willMorph(from, pic.scene, dark)) {
-      const a = s.getBoundingClientRect();
-      const b = i.getBoundingClientRect();
-      setMorph({ from, to: pic.scene, left: b.left - a.left, top: b.top - a.top, scale: b.width / pic.width });
+      setMorph({ from, to: pic.scene, ...picBox(s.getBoundingClientRect(), i.getBoundingClientRect(), { left: s.scrollLeft, top: s.scrollTop }, pic.width) });
     }
     lastShown.set(memKey, pic);
   }, [pic, memKey, dark]);
@@ -154,9 +146,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       return;
     }
     const place = () => {
-      const a = s.getBoundingClientRect();
-      const b = i.getBoundingClientRect();
-      const next = { left: b.left - a.left, top: b.top - a.top, scale: b.width / pic.width };
+      const next = picBox(s.getBoundingClientRect(), i.getBoundingClientRect(), { left: s.scrollLeft, top: s.scrollTop }, pic.width);
       setBox((old) => (old && old.left === next.left && old.top === next.top && old.scale === next.scale ? old : next));
     };
     place();
@@ -172,7 +162,7 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
       {block ? (
         <div ref={stage} className="doc-diagram-stage">
           <button type="button" className="doc-diagram-pic" title="캔버스에서 보기" aria-label={`${label}, 캔버스에서 보기`} onClick={() => onShow(id)}>
-            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', maxWidth: pic.width * DOC_MAX_SCALE, ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
+            {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', ...docPicWidths(pic.width), ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
           {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
           {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} hideEta />}

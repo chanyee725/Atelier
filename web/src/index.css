@@ -472,7 +472,8 @@ body {
 .doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic, .doc-diagram-gone) { border-top: 1px solid var(--border); }
 .doc-diagram-pic {
   display: flex;
-  justify-content: center;
+  /* safe: a picture wider than the column (held at 60%, #987) starts at the left edge instead of being cut on both sides. */
+  justify-content: safe center;
   width: 100%;
   padding: 12px;
   border: 0;
@@ -483,8 +484,9 @@ body {
 .doc-diagram.is-selected { box-shadow: 0 0 0 2px var(--primary); }
 .doc-diagram-pic:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; border-radius: var(--radius-card); }
 .doc-diagram-pic img { max-width: 100%; height: auto; }
-/* Holds the picture button and, as its sibling, the run overlay (positioned over the img). */
-.doc-diagram-stage { position: relative; }
+/* Holds the picture button and, as its sibling, the run overlay (positioned over the img). A picture held at its 60%
+   floor scrolls sideways inside the block (#987); the overlay layers scroll with it. */
+.doc-diagram-stage { position: relative; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: 14px; padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 
