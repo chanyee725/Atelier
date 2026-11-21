@@ -910,7 +910,7 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
           }}
         />
       )}
-      {block && <BlockCodePanel block={block} dark={dark} reset={resets.has(block.id)} onPatch={patchBlock} onClose={() => setEditing(null)} />}
+      {block && path && <BlockCodePanel file={path} block={block} dark={dark} reset={resets.has(block.id)} onPatch={patchBlock} onClose={() => setEditing(null)} />}
     </div>
   );
 }

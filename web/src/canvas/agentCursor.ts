@@ -16,6 +16,9 @@ export type CursorEvent = {
   y?: number;
   /** Where in the document the change ends (E529, #619): top-level block index and text offset in it. */
   doc?: { index: number; offset: number };
+  /** The canvas block (diagram) whose code changed, and the first line of it that did (E712, #1039). */
+  block?: string;
+  line?: number;
   /** The session is at work (E536, #653): its cursor stays until a `gone` event, it does not fade. */
   live?: boolean;
   /** Short status label (shared/dispatch/agent-status.ts), e.g. "글 작성 중…". */

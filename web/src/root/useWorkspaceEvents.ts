@@ -3,6 +3,7 @@ import { api, type DpxFile } from '../api';
 import type { CursorEvent, CursorStatusEvent } from '../canvas/agentCursor';
 import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from '../canvas/cursorStore';
 import { applyDocCursorEvent, applyDocCursorStatusEvent, clearDocCursors } from '../doc/docCursorStore';
+import { applyBlockMark, clearBlockMarks } from '../canvas/blockMarkStore';
 import { canApplyLive, type WorkspaceEvent } from '../externalChange';
 import type { FileSession } from '../fileSession';
 import { events } from '../lib/events';
@@ -57,6 +58,7 @@ export function useWorkspaceEvents({ session, load, refreshTree, ownMoves, remov
     const offCursor = events.subscribeJson<CursorEvent>('cursor', (e) => {
       applyCursorEvent(e);
       applyDocCursorEvent(e);
+      applyBlockMark(e);
     });
     // A session's status label changed (E536): the tag text only, the cursor stays where it is.
     const offStatus = events.subscribeJson<CursorStatusEvent>('cursor-status', (e) => {
@@ -68,6 +70,7 @@ export function useWorkspaceEvents({ session, load, refreshTree, ownMoves, remov
     const offOpen = events.onConnection((online) => {
       if (!online) return;
       clearCursors();
+      clearBlockMarks();
       clearDocCursors();
       void reloadRun();
     });
