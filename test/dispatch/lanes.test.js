@@ -87,14 +87,17 @@ test("run times: merged tasks feed a per-lane median; capped; none yet is null",
   assert.equal(hub.etaHint("quickfix"), null);
 });
 
-test("agent prompts call the tool Atelier, carry the lanes and the lead merge, and drop emphasis", async () => {
+test("agent prompts call the tool Atelier, carry the lanes and the merge hand-off, and drop emphasis", async () => {
   const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE } = await import("../../server/dispatch/roles.js");
   const all = [SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE, ...roles.map(r => r.prompt)].join("\n");
   assert.doesNotMatch(all, /Dispatch|Drawing|IMPORTANT|NEVER|반드시/);
   assert.match(SPAWN_PROMPT, /아틀리에\(Atelier\)/);
   for (const lane of ["quickfix", "normal", "risky"]) assert.match(SPAWN_PROMPT, new RegExp(`- ${lane}:`));
-  assert.match(SPAWN_PROMPT, /gh pr merge <번호> --merge/);
-  assert.match(SPAWN_PROMPT, /git merge --ff-only origin\/develop/);
+  // The merge steps moved to the merge role (#1031); the lead hands PRs and merges off.
+  const merge = roles.find(r => r.id === "merge").prompt;
+  assert.match(merge, /gh pr merge <번호> --merge/);
+  assert.match(merge, /git merge --ff-only origin\/develop/);
+  assert.match(SPAWN_PROMPT, /머지 담당\(merge\)/);
   assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
   assert.doesNotMatch(SPAWN_PROMPT, /20분/);
   // Areas (#782): no fixed list, taken from the project, reused; plans at <영역>/<기능>/계획.dpx.json.
