@@ -292,8 +292,11 @@ export const boardShown = (scene: Scene, steps: readonly RunStep[]): boolean => 
 export type Box = { left: number; top: number; width: number; height: number };
 export type Size = { width: number; height: number };
 
-/** Smallest and largest scale of the canvas legend (#987). */
-export const LEGEND_SCALE = { min: 0.6, max: 1 } as const;
+/**
+ * Smallest and largest scale of the canvas legend (#987). Not as small as the picture's 60% floor: the card sits under
+ * the picture, never beside a node, so it can stay big enough to read.
+ */
+export const LEGEND_SCALE = { min: 0.8, max: 1 } as const;
 
 /**
  * Scale of the canvas legend for a picture drawn at `scale` CSS px per scene unit: the same as the picture, so the
@@ -305,21 +308,14 @@ export const legendScale = (scale: number): number => (Number.isFinite(scale) ? 
 const EDGE = 8;
 
 /**
- * Where the canvas legend goes, in overlay px (§5.1): under the picture (below the step labels), else left of it,
- * else right, else above; the first side where it fits whole inside the overlay. When none does it goes under the
- * picture. Either way it is clamped inside the overlay so the pane edge never cuts it.
+ * Where the canvas legend goes, in overlay px (§5.1, #987): always under the picture (below the step labels), lined
+ * up with its left edge, the same place the document puts its run card. It is moved sideways to stay inside the
+ * overlay but never up over the picture: when the picture reaches the pane's bottom the card is below the fold and
+ * shows when the canvas is scrolled, instead of covering nodes.
  */
 export function legendSpot(pic: Box, size: Size, area: Size, gap = 12, below = 0): { left: number; top: number } {
-  const sides = [
-    { left: pic.left, top: pic.top + pic.height + below + gap },
-    { left: pic.left - gap - size.width, top: pic.top },
-    { left: pic.left + pic.width + gap, top: pic.top },
-    { left: pic.left, top: pic.top - gap - size.height },
-  ];
-  const fits = (p: { left: number; top: number }) => p.left >= EDGE && p.top >= EDGE && p.left + size.width <= area.width - EDGE && p.top + size.height <= area.height - EDGE;
-  const p = sides.find(fits) ?? sides[0]!;
-  const clamp = (v: number, max: number) => Math.max(EDGE, Math.min(v, max - EDGE));
-  return { left: clamp(p.left, area.width - size.width), top: clamp(p.top, area.height - size.height) };
+  const left = Math.max(EDGE, Math.min(pic.left, area.width - size.width - EDGE));
+  return { left, top: Math.max(EDGE, pic.top + pic.height + below + gap) };
 }
 
 /** SVG path data through the edge's points (straight segments; the overlay traces, it does not redraw the connector). */

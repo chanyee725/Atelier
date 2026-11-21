@@ -68,7 +68,10 @@ export function RunEta({ steps }: { steps: readonly RunStep[] }) {
   return <EtaCorner panel={panel} />;
 }
 
-/** Per-agent time left, bottom-right corner of the picture (#735). One row per working agent, the rest fold into "+N". */
+/**
+ * Per-agent time left (#735). One row per working agent, the rest fold into "+N". In the document it is a card under
+ * the picture (`RunEta`); on the canvas it is the middle part of the legend card under the picture (#987).
+ */
 function EtaCorner({ panel }: { panel: EtaPanel }) {
   if (!panel.rows.length) return null;
   return (
@@ -172,13 +175,16 @@ export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number)
 }
 
 /**
- * The canvas legend: placed in overlay px on the side of the picture with room (`legendSpot`), measured after it
- * renders so the clamp knows its size, and scaled with the picture between 60% and 100% (`legendScale`, #987). Shown only when the board is (`boardShown`), like the document's.
+ * The canvas legend: one card under the picture (`legendSpot`, #987), never over a node, with the progress, the
+ * per-agent time left (the document shows the same rows in its card under the picture) and the legend. Measured
+ * after it renders so the clamp knows its size, and scaled with the picture between 80% and 100% (`legendScale`).
+ * Shown only when the board is (`boardShown`), like the document's.
  */
 export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Props, 'motionInside'> & { area: Size }) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<Size | null>(null);
   const shown = useMemo(() => boardShown(scene, steps), [scene, steps]);
+  const etas = useMemo(() => etaPanel(steps), [steps]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -195,15 +201,14 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12) : null;
   // The individual `scale` property, set even at 1 so the stacking context never flips as the zoom changes.
   const zoom: CSSProperties = { scale: String(k), transformOrigin: '0 0' };
-  return <RunLegend ref={ref} steps={steps} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;
+  return <RunLegend ref={ref} steps={steps} etas={etas} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;
 }
 
 /**
  * The board's legend (§5.1): the weighted progress bar and text, then a collapsible list of the agents and states in
- * the run. Beside the picture on the canvas (`CanvasLegend`) and under the picture in the document, so it never
- * covers a node.
+ * the run. Under the picture on the canvas (`CanvasLegend`), so it never covers a node.
  */
-export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunStep[]; canvas?: boolean; style?: CSSProperties; ref?: Ref<HTMLDivElement> }) {
+export function RunLegend({ steps, etas, canvas, style, ref }: { steps: readonly RunStep[]; etas?: EtaPanel; canvas?: boolean; style?: CSSProperties; ref?: Ref<HTMLDivElement> }) {
   const id = useId();
   const p = useMemo(() => runProgress(steps), [steps]);
   const legend = useMemo(() => legendOf(steps), [steps]);
@@ -213,6 +218,7 @@ export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunSt
         {progressLabel(p)}
       </p>
       {p.total > 0 && <progress className="run-progress" value={p.percent} max={100} aria-labelledby={id} />}
+      {etas && <EtaCorner panel={etas} />}
       <details open>
         <summary>범례</summary>
         <ul aria-label="에이전트">

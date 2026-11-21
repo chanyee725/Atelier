@@ -150,20 +150,22 @@ test('boardShown: the legend shows only when a step links to a node', async () =
   assert.equal(boardShown(s, []), false);
 });
 
-test('legendSpot: under the picture, else left, right, above; always inside the overlay', () => {
+test('legendSpot (#987): always under the picture, moved sideways into the overlay, never up over a node', () => {
   const size = { width: 200, height: 120 };
   const area = { width: 1000, height: 700 };
-  // Room under the picture (the label reach is left free).
+  // Under the picture, lined up with its left edge (the label reach is left free).
   assert.deepEqual(legendSpot({ left: 100, top: 100, width: 300, height: 200 }, size, area, 12, 20), { left: 100, top: 332 });
-  // Picture at the bottom: left of it.
-  assert.deepEqual(legendSpot({ left: 400, top: 500, width: 300, height: 190 }, size, area), { left: 188, top: 500 });
-  // Bottom-left corner: right of it.
-  assert.deepEqual(legendSpot({ left: 10, top: 500, width: 300, height: 190 }, size, area), { left: 322, top: 500 });
-  // Bottom, spanning the width: above it.
-  assert.deepEqual(legendSpot({ left: 10, top: 300, width: 980, height: 390 }, size, area), { left: 10, top: 168 });
-  // Picture fills the pane: under it, clamped inside the overlay.
-  const p = legendSpot({ left: -50, top: -50, width: 1200, height: 900 }, size, area);
-  assert.deepEqual(p, { left: 8, top: area.height - size.height - 8 });
+  // Picture at the bottom: still under it (below the fold), never left, right or above it.
+  const bottom = { left: 400, top: 500, width: 300, height: 190 };
+  const p = legendSpot(bottom, size, area);
+  assert.deepEqual(p, { left: 400, top: 702 });
+  assert.ok(p.top >= bottom.top + bottom.height, 'never over the picture');
+  // Picture past the right edge: moved left to stay inside the overlay.
+  assert.deepEqual(legendSpot({ left: 900, top: 100, width: 300, height: 200 }, size, area), { left: 792, top: 312 });
+  // Picture past the left edge: kept at the margin.
+  assert.equal(legendSpot({ left: -50, top: 100, width: 1200, height: 200 }, size, area).left, 8);
+  // Picture scrolled up out of view: the card stays at the top margin instead of going off the pane.
+  assert.equal(legendSpot({ left: 10, top: -500, width: 300, height: 200 }, size, area).top, 8);
 });
 
 test('eta panel (#735): working agents only, goal step left out, extra rows fold into +N', async () => {
@@ -292,9 +294,10 @@ test('run-mark band (#987): `runMarks on` keeps a free band above every node and
   }
 });
 
-test('canvas legend scale (#987): follows the picture between 60% and 100%', () => {
-  assert.equal(legendScale(0.8), 0.8);
-  assert.equal(legendScale(0.2), 0.6, 'never too small to read');
+test('canvas legend scale (#987): follows the picture between 80% and 100%', () => {
+  assert.equal(legendScale(0.9), 0.9);
+  assert.equal(legendScale(0.6), 0.8, 'at the 60% fit floor the card stays readable');
+  assert.equal(legendScale(0.2), 0.8, 'never too small to read');
   assert.equal(legendScale(2), 1, 'never bigger than its real size');
   assert.equal(legendScale(Number.NaN), 1);
 });
