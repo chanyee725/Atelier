@@ -193,7 +193,8 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   // Scaled with the picture (#987); the transform leaves the measured size alone, so place it by the scaled size.
   const k = legendScale(scale);
   const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12) : null;
-  const zoom: CSSProperties = k === 1 ? {} : { transform: `scale(${k})`, transformOrigin: '0 0' };
+  // The individual `scale` property, set even at 1 so the stacking context never flips as the zoom changes.
+  const zoom: CSSProperties = { scale: String(k), transformOrigin: '0 0' };
   return <RunLegend ref={ref} steps={steps} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;
 }
 
