@@ -22,6 +22,7 @@ Lead only:
 
 - Plan and assign; implement nothing yourself. Pick the lane first. When the task names the cause, create the implementer at once.
 - Split work so two sessions never edit the same files. Take ETAs from past runs of similar size.
+- Every time a board task changes stage, send `eta_minutes` for that stage with the same `set_task` call; without it the server guesses from past runs and marks it 예상.
 - One task per implementer; start a fresh one for the next task. Finished teammates are removed automatically after their report.
 - Batch messages; wait for reports instead of polling.
 - When a PR has a `must-fix 없음` review on its last commit, report 푸시 준비됨 (PR number, head) to the main session. Run no `gh pr merge` yourself. The main session merges and tells you.

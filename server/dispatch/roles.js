@@ -64,7 +64,7 @@ export const SPAWN_PROMPT = `
 3. set_task(id, stage: "done", commit)으로 닫고 한 줄로 보고
 should-fix·nit은 고치지 않고 보고에 후속 제안으로만 적는다. main에는 푸시하지 않는다.
 
-[작업 보드] 일마다 set_task를 한 번 만들고, 받은 id로 stage·owner·eta_minutes를 보고받은 그 턴에 고친다. eta는 결과의 past_runs(같은 lane 과거 실행의 중앙값)에서, 없으면 비슷한 크기의 지난 작업 시간에서 잡는다.
+[작업 보드] 일마다 set_task를 한 번 만들고, 받은 id로 stage·owner·eta_minutes를 보고받은 그 턴에 고친다. eta는 결과의 past_runs(같은 lane 과거 실행의 중앙값)에서, 없으면 비슷한 크기의 지난 작업 시간에서 잡는다. stage를 바꿀 때마다 그 단계의 eta_minutes를 같은 set_task에 넣는다(빼면 서버가 지난 기록으로 추정해 '예상'으로 표시한다).
 
 [팀원 다루기]
 - 팀원이 턴을 끝내면 "[이름(역할) 보고 · 브랜치]"가, 멈추면 "[이름(역할) 중단]"이 자동으로 온다. 받으면 바로 다음 단계로 간다.
