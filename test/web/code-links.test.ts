@@ -119,14 +119,14 @@ test('codeError gives a plain message per failure', () => {
 
 test('badges sit on the top-right corner of nodes with code, once per block', () => {
   const view = { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 };
-  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 50, h: 30 }, { kind: 'node', id: 'Api', x: 100, y: 20, w: 50, h: 30 }] } };
+  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 80, h: 30 }, { kind: 'node', id: 'Api', x: 130, y: 20, w: 80, h: 30 }] } };
   const image = { id: 'img', type: 'image', customData: { blockId: 'b1' }, x: 0, y: 0, width: 400, height: 200, fileId: 'f' };
   const lookup = (id: string) => (id === 'b1' ? info : undefined);
   const get = () => pic as never;
   const out = placeBadges([image, { ...image, id: 'copy' }] as never, view, { left: 0, top: 0 }, lookup, get, null);
   assert.equal(out.length, 1);
   assert.equal(out[0]!.node, 'Web');
-  assert.equal(out[0]!.x, 60);
+  assert.equal(out[0]!.x, 90);
   assert.equal(out[0]!.y, 20);
   assert.deepEqual(placeBadges([image] as never, view, { left: 0, top: 0 }, lookup, get, 'b1'), []);
   assert.deepEqual(placeBadges([{ ...image, angle: 1 }] as never, view, { left: 0, top: 0 }, lookup, get, null), []);
@@ -148,7 +148,7 @@ test('free-form shapes with code get a badge at their top-right; sameBadges comp
 
 test('a block node badge is labelled with its node name', () => {
   const view = { scrollX: 0, scrollY: 0, zoom: { value: 1 }, offsetLeft: 0, offsetTop: 0 };
-  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 50, h: 30 }] } };
+  const pic = { width: 400, scene: { handles: [{ kind: 'node', id: 'Web', x: 10, y: 20, w: 80, h: 30 }] } };
   const image = { id: 'img', type: 'image', customData: { blockId: 'b1' }, x: 0, y: 0, width: 400, height: 200, fileId: 'f' };
   const out = placeBadges([image] as never, view, { left: 0, top: 0 }, () => info, () => pic as never, null);
   assert.equal(out[0]!.label, 'Web');
@@ -187,7 +187,7 @@ test('zoomed out, block node badges skip nodes too small for them and never over
   const at = (zoom: number) => placeBadges([image] as never, { scrollX: 0, scrollY: 0, zoom: { value: zoom }, offsetLeft: 0, offsetTop: 0 }, { left: 0, top: 0 }, () => two, () => pic as never, null);
   assert.deepEqual(at(1).map((b) => b.node), ['Web', 'Api'], 'at 100% both nodes get a badge');
   assert.deepEqual(at(0.3), [], 'a 30px node gets none');
-  assert.deepEqual(at(0.45), [], 'a 45px node (a wide diagram fitted whole in the 둘 다 pane) gets none');
+  assert.deepEqual(at(0.5), [], 'a 50px node (a wide diagram fitted whole in the 둘 다 pane) gets none');
   // Two shapes with code side by side: the second badge would sit on the first, so it is left out.
   const s1 = { ...SHAPE, id: 'a', x: 0, y: 0, width: 60, height: 20 };
   const s2 = { ...SHAPE, id: 'b', x: 10, y: 2, width: 60, height: 20 };

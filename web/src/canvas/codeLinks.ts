@@ -186,9 +186,9 @@ export const BADGE_W = 28;
 export const BADGE_H = 16;
 /**
  * A block node narrower than this on screen gets no badge (#1043): at a small zoom (the 둘 다 pane fitting a wide
- * diagram whole) a 28px badge would cover the node.
+ * diagram whole) a 28px badge would cover half the node or more.
  */
-export const BADGE_MIN_NODE_PX = 48;
+export const BADGE_MIN_NODE_PX = 64;
 
 /**
  * Badges for the nodes with code of every block picture on the canvas (rotated, hidden or deleted images, the
