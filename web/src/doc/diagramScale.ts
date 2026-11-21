@@ -15,9 +15,8 @@ export function docPicWidths(width: number): { minWidth: number; maxWidth: numbe
 }
 
 /**
- * Whether a picture `width` wide is held at its 60% floor past a stage `stageWidth` wide (its inner width, padding
- * included), so the stage scrolls sideways and gets the end gap (#1005). Measured on the padded width, so adding
- * the gap never flips the answer back.
+ * Whether a picture `width` wide is held at its 60% floor past a stage `stageWidth` wide, so the stage scrolls
+ * sideways and gets the end gap (#1005). The gap sits past the picture, so adding it never flips the answer back.
  */
 export function stageWide(width: number, stageWidth: number): boolean {
   return stageWidth > 0 && docPicWidths(width).minWidth > stageWidth;
