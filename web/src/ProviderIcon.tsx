@@ -8,8 +8,6 @@ import { useId, type CSSProperties } from 'react';
 import { cn } from './lib/utils';
 import { providerBrand, providerIcon } from './providerIcons';
 
-export { PROVIDER_BRANDS, PROVIDER_ICONS, providerBrand, providerIcon } from './providerIcons';
-
 /** Sized by `className` (default 1em, following the text it sits in). Renders nothing for an unknown id. */
 export function ProviderIcon({ provider, className }: { provider: string | null | undefined; className?: string }) {
   const gradientId = useId();

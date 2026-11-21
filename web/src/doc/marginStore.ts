@@ -89,7 +89,7 @@ const read = () => snap;
 
 // ---- the hook ----
 
-export type { MarginCard, MarginChange } from './agentMargin.ts';
+export type { MarginCard } from './agentMargin.ts';
 
 export type AgentMargin = {
   /** Agents editing this document now, in the order they came. */
