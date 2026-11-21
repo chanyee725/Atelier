@@ -2,66 +2,28 @@
 // start.sh against a stub HTTP server that records POST /api/sessions bodies; no real server or CLI runs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, chmodSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { stubServer, pluginTree, runScript } from './helpers/atelier-team.mjs';
 
-const SRC = new URL('../plugin/', import.meta.url).pathname;
-
-async function runTeam(preset, env) {
-  const posts = [];
-  let n = 0;
-  const server = http.createServer((req, res) => {
-    let b = '';
-    req.on('data', (c) => (b += c));
-    req.on('end', () => {
-      res.setHeader('content-type', 'application/json');
-      if (req.method === 'GET' && req.url === '/api/state') return res.end(JSON.stringify({ providers: { claude: { connected: true } }, sessions: [] }));
-      if (req.method === 'POST' && req.url === '/api/sessions') {
-        const body = JSON.parse(b);
-        posts.push(body);
-        return res.end(JSON.stringify({ sessions: body.items.map((i) => ({ name: `S${++n}`, model: i.model ?? `default-${i.role}`, branch: `dispatch/${i.role}-${n}`, id: `id-${n}` })) }));
-      }
-      res.statusCode = 404;
-      res.end('{}');
-    });
-  });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  const dir = mkdtempSync(join(tmpdir(), 'atelier-team-'));
+async function runTeam(preset, env, { task = 'Issue #1', ...state } = {}) {
+  const stub = await stubServer(state);
+  const tree = pluginTree();
   try {
-    const skill = join(dir, 'plugin/skills/atelier-team');
-    mkdirSync(join(skill, 'scripts'), { recursive: true });
-    mkdirSync(join(skill, 'reference'));
-    mkdirSync(join(dir, 'plugin/scripts'));
-    copyFileSync(join(SRC, 'skills/atelier-team/scripts/team.sh'), join(skill, 'scripts/team.sh'));
-    copyFileSync(join(SRC, 'skills/atelier-team/reference/rules.md'), join(skill, 'reference/rules.md'));
-    writeFileSync(join(dir, 'plugin/scripts/start.sh'), '#!/bin/sh\nexit 0\n');
-    chmodSync(join(dir, 'plugin/scripts/start.sh'), 0o755);
-    const r = await new Promise((resolve) => {
-      const c = spawn('bash', [join(skill, 'scripts/team.sh'), dir, preset, 'Issue #1'], {
-        env: { ...process.env, DISPATCH_PORT: String(server.address().port), DISPATCH_TEAM_MODEL: '', DISPATCH_TEAM_MODE: '', ...env },
-      });
-      let stdout = '';
-      let stderr = '';
-      c.stdout.on('data', (d) => (stdout += d));
-      c.stderr.on('data', (d) => (stderr += d));
-      c.on('close', (status) => resolve({ status, stdout, stderr }));
-    });
-    return { ...r, posts };
+    const r = await runScript(join(tree.scripts, 'team.sh'), [tree.dir, preset, task], { DISPATCH_PORT: String(stub.port), ...env });
+    return { ...r, posts: stub.posts, sessions: stub.sessions };
   } finally {
-    server.close();
-    rmSync(dir, { recursive: true, force: true });
+    stub.close();
+    tree.cleanup();
   }
 }
 
 const roles = (posts) => posts.flatMap((p) => p.items.map((i) => i.role));
 
-test('team.sh small preset: lead, then impl, review and a tester as its children; role defaults pick the models', async () => {
+test('team.sh small preset: lead, then impl, review, a tester, the PR and merge roles as its children; role defaults pick the models', async () => {
   const r = await runTeam('small', { DISPATCH_TEAM_ROLE_MODELS: '' });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(roles(r.posts), ['lead', 'impl', 'review', 'test']);
+  assert.deepEqual(roles(r.posts), ['lead', 'impl', 'review', 'test', 'pr', 'merge']);
+  assert.ok(r.posts.every((p) => p.items.every((i) => i.issue === 1)), 'every session records the issue from the task');
   assert.equal(r.posts[1].parent, 'id-1');
   assert.ok(r.posts.every((p) => p.items.every((i) => !('model' in i))), 'no model override without env');
   assert.ok(r.posts.every((p) => !('mode' in p)), 'no mode without DISPATCH_TEAM_MODE');
@@ -71,7 +33,7 @@ test('team.sh DISPATCH_TEAM_ROLE_MODELS sets only the named roles; DISPATCH_TEAM
   const r = await runTeam('small', { DISPATCH_TEAM_ROLE_MODELS: '{"impl":"gemini-3.8-flash-high"}' });
   assert.equal(r.status, 0, r.stderr);
   const byRole = Object.fromEntries(r.posts.flatMap((p) => p.items).map((i) => [i.role, i.model]));
-  assert.deepEqual(byRole, { lead: undefined, impl: 'gemini-3.8-flash-high', review: undefined, test: undefined });
+  assert.deepEqual(byRole, { lead: undefined, impl: 'gemini-3.8-flash-high', review: undefined, test: undefined, pr: undefined, merge: undefined });
 
   const all = await runTeam('small', { DISPATCH_TEAM_ROLE_MODELS: '{"impl":"gemini-3.8-flash-high"}', DISPATCH_TEAM_MODEL: 'claude-haiku-5-5' });
   assert.ok(all.posts.flatMap((p) => p.items).every((i) => i.model === 'claude-haiku-5-5'));
@@ -92,4 +54,69 @@ test('team.sh DISPATCH_TEAM_MODE sends that mode with every create call (#856); 
   assert.notEqual(bad.status, 0);
   assert.match(bad.stderr, /DISPATCH_TEAM_MODE is one of/);
   assert.equal(bad.posts.length, 0);
+});
+
+test('every preset ends with the PR and merge roles (#1031)', async () => {
+  for (const preset of ['small', 'risky', 'standard', 'ui', 'full']) {
+    const r = await runTeam(preset, {});
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(roles(r.posts).slice(-2), ['pr', 'merge'], preset);
+  }
+});
+
+test('team.sh run twice for one issue makes one lead; the second run prints that lead and creates nothing (#1031)', async () => {
+  const stub = await stubServer();
+  const tree = pluginTree();
+  try {
+    const env = { DISPATCH_PORT: String(stub.port) };
+    const a = await runScript(join(tree.scripts, 'team.sh'), [tree.dir, 'small', 'Issue #1031: roles'], env);
+    assert.equal(a.status, 0, a.stderr);
+    const b = await runScript(join(tree.scripts, 'team.sh'), [tree.dir, 'small', 'Issue #1031 again'], env);
+    assert.equal(b.status, 0, b.stderr);
+    assert.equal(b.stdout.trim(), 'S1');
+    assert.match(b.stderr, /Issue #1031 already has a live lead \(S1\); no new team started/);
+    assert.equal(stub.posts.length, 2, 'only the first run posted');
+    assert.equal(stub.sessions.filter((s) => s.role === 'lead').length, 1);
+  } finally {
+    stub.close();
+    tree.cleanup();
+  }
+});
+
+test('a live lead holds an issue through its session task line or an open board task; done, failed and other issues do not', async () => {
+  const lead = (x) => ({ id: 'L', name: 'Leo', role: 'lead', canSpawn: true, status: 'running', issue: null, ...x });
+  const held = [
+    { sessions: [lead({ issue: 1031 })] },
+    { sessions: [lead({ task: '#1031 역할 추가' })] },
+    { sessions: [lead({ status: 'waiting' })], tasks: [{ lead: 'L', title: 'E716 #1031', stage: 'impl' }] },
+  ];
+  for (const state of held) {
+    const r = await runTeam('small', {}, { task: 'Issue #1031', ...state });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), 'Leo', JSON.stringify(state));
+    assert.equal(r.posts.length, 0);
+  }
+  const free = [
+    { sessions: [lead({ issue: 1031, status: 'done' })] },
+    { sessions: [lead({ issue: 1031, status: 'error' })] },
+    { sessions: [lead({ issue: 10311 })] },
+    { sessions: [lead({ status: 'idle' })], tasks: [{ lead: 'L', title: '#1031', stage: 'done' }] },
+    { sessions: [lead({ issue: 1031, canSpawn: false, role: 'impl' })] },
+  ];
+  for (const state of free) {
+    const r = await runTeam('small', {}, { task: 'Issue #1031', ...state });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.posts.length, 2, JSON.stringify(state));
+  }
+  const ignored = await runTeam('small', { DISPATCH_TEAM_IGNORE_LEAD: 'Leo' }, { task: 'Issue #1031', sessions: [lead({ task: 'next #1031' })] });
+  assert.equal(ignored.posts.length, 2, 'the lead being replaced does not hold the issue');
+});
+
+test('a live merge role in the project is reused: the new team gets none and the lead is told its name', async () => {
+  const r = await runTeam('small', {}, { sessions: [{ id: 'M', name: 'Max', role: 'merge', canSpawn: false, status: 'idle' }] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(roles(r.posts), ['lead', 'impl', 'review', 'test', 'pr']);
+  assert.match(r.posts[0].commonPrompt, /The merge role of this project is Max/);
+  const gone = await runTeam('small', {}, { sessions: [{ id: 'M', name: 'Max', role: 'merge', canSpawn: false, status: 'done' }] });
+  assert.deepEqual(roles(gone.posts).slice(-1), ['merge']);
 });

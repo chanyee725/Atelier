@@ -7,6 +7,10 @@
 # (JSON { role: modelId }, e.g. '{"impl":"gemini-3.8-flash-high"}' for a UI issue), else DISPATCH_TEAM_MODEL for all.
 # Mode: DISPATCH_TEAM_MODE (plan | impl | review | docs | quickfix | research) gives every session that mode's
 # harness profile (#748, #856) where no model is named; unset, each session keeps its role default.
+# One team per issue (#1031): the issue is DISPATCH_TEAM_ISSUE, else the first #<n> in the task. When a live lead
+# already holds it (its sessions' issue, its session task line or an open board task names it), no team starts and
+# that lead's name is printed instead. DISPATCH_TEAM_IGNORE_LEAD (name or id) is left out of that check (relay.sh
+# passes the lead it replaces). Every session records the issue. A live merge role in the project is reused, not doubled.
 set -euo pipefail
 
 here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -31,6 +35,11 @@ case "$preset" in
   full)     items='[{"role":"lead"},{"role":"impl","n":3},{"role":"review","n":2},{"role":"test"},{"role":"docs"}]' ;;
   *) echo "Unknown preset '$preset' (small | risky | standard | ui | full)" >&2; exit 2 ;;
 esac
+# Every preset opens PRs and merges through the two roles (#1031): leads and implementers do neither.
+items="${items%]},{\"role\":\"pr\"},{\"role\":\"merge\"}]"
+
+issue="${DISPATCH_TEAM_ISSUE:-$(printf '%s' "$task" | grep -oE '#[0-9]+' | head -n1 | tr -d '#' || true)}"
+case "$issue" in ""|*[!0-9]*) issue="" ;; esac
 
 # Checked before anything starts: a bad value inside mk's command substitution would not stop the script.
 if [ -n "${DISPATCH_TEAM_ROLE_MODELS:-}" ]; then
@@ -57,19 +66,45 @@ if [ "$connected" != "true" ]; then
   curl -sf -X POST "$url/api/providers/claude/login" "${H[@]}" -d '{}' >/dev/null
 fi
 
+# Duplicate guard: after a server restart a relay may run again; the issue's live lead keeps it.
+tasks="$(curl -sf "$url/api/tasks" || echo '{"tasks":[]}')"
+holder="$(node -e '
+  const [st, tk, issue, ignore] = process.argv.slice(1);
+  const n = Number(issue); if (!n) process.exit(0);
+  const sessions = JSON.parse(st).sessions || [], tasks = JSON.parse(tk).tasks || [];
+  const live = (s) => ["starting", "running", "waiting", "idle"].includes(s.status);
+  const re = new RegExp(`#${n}(?![0-9])`);
+  const l = sessions.find((s) => s.canSpawn && live(s) && s.id !== ignore && s.name !== ignore && (s.issue === n
+    || re.test(s.task || "") || tasks.some((t) => t.lead === s.id && t.stage !== "done" && re.test(t.title || ""))));
+  if (l) console.log(l.name);
+' "$state" "$tasks" "$issue" "${DISPATCH_TEAM_IGNORE_LEAD:-}")"
+if [ -n "$holder" ]; then
+  echo "$holder"
+  echo "Issue #$issue already has a live lead ($holder); no new team started." >&2
+  exit 0
+fi
+# One merge role per project: a live one stays the project's merger, so this team gets none.
+merger="$(node -e '
+  const s = (JSON.parse(process.argv[1]).sessions || []).find((x) => x.role === "merge" && ["starting", "running", "waiting", "idle"].includes(x.status));
+  if (s) console.log(s.name);
+' "$state")"
+if [ -n "$merger" ]; then
+  items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter((i) => i.role !== "merge")))' "$items")"
+fi
+
 # Lead first, then every teammate created as its child: a child's finished turn is forwarded to the lead,
 # so the lead wakes on reports instead of polling, and its list_sessions shows the team.
 mk() { # mk <items-json> <role-note> [parent-id] → POST body
   node -e '
     const fs = require("fs");
-    const [rulesPath, task, items, note, parent, model, effort, perm, roleModelsRaw, mode] = process.argv.slice(1);
+    const [rulesPath, task, items, note, parent, model, effort, perm, roleModelsRaw, mode, issue] = process.argv.slice(1);
     const rules = fs.readFileSync(rulesPath, "utf8").trim();
     let roleModels = {};
     try { roleModels = roleModelsRaw ? JSON.parse(roleModelsRaw) : {}; } catch { console.error("DISPATCH_TEAM_ROLE_MODELS is not JSON"); process.exit(1); }
     // DISPATCH_TEAM_MODEL / _EFFORT / _PERM override every item (cheap test runs: claude-haiku-5-5, low;
     // a fully hands-off team: auto).
     const list = JSON.parse(items).map((i) => ({
-      ...i, ...(roleModels[i.role] && { model: roleModels[i.role] }), ...(model && { model }), ...(effort && { effort }), ...(perm && { perm }),
+      ...i, ...(issue && { issue: Number(issue) }), ...(roleModels[i.role] && { model: roleModels[i.role] }), ...(model && { model }), ...(effort && { effort }), ...(perm && { perm }),
     }));
     process.stdout.write(JSON.stringify({
       commonPrompt: `${rules}\n\n${note}\n\nTask from the user:\n${task}`,
@@ -78,7 +113,7 @@ mk() { # mk <items-json> <role-note> [parent-id] → POST body
       ...(parent && { parent }),
       ...(mode && { mode }),
     }));
-  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}" "${DISPATCH_TEAM_ROLE_MODELS:-}" "${DISPATCH_TEAM_MODE:-}"
+  ' "$skill/reference/rules.md" "$task" "$1" "$2" "${3:-}" "${DISPATCH_TEAM_MODEL:-}" "${DISPATCH_TEAM_EFFORT:-}" "${DISPATCH_TEAM_PERM:-}" "${DISPATCH_TEAM_ROLE_MODELS:-}" "${DISPATCH_TEAM_MODE:-}" "$issue"
 }
 post() { # post <body> → prints sessions, exits on error; sets $ids
   local resp
@@ -93,7 +128,7 @@ post() { # post <body> → prints sessions, exits on error; sets $ids
 lead_items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter(i => i.role === "lead")))' "$items")"
 team_items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter(i => i.role !== "lead")))' "$items")"
 
-lead_line="$(post "$(mk "$lead_items" "Your team is being created right now as your children (list_sessions shows them). Do not create sessions for these roles again; assign work to them with send_message. Each teammate's finished turn reaches you automatically as a \"[name 보고 · branch]\" message, so end your turn when you are waiting for a report instead of sleeping or polling.")")"
+lead_line="$(post "$(mk "$lead_items" "Your team is being created right now as your children (list_sessions shows them). Do not create sessions for these roles again; assign work to them with send_message. Each teammate's finished turn reaches you automatically as a \"[name 보고 · branch]\" message, so end your turn when you are waiting for a report instead of sleeping or polling.${merger:+ The merge role of this project is $merger (not your child): hand merges to it with send_message.}")")"
 lead_id="${lead_line##*$'\t'}"
 team_lines="$(post "$(mk "$team_items" "Your lead is the 관리자 session. Wait for its assignment before starting work: answer this first message only with a one-line ready note. Your final answer each turn is forwarded to the lead automatically; use message_lead only for questions mid-turn." "$lead_id")")"
 printf '%s\n%s\n' "$lead_line" "$team_lines" | cut -f1-3
