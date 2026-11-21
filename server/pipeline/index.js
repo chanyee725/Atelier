@@ -19,6 +19,7 @@ import { redact } from '../dispatch/redact.js';
 import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
+import { planFileName } from './shared.js';
 import { resolvePlanRoles } from './plan-roles.js';
 import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
@@ -26,6 +27,8 @@ import { resolvedStep } from '../../shared/dispatch/plan.ts';
 import { applyStepOverrides } from '../../shared/dispatch/plan-overrides.ts';
 import { planOrderIn } from '../../shared/dispatch/plan-diagram.ts';
 import { nodeLabels, summaryNodes, withSummary, withoutSummary } from '../../shared/dispatch/run-summary.ts';
+
+export { planFileName };
 
 const MAX_BODY = 1024 * 1024;
 const PROVIDER_NAMES = { claude: 'Claude', openai: 'OpenAI Codex', gemini: 'Gemini' };
@@ -48,18 +51,6 @@ async function readJson(req) {
 function send(res, status, body) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
-}
-
-/** A file name from a plan title: letters (any script), digits, `-` and `_`; spaces become `-`. */
-export function planFileName(title) {
-  const stem = String(title ?? '')
-    .normalize('NFC')
-    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .slice(0, 60)
-    .replace(/-+$/, '');
-  return stem || 'plan';
 }
 
 /** Session fields a run record keeps (record.js pickSession drops anything else). */
@@ -316,6 +307,9 @@ export async function setup(ctx) {
       limits: l ? { five: l.five ?? null, seven: l.seven ?? null, fiveReset: l.fiveReset ?? null, sevenReset: l.sevenReset ?? null } : null,
     };
   }
+
+  // Each section file adds its functions to `c`; sections call each other through `c` at call time (#1000).
+  const c = { ctx, ws, recorder, dispatch, drafts, entries, save, changed, leadEntries, readOrNull, check, status };
 
   // ---- write_plan ----
   // <area>/<feature>/계획.dpx.json, or 계획-2… when that name is taken. An empty dir is the top level.
@@ -804,6 +798,8 @@ export async function setup(ctx) {
     const [path, e] = running;
     return { path, step: body.step, note: recorder.noteStep(e.runId, body.step, text.slice(0, 200)) };
   }
+
+  const {} = c;
 
   const route = (method, path, fn) => ({
     method,
