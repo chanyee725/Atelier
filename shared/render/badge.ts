@@ -4,6 +4,12 @@
 
 /** Chip height; the pill radius is half of it, so a chip with one glyph is a circle of radius 9. */
 export const BADGE_H = 18;
+/**
+ * Height of the band a run-marked diagram (`runMarks on`, #987) keeps above every node, outside its box: the
+ * progress board draws the agent badges and the state chip in it, so they never cover the node's text. The layout
+ * widens the gap above each node by this much.
+ */
+export const RUN_BAND = 24;
 /** Room left and right of the text. */
 export const BADGE_PAD_X = 6;
 /** Text size and weight inside the chip (white on a solid fill reads better a little heavier). */

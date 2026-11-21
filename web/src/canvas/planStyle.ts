@@ -41,7 +41,8 @@ function nodesOf(children: readonly GraphChild[], out: GraphChild[] = []): Graph
 /**
  * `code` with each node's look written into the line that names it first (its declaration, or the connection that
  * created it): `[icon, color, styleMode: plain]` added after the name, or put first inside its `[...]`. Attributes the
- * node already has win. The line count and every other line stay the same, so diagnostics and code links still match.
+ * node already has win. A last line `runMarks on` keeps room above each node for the run marks (#987). Every written
+ * line keeps its number, so diagnostics and code links still match.
  * Code that is not a flowchart or architecture graph comes back unchanged.
  */
 export function decorateCode(code: string, type: string, roles: Readonly<Record<string, string>>): string {
@@ -73,6 +74,8 @@ export function decorateCode(code: string, type: string, roles: Readonly<Record<
     for (const e of list.sort((a, b) => b.col - a.col)) t = t.slice(0, e.col) + e.text + t.slice(e.col);
     lines[i] = t;
   }
+  // The run marks get a band of their own above each node (#987); added as a last line so no line moves.
+  if (ast.styles.runMarks === undefined) lines.push('runMarks on');
   return lines.join('\n');
 }
 

@@ -1,5 +1,5 @@
 // Where the canvas looks when a file opens (E494). The first time a file opens in this tab, the view fits every
-// shape and block, but never zooms in past 100%, so a small drawing is not blown up. Once the user pans or zooms,
+// shape and block, but never zooms in past 100%, so a small drawing is not blown up, nor out past 60% (#987). Once the user pans or zooms,
 // the file keeps the view they left it at: a reload (another tab, an agent editing the file) or switching back to
 // the file does not move it. Until then a reload fits again, so a block an agent adds comes into view.
 // The first view Excalidraw reports after an open is the opening view (our fit, or its own default on an empty
@@ -16,8 +16,11 @@ export const FIT_MAX_ZOOM = 1;
 /** The 둘 다 view fits with a fixed 48px margin and may enlarge a small drawing up to this zoom (#976). */
 export const PANE_FIT = { marginPx: 48, maxZoom: 2 } as const;
 export type FitOptions = { marginPx?: number; maxZoom?: number };
-/** Smallest zoom of a fitted view (Excalidraw's own minimum). */
-export const FIT_MIN_ZOOM = 0.1;
+/**
+ * Smallest zoom of a fitted view (#987): below it the text is too small to read. A wider drawing opens at this zoom,
+ * centred, and the rest is a scroll away.
+ */
+export const FIT_MIN_ZOOM = 0.6;
 /** Share of the viewport the drawing takes, leaving a margin around it. */
 export const FIT_MARGIN = 0.9;
 /** Excalidraw's zoom step: fitted zooms are rounded down to it, like its own fit. */
