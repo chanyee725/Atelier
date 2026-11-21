@@ -7,6 +7,7 @@
 // Metadata only: never keys, tokens or names.
 import { ROLES, PERMS } from "./roles.js";
 import { checkEffort, checkPerm, PROVIDER_NAMES } from "./hub.js";
+import { isObj } from "../../shared/is-obj.ts";
 
 export const MODES = [
   { id: "plan", name: "계획/설계" },
@@ -80,7 +81,6 @@ export function defaultCells() {
 
 const cellOf = (choice, role) => ({ provider: choice.provider, model: choice.model ?? null, effort: choice.effort ?? null, perm: choice.perm ?? role.perm ?? "auto" });
 
-const isObj = v => v !== null && typeof v === "object" && !Array.isArray(v);
 const bad = msg => Object.assign(new Error(msg), { status: 400 });
 
 /** Strips a hint to one short line of plain text. */

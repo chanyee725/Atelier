@@ -2,6 +2,7 @@
 // effort, permission and head count for one run, without editing the plan file (so the revision they approve is the
 // one on disk). Pure, shared by the server (validates and applies) and the web (estimates the sessions it will start).
 import { MAX_PLAN_N, MAX_PLAN_NAME, PLAN_PERMS, type Plan, type PlanPerm } from './plan.ts';
+import { isObj } from '../is-obj.ts';
 
 export interface StepOverride {
   model?: string;
@@ -13,7 +14,6 @@ export interface StepOverride {
 export type StepOverrides = Record<string, StepOverride>;
 
 const OVERRIDE_KEYS = ['model', 'effort', 'perm', 'n'] as const;
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** The plan with the overrides laid over its steps, or the first problem in words (a bad shape, an unknown step). */
 export function applyStepOverrides(plan: Plan, overrides: unknown): { plan: Plan } | { error: string } {

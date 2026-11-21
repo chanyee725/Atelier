@@ -3,6 +3,7 @@
 // with `planProblem` / `cleanPlan`, and both sides compute the run order with `planOrder`.
 // Storage rules only check the shape. Whether a plan can run (its block exists, `after` names real steps, no cycle)
 // is `planOrder`'s job, so a person deleting the diagram block never makes their file unsaveable.
+import { isObj } from '../is-obj.ts';
 
 /** Sub-format version this code understands. A plan with a higher `v` is kept verbatim, shown and not runnable. */
 export const PLAN_VERSION = 1;
@@ -54,7 +55,6 @@ export interface Plan {
   steps: PlanStep[];
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isName = (v: unknown): v is string => typeof v === 'string' && v.length >= 1 && v.length <= MAX_PLAN_NAME;
 const NAME_FIELDS = ['provider', 'role', 'model', 'effort', 'mode'] as const;
 

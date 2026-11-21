@@ -2,6 +2,7 @@
 // The JSON shape plus the storage rules both sides share (`layoutProblem`, `cleanLayout`): the server checks saves with
 // them and the web checks layouts read back from canvas images. Reconciling with code edits is in `overrides.ts`;
 // rendering applies layouts in `composeGraph`.
+import { isObj } from '../is-obj.ts';
 
 /** Sub-format version this renderer understands. A layout with another `v` is ignored when drawing. */
 export const BLOCK_LAYOUT_VERSION = 1;
@@ -39,7 +40,6 @@ export const MAX_LAYOUT_ITEMS = 2000;
 /** Longest item key, `parent`, `basis.type` and `basis.direction`. */
 export const MAX_LAYOUT_NAME = 200;
 
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
 /**

@@ -3,6 +3,7 @@
 // `cleanDiscussions`, and both sides count open questions with `openQuestions`.
 // Stored: the question, its choices and the answer (document content), who asked / answered as a session name,
 // "user" or "outside" only, the asking session's id, and times. Never a transcript, an email or a real name.
+import { isObj } from '../is-obj.ts';
 
 /** Sub-format version this code understands. A higher `v` is kept verbatim and not changed. */
 export const DISCUSSIONS_VERSION = 1;
@@ -54,7 +55,6 @@ export interface Discussions {
   items: Discussion[];
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isName = (v: unknown): v is string => typeof v === 'string' && v.length >= 1 && v.length <= MAX_DISCUSSION_NAME;
 const isText = (v: unknown, max: number): v is string => typeof v === 'string' && v.trim().length >= 1 && v.length <= max;
 const isTime = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;

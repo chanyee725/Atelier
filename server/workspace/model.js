@@ -10,6 +10,7 @@ import { blockCodeProblem, cleanBlockCode, salvageBlockCode } from '../../shared
 import { cleanPlan, planProblem } from '../../shared/dispatch/plan.ts';
 // In-document questions (`discussions`, #738) follow the same pattern.
 import { cleanDiscussions, discussionsProblem } from '../../shared/dispatch/discussions.ts';
+import { isObj } from '../../shared/is-obj.ts';
 
 export const FILE_EXT = '.dpx.json';
 // 1: before the document editor (E6). 2: `document` is the editor's own content. Every write stores
@@ -29,7 +30,6 @@ export const emptyCanvas = () => ({ elements: [], appState: {} });
 
 export class ValidationError extends Error {}
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 export function newFile({ title = '' } = {}) {
   return {
