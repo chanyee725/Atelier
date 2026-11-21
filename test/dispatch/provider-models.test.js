@@ -36,10 +36,11 @@ test("codexModels reads `codex debug models`: listed models only, by priority; [
   assert.deepEqual(await codexModels(async () => ({ stdout: "not json" })), []);
 });
 
-test("role defaults: lead/test/design Sonnet, impl/review Opus, docs Haiku; agent CLIs are claude, codex and agy", () => {
+test("role defaults: lead/test/design/merge Sonnet, impl/review Opus, docs/pr Haiku; agent CLIs are claude, codex and agy", () => {
   const model = Object.fromEntries(ROLES.map(r => [r.id, r.model]));
   assert.deepEqual(model, { lead: "claude-sonnet-5-5", impl: "claude-opus-5-5", review: "claude-opus-5-5",
-    test: "claude-sonnet-5-5", design: "claude-sonnet-5-5", docs: "claude-haiku-5-5" });
+    test: "claude-sonnet-5-5", design: "claude-sonnet-5-5", docs: "claude-haiku-5-5",
+    pr: "claude-haiku-5-5", merge: "claude-sonnet-5-5" });
   const ids = staticModels().map(m => m.id);
   for (const r of ROLES) assert.ok(ids.includes(r.model), r.id);
   assert.deepEqual(AGENT_CLIS, ["claude", "codex", "agy"]);
