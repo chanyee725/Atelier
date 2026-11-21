@@ -1,5 +1,7 @@
 // Where the canvas looks when a file opens (E494). The first time a file opens in this tab, the view fits every
-// shape and block, but never zooms in past 100%, so a small drawing is not blown up, nor out past 60% (#987). Once the user pans or zooms,
+// shape and block, but never zooms in past 100%, so a small drawing is not blown up. A file that is one diagram or plan
+// block alone never opens below 60% (#987); a file with several blocks or free shapes opens with all of them in view
+// (#1005). Once the user pans or zooms,
 // the file keeps the view they left it at: a reload (another tab, an agent editing the file) or switching back to
 // the file does not move it. Until then a reload fits again, so a block an agent adds comes into view.
 // The first view Excalidraw reports after an open is the opening view (our fit, or its own default on an empty
@@ -15,12 +17,23 @@ export type Bounds = readonly [number, number, number, number];
 export const FIT_MAX_ZOOM = 1;
 /** The 둘 다 view fits with a fixed 48px margin and may enlarge a small drawing up to this zoom (#976). */
 export const PANE_FIT = { marginPx: 48, maxZoom: 2 } as const;
-export type FitOptions = { marginPx?: number; maxZoom?: number };
+export type FitOptions = { marginPx?: number; maxZoom?: number; minZoom?: number };
 /**
- * Smallest zoom of a fitted view (#987): below it the text is too small to read. A wider drawing opens at this zoom,
- * centred, and the rest is a scroll away.
+ * Smallest zoom of a fitted view of a lone block (#987): below it the text is too small to read. A wider diagram or
+ * plan opens at this zoom, centred, and the rest is a scroll away.
  */
 export const FIT_MIN_ZOOM = 0.6;
+/** Smallest zoom of a fitted view of several things (#1005): Excalidraw's own lowest zoom, so all of them show. */
+export const FIT_ALL_MIN_ZOOM = 0.1;
+
+/**
+ * The smallest zoom the first fit may use, from the block id of each live element (null for a free shape): the
+ * 60% floor only when everything on the canvas is one block, else the whole file comes into view (#1005).
+ */
+export function fitMinZoom(blockIds: readonly (string | null)[]): number {
+  const first = blockIds[0];
+  return first != null && blockIds.every((id) => id === first) ? FIT_MIN_ZOOM : FIT_ALL_MIN_ZOOM;
+}
 /** Share of the viewport the drawing takes, leaving a margin around it. */
 export const FIT_MARGIN = 0.9;
 /** Excalidraw's zoom step: fitted zooms are rounded down to it, like its own fit. */
@@ -42,7 +55,7 @@ export function fitView(bounds: Bounds | null, width: number, height: number, op
   const maxZoom = opts.maxZoom ?? FIT_MAX_ZOOM;
   // Rounded down to the step (a hair over a step counts as on it), then kept within the limits.
   const stepped = Math.floor(raw / ZOOM_STEP + 1e-9) * ZOOM_STEP;
-  const zoom = Math.min(maxZoom, Math.max(FIT_MIN_ZOOM, Number(stepped.toFixed(2))));
+  const zoom = Math.min(maxZoom, Math.max(opts.minZoom ?? FIT_MIN_ZOOM, Number(stepped.toFixed(2))));
   return { zoom, scrollX: width / 2 / zoom - (x1 + x2) / 2, scrollY: height / 2 / zoom - (y1 + y2) / 2 };
 }
 
