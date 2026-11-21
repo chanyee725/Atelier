@@ -9,7 +9,9 @@ import { join } from 'node:path';
 const SRC = new URL('../../plugin/', import.meta.url).pathname;
 
 // A stub Atelier: GET /api/state and /api/tasks answer from `sessions` and `tasks`; POST /api/sessions records the
-// body and adds the made sessions (idle, the lead able to spawn), so a second run sees the first run's team.
+// body and adds the made sessions (idle, the lead able to spawn), so a second run sees the first run's team. Like the
+// hub, it refuses children past the default maxChildren (MAX_CHILDREN) of one parent.
+export const MAX_CHILDREN = 8;
 export async function stubServer({ sessions = [], tasks = [] } = {}) {
   const posts = [];
   let n = 0;
@@ -23,7 +25,10 @@ export async function stubServer({ sessions = [], tasks = [] } = {}) {
       if (req.method === 'POST' && req.url === '/api/sessions') {
         const body = JSON.parse(b);
         posts.push(body);
-        const made = body.items.map((i) => ({ name: `S${++n}`, model: i.model ?? `default-${i.role}`, branch: `dispatch/${i.role}-${n}`, id: `id-${n}`,
+        const total = body.items.reduce((a, i) => a + (i.n || 1), 0);
+        const active = body.parent ? sessions.filter((s) => s.parent === body.parent && !['done', 'error'].includes(s.status)).length : 0;
+        if (body.parent && active + total > MAX_CHILDREN) return res.end(JSON.stringify({ error: `max ${MAX_CHILDREN} children` }));
+        const made = body.items.flatMap((i) => Array.from({ length: i.n || 1 }, () => i)).map((i) => ({ name: `S${++n}`, model: i.model ?? `default-${i.role}`, branch: `dispatch/${i.role}-${n}`, id: `id-${n}`,
           role: i.role, canSpawn: i.role === 'lead', status: 'idle', issue: i.issue ?? null, parent: body.parent ?? null }));
         sessions.push(...made);
         return res.end(JSON.stringify({ sessions: made }));

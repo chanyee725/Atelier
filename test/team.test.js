@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { stubServer, pluginTree, runScript } from './helpers/atelier-team.mjs';
+import { stubServer, pluginTree, runScript, MAX_CHILDREN } from './helpers/atelier-team.mjs';
 
 async function runTeam(preset, env, { task = 'Issue #1', ...state } = {}) {
   const stub = await stubServer(state);
@@ -56,11 +56,14 @@ test('team.sh DISPATCH_TEAM_MODE sends that mode with every create call (#856); 
   assert.equal(bad.posts.length, 0);
 });
 
-test('every preset ends with the PR and merge roles (#1031)', async () => {
+test('every preset ends with the PR and merge roles and fits the default maxChildren (#1031)', async () => {
   for (const preset of ['small', 'risky', 'standard', 'ui', 'full']) {
     const r = await runTeam(preset, {});
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(roles(r.posts).slice(-2), ['pr', 'merge'], preset);
+    const teammates = r.posts[1].items.reduce((a, i) => a + (i.n || 1), 0);
+    assert.ok(teammates <= MAX_CHILDREN, `${preset}: ${teammates} teammates > ${MAX_CHILDREN}`);
+    assert.equal(r.sessions.filter((s) => s.parent === 'id-1').length, teammates, `${preset}: every teammate was made`);
   }
 });
 

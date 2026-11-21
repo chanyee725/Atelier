@@ -32,7 +32,7 @@ case "$preset" in
   risky)    items='[{"role":"lead"},{"role":"impl"},{"role":"review","n":2}]' ;;
   standard) items='[{"role":"lead"},{"role":"impl","n":2},{"role":"review"},{"role":"test"}]' ;;
   ui)       items='[{"role":"lead"},{"role":"impl"},{"role":"design"},{"role":"review"}]' ;;
-  full)     items='[{"role":"lead"},{"role":"impl","n":3},{"role":"review","n":2},{"role":"test"},{"role":"docs"}]' ;;
+  full)     items='[{"role":"lead"},{"role":"impl","n":2},{"role":"review","n":2},{"role":"test"},{"role":"docs"}]' ;;
   *) echo "Unknown preset '$preset' (small | risky | standard | ui | full)" >&2; exit 2 ;;
 esac
 # Every preset opens PRs and merges through the two roles (#1031): leads and implementers do neither.
