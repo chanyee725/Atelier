@@ -291,5 +291,7 @@ export function routeTable(d) {
       return { ok: true };
     }],
     ["POST", /^\/api\/providers\/refresh$/, async () => { await d.refreshProviders(); return d.providers(); }],
+    // Settings page only; kept out of /api/state and SSE so agents reading the state never see it (#1023).
+    ["GET", /^\/api\/providers\/accounts$/, async () => ({ accounts: await d.accounts() })],
   ];
 }
