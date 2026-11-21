@@ -52,7 +52,7 @@ export const isEditingDiagram = (a: Pick<AgentPresence, 'statusLabel' | 'file' |
 
 /** Role tones (the `--role-*` tokens in web/src/index.css). */
 export type RoleTone = 'lead' | 'merge' | 'impl' | 'review' | 'test' | 'design' | 'docs' | 'other';
-const ROLE_NAME: Record<Exclude<RoleTone, 'other'>, string> = { lead: '관리자', merge: '병합자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' };
+const ROLE_NAME: Record<Exclude<RoleTone, 'other'>, string> = { lead: '관리자', merge: '머지 담당', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' };
 
 /**
  * The role badge of a session: its tone and the label shown next to the colour (never colour alone). The server's

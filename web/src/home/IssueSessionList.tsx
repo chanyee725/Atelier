@@ -19,7 +19,7 @@ export function PrIssueSessions({ issue, fallback, version }: { issue: number | 
   return <IssueSessionList sessions={list} issue={issue} onToggle={setOpen} />;
 }
 
-const ROLE: Record<string, string> = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화', merge: '병합자' };
+const ROLE: Record<string, string> = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화', pr: 'PR 담당', merge: '머지 담당' };
 
 export function IssueSessionList({ sessions, issue = null, onToggle, now = Date.now() }: { sessions: readonly IssueSession[]; issue?: number | null; onToggle?: (open: boolean) => void; now?: number }) {
   if (!sessions.length) return null;

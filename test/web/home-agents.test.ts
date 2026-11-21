@@ -78,7 +78,7 @@ test('roleBadge: tone from the role id, label always text (#793)', () => {
   assert.deepEqual(roleBadge({ role: 'impl' }), { tone: 'impl', label: '구현자' });
   assert.deepEqual(roleBadge({ role: 'docs', roleName: '문서화' }), { tone: 'docs', label: '문서화' });
   assert.deepEqual(roleBadge({ role: 'lead', roleName: '병합 관리자' }), { tone: 'merge', label: '병합 관리자' });
-  assert.deepEqual(roleBadge({ role: 'merge' }), { tone: 'merge', label: '병합자' });
+  assert.deepEqual(roleBadge({ role: 'merge' }), { tone: 'merge', label: '머지 담당' });
   assert.deepEqual(roleBadge({ role: 'custom', roleName: '분석가' }), { tone: 'other', label: '분석가' });
   assert.deepEqual(roleBadge({ role: '', outside: true }), { tone: 'other', label: '외부 API' });
 });
