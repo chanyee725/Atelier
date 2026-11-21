@@ -8,7 +8,7 @@
 # project-root defaults to the git top level of the current folder, else the current folder.
 # Non-GET requests carry x-drawing: 1, and x-drawing-session: $DRAWING_SESSION when that is set.
 # Prints the response body; exits 1 on an HTTP status >= 400 (body on stderr) or when no server answers.
-# Talks to 127.0.0.1 only.
+# Talks to 127.0.0.1 only. Gives up after $ATELIER_API_TIMEOUT seconds (default 60).
 set -euo pipefail
 
 root=""
@@ -28,7 +28,10 @@ done
 port="${port:-${DRAW_PORT:-${DISPATCH_PORT:-4330}}}"
 [[ "$port" =~ ^[0-9]+$ ]] || { echo "Bad port: $port" >&2; exit 1; }
 
-args=(-sS -X "$method" -w '\n%{http_code}')
+timeout="${ATELIER_API_TIMEOUT:-60}"
+[[ "$timeout" =~ ^[0-9]+$ ]] || { echo "Bad ATELIER_API_TIMEOUT: $timeout" >&2; exit 2; }
+# -g: brackets and braces in a path or query (노트[1]) are sent as they are, not expanded by curl.
+args=(-sS -g --max-time "$timeout" -X "$method" -w '\n%{http_code}')
 if [ "$method" != GET ]; then
   args+=(-H 'x-drawing: 1')
   [ -n "${DRAWING_SESSION:-}" ] && args+=(-H "x-drawing-session: $DRAWING_SESSION")

@@ -131,3 +131,21 @@ test('a live merge role in the project is reused: the new team gets none and the
   assert.deepEqual(roles(relayed.posts).slice(-1), ['merge']);
   assert.doesNotMatch(relayed.posts[0].commonPrompt, /The merge role of this project is/);
 });
+
+test('team.sh refuses a preset bigger than the project\'s maxChildren before any session exists (#1034)', async () => {
+  const r = await runTeam('full', {}, { settings: { team: { maxChildren: 5 } } });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /8 teammates but maxChildren is 5/);
+  assert.equal(r.posts.length, 0, 'no lead left holding the issue');
+  const ok = await runTeam('risky', {}, { settings: { team: { maxChildren: 5 } } });
+  assert.equal(ok.status, 0, ok.stderr);
+});
+
+test('team.sh removes its lead when the teammates are refused, so a rerun is not blocked by a lone lead (#1034)', async () => {
+  const r = await runTeam('small', {}, { failTeam: 'Gemini 한도에 닿았어요' });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /Gemini 한도에 닿았어요/);
+  assert.match(r.stderr, /its lead was removed/);
+  assert.equal(r.posts.length, 2);
+  assert.deepEqual(r.sessions, [], 'the lead made first is gone');
+});

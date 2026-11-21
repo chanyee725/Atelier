@@ -43,6 +43,8 @@ fi
 if [ -n "$holder" ]; then
   echo "$holder"
   echo "Issue #$issue already has a live lead ($holder); no new team started." >&2
+  # Another team holds the first issue: the rest of the queue is not dropped silently.
+  printf 'Queue not handed over; start it again without #%s: %s\n' "$issue" "$task" >&2
   node -e 'const [raw, lead] = process.argv.slice(1); process.exit(JSON.parse(raw).sessions.some((s) => s.canSpawn && (s.id === lead || s.name === lead)) ? 0 : 1)' "$state" "$lead" \
     || exit 0
   task=""
@@ -53,7 +55,11 @@ ids="$(node -e '
   const st = JSON.parse(raw);
   const l = st.sessions.find((s) => s.canSpawn && (s.id === lead || s.name === lead));
   if (!l) { console.error(`No lead named "${lead}". Leads: ${st.sessions.filter((s) => s.canSpawn).map((s) => s.name).join(", ") || "none"}`); process.exit(1); }
-  for (const s of st.sessions) if (s.parent === l.id) console.log(s.id);
+  // The old merge role may serve another team too (team.sh reuses a live one): while another live lead is
+  // around it stays, and only a project with no other lead loses it with this team (#1034).
+  const live = (s) => ["starting", "running", "waiting", "idle"].includes(s.status);
+  const others = st.sessions.some((s) => s.canSpawn && s.id !== l.id && live(s));
+  for (const s of st.sessions) if (s.parent === l.id && !(s.role === "merge" && others)) console.log(s.id);
   console.log(l.id);
 ' "$state" "$lead")"
 

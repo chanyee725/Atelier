@@ -133,8 +133,27 @@ post() { # post <body> → prints sessions, exits on error; sets $ids
 lead_items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter(i => i.role === "lead")))' "$items")"
 team_items="$(node -e 'console.log(JSON.stringify(JSON.parse(process.argv[1]).filter(i => i.role !== "lead")))' "$items")"
 
+# The server refuses a lead's children past settings.team.maxChildren (default 8). Checked before the lead exists,
+# so a team that cannot be built leaves no lone lead holding the issue.
+over="$(node -e '
+  const [raw, items] = process.argv.slice(1);
+  const max = JSON.parse(raw).settings?.team?.maxChildren ?? 8;
+  const n = JSON.parse(items).reduce((a, i) => a + (i.n ?? 1), 0);
+  if (n > max) console.log(`${n} teammates but maxChildren is ${max}`);
+' "$state" "$team_items")"
+if [ -n "$over" ]; then
+  echo "Preset '$preset' needs $over (설정 → 관리자와 팀). Pick a smaller preset or raise it; no team started." >&2
+  exit 1
+fi
+
 lead_line="$(post "$(mk "$lead_items" "Your team is being created right now as your children (list_sessions shows them). Do not create sessions for these roles again; assign work to them with send_message. Each teammate's finished turn reaches you automatically as a \"[name 보고 · branch]\" message, so end your turn when you are waiting for a report instead of sleeping or polling.${merger:+ The merge role of this project is $merger (not your child): hand merges to it with send_message.}")")"
 lead_id="${lead_line##*$'\t'}"
-team_lines="$(post "$(mk "$team_items" "Your lead is the 관리자 session. Wait for its assignment before starting work: answer this first message only with a one-line ready note. Your final answer each turn is forwarded to the lead automatically; use message_lead only for questions mid-turn." "$lead_id")")"
+if ! team_lines="$(post "$(mk "$team_items" "Your lead is the 관리자 session. Wait for its assignment before starting work: answer this first message only with a one-line ready note. Your final answer each turn is forwarded to the lead automatically; use message_lead only for questions mid-turn." "$lead_id")")"; then
+  # No lone lead: it would hold the issue, and a rerun would only print its name (#1034).
+  curl -sf -X POST "$url/api/sessions/$lead_id/remove" "${H[@]}" -d '{}' >/dev/null \
+    || echo "Could not remove the lead ${lead_line%%$'\t'*}; remove it before running again." >&2
+  echo "The team was not created, so its lead was removed. Fix the reason above and run again." >&2
+  exit 1
+fi
 printf '%s\n%s\n' "$lead_line" "$team_lines" | cut -f1-3
 echo "Atelier: $url"

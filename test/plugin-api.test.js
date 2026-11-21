@@ -28,6 +28,7 @@ async function withServer(fn) {
     req.on('data', (c) => (body += c));
     req.on('end', () => {
       seen.push({ method: req.method, url: req.url, headers: req.headers, body });
+      if (req.url.startsWith('/api/hang')) return; // never answers
       const status = req.url.startsWith('/api/missing') ? 404 : 200;
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(status === 200 ? { ok: true } : { error: 'not found' }));
@@ -82,4 +83,18 @@ test('api.sh: the port comes from <project>/.atelier/server.port; 4xx exits 1 wi
 test('api.sh: refuses other methods and paths outside /api/', async () => {
   assert.equal((await run(['HEAD', '/api/tree'])).code, 2);
   assert.equal((await run(['GET', 'http://example.com/api/tree'])).code, 2);
+});
+
+test('api.sh: brackets in a query go out as they are (-g), and a hung server times out (#1034)', async () => {
+  await withServer(async (port, seen) => {
+    const env = { DRAW_PORT: String(port) };
+    const r = await run(['GET', '/api/file?path=a[1]{x}'], env);
+    assert.equal(r.code, 0, r.stderr);
+    assert.equal(seen.at(-1).url, '/api/file?path=a[1]{x}');
+    const t0 = Date.now();
+    const hung = await run(['GET', '/api/hang'], { ...env, ATELIER_API_TIMEOUT: '1' });
+    assert.equal(hung.code, 1);
+    assert.ok(Date.now() - t0 < 5000);
+    assert.equal((await run(['GET', '/api/tree'], { ...env, ATELIER_API_TIMEOUT: 'x' })).code, 2);
+  });
 });
