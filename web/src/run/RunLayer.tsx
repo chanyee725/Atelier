@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendScale, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendOpen, legendScale, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -219,7 +219,8 @@ export function RunLegend({ steps, etas, canvas, style, ref }: { steps: readonly
       </p>
       {p.total > 0 && <progress className="run-progress" value={p.percent} max={100} aria-labelledby={id} />}
       {etas && <EtaCorner panel={etas} />}
-      <details open>
+      {/* On the canvas a long list starts folded (#987), so the card under the picture stays short. */}
+      <details open={legendOpen(legend.agents.length, canvas)}>
         <summary>범례</summary>
         <ul aria-label="에이전트">
           {legend.agents.map((a) => (

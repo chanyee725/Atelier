@@ -304,6 +304,10 @@ export const LEGEND_SCALE = { min: 0.8, max: 1 } as const;
  */
 export const legendScale = (scale: number): number => (Number.isFinite(scale) ? Math.min(LEGEND_SCALE.max, Math.max(LEGEND_SCALE.min, scale)) : 1);
 
+/** Most agents the canvas legend lists open; more and the list starts folded (#987). */
+export const LEGEND_OPEN_MAX = 6;
+export const legendOpen = (agents: number, canvas?: boolean): boolean => !canvas || agents <= LEGEND_OPEN_MAX;
+
 /** Margin kept between the canvas legend and the overlay's edges. */
 const EDGE = 8;
 

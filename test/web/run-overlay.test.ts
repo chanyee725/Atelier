@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendScale, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendOpen, legendScale, legendSpot, liveTargets, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
 import { RUN_BAND } from '../../shared/render/badge.ts';
 
@@ -300,4 +300,10 @@ test('canvas legend scale (#987): follows the picture between 80% and 100%', () 
   assert.equal(legendScale(0.2), 0.8, 'never too small to read');
   assert.equal(legendScale(2), 1, 'never bigger than its real size');
   assert.equal(legendScale(Number.NaN), 1);
+});
+
+test('canvas legend list (#987): starts folded past six agents, always open in the document', () => {
+  assert.equal(legendOpen(6, true), true);
+  assert.equal(legendOpen(12, true), false, 'a 12-agent list would run the card off the pane');
+  assert.equal(legendOpen(12, false), true);
 });
