@@ -20,7 +20,21 @@ export type CursorEvent = {
   live?: boolean;
   /** Short status label (shared/dispatch/agent-status.ts), e.g. "글 작성 중…". */
   status?: string | null;
+  /** The diagram block the change was in (E712, #1039): its id, the first changed code line (1-based), its node. */
+  diagram?: DiagramSpot;
 };
+
+/** Where in a diagram block an agent wrote (E712, #1039). */
+export type DiagramSpot = { id: string; line?: number; node?: string };
+
+/** A diagram place from an event, checked (it goes into lookups and text), or undefined. */
+export function diagramSpot(v: unknown): DiagramSpot | undefined {
+  const d = v as { id?: unknown; line?: unknown; node?: unknown } | null | undefined;
+  if (!d || typeof d !== 'object' || typeof d.id !== 'string' || !d.id) return undefined;
+  const line = typeof d.line === 'number' && Number.isInteger(d.line) && d.line > 0 ? d.line : undefined;
+  const node = typeof d.node === 'string' && d.node.trim() ? d.node.trim().slice(0, 60) : undefined;
+  return { id: d.id, ...(line ? { line } : {}), ...(node ? { node } : {}) };
+}
 
 /** The `cursor-status` SSE event: only the status label of a session changed; its place and edit time stay. */
 export type CursorStatusEvent = { sid: string; status?: string | null };
@@ -44,6 +58,8 @@ export type Cursor = {
   live: boolean;
   /** Short status label shown in the tag, or '' (then the thinking dots show). */
   status: string;
+  /** The diagram block of its last placed change (E712), if it was one. */
+  diagram?: DiagramSpot;
 };
 
 /** Glide length (ms) with an ease-out. */
@@ -172,11 +188,13 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
   if (!hasPlace && e.doc) return letGo();
   const next = new Map(cursors);
   if (!hasPlace) {
-    next.set(e.sid, { ...old!, color: cursorColor(e.color) || old!.color, editAt: now, live: e.live ?? old!.live, status: statusAfter(e, old!.status) });
+    const diagram = diagramSpot(e.diagram) ?? old!.diagram;
+    next.set(e.sid, { ...old!, color: cursorColor(e.color) || old!.color, editAt: now, live: e.live ?? old!.live, status: statusAfter(e, old!.status), ...(diagram ? { diagram } : {}) });
     return next;
   }
   const to = { x: e.x!, y: e.y! };
   const from = old && sameFile && phaseOf(old, now) !== 'gone' ? positionAt(old, now, reduced) : to;
+  const diagram = diagramSpot(e.diagram);
   next.set(e.sid, {
     sid: e.sid,
     name: e.name ?? old?.name ?? '',
@@ -189,8 +207,27 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
     editAt: now,
     live: e.live === true,
     status: statusAfter(e, sameFile ? old?.status : undefined),
+    ...(diagram ? { diagram } : {}),
   });
   return next;
+}
+
+/** One agent's mark on a line of a diagram's code (the code panel, E712 #1039). */
+export type CodeLineMark = { sid: string; name: string; role: string; color: string; status: string; line: number };
+
+/**
+ * Agents whose last change was in diagram block `blockId` of `file` and named a code line, still at work there at
+ * `now` (editing or thinking; a fading or gone cursor has moved on), newest edit first. One mark per agent.
+ */
+export function codeLineMarks(cursors: ReadonlyMap<string, Cursor>, file: string, blockId: string, now: number): CodeLineMark[] {
+  const out: (CodeLineMark & { at: number })[] = [];
+  for (const c of cursors.values()) {
+    const d = c.diagram;
+    const phase = phaseOf(c, now);
+    if (c.file !== file || d?.id !== blockId || !d.line || (phase !== 'editing' && phase !== 'thinking')) continue;
+    out.push({ sid: c.sid, name: c.name, role: c.role, color: c.color, status: c.status, line: d.line, at: c.editAt });
+  }
+  return out.sort((a, b) => b.at - a.at || a.sid.localeCompare(b.sid)).map(({ at: _at, ...m }) => m);
 }
 
 /**
@@ -227,4 +264,20 @@ export type ScreenView = { scrollX: number; scrollY: number; zoom: { value: numb
 export function toScreen(p: Pt, st: ScreenView, wrapRect: { left: number; top: number }): Pt {
   const z = st.zoom.value;
   return { x: (p.x + st.scrollX) * z + st.offsetLeft - wrapRect.left, y: (p.y + st.scrollY) * z + st.offsetTop - wrapRect.top };
+}
+
+/** The parts of a scene element blockShift reads. */
+type SceneBox = { x: number; y: number; width: number; height: number; isDeleted?: boolean; customData?: Record<string, unknown> | null };
+
+/**
+ * How far to move `c` so it lands on the centre of its diagram block's picture on the canvas (E712, #1039): the server
+ * places a diagram change at the block's saved box, which the canvas may have placed elsewhere (a new block) or moved
+ * since. No shift without a diagram place or a picture of that block.
+ */
+export function blockShift(c: Pick<Cursor, 'to' | 'diagram'>, elements: readonly SceneBox[]): Pt {
+  const id = c.diagram?.id;
+  if (!id) return { x: 0, y: 0 };
+  const el = elements.find((e) => !e.isDeleted && e.customData?.blockId === id);
+  if (!el) return { x: 0, y: 0 };
+  return { x: el.x + el.width / 2 - c.to.x, y: el.y + el.height / 2 - c.to.y };
 }
