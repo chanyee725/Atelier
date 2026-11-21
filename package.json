@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Local Eraser-like diagramming tool: document + infinite canvas per file",
+  "description": "Local diagramming tool: document + infinite canvas per file, with agent teams",
   "engines": {
     "node": ">=22.18"
   },
