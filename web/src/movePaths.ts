@@ -11,13 +11,6 @@ const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 /** What the rename field starts with: the file name without its extension (the title is not the name), or the folder name. */
 export const renameInitial = (node: Pick<TreeNode, 'type' | 'name'>): string => (node.type === 'file' ? stem(node.name) : node.name);
 
-/** Where `node` lands when dropped on folder `dir` ('' = the workspace root); null when that is a no-op or impossible. */
-export function dropTarget(node: Pick<TreeNode, 'type' | 'path'>, dir: string): string | null {
-  if (node.type === 'folder' && (dir === node.path || dir.startsWith(`${node.path}/`))) return null;
-  if (parentPath(node.path) === dir) return null;
-  return join(dir, baseName(node.path));
-}
-
 /** New full path for renaming `node` to the typed `name` (same folder); null when empty, unchanged or containing a slash. */
 export function renameTarget(node: Pick<TreeNode, 'type' | 'path'>, name: string): string | null {
   const raw = name.trim();

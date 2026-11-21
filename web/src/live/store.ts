@@ -111,8 +111,6 @@ const readSheets = () => sheets > 0;
 export const useAgentLiveTarget = () => useSyncExternalStore(subscribe, read, read);
 /** The open panel's path (empty when opened from somewhere without one, e.g. a reload or the address bar). */
 export const useAgentLiveTrail = () => useSyncExternalStore(subscribe, readTrail, readTrail);
-/** Not a hook; tests and non-React callers. */
-export const liveTrail = (): readonly string[] => trail;
 
 /**
  * A modal session sheet (SessionSheet) is open: the panel hides under it and shows again when it closes.

@@ -23,13 +23,3 @@ export function cardRows(id: string, group: UsageGroup | undefined, settings: Di
     return { label: w.label, used: w.used ?? null, reset: w.reset ?? null, limit: field && settings ? guardValue(field, settings) : null };
   });
 }
-
-/**
- * The 세션 보드 사용량 card's rows for one group: Claude and Codex as in the sidebar card, other providers as reported.
- * The group must come from useUsage (per-provider /api/limits); the dispatch store's `limits` is the flat Claude-only
- * guard shape and has no per-provider windows, which left every Claude row at '—' (#897).
- */
-export function boardRows(group: UsageGroup, settings: DispatchSettings | null): CardRow[] {
-  if (group.id === 'claude' || group.id === 'openai') return cardRows(group.id, group, settings);
-  return group.windows.map((w) => ({ label: w.label, used: w.used ?? null, reset: w.reset ?? null, limit: null }));
-}
