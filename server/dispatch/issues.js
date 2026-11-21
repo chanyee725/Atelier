@@ -58,14 +58,6 @@ export function bodySummary(body, { lines = 3, width = 160 } = {}) {
 const cleanTitle = t => (typeof t === "string" ? t.replace(CONTROL, " ").trim().slice(0, TITLE_MAX) : "");
 
 /**
- * Joins gh's open issues and PRs: each issue gets the PRs whose head branch names it (`feat/<n>-…`) or whose body
- * closes it. Issues stay in gh's order (newest first); PRs open first, then merged, then closed, newest first.
- */
-export function joinIssues(rawIssues, rawPrs) {
-  return joinParsed(rawIssues, parsePrs(rawPrs));
-}
-
-/**
  * gh's PRs, metadata only: `{ pr: { number, state, url?, branch? }, issues, refs }`. `issues` are the ones its branch
  * names or its body closes; `refs` the ones its body only refers to. Open first, then merged, then closed, newest first.
  */
@@ -89,6 +81,10 @@ export function parsePrs(rawPrs) {
 /** The PRs working on issue `n` (branch, Closes or Refs), from parsePrs' list. */
 export const prsOfIssue = (prs, n) => prs.filter(p => p.issues.has(n) || p.refs.has(n)).map(p => p.pr);
 
+/**
+ * Joins gh's open issues with parsePrs' list: each issue gets the PRs whose head branch names it (`feat/<n>-…`) or
+ * whose body closes it. Issues stay in gh's order (newest first).
+ */
 function joinParsed(rawIssues, prs) {
   return (Array.isArray(rawIssues) ? rawIssues : []).flatMap(i => {
     const number = issueNumber(i?.number);
