@@ -34,11 +34,26 @@ test('span formats minutes, hours and days', () => {
 });
 
 test('etaLine: minutes left, almost, late, none, done', () => {
-  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN }, 90 * MIN), { text: '10분 남음', late: false });
-  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN + 20_000 }, 100 * MIN), { text: '곧 끝나요', late: false });
-  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN }, 115 * MIN), { text: '15분 지났어요', late: true });
+  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN }, 90 * MIN), { text: '10분 남음', late: false, estimated: false });
+  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN + 20_000 }, 100 * MIN), { text: '곧 끝나요', late: false, estimated: false });
+  assert.deepEqual(etaLine({ stage: 'impl', etaAt: 100 * MIN }, 115 * MIN), { text: '15분 지남', late: true, estimated: false });
   assert.equal(etaLine({ stage: 'impl', etaAt: null }, 0), null);
   assert.equal(etaLine({ stage: 'done', etaAt: 5 }, 0), null);
+});
+
+test('etaLine: a server estimate says so; a passed one reads N분 지남 (#1028)', () => {
+  assert.deepEqual(etaLine({ stage: 'review', etaAt: 100 * MIN, etaEstimated: true }, 88 * MIN), { text: '약 12분 남음(예상)', late: false, estimated: true });
+  assert.deepEqual(etaLine({ stage: 'review', etaAt: 100 * MIN, etaEstimated: true }, 114 * MIN), { text: '14분 지남', late: true, estimated: true });
+});
+
+test('stageProgress: step on 계획 → 구현 → 리뷰 → 테스트 → 머지 (#1028)', async () => {
+  const { stageProgress } = await import('../../web/src/dispatch/lib/board.ts');
+  assert.equal(stageProgress('review')?.text, '리뷰 · 3/5');
+  assert.equal(stageProgress('plan')?.text, '계획 · 1/5');
+  assert.equal(stageProgress('merge')?.text, '머지 · 5/5');
+  assert.deepEqual([stageProgress('test')?.step, stageProgress('test')?.total], [4, 5]);
+  assert.equal(stageProgress('done'), null);
+  assert.equal(stageProgress('blocked'), null);
 });
 
 test('완료 column lists the newest first and caps at DONE_LIMIT with a hidden count', () => {

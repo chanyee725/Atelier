@@ -41,7 +41,7 @@ export function IssueTeamPanel({ issue, row, tasks, answerOf, now, closing = fal
   const cost = teamCost(team, now);
   const v = verdict(row.prs, answerOf);
   const flow = flowOf(row.branches, row.prs);
-  const eta = issueEta(issue.etaAt, now);
+  const eta = issueEta(issue.etaAt, now, issue.etaEstimated);
   const stage = ACTIVE_STAGE[issue.stage];
   const titleOf = issueTitles([{ number: issue.number, title: issue.title }]);
   const prUrl = row.prs.find((p) => p.state === 'open' && p.url)?.url ?? row.prs.find((p) => p.url)?.url;

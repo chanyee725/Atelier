@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIVE_STAGE, activeIssues, activeStage, issueEta, issueTasks, taskStage } from '../../web/src/home/activeIssues.ts';
+import { ACTIVE_STAGE, activeIssues, activeStage, boardStage, issueEta, issueTasks, taskStage } from '../../web/src/home/activeIssues.ts';
 import { issueRows, type ApiIssue } from '../../web/src/home/issueBoard.ts';
 import type { Session } from '../../shared/dispatch/types.ts';
 import type { BoardTask } from '../../web/src/dispatch/types.ts';
@@ -92,6 +92,25 @@ test('ETA only when a task on the issue set one: the latest open one', () => {
   assert.equal(list.find((x) => x.number === 702)!.etaAt, now + 40 * 60_000);
   assert.equal(list.find((x) => x.number === 703)!.etaAt, null);
   assert.equal(issueEta(null, now), null);
-  assert.deepEqual(issueEta(now + 40 * 60_000, now), { text: '40분 남음', late: false });
+  assert.deepEqual(issueEta(now + 40 * 60_000, now), { text: '40분 남음', late: false, estimated: false });
   assert.equal(issueEta(now - 5 * 60_000, now)!.late, true);
+  assert.equal(issueEta(now + 40 * 60_000, now, true)!.text, '약 40분 남음(예상)');
+});
+
+test('the ETA estimate flag follows the task whose ETA is shown (#1028)', () => {
+  const now = 1_000_000;
+  const guess = { ...task('impl-a', 'impl', now + 40 * 60_000), etaEstimated: true };
+  const list = activeIssues(issueRows(ISSUES, SESSIONS), SESSIONS, [guess, task('impl-a', 'review', now + 10 * 60_000, 'b')]);
+  assert.equal(list.find((x) => x.number === 702)!.etaEstimated, true);
+  const set = activeIssues(issueRows(ISSUES, SESSIONS), SESSIONS, [task('impl-a', 'impl', now + 40 * 60_000)]);
+  assert.equal(set.find((x) => x.number === 702)!.etaEstimated, false);
+});
+
+test('boardStage: a step shows with or without board tasks, none once merged (#1028)', () => {
+  assert.equal(boardStage('impl', []), 'impl');
+  assert.equal(boardStage('impl', [task('a', 'plan')]), 'plan');
+  assert.equal(boardStage('review', [task('a', 'test'), task('a', 'impl')]), 'test');
+  assert.equal(boardStage('review', [task('a', 'review'), task('a', 'test')]), 'review');
+  assert.equal(boardStage('merge', []), 'merge');
+  assert.equal(boardStage('merged', [task('a', 'done')]), null);
 });

@@ -11,6 +11,8 @@ export interface MergeCheck {
 export interface AttentionTask {
   id: string; lead: string | null; title: string; stage: string; owner: string | null;
   etaAt: number | null; mergeCheck?: MergeCheck | null;
+  /** etaAt is the server's guess (#1028); passing a guess shows on the row only, not here. */
+  etaEstimated?: boolean;
   /** Last change the lead made (server/dispatch/hub.js setTask); older servers may leave it out. */
   updatedAt?: number;
   /** Server's flag (server/state.js taskStuck); absent or null while the task looks fine. */
@@ -128,7 +130,7 @@ export function attentionItems(
     const folded = owner?.stuck?.reason === "repeat-fail" && out.some(i => i.kind === "session" && i.sessionId === owner.id);
     if (st?.reason === "stage-mismatch" && !folded) {
       out.push({ key: `t:${t.id}`, kind: "mismatch", level: "warn", who: t.title, reason: by(st.label), since: st.sinceMs ?? null, sessionId: target, flagged: true });
-    } else if (st?.reason === "over-eta" || (t.etaAt != null && t.etaAt < now)) {
+    } else if (st?.reason === "over-eta" || (t.etaAt != null && t.etaAt < now && !t.etaEstimated)) {
       // Lateness counts from the estimate either way; the server's sentence says how far past it is.
       // The auto close found no evidence it landed (#930): say why, so the reader knows to check it by hand.
       const base = st?.reason === "over-eta" ? st.label : "예상 시간을 넘겼어요";

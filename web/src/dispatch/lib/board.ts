@@ -67,20 +67,42 @@ export function span(ms: number): string {
   return `${m}분`;
 }
 
-/** The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done. */
-export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt'>, now: number): { text: string; late: boolean } | null {
+/**
+ * The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done.
+ * A server estimate (#1028: `etaEstimated`, the stage median of finished tasks) says so: 약 N분 남음(예상).
+ */
+export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; late: boolean; estimated: boolean } | null {
   if (t.stage === 'done' || t.etaAt == null) return null;
+  const estimated = !!t.etaEstimated;
   const left = t.etaAt - now;
-  return left >= 60_000
-    ? { text: `${span(left)} 남음`, late: false }
-    : left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지났어요`, late: true };
+  if (left >= 60_000) return { text: estimated ? `약 ${span(left)} 남음(예상)` : `${span(left)} 남음`, late: false, estimated };
+  if (left > -60_000) return { text: '곧 끝나요', late: false, estimated };
+  return { text: `${span(-left)} 지남`, late: true, estimated };
+}
+
+/** The stages a task walks through in order (#1028); 완료 and 막힘 are not steps. */
+export const PROGRESS_STAGES: { id: TaskStage; label: string }[] = [
+  { id: 'plan', label: '계획' },
+  { id: 'impl', label: '구현' },
+  { id: 'review', label: '리뷰' },
+  { id: 'test', label: '테스트' },
+  { id: 'merge', label: '머지' },
+];
+
+/** Where a task is on 계획 → 구현 → 리뷰 → 테스트 → 머지, e.g. { step: 3, total: 5, text: '리뷰 · 3/5' }; null when done or blocked. */
+export function stageProgress(stage: TaskStage): { stage: TaskStage; label: string; step: number; total: number; text: string } | null {
+  const i = PROGRESS_STAGES.findIndex(s => s.id === stage);
+  if (i < 0) return null;
+  const total = PROGRESS_STAGES.length;
+  const label = PROGRESS_STAGES[i]!.label;
+  return { stage, label, step: i + 1, total, text: `${label} · ${i + 1}/${total}` };
 }
 
 /**
  * The one small warning a 작업 보드 row may carry (#919): why a task is blocked, or why it is late or stuck. Quiet
  * rows (on time, in progress) get none. `tone` picks the colour (막힘 red, 지연 amber).
  */
-export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt'>, now: number): { text: string; tone: 'bad' | 'warn' } | null {
+export function taskWarn(t: Pick<BoardTask, 'stage' | 'note' | 'stuck' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; tone: 'bad' | 'warn' } | null {
   if (t.stage === 'blocked') return { text: t.note || '막혔어요', tone: 'bad' };
   if (t.stuck) return { text: t.stuck.label, tone: 'warn' };
   const eta = etaLine(t, now);
