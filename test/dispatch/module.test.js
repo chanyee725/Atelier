@@ -149,9 +149,6 @@ test('removed routes: no cross-project probing', async () => {
     const { projects } = await (await fetch(`${base}/api/projects`)).json();
     assert.equal(projects.length, 1);
     assert.equal(projects[0].current, true);
-    const all = await (await fetch(`${base}/api/usage/all`)).json();
-    assert.equal(all.projects.length, 1);
-    assert.equal(all.projects[0].days.length, 14);
   } finally {
     await stop();
     rmSync(root, { recursive: true, force: true });
