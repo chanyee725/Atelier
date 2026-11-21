@@ -1,6 +1,6 @@
-// Helpers for the 설정 modal's 모델 연결 + 역할별 모델 section (#624): the model list grouped by provider, what a role's
-// chosen model needs to say (not listed, provider not connected), and the role-model patch and resync. React-free so
-// node --test can check them. Status only: no account, email or token reaches here.
+// Helpers for the 설정 modal's 역할별 모델 section (#624): the model list grouped by provider and what a role's chosen
+// model needs to say (not listed, provider not connected). React-free so node --test can check them. Status only: no
+// account, email or token reaches here.
 import { PROVIDERS } from '../../modelConnect.ts';
 
 export type ModelOption = { id: string; label: string; provider: string };
@@ -49,36 +49,3 @@ export function roleChoice(model: string, models: readonly ModelOption[], provid
   }
   return { provider: m.provider, warn: null };
 }
-
-/** Only the roles whose shown model differs from the saved one, as a `team.roleModels` patch; null when none. */
-export function roleModelsPatch(saved: Record<string, string>, shown: Record<string, string>): Record<string, string> | null {
-  const out: Record<string, string> = {};
-  for (const [role, model] of Object.entries(shown)) if (model && model !== saved[role]) out[role] = model;
-  return Object.keys(out).length ? out : null;
-}
-
-/**
- * The shown role models after the saved ones change from `prev` to `next` (another tab, the server's settings or
- * snapshot event, a save's answer): a role still showing its `prev` model follows `next`; a role the user changed keeps
- * the change. New roles take their saved model; roles that are gone drop out.
- */
-export function resyncRoleModels(prev: Record<string, string>, next: Record<string, string>, shown: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [role, model] of Object.entries(next)) {
-    const s = shown[role];
-    out[role] = s === undefined || s === prev[role] ? model : s;
-  }
-  return out;
-}
-
-/** Saved role models from team settings and the roles: the override first, else the role's own model (#616). */
-export function savedRoleModels(team: Record<string, unknown> | undefined, roles: readonly { id: string; model: string }[]): Record<string, string> {
-  const rm = team?.roleModels && typeof team.roleModels === 'object' ? (team.roleModels as Record<string, unknown>) : {};
-  return Object.fromEntries(roles.map((r) => [r.id, typeof rm[r.id] === 'string' && rm[r.id] ? (rm[r.id] as string) : r.model]));
-}
-
-/** Shallow equality of two role-model maps (to skip a resync when nothing changed). */
-export const sameModels = (a: Record<string, string>, b: Record<string, string>) => {
-  const ka = Object.keys(a);
-  return ka.length === Object.keys(b).length && ka.every((k) => a[k] === b[k]);
-};
