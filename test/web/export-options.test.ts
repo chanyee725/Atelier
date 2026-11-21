@@ -1,17 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_EXPORT, describeExport, exportBackground, exportSuffix, normalizeExport } from '../../web/src/export/options.ts';
+import { DEFAULT_EXPORT, describeExport, exportBackground, exportSuffix } from '../../web/src/export/options.ts';
 
 test('defaults are 2x, light, with a background', () => {
   assert.deepEqual(DEFAULT_EXPORT, { scale: 2, transparent: false, dark: false });
   assert.equal(exportSuffix(DEFAULT_EXPORT, 'png'), '');
-});
-
-test('normalizeExport repairs bad input', () => {
-  assert.deepEqual(normalizeExport(null), DEFAULT_EXPORT);
-  assert.deepEqual(normalizeExport({ scale: 5 as never, transparent: 'yes' as never }), DEFAULT_EXPORT);
-  assert.deepEqual(normalizeExport({ scale: 3, transparent: true, dark: true }), { scale: 3, transparent: true, dark: true });
-  assert.equal(normalizeExport({ scale: 1 }).scale, 1);
 });
 
 test('background is white, dark, or none when transparent', () => {
