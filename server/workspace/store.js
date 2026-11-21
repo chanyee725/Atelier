@@ -1,20 +1,21 @@
 // Workspace file store: one `*.dpx.json` per diagram file, sub-folders = folders.
 // Writes are atomic (temp file in the same dir + rename) and serialized; stale writes are refused by revision.
-// The sections live in store-<name>.js (history, runs, trash); each gets the shared context `c`.
+// The sections live in store-<name>.js (history, runs, trash, tree); each gets the shared context `c`.
 import { lstatSync, readdirSync, watch } from 'node:fs';
 import { pollWatch } from './poll-watch.js';
-import { link, mkdir, readdir, readFile, rename, rm, rmdir, stat, lstat, unlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, readdir, readFile, rename, rm, rmdir, lstat, unlink, writeFile } from 'node:fs/promises';
 import { randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { createResolver, parseWorkspacePath, PathError } from './paths.js';
 import { FILE_EXT, FORMAT_VERSION, newFile, normalizeContent, parseStored, ValidationError } from './model.js';
 import { applyPlanOps } from './plan-ops.js';
 import { PLAN_VERSION } from '../../shared/dispatch/plan.ts';
-import { DISCUSSIONS_VERSION, openQuestions } from '../../shared/dispatch/discussions.ts';
+import { DISCUSSIONS_VERSION } from '../../shared/dispatch/discussions.ts';
 import { StoreError, sha, MAX_TOMBSTONES, isDpx, HISTORY_INTERVAL_MS, HISTORY_MAX } from './store-shared.js';
 import { createHistory } from './store-history.js';
 import { createRunsSidecar } from './store-runs.js';
 import { createTrash } from './store-trash.js';
+import { createTree } from './store-tree.js';
 
 export { StoreError, HISTORY_DIR, HISTORY_INTERVAL_MS, HISTORY_MAX, VERSION_LABELS, TRASH_DIR, TRASH_DAYS, TRASH_MAX, RUNS_DIR } from './store-shared.js';
 
@@ -145,83 +146,11 @@ export function createStore(
   // Moved sections, called through the shared context.
   const collectFiles = (...a) => c.collectFiles(...a); // store-trash.js
   const dropHistory = (...a) => c.dropHistory(...a); // store-history.js
-  const historyDirOf = (...a) => c.historyDirOf(...a); // store-history.js
   const markBorn = (...a) => c.markBorn(...a); // store-history.js
   const moveHistory = (...a) => c.moveHistory(...a); // store-history.js
-  const readBorn = (...a) => c.readBorn(...a); // store-history.js
-  const snapshotIds = (...a) => c.snapshotIds(...a); // store-history.js
   const snapshotQuietly = (...a) => c.snapshotQuietly(...a); // store-history.js
   const trashMany = (...a) => c.trashMany(...a); // store-trash.js
   const trashQuietly = (...a) => c.trashQuietly(...a); // store-trash.js
-
-  // ---- tree ----
-  async function walk(absDir, relDir) {
-    const out = [];
-    let entries;
-    try {
-      entries = await readdir(absDir, { withFileTypes: true });
-    } catch {
-      return out;
-    }
-    entries.sort((a, b) => a.name.localeCompare(b.name));
-    for (const e of entries) {
-      if (skip(e, relDir)) continue;
-      const rel = relDir ? `${relDir}/${e.name}` : e.name;
-      if (e.isDirectory()) {
-        out.push({ type: 'folder', name: e.name, path: rel, children: await walk(join(absDir, e.name), rel) });
-      } else if (e.isFile() && isDpx(e.name)) {
-        let title = '';
-        let revision = null;
-        let pipeline;
-        let questions = 0;
-        try {
-          const f = parseStored(await readFile(join(absDir, e.name), 'utf8'));
-          title = f.title;
-          revision = f.revision;
-          // A file with a plan is a draft (plan) until the runs module says it is running, paused or done.
-          if (f.plan) pipeline = (c.treeMark && (await c.treeMark(rel).catch(() => null))) || { state: 'plan' };
-          // Open questions for the sidebar badge (#738).
-          questions = openQuestions(f.discussions).length;
-        } catch {
-          // unreadable file still shows up so it can be renamed or deleted
-        }
-        let st;
-        try {
-          st = await stat(join(absDir, e.name));
-        } catch {
-          continue; // removed or unreadable between readdir and stat
-        }
-        // Saves replace the file (atomic rename), so its birth time is the last save on most systems; projects.js
-        // takes the earlier of this and the oldest history snapshot. Without a birth time (0) the mtime stands in.
-        const born = st.birthtimeMs > 0 && st.birthtimeMs < st.mtimeMs ? st.birthtime : st.mtime;
-        const row = { type: 'file', name: e.name, path: rel, title, revision, mtime: st.mtime.toISOString(), created: born.toISOString() };
-        if (pipeline) row.pipeline = pipeline;
-        if (questions) row.questions = questions;
-        out.push(row);
-      }
-    }
-    // folders first
-    return out.sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1));
-  }
-
-  const tree = () => walk(fsr.root, '');
-
-  /**
-   * When the file at `rel` (a tree path) was made, in ms: the `born` mark of a file made through the API; for one
-   * made outside the app, the earliest of its oldest kept history snapshot and `fallback` (its own times). Null when unknown.
-   */
-  async function createdAt(rel, fallback = null) {
-    try {
-      const dir = await historyDirOf(rel);
-      const born = await readBorn(dir);
-      if (born) return born;
-      const first = (await snapshotIds(dir))[0];
-      const known = [first === undefined ? null : Number(first), fallback].filter((t) => t != null);
-      return known.length ? Math.min(...known) : null;
-    } catch {
-      return fallback;
-    }
-  }
 
   // ---- file operations ----
   // `body` may carry starting content (document, canvas, blocks, plan), e.g. a pipeline template; it is checked like a save.
@@ -854,10 +783,10 @@ export function createStore(
       return queue;
     },
     // Sections not split out yet.
-    walk, tree, createdAt, createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget, scan, reconcile, reconcileNow, startWatching, close,
+    createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget, scan, reconcile, reconcileNow, startWatching, close,
   };
-  for (const make of [createHistory, createRunsSidecar, createTrash]) Object.assign(c, make(c));
-  const { trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, runsApi } = c;
+  for (const make of [createHistory, createRunsSidecar, createTrash, createTree]) Object.assign(c, make(c));
+  const { tree, createdAt, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, runsApi } = c;
 
   return { root: fsr.root, tree, createdAt, createFile, readFile: readFileAt, fileExists, writeFile: writeFileAt, patchPlan: patchPlanAt, patchDiscussions: patchDiscussionsAt, editDocument: editDocumentAt, createFolder, move, removeFile, removeFolder, trash, restoreTrash, history, historyVersion, historySnapshotNow, labelVersion, startWatching, close, runs: runsApi };
 }
