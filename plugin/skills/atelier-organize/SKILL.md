@@ -9,11 +9,11 @@ Atelier keeps one tree per project: **area → feature → documents**.
 
 ```
 <workspace>/
-  Web/                    area: a top-level part of the code
+  web/                    area: a top-level part of the code
     이슈-대시보드/          feature: one piece of work
       계획.dpx.json         the lead's plan (when there is one)
       화면-흐름.dpx.json     other docs and diagrams (optional)
-  Server/
+  server/
     단일-폴더-저장/
       계획.dpx.json
 ```
@@ -24,7 +24,7 @@ The workspace is the folder the server serves (`GET /api/info` → `workspace`).
 
 1. Read the project's structure, not the workspace. List the top-level folders of the git project and one level inside the main ones (`web/src`, `server`, `packages/*`, `apps/*`, `services/*`). Skip `node_modules`, `test`, `dist`, `build`, hidden folders and the workspace itself.
    Done when: you can name 2–6 parts of the code, each with the folder it comes from.
-2. Pick the areas. One area per part, named after it in short English PascalCase (`web/` → `Web`, `server/` → `Server`, `apps/admin` → `Admin`). Reuse an area that already exists in the workspace (`GET /api/tree`); never make two for the same part. Never use `pipelines`, `docs`, `misc` or `etc`.
+2. Pick the areas. One area per part, named exactly like its code folder, letter case included (`web/` → `web`, `server/` → `server`, `apps/admin` → `admin`). Check the existing areas first (`GET /api/tree`) and reuse one that matches in any letter case; never make two for the same part (`Web/` next to `web/`). The server also files a path under an existing folder that differs only in case, and answers 409 when two such folders exist. Never use `pipelines`, `docs`, `misc` or `etc`.
    Done when: you have the area list, existing ones first.
 3. Create the missing areas: `POST /api/folder {path: "<Area>"}` (409 means it exists, which is fine).
    Done when: `GET /api/tree` shows every area at the top.
