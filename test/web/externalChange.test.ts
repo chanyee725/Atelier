@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { externalAction } from '../../web/src/externalChange.ts';
+import { externalAction, movedOpenPath } from '../../web/src/externalChange.ts';
 
 const open = 'proj/arch.dpx.json';
 
@@ -51,4 +51,13 @@ test('canApplyLive: a writer that only reorders keys applies live instead of res
   assert.equal(sameJson({ a: [1] }, { a: { 0: 1 } }), false);
   assert.equal(sameJson({ a: 1 }, { b: 1 }), false);
   assert.equal(sameJson(0, null), false);
+});
+
+test('movedOpenPath: an outside move of the open file or its folder gives the new path (#1045)', () => {
+  assert.equal(movedOpenPath({ kind: 'tree', from: '기획/로봇 제어', path: 'web/로봇 제어' }, '기획/로봇 제어/계획.dpx.json'), 'web/로봇 제어/계획.dpx.json');
+  assert.equal(movedOpenPath({ kind: 'tree', from: 'a/x.dpx.json', path: 'b/x.dpx.json' }, 'a/x.dpx.json'), 'b/x.dpx.json');
+  assert.equal(movedOpenPath({ kind: 'tree', from: '기획/로봇', path: 'web/로봇' }, '기획/로봇 제어/계획.dpx.json'), null);
+  assert.equal(movedOpenPath({ kind: 'tree', path: 'web/x' }, 'web/x/a.dpx.json'), null);
+  assert.equal(movedOpenPath({ kind: 'delete', from: 'a', path: 'a' }, 'a/b.dpx.json'), null);
+  assert.equal(movedOpenPath({ kind: 'tree', from: 'a', path: 'b' }, null), null);
 });

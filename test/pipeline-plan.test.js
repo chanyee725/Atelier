@@ -23,7 +23,9 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     assert.equal(asked.status, 400);
     assert.match(asked.body.error, /discussions/);
     assert.equal(w.status, 200, JSON.stringify(w.body));
-    assert.equal(w.body.path, 'App/로그인-개편/계획.dpx.json');
+    // A new plan is drafted in 기획 (#1045); its area is the lead's (no step file is in a workspace folder).
+    assert.equal(w.body.path, '기획/로그인-개편/계획.dpx.json');
+    assert.equal(w.body.area, 'App');
     assert.equal(w.body.state, 'plan');
     const file = JSON.parse(readFileSync(join(ws, w.body.path), 'utf8'));
     assert.deepEqual(file.plan.steps.map((s) => s.id), ['api', 'ui', 'review']);
@@ -68,12 +70,19 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
     assert.equal(go.status, 200, JSON.stringify(go.body));
     assert.equal(go.body.state, 'running');
     assert.ok(go.body.runId);
+    // 시작하기 moved the feature folder to the area; the plan's state went with it.
+    const moved = 'App/로그인-개편/계획.dpx.json';
+    assert.equal(go.body.path, moved);
+    assert.ok(existsSync(join(ws, moved)) && !existsSync(join(ws, '기획', '로그인-개편')));
+    assert.equal(d.store.data.pipelines[moved]?.state, 'running');
+    assert.equal(d.store.data.pipelines[w.body.path], undefined);
     const told = d.hub.transcript(lead.id).filter((m) => m.kind === 'user').map((m) => m.text).join('\n');
     assert.match(told, new RegExp(`\\[계획 승인 · rev ${saved.body.revision}\\]`));
     assert.match(told, /단계 ui 모델/);
-    assert.equal((await call('POST', '/api/pipeline/start', { path: w.body.path, revision: saved.body.revision })).status, 409);
+    assert.match(told, /계획 폴더를 기획\/로그인-개편에서 App\/로그인-개편로 옮겼다/);
+    assert.equal((await call('POST', '/api/pipeline/start', { path: moved, revision: saved.body.revision })).status, 409);
     // Running plans are not rewritten.
-    assert.equal((await call('POST', '/api/pipeline/plan', { lead: lead.id, path: w.body.path, goal: 'x', steps: STEPS })).status, 409);
+    assert.equal((await call('POST', '/api/pipeline/plan', { lead: lead.id, path: moved, goal: 'x', steps: STEPS })).status, 409);
 
     // After approval: teammates, tasks tied to steps, notes.
     await until(() => ['idle', 'done'].includes(d.hub.get(lead.id).status), 10_000);
@@ -91,9 +100,10 @@ test('write_plan writes a draft, gates create_sessions, and 시작하기 hands t
 
     // The teammate's session lands in the run record under its step (metadata only).
     const runId = go.body.runId;
-    await until(() => t.app.ctx.modules.pipeline && d.store.data.pipelines[w.body.path].links[mate.id] === 'api', 10_000);
+    await until(() => t.app.ctx.modules.pipeline && d.store.data.pipelines[moved].links[mate.id] === 'api', 10_000);
     await t.app.ctx.modules.runs.recorder.endRun(runId, 'done');
-    const rec = (await call('GET', `/api/runs/run?path=${encodeURIComponent(w.body.path)}&id=${runId}`)).body;
+    const rec = (await call('GET', `/api/runs/run?path=${encodeURIComponent(moved)}&id=${runId}`)).body;
+    assert.equal(rec.file, moved);
     assert.equal(rec.steps.api.note, '리뷰 must-fix 1건 고쳐서 다시 올림');
     assert.equal(rec.steps.api.sessions[0].sid, mate.id);
     assert.equal(rec.steps.api.sessions[0].name, mate.name);
@@ -118,10 +128,13 @@ test('the 알림함 lists plans that wait for 시작하기 until they start, are
     assert.equal(first.lead, lead.name);
     assert.equal(typeof first.since, 'number');
     // Started: gone. Paused and reopened by the person: still gone.
-    assert.equal((await call('POST', '/api/pipeline/start', { path: a.path, revision: a.revision })).status, 200);
+    const started = await call('POST', '/api/pipeline/start', { path: a.path, revision: a.revision });
+    assert.equal(started.status, 200);
     assert.deepEqual((await waiting()).map((p) => p.path), [b.path]);
-    assert.equal((await call('POST', '/api/pipeline/stop', { path: a.path })).status, 200);
-    assert.equal((await call('POST', '/api/pipeline/reopen', { path: a.path })).status, 200);
+    // 시작하기 moved it out of 기획 (#1045).
+    assert.equal(started.body.path, 'App/가/계획.dpx.json');
+    assert.equal((await call('POST', '/api/pipeline/stop', { path: started.body.path })).status, 200);
+    assert.equal((await call('POST', '/api/pipeline/reopen', { path: started.body.path })).status, 200);
     assert.deepEqual((await waiting()).map((p) => p.path), [b.path]);
     // Deleted: gone.
     assert.equal((await call('DELETE', `/api/file?path=${encodeURIComponent(b.path)}`)).status, 200);
@@ -216,7 +229,7 @@ test('a one-step plan with autostart starts at once', { timeout: 60_000 }, async
   }
 });
 
-test('a new plan goes to <area>/<feature>/계획.dpx.json: the area write_plan names, else the lead\'s, else the steps\' (#726, #782)', { timeout: 60_000 }, async () => {
+test('a new plan is drafted in 기획/<feature>/ with its area: the one write_plan names, else the steps\', else the lead\'s (#782, #1045)', { timeout: 60_000 }, async () => {
   const t = await start();
   try {
     const { call, d, ws } = t;
@@ -237,33 +250,40 @@ test('a new plan goes to <area>/<feature>/계획.dpx.json: the area write_plan n
       assert.equal(withPath.status, 400, `${key}=${bad} with path`);
     }
     assert.ok(!existsSync(join(ws, 'x')) && !existsSync(join(ws, 'worktrees')) && !existsSync(join(ws, 'Proj', 'ok.dpx.json')));
-    // The named area and feature win; a new area folder is made; the lead works for that area now.
+    // A new plan is drafted in 기획/<feature>/ (#1045). The named area and feature win; the area is only recorded
+    // (made on 시작하기), and the lead does not move to 기획.
     const named = await call('POST', '/api/pipeline/plan', { lead: t.lead.id, area: 'Server', feature: '단일-폴더-저장', title: '이름 붙인 계획', goal: 'x', steps: one });
     assert.equal(named.status, 200, JSON.stringify(named.body));
-    assert.equal(named.body.path, 'Server/단일-폴더-저장/계획.dpx.json');
-    assert.equal(d.hub.get(t.lead.id).folder, 'Server');
+    assert.equal(named.body.path, '기획/단일-폴더-저장/계획.dpx.json');
+    assert.equal(named.body.area, 'Server');
+    assert.equal(d.store.data.pipelines[named.body.path].area, 'Server');
+    assert.ok(!existsSync(join(ws, 'Server')));
+    assert.equal(d.hub.get(t.lead.id).folder, 'App');
     // A second plan for the same feature (another lead) gets 계획-2; the older `folder` still names the area.
     const lead1 = await fresh();
     const again = await call('POST', '/api/pipeline/plan', { lead: lead1.id, folder: 'Server', feature: '단일-폴더-저장', goal: 'x', steps: one });
-    assert.equal(again.body.path, 'Server/단일-폴더-저장/계획-2.dpx.json');
-    // An area or path that differs from an existing folder only in letter case reuses that folder (#1026).
-    const lead4 = await fresh();
-    const lower = await call('POST', '/api/pipeline/plan', { lead: lead4.id, area: 'server', feature: '단일-폴더-저장', goal: 'x', steps: one });
-    assert.equal(lower.body.path, 'Server/단일-폴더-저장/계획-3.dpx.json', JSON.stringify(lower.body));
+    assert.equal(again.body.path, '기획/단일-폴더-저장/계획-2.dpx.json');
+    assert.equal(again.body.area, 'Server');
+    // A path that differs from an existing folder only in letter case reuses that folder (#1026).
+    mkdirSync(join(ws, 'Server'));
     const lead5 = await fresh();
     const byPath = await call('POST', '/api/pipeline/plan', { lead: lead5.id, path: 'SERVER/경로-계획', goal: 'x', steps: one });
     assert.equal(byPath.body.path, 'Server/경로-계획.dpx.json', JSON.stringify(byPath.body));
-    assert.ok(!existsSync(join(ws, 'server')) && !existsSync(join(ws, 'SERVER')));
-    // No area and a lead without one: the folder every step's files share; the feature defaults to the title.
+    assert.ok(!existsSync(join(ws, 'SERVER')));
+    // No area and a lead without one: the folder most step files sit in; the feature defaults to the title.
     const lead2 = await fresh();
-    const inferred = await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '추론', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['./Proj/x/y.dpx.json'] }, { title: 'c', role: 'review' }] });
-    assert.equal(inferred.body.path, 'Proj/추론/계획.dpx.json');
-    // No area at all: refused with the areas there are, nothing written.
+    const inferred = await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '추론', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['./Proj/x/y.dpx.json'] }, { title: 'c', role: 'review', files: ['Other/z.dpx.json'] }] });
+    assert.equal(inferred.body.path, '기획/추론/계획.dpx.json');
+    assert.equal(inferred.body.area, 'Proj');
+    // A tie and no area of the lead's: written to 기획 anyway, with a line at the top saying it stays there.
     const lead3 = await fresh();
     const mixed = await call('POST', '/api/pipeline/plan', { lead: lead3.id, title: '섞임', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['Other/z.dpx.json'] }] });
-    assert.equal(mixed.status, 400);
-    assert.match(mixed.body.error, /area\(영역\)를 정해 주세요.*Other/);
-    assert.ok(!existsSync(join(ws, '섞임')));
+    assert.equal(mixed.status, 200, JSON.stringify(mixed.body));
+    assert.equal(mixed.body.path, '기획/섞임/계획.dpx.json');
+    assert.equal(mixed.body.area, null);
+    const doc = JSON.parse(readFileSync(join(ws, mixed.body.path), 'utf8')).document;
+    assert.match(JSON.stringify(doc.content[0]), /기획 폴더에 그대로 있어요/);
+    assert.doesNotMatch(readFileSync(join(ws, inferred.body.path), 'utf8'), /그대로 있어요/);
   } finally {
     await t.stop();
   }
@@ -292,7 +312,7 @@ test('시작하기 takes per-step overrides for this run only (#972)', { timeout
     const told = d.hub.transcript(lead.id).filter((m) => m.kind === 'user').map((m) => m.text).join('\n');
     assert.match(told, /시작 창에서 사용자가 이번 실행만 바꾼 구성/);
     assert.match(told, /단계 review 모델 claude-fable-5-2 → claude-sonnet-5-5/);
-    const file = (await call('GET', `/api/file?path=${encodeURIComponent(w.path)}`)).body;
+    const file = (await call('GET', `/api/file?path=${encodeURIComponent(ok.body.path)}`)).body;
     assert.equal(file.plan.steps.find((s) => s.id === 'review').model, 'claude-fable-5-2');
   } finally {
     await t.stop();

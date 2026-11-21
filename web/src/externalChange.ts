@@ -20,6 +20,16 @@ export function externalAction(e: WorkspaceEvent, openPath: string | null, dirty
 }
 
 /**
+ * Where the open file went when an outside move (another tab, or 시작하기 moving a plan from 기획 to its area, #1045)
+ * took it or the folder holding it, or null when the move does not touch it. The tab follows instead of closing.
+ */
+export function movedOpenPath(e: WorkspaceEvent, openPath: string | null): string | null {
+  if (!openPath || e.kind !== 'tree' || e.from === undefined || !e.path || e.path === e.from) return null;
+  if (same(e.from, openPath)) return e.path;
+  return openPath.startsWith(e.from + '/') ? e.path + openPath.slice(e.from.length) : null;
+}
+
+/**
  * Deep equality of JSON-like values that ignores object key order (a writer that reorders keys has not changed
  * anything, so it must not restart the panes, #557). `undefined` and `null` count as the same, as in JSON.
  */
