@@ -1,9 +1,8 @@
 // What the web does with a server `workspace` SSE event (pure, so it can be tested).
+import { stem } from './movePaths.ts';
 
 export type WorkspaceEvent = { kind: 'create' | 'change' | 'delete' | 'tree'; path: string; from?: string; revision?: number | null };
 
-/** `a/b`, `a/b.dpx` and `a/b.dpx.json` are the same file. */
-const stem = (p: string) => p.replace(/\.dpx(\.json)?$/i, '');
 const same = (a: string, b: string) => stem(a) === stem(b);
 
 /**

@@ -1,6 +1,7 @@
 // App shell navigation (design doc 6 §2.1, §5): which screen is shown, which sidebar rows are open, and the
 // one-letter shortcuts. Pure, so it is tested without a browser.
 import type { DocNode, Project, ProjectsView, TreeNode } from './api';
+import { baseName } from './movePaths.ts';
 
 /** The main panel: a sidebar view, a project home, the 세션 보드 or the open document. 보관함 opens the trash dialog. */
 export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' } | BoardSection;
@@ -88,8 +89,6 @@ export function openPathsFor(view: ProjectsView | null, path: string | null): st
   walk(project ? project.docs : view.loose);
   return out;
 }
-
-const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 /** One step of the open document's path (design doc 6 §2.4): its project, then the documents or groups above it. */
 export type Crumb = { kind: 'project' | 'doc' | 'group'; path: string; label: string };
