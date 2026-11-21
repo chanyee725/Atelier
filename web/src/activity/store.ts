@@ -1,11 +1,11 @@
-// The page's activity log (E537, #654): GET /api/activity once, then SSE `activity` (one new event) and
-// `activity-read` (a read mark from any page); a reconnect loads it again. New events go to the listeners
+// The page's activity log (E537, #654): GET /api/activity once, then SSE `activity` (one new event); a
+// reconnect loads it again. New events go to the listeners
 // (browser notifications) only after the first load, so history never pops up. Memory only.
 import { parseActivityLog } from '../../../shared/dispatch/agent-activity.ts';
 import { events } from '../lib/events';
-import { addEvent, markRead, type ActivityEvent, type ActivityLog } from './activity';
+import { addEvent, type ActivityEvent, type ActivityLog } from './activity';
 
-let log: ActivityLog = { events: [], readAt: 0 };
+let log: ActivityLog = { events: [] };
 let loaded = false;
 let started = false;
 const fresh = new Set<(e: ActivityEvent) => void>();
@@ -21,7 +21,7 @@ function load() {
       if (!d) return;
       const got = parseActivityLog(d);
       // Keep events that came over the stream while the request ran.
-      let next: ActivityLog = { events: got.events, readAt: Math.max(got.readAt, log.readAt) };
+      let next: ActivityLog = { events: got.events };
       for (const e of log.events) next = addEvent(next, e);
       loaded = true;
       set(next);
@@ -38,7 +38,6 @@ function start() {
     set(next);
     if (loaded) for (const f of fresh) f(e as ActivityEvent);
   });
-  events.subscribeJson<{ readAt?: unknown }>('activity-read', (e) => set(markRead(log, e?.readAt)));
   let first = true;
   events.onConnection((online) => {
     if (!online) return;

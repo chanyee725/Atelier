@@ -1,8 +1,7 @@
 // Agent activity log (E537, issue #654): start / progress / finish / error events of the agent sessions working on
 // the workspace's documents, for the app's activity feed, toasts and browser notifications. Shape and copy:
 // shared/dispatch/agent-activity.ts; the rules: ./activity-log.js.
-//   GET  /api/activity             -> { events, readAt }
-//   POST /api/activity/read { at } -> { readAt }   (SSE `activity-read` { readAt } to every page)
+//   GET  /api/activity             -> { events }
 //   SSE  `activity`                -> one new event
 // Metadata only (who, which file and section, when, what kind), never a transcript or tool text. Kept in
 // <workspace>/.drawing/activity.json, the newest ACTIVITY_MAX events, written atomically a moment after a change.
@@ -13,27 +12,10 @@ import { createActivityLog } from './activity-log.js';
 
 export const ACTIVITY_FILE = ['.drawing', 'activity.json'];
 const WRITE_DELAY_MS = 500;
-const BODY_MAX = 1024;
-
-const readBody = (req) =>
-  new Promise((ok, fail) => {
-    let s = '';
-    req.setEncoding('utf8');
-    req.on('data', (d) => {
-      s += d;
-      if (s.length > BODY_MAX) {
-        req.destroy();
-        fail(new Error('body too large'));
-      }
-    });
-    req.on('end', () => ok(s));
-    req.on('error', fail);
-  });
-
 export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS } = {}) {
   const dir = ctx.workspaceDir ? join(ctx.workspaceDir, ACTIVITY_FILE[0]) : null;
   const path = dir ? join(dir, ACTIVITY_FILE[1]) : null;
-  let log = { events: [], readAt: 0 };
+  let log = { events: [] };
   if (path) {
     try {
       log = parseActivityLog(JSON.parse(await readFile(path, 'utf8')));
@@ -106,28 +88,6 @@ export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS
         handler(_req, res) {
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           res.end(JSON.stringify(log));
-        },
-      },
-      {
-        method: 'POST',
-        path: '/api/activity/read',
-        async handler(req, res) {
-          let at;
-          try {
-            at = JSON.parse((await readBody(req)) || '{}')?.at;
-          } catch {
-            at = undefined;
-          }
-          const t = now();
-          if (typeof at !== 'number' || !Number.isFinite(at)) at = t;
-          const readAt = Math.max(log.readAt, Math.min(at, t));
-          if (readAt !== log.readAt) {
-            log.readAt = readAt;
-            save();
-            ctx.hub.broadcast('activity-read', { readAt });
-          }
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify({ readAt }));
         },
       },
     ],

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createActivityLog } from '../server/cursor/activity-log.js';
 import { setup } from '../server/cursor/activity.js';
-import { ACTIVITY_MAX, activitySentence, fileStemOf, objectOf, parseActivityLog, subjectOf, unreadOf } from '../shared/dispatch/agent-activity.ts';
+import { ACTIVITY_MAX, activitySentence, fileStemOf, objectOf, parseActivityLog, subjectOf } from '../shared/dispatch/agent-activity.ts';
 
 const sessions = {
   s1: { id: 's1', name: 'Jude', role: 'impl', provider: 'claude', color: '#3b82f6', status: 'running' },
@@ -90,15 +90,14 @@ test('activitySentence: 해요체 copy with the right particles', () => {
   assert.equal(fileStemOf('a/b/c.dpx.json'), 'c');
 });
 
-test('parseActivityLog and unreadOf: malformed events are dropped, newest ACTIVITY_MAX kept', () => {
+test('parseActivityLog: malformed events are dropped, newest ACTIVITY_MAX kept', () => {
   const ev = (i) => ({ id: `${i}-1`, at: i, kind: 'start', sid: 's', name: 'n', role: 'impl', file: 'a.dpx.json' });
   const many = Array.from({ length: ACTIVITY_MAX + 5 }, (_, i) => ev(i + 1));
   const log = parseActivityLog({ events: [...many, { id: 'x' }, { ...ev(9999), kind: 'hack' }], readAt: 100 });
   assert.equal(log.events.length, ACTIVITY_MAX);
   assert.equal(log.events[0].at, 6);
-  assert.equal(unreadOf(log), ACTIVITY_MAX + 5 - 100);
-  assert.deepEqual(parseActivityLog(null), { events: [], readAt: 0 });
-  assert.deepEqual(parseActivityLog({ events: 'x', readAt: 'y' }), { events: [], readAt: 0 });
+  assert.deepEqual(parseActivityLog(null), { events: [] });
+  assert.deepEqual(parseActivityLog({ events: 'x', readAt: 'y' }), { events: [] }, 'an old read mark is dropped');
 });
 
 // ---- server module ----
@@ -135,7 +134,7 @@ async function moduleRig(workspaceDir, { now } = {}) {
 test('activity module: events get ids and titles, go out over SSE and are stored under .drawing/', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'activity-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  let clock = 5000;
+  const clock = 5000;
   const r = await moduleRig(dir, { now: () => clock });
   r.report({ sid: 's1', file: 'a.dpx.json', section: '개요' });
   r.report({ sid: 's1', file: 'a.dpx.json', section: '설계' });
@@ -148,23 +147,13 @@ test('activity module: events get ids and titles, go out over SSE and are stored
   assert.equal(new Set(evs.map((e) => e.id)).size, 4);
   const got = await r.call('GET', '/api/activity');
   assert.equal(got.json.events.length, 4);
-  assert.equal(got.json.readAt, 0);
-
-  // Read up to now: everything older is read, the SSE tells the other pages; a later or older `at` is clamped.
-  clock = 6000;
-  const read = await r.call('POST', '/api/activity/read', JSON.stringify({ at: 9_999_999 }));
-  assert.deepEqual(read.json, { readAt: 6000 });
-  assert.deepEqual(r.sent.at(-1), { event: 'activity-read', data: { readAt: 6000 } });
-  const n = r.sent.length;
-  assert.deepEqual((await r.call('POST', '/api/activity/read', JSON.stringify({ at: 10 }))).json, { readAt: 6000 });
-  assert.equal(r.sent.length, n, 'an older mark changes nothing and sends nothing');
-  clock = 7000;
-  assert.deepEqual((await r.call('POST', '/api/activity/read', 'not json')).json, { readAt: 7000 });
+  assert.equal('readAt' in got.json, false);
+  assert.equal(r.m.routes.some((x) => x.path === '/api/activity/read'), false, 'no read-mark route');
 
   await r.m.close();
   const disk = JSON.parse(await readFile(join(dir, '.drawing', 'activity.json'), 'utf8'));
   assert.equal(disk.version, 1);
-  assert.equal(disk.readAt, 7000);
+  assert.equal('readAt' in disk, false);
   assert.deepEqual(disk.events.map((e) => e.kind), ['start', 'progress', 'finish', 'start']);
   // Metadata only: no transcript or tool text fields.
   for (const e of disk.events) for (const k of Object.keys(e)) assert.ok(['id', 'at', 'kind', 'sid', 'name', 'role', 'provider', 'color', 'file', 'title', 'section'].includes(k), k);
@@ -173,7 +162,6 @@ test('activity module: events get ids and titles, go out over SSE and are stored
   const again = await moduleRig(dir, { now: () => clock });
   const back = await again.call('GET', '/api/activity');
   assert.equal(back.json.events.length, 4);
-  assert.equal(back.json.readAt, 7000);
   await again.m.close();
 });
 
@@ -183,7 +171,7 @@ test('activity module: a damaged file starts empty; a hub failure adds an error 
   await mkdir(join(dir, '.drawing'));
   await writeFile(join(dir, '.drawing', 'activity.json'), '{broken');
   const r = await moduleRig(dir);
-  assert.deepEqual((await r.call('GET', '/api/activity')).json, { events: [], readAt: 0 });
+  assert.deepEqual((await r.call('GET', '/api/activity')).json, { events: [] });
   r.report({ sid: 's2', file: 'a.dpx.json' });
   r.hub.emit('session', { id: 's2', state: 'failed' });
   await r.m.settled();

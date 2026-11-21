@@ -3,7 +3,6 @@
 // attribution and the hub's session state. Metadata only (who, which file, which section, when, what kind): never a
 // transcript or tool text. Kept in <workspace>/.drawing/activity.json (newest ACTIVITY_MAX).
 //   GET  /api/activity              -> ActivityLog
-//   POST /api/activity/read { at }  -> { readAt } (everything up to `at` counts as read; SSE `activity-read` too)
 //   SSE  `activity`                 -> ActivityEvent (one new event)
 
 export type ActivityKind = 'start' | 'progress' | 'finish' | 'error';
@@ -33,8 +32,6 @@ export interface ActivityEvent {
 
 export interface ActivityLog {
   events: ActivityEvent[];
-  /** Everything at or before this time (ms) has been seen; 0 when nothing has. */
-  readAt: number;
 }
 
 /** Events kept on disk and sent to the page. */
@@ -74,15 +71,11 @@ export function activitySentence(e: Pick<ActivityEvent, 'kind' | 'name' | 'file'
   }
 }
 
-/** Events newer than `readAt`. */
-export const unreadOf = (log: ActivityLog) => log.events.filter((e) => e.at > log.readAt).length;
-
 /** Parses a stored or sent log; anything malformed is dropped. */
 export function parseActivityLog(x: unknown): ActivityLog {
-  const o = (x ?? {}) as { events?: unknown; readAt?: unknown };
+  const o = (x ?? {}) as { events?: unknown };
   const events = Array.isArray(o.events) ? o.events.filter(isActivityEvent).slice(-ACTIVITY_MAX) : [];
-  const readAt = typeof o.readAt === 'number' && Number.isFinite(o.readAt) ? o.readAt : 0;
-  return { events, readAt };
+  return { events };
 }
 
 const KINDS = new Set(['start', 'progress', 'finish', 'error']);
