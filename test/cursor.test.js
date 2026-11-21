@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { blockText, changedCentre, changedDocSpot, docBlocksOf, mentionsFile, shapesOf } from '../server/cursor/model.js';
+import { blockSigsOf, blockText, changedCentre, changedDocSpot, docBlocksOf, embedSpot, mentionsFile, shapesOf } from '../server/cursor/model.js';
 import { setup } from '../server/cursor/index.js';
 import { Hub } from '../server/dispatch/hub.js';
 
@@ -388,6 +388,39 @@ test('changedDocSpot: appended, edited, replaced and removed blocks', () => {
   assert.equal(spot(docFile(head('Plan')), docFile(head('Plan', 'plan'))), null);
   // An embedded diagram (no text): offset 0.
   assert.deepEqual(spot(a, docFile(head('Plan'), para('one'), { type: 'diagram', attrs: { blockId: 'b1' } })), { index: 2, offset: 0 });
+});
+
+const embed = (id) => ({ type: 'diagram', attrs: { blockId: id } });
+test('embedSpot: a changed canvas block the document embeds lands on that diagram (E712, #1039)', () => {
+  const doc = docFile(head('Plan'), embed('b1'), para('after'), embed('b2'));
+  const sigs = (blocks) => blockSigsOf({ blocks });
+  const before = sigs([block('b1', 0, 0, 'a > b'), block('b2', 0, 300, 'c > d'), block('b3', 0, 600)]);
+  // The code of b1 changed: the diagram embedding b1 (block 1 of the document).
+  const b1 = [block('b1', 0, 0, 'a > x'), block('b2', 0, 300, 'c > d'), block('b3', 0, 600)];
+  assert.deepEqual(embedSpot(before, sigs(b1), docBlocksOf(doc)), { index: 1, offset: 0 });
+  // b2 and b1 both changed: the last embedded one in the document.
+  const both = [block('b1', 0, 0, 'a > x'), block('b2', 0, 300, 'c > y'), block('b3', 0, 600)];
+  assert.deepEqual(embedSpot(before, sigs(both), docBlocksOf(doc)), { index: 3, offset: 0 });
+  // A block nothing embeds (b3), or no change at all: no place.
+  assert.equal(embedSpot(before, sigs([block('b1', 0, 0, 'a > b'), block('b2', 0, 300, 'c > d'), block('b3', 0, 600, 'e')]), docBlocksOf(doc)), null);
+  assert.equal(embedSpot(before, before, docBlocksOf(doc)), null);
+});
+
+test('cursor module: a diagram block edit lands on the embedded diagram in the document (E712, #1039)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const doc = (code) => ({ ...docFile(head('Plan'), embed('b1'), para('done')), blocks: [block('b1', 0, 0, code)] });
+  r.files.set('d.dpx.json', doc('a > b'));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', text: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d.dpx.json' -d @/tmp/x.json` } });
+  await r.tick();
+  await r.change('d.dpx.json', doc('a > x'));
+  const e = r.sent.filter((x) => x.event === 'cursor').at(-1).data;
+  assert.equal(e.sid, 's1');
+  assert.deepEqual(e.doc, { index: 1, offset: 0 });
+  assert.equal(e.live, true);
+  assert.equal(typeof e.y, 'number');
+  m.close();
 });
 
 test('blockText: text nodes only, nested blocks included', () => {

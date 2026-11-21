@@ -8,7 +8,7 @@
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
 // parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
 import { AGENT_COLORS } from '../dispatch/colors.js';
-import { changedCentre, changedDocSpot, changedKeys, docBlocksOf, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
+import { blockSigsOf, changedCentre, changedDocSpot, changedKeys, docBlocksOf, embedSpot, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
 import { agentStatus } from '../../shared/dispatch/agent-status.ts';
 
 const ATTRIBUTE_MS = 60_000;
@@ -32,13 +32,16 @@ const READ_ONLY = new Set(['Read', 'Grep', 'Glob', 'LS', 'NotebookRead', 'WebFet
 const DPX_RE = /[^\s"'`=?&<>|;(),]*\.dpx\.json/g;
 const EMPTY = new Map();
 // What a change is diffed on: the shapes with a place (shapesOf) plus, for the document cursor (E529, #619), the
-// document's top-level blocks as `.doc`.
-const snapshotOf = (file) => Object.assign(shapesOf(file), { doc: docBlocksOf(file) });
+// document's top-level blocks as `.doc`, and the canvas blocks by id as `.blocks` (E712, #1039: a diagram's code can
+// change while the document does not).
+const snapshotOf = (file) => Object.assign(shapesOf(file), { doc: docBlocksOf(file), blocks: blockSigsOf(file) });
 const docOf = (s) => s?.doc ?? [];
+const blocksOf = (s) => s?.blocks ?? new Map();
 // Where a change lands: `{ x, y }` on the canvas and/or `{ doc: { index, offset } }` in the document (E529, #619).
+// A change inside a canvas block that the document embeds lands on that embedded diagram (E712, #1039).
 const spotOf = (before, after) => {
   const at = changedCentre(before, after);
-  const doc = changedDocSpot(docOf(before), docOf(after));
+  const doc = changedDocSpot(docOf(before), docOf(after)) ?? embedSpot(blocksOf(before), blocksOf(after), docOf(after));
   return at || doc ? { ...(at ?? {}), ...(doc ? { doc } : {}) } : null;
 };
 const OUTSIDE_NAME = '에이전트';

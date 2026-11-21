@@ -112,12 +112,42 @@ export function blockText(b) {
   return Array.isArray(b.content) ? b.content.map(blockText).join('') : '';
 }
 
-/** The document's top-level blocks: { sig, type, text } each (empty for a file without a document). */
+/**
+ * The document's top-level blocks: { sig, type, text, ref } each (empty for a file without a document). `ref` is the
+ * canvas block id an embedded diagram shows (E712, #1039), absent for other blocks.
+ */
 export function docBlocksOf(file) {
   const c = file?.document?.content;
   if (!Array.isArray(c)) return [];
   // The signature is kept per file between changes (server/cursor/index.js): a hash, not a second copy of the JSON.
-  return c.map((b) => ({ sig: hash(blockSig(b)), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) }));
+  return c.map((b) => {
+    const out = { sig: hash(blockSig(b)), type: typeof b?.type === 'string' ? b.type : '', text: blockText(b) };
+    if (b?.type === 'diagram' && typeof b.attrs?.blockId === 'string') out.ref = b.attrs.blockId;
+    return out;
+  });
+}
+
+/** Signature of each canvas block (`file.blocks`) by id: its code and properties, so a change inside a block is seen. */
+export function blockSigsOf(file) {
+  const out = new Map();
+  for (const b of Array.isArray(file?.blocks) ? file.blocks : []) {
+    if (b && typeof b.id === 'string') out.set(b.id, hash(JSON.stringify(b)));
+  }
+  return out;
+}
+
+/**
+ * Where a change to canvas blocks that a document embeds lands (E712, #1039): the last embedded diagram, in `docAfter`
+ * (docBlocksOf), whose block id changed between `beforeSigs` and `afterSigs` (blockSigsOf). The place is the start of
+ * that diagram: it is an atom, so the doc view shows the cursor at the diagram itself. Null when no embedded one changed.
+ */
+export function embedSpot(beforeSigs = new Map(), afterSigs = new Map(), docAfter = []) {
+  const changed = new Set();
+  for (const [id, sig] of afterSigs) if (beforeSigs.get(id) !== sig) changed.add(id);
+  for (let i = docAfter.length - 1; i >= 0; i--) {
+    if (docAfter[i].ref !== undefined && changed.has(docAfter[i].ref)) return { index: i, offset: 0 };
+  }
+  return null;
 }
 
 /**
