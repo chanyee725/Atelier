@@ -187,6 +187,7 @@ test('zoomed out, block node badges skip nodes too small for them and never over
   const at = (zoom: number) => placeBadges([image] as never, { scrollX: 0, scrollY: 0, zoom: { value: zoom }, offsetLeft: 0, offsetTop: 0 }, { left: 0, top: 0 }, () => two, () => pic as never, null);
   assert.deepEqual(at(1).map((b) => b.node), ['Web', 'Api'], 'at 100% both nodes get a badge');
   assert.deepEqual(at(0.3), [], 'a 30px node gets none');
+  assert.deepEqual(at(0.45), [], 'a 45px node (a wide diagram fitted whole in the 둘 다 pane) gets none');
   // Two shapes with code side by side: the second badge would sit on the first, so it is left out.
   const s1 = { ...SHAPE, id: 'a', x: 0, y: 0, width: 60, height: 20 };
   const s2 = { ...SHAPE, id: 'b', x: 10, y: 2, width: 60, height: 20 };

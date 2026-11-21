@@ -54,6 +54,8 @@ test('in the 둘 다 pane a lone wide diagram shows whole, below the 60% floor (
     const p = onScreen(v, x, y);
     assert.ok(p.x >= 0 && p.x <= 448 && p.y >= 0 && p.y <= 732, `(${x},${y}) on screen at ${p.x},${p.y}`);
   }
+  // Rounded to a 0.02 step down there, so the row fills the pane: (448 - 96) / 1290 = 0.27.
+  assert.equal(v.zoom, 0.26);
   // A huge one stops at Excalidraw's lowest zoom.
   assert.equal(fitView([0, 0, 1e6, 1e6], 1000, 1000, PANE_FIT)!.zoom, FIT_ALL_MIN_ZOOM);
 });

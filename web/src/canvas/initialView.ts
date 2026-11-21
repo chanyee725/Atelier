@@ -45,6 +45,8 @@ export function fitMinZoom(blockIds: readonly (string | null)[]): number {
 export const FIT_MARGIN = 0.9;
 /** Excalidraw's zoom step: fitted zooms are rounded down to it, like its own fit. */
 const ZOOM_STEP = 0.1;
+/** Step of a whole fit (the 둘 다 pane) below the 60% floor, where a 0.1 step loses up to a third of the room. */
+const FINE_ZOOM_STEP = 0.02;
 
 /**
  * The view that shows `bounds` whole and centred in a `width`×`height` viewport, or null when there is nothing to
@@ -60,8 +62,10 @@ export function fitView(bounds: Bounds | null, width: number, height: number, op
   // A fixed pixel margin when asked (the viewport must be bigger than it), else a share of the viewport.
   const raw = m !== undefined && width > 2 * m && height > 2 * m ? Math.min((width - 2 * m) / w, (height - 2 * m) / h) : Math.min(width / w, height / h) * FIT_MARGIN;
   const maxZoom = opts.maxZoom ?? FIT_MAX_ZOOM;
-  // Rounded down to the step (a hair over a step counts as on it), then kept within the limits.
-  const stepped = Math.floor(raw / ZOOM_STEP + 1e-9) * ZOOM_STEP;
+  // Rounded down to the step (a hair over a step counts as on it), then kept within the limits. A whole fit below
+  // the 60% floor rounds to a finer step: 0.29 to 0.2 would leave a third of the pane empty (#1043).
+  const step = opts.whole && raw < FIT_MIN_ZOOM ? FINE_ZOOM_STEP : ZOOM_STEP;
+  const stepped = Math.floor(raw / step + 1e-9) * step;
   const floor = opts.whole ? FIT_ALL_MIN_ZOOM : (opts.minZoom ?? FIT_MIN_ZOOM);
   const zoom = Math.min(maxZoom, Math.max(floor, Number(stepped.toFixed(2))));
   return { zoom, scrollX: width / 2 / zoom - (x1 + x2) / 2, scrollY: height / 2 / zoom - (y1 + y2) / 2 };
