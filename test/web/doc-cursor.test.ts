@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createDocument, getSchema } from '@tiptap/core';
 import { withTrailingParagraph } from '../../web/src/doc/model.ts';
 import { docExtensions } from '../../web/src/doc/extensions.ts';
-import { applyDocCursor, docPos, DOC_MOVE_MS, glideAt, gliding, nextGlide, pruneDocGone, SETTLE_MS, type DocCursor } from '../../web/src/doc/docCursor.ts';
+import { applyDocCursor, DIAGRAM_HOLD_MS, docPos, DOC_MOVE_MS, heldUntil, glideAt, gliding, nextGlide, pruneDocGone, SETTLE_MS, type DocCursor } from '../../web/src/doc/docCursor.ts';
 import { FADE_AFTER_MS, FADE_MS } from '../../web/src/canvas/agentCursor.ts';
 import { blockText, changedDocSpot, docBlocksOf } from '../../server/cursor/model.js';
 
@@ -161,4 +161,44 @@ test('a code-only diagram write lands on the embedded diagram block in the docum
   assert.equal(d.nodeAt(at.pos)?.type.name, 'diagram');
   m = applyDocCursor(m, { sid: 's1', gone: true } as never, 1000);
   assert.equal(m.size, 0);
+});
+
+test('a text edit right after a diagram edit keeps the caret on the diagram block for a few seconds (#1043)', () => {
+  const diagram = { id: 'b1', line: 2, node: '서버' };
+  let m = applyDocCursor(new Map(), ev({ index: 2, offset: 0 }, { diagram, live: true }), 1000);
+  m = applyDocCursor(m, ev({ index: 4, offset: 7 }, { live: true, status: '글 작성 중…' }), 1800);
+  let c = m.get('s1')!;
+  assert.deepEqual(c.spot, { index: 2, offset: 0 }, 'still on the diagram block');
+  assert.deepEqual(c.diagram, diagram);
+  assert.equal(c.editAt, 1800);
+  assert.equal(c.status, '글 작성 중…');
+  assert.equal(heldUntil(c), 1000 + DIAGRAM_HOLD_MS);
+  // A second text edit during the hold moves the target, not the caret, and not the end of the hold.
+  m = applyDocCursor(m, ev({ index: 4, offset: 12 }, { live: true }), 2500);
+  assert.deepEqual(m.get('s1')!.spot, { index: 2, offset: 0 });
+  assert.equal(heldUntil(m.get('s1')!), 1000 + DIAGRAM_HOLD_MS);
+  assert.equal(pruneDocGone(m, 3999), m, 'nothing moves before the hold ends');
+  // The hold ends: the caret moves to the newest text place and leaves the diagram.
+  const after = pruneDocGone(m, 1000 + DIAGRAM_HOLD_MS);
+  c = after.get('s1')!;
+  assert.deepEqual(c.spot, { index: 4, offset: 12 });
+  assert.equal(c.diagram, undefined);
+  assert.equal(c.held, undefined);
+  assert.equal(c.moveAt, 1000 + DIAGRAM_HOLD_MS, 'it glides from the end of the hold');
+});
+
+test('the diagram hold ends early on a new diagram edit, and does not apply to a late text edit or another file (#1043)', () => {
+  const diagram = { id: 'b1' };
+  const start = applyDocCursor(new Map(), ev({ index: 2, offset: 0 }, { diagram, live: true }), 1000);
+  // Late: the text place wins at once.
+  assert.deepEqual(applyDocCursor(start, ev({ index: 4, offset: 1 }, { live: true }), 1000 + DIAGRAM_HOLD_MS).get('s1')!.spot, { index: 4, offset: 1 });
+  // Another file: the text place wins at once.
+  assert.deepEqual(applyDocCursor(start, ev({ index: 4, offset: 1 }, { live: true, file: 'b.dpx.json' }), 1500).get('s1')!.spot, { index: 4, offset: 1 });
+  // A diagram edit during the hold moves the caret to it and drops the held text place.
+  let m = applyDocCursor(start, ev({ index: 4, offset: 1 }, { live: true }), 1500);
+  m = applyDocCursor(m, ev({ index: 6, offset: 0 }, { diagram: { id: 'b2' }, live: true }), 2000);
+  const c = m.get('s1')!;
+  assert.deepEqual(c.spot, { index: 6, offset: 0 });
+  assert.equal(c.held, undefined);
+  assert.equal(c.diagram?.id, 'b2');
 });
