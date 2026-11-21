@@ -115,7 +115,7 @@ All from the Dispatch store already used by `/dispatch` (`web/src/dispatch/store
 | Project groups | `GET /api/projects` (Atelier `projectsApi.projects()`), `dispatch/lib/folder.ts` |
 | Limits (Claude 5h/7d/Fable, Codex) | `GET /api/limits` + `limits` event |
 | Guard thresholds | `settings` slice (`GET /api/state`), edited in 설정 › 한도 (`POST /api/settings`) |
-| Usage detail tab | `GET /api/usage`, `GET /api/usage/all` (existing `UsagePage`) |
+| Usage detail tab | `GET /api/usage` (existing `UsagePage`) |
 | Timeline tab | `GET /api/timeline` (existing `SessionTimeline`) |
 | Create / stop / interrupt / answer | `POST /api/sessions`, `/kill`, `/interrupt`, `/permission`, `/message` (existing dialogs) |
 | Clear | `POST /api/sessions/clear-done`, `POST /api/sessions/clear` (API exists, no UI yet) |
