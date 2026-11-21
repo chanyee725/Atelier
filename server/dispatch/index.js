@@ -7,7 +7,7 @@
 // drawing tool works on its own and GET /api/dispatch says why.
 import path from "node:path";
 import { ownGitEnv, runCli } from "./cli.js";
-import { cancelLogin, login, loginWithKey, logout, PROVIDER_IDS, providerStatus, publicStatus } from "./auth.js";
+import { cancelLogin, claudeAccount, login, loginWithKey, logout, PROVIDER_IDS, providerStatus, publicStatus } from "./auth.js";
 import { Burn } from "./burn.js";
 import { Store } from "./dispatch-store.js";
 import { currentBranch } from "./git.js";
@@ -48,7 +48,7 @@ const UNCHECKED = Object.fromEntries(PROVIDER_IDS.map(id => [id, { installed: nu
  * project is read or written for settings (memory only).
  */
 export async function createDispatch({ root, broadcast, port, workspaceDir, layout, deps = {} }) {
-  const dep = { providerStatus, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
+  const dep = { providerStatus, claudeAccount, codexModels, login, loginWithKey, logout, cancelLogin, ...deps };
   const store = new Store(root, ...(layout ? [layout] : []));
   await store.load();
   // The user's defaults file wins over the project's state.json, key by key (docs/design/user-defaults.md).
@@ -186,6 +186,10 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
     modeProfiles,
     root, store, hub, ledger, models, broadcast, snapshot, usage, projects, saveUserDefaults,
     providers: () => providers, refreshProviders, setEnabled,
+    // The logged-in account email per provider for 설정 > 모델 연결 (#1023). Claude only: Codex and agy print none
+    // without reading their credential files. The CLI is asked only once a status check found it logged in, so no
+    // CLI starts before the user connects a provider. Memory only, never stored or logged.
+    accounts: async () => ({ claude: providers.claude?.cliLoggedIn ? await dep.claudeAccount() : null, openai: null, gemini: null }),
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.
     prStatus: dep.prStatus ?? createPrStatus({ workspaceDir, cwd: root, prDefault: async () => (await userDefaults.current()).prStatus ?? true }),

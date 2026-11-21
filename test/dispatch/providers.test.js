@@ -342,3 +342,23 @@ test('#587 Codex API key: goes to the CLI stdin only, never into args, logs, fil
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('#1023 account email: from `claude auth status` after connect, null again after CLI logout, never in state', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'drawing-e525-auth-'));
+  writeFileSync(join(dir, 'auth-state'), 'claude');
+  const s = await start(withFake(dir));
+  const accounts = async () => (await (await fetch(`${s.base}/api/providers/accounts`)).json()).accounts;
+  const calls0 = fake.calls().length;
+  try {
+    assert.deepEqual(await accounts(), { claude: null, openai: null, gemini: null });
+    assert.equal(fake.calls().length, calls0, 'no CLI before the user connects');
+    assert.deepEqual((await s.post('/api/providers/claude/login')).body, { ok: true, connected: true });
+    assert.equal((await accounts()).claude, 'fake@example.invalid');
+    assert.ok(!(await (await fetch(`${s.base}/api/state`)).text()).includes('@example.invalid'));
+    assert.equal((await s.post('/api/providers/claude/logout', { cli: true })).status, 200);
+    assert.equal((await accounts()).claude, null);
+  } finally {
+    await s.stop();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

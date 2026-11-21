@@ -2,7 +2,7 @@
 // Runs against a scratch git repo with one commit in a temp dir; no agent CLI is started.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -25,7 +25,7 @@ function scratchRepo() {
 }
 
 function fakeDeps(dir) {
-  const calls = { providerStatus: 0, codexModels: 0, login: 0 };
+  const calls = { providerStatus: 0, codexModels: 0, login: 0, claudeAccount: 0 };
   return {
     calls,
     deps: {
@@ -36,6 +36,7 @@ function fakeDeps(dir) {
         return { claude: { ...p }, openai: { ...p }, gemini: { ...p } };
       },
       codexModels: async () => { calls.codexModels++; return []; },
+      claudeAccount: async () => { calls.claudeAccount++; return 'fake@example.invalid'; },
       login: () => { calls.login++; },
       logout: async () => {},
       cancelLogin: () => {},
@@ -285,6 +286,29 @@ test('pr-tracking route: default on, toggles and persists, header and body check
     const rs = await Promise.all(Array.from({ length: 8 }, (_, i) => fetch(url, { method: 'POST', headers: W, body: JSON.stringify({ on: i % 2 === 0 }) })));
     assert.deepEqual(rs.map((r) => r.status), Array(8).fill(200));
     assert.deepEqual(readdirSync(join(ws, '.drawing')).filter((f) => f.endsWith('.tmp')), []);
+  } finally {
+    await stop();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('account email: asked only after the CLI was found logged in, never in /api/state or the state file (#1023)', async () => {
+  const { root, ws } = scratchRepo();
+  const { calls, deps } = fakeDeps(root);
+  const { base, stop } = await start(ws, deps);
+  try {
+    const before = await (await fetch(`${base}/api/providers/accounts`)).json();
+    assert.deepEqual(before, { accounts: { claude: null, openai: null, gemini: null } });
+    assert.equal(calls.claudeAccount, 0, 'no CLI before the user connects a provider');
+    await fetch(`${base}/api/providers/claude/login`, { method: 'POST', headers: W, body: '{}' });
+    const res = await fetch(`${base}/api/providers/accounts`);
+    assert.equal(res.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(await res.json(), { accounts: { claude: 'fake@example.invalid', openai: null, gemini: null } });
+    const state = await (await fetch(`${base}/api/state`)).text();
+    assert.ok(!state.includes('fake@example.invalid'));
+    // grep exits 1 when nothing on disk under the project holds the address.
+    const found = spawnSync('grep', ['-rl', 'fake@example.invalid', root], { encoding: 'utf8' });
+    assert.equal(found.status, 1, found.stdout);
   } finally {
     await stop();
     rmSync(root, { recursive: true, force: true });

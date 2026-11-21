@@ -45,7 +45,7 @@ const CODEX_MODELS = { models: [
 ] };
 
 const STATUS = {
-  claude: { "auth status": JSON.stringify({ loggedIn: true, authMethod: "claude.ai" }) },
+  claude: { "auth status": JSON.stringify({ loggedIn: true, authMethod: "claude.ai", email: "fake@example.invalid" }) },
   codex: { "login status": "Logged in using ChatGPT", "debug models": JSON.stringify(CODEX_MODELS) },
 };
 
@@ -70,7 +70,7 @@ function fakeAuth(file, sub, bin = "claude", rest = []) {
   if (sub === "status") {
     const loggedIn = existsSync(file);
     if (bin === "codex") process.stdout.write(loggedIn ? "Logged in using ChatGPT\n" : "Not logged in\n");
-    else process.stdout.write(JSON.stringify(loggedIn ? { loggedIn, authMethod: "claude.ai" } : { loggedIn }) + "\n");
+    else process.stdout.write(JSON.stringify(loggedIn ? { loggedIn, authMethod: "claude.ai", email: "fake@example.invalid" } : { loggedIn }) + "\n");
     return process.exit(0);
   }
   if (sub === "login" && rest[0] === "--with-api-key") {

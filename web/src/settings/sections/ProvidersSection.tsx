@@ -4,8 +4,9 @@
 // log in with an API key: the key lives only in the input until submit, is cleared before the request and goes once
 // to the server, which hands it to `codex login --with-api-key`; it is never stored or logged here. Provider state
 // comes from the shared model-connection subscription (useModels, #616/#625). With Dispatch off the rows show
-// read-only with the reason (#620). Status only: no account, email, token or key is kept; the one
-// account thing is the user's own label for the row (#747, AccountLabelField).
+// read-only with the reason (#620). No token or key is kept. Each row shows the email its CLI is logged in with
+// (#1023, AccountEmail): asked from /api/providers/accounts when the section opens or a connection changes, held in
+// this component's state only (no storage, no logs). Codex and agy print no email, so their rows say so.
 import { ExternalLink, KeyRound, Loader2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api';
@@ -34,7 +35,6 @@ import { useModels, type Models } from '../../SidebarModels';
 import { MODELS_CHANGED, useDirtyMark, useSettingsLoad } from '../context';
 import { OffNote } from '../DispatchOff';
 import { SectionFrame } from '../SectionFrame';
-import { AccountLabelField } from './AccountLabelField';
 import { oneAtATime } from '../model';
 import '../../connect.css';
 
@@ -45,8 +45,32 @@ const ACTION_BTN = cn(
   FOCUS,
 );
 
+/** Logged-in emails per provider, asked again whenever a CLI's login state changes. Memory only.
+ *  `undefined` until the answer for the current login state arrives (the row then says it is checking). */
+function useAccounts(models: Models): Record<string, string | null> | undefined {
+  const [accounts, setAccounts] = useState<Record<string, string | null>>();
+  const loggedIn = PROVIDERS.map((m) => (models.providers[m.id]?.cliLoggedIn ? '1' : '0')).join('');
+  useEffect(() => {
+    let live = true;
+    setAccounts(undefined);
+    const load = () =>
+      api.providerAccounts().then(
+        (a) => live && setAccounts(a),
+        () => live && setAccounts({}),
+      );
+    void load();
+    window.addEventListener(MODELS_CHANGED, load);
+    return () => {
+      live = false;
+      window.removeEventListener(MODELS_CHANGED, load);
+    };
+  }, [loggedIn]);
+  return accounts;
+}
+
 export default function ProvidersSection() {
   const models = useModels();
+  const accounts = useAccounts(models);
   const { load } = useSettingsLoad();
   const offId = useId();
   const off = load.kind === 'off';
@@ -60,7 +84,7 @@ export default function ProvidersSection() {
       ) : (
         <ul className="flex flex-col gap-3">
           {PROVIDERS.map((meta) => (
-            <ProviderRow key={meta.id} meta={meta} models={models} describedBy={off ? offId : undefined} />
+            <ProviderRow key={meta.id} meta={meta} models={models} email={accounts ? (accounts[meta.id] ?? null) : undefined} describedBy={off ? offId : undefined} />
           ))}
         </ul>
       )}
@@ -68,7 +92,7 @@ export default function ProvidersSection() {
   );
 }
 
-function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models: Models; describedBy?: string }) {
+function ProviderRow({ meta, models, email, describedBy }: { meta: ProviderMeta; models: Models; email: string | null | undefined; describedBy?: string }) {
   const { status, limits } = models;
   const p = models.providers[meta.id];
   const enabled = !!status?.enabled;
@@ -244,7 +268,7 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
           CLI에서도 로그아웃
         </button>
       )}
-      <AccountLabelField meta={meta} />
+      <AccountEmail meta={meta} email={email} loggedIn={!!p?.cliLoggedIn} />
       {/* Always rendered, so its text changes are announced. */}
       <p role="status" className={cn('ml-11 text-xs', note?.bad ? 'text-destructive' : 'text-muted-foreground')}>
         {note?.text}
@@ -253,3 +277,24 @@ function ProviderRow({ meta, models, describedBy }: { meta: ProviderMeta; models
   );
 }
 
+// Codex and agy print no account email without reading their credential files, which Atelier never does.
+const NO_EMAIL: Record<string, string> = { openai: 'Codex CLI는 로그인한 이메일을 알려주지 않아요.', gemini: 'agy는 로그인한 이메일을 알려주지 않아요.' };
+
+/** 로그인 계정: the email the provider's CLI is logged in with, read only and selectable. `email` undefined: still asking. */
+function AccountEmail({ meta, email, loggedIn }: { meta: ProviderMeta; email: string | null | undefined; loggedIn: boolean }) {
+  const text = email
+    ? null
+    : (NO_EMAIL[meta.id] ?? (!loggedIn ? '연결하면 로그인한 이메일이 보여요.' : email === undefined ? '확인하고 있어요.' : '로그인한 이메일을 읽지 못했어요.'));
+  return (
+    <div data-testid="settings-provider-account" className="ml-11 flex min-w-0 items-baseline gap-2">
+      <span className="shrink-0 text-xs text-muted-foreground">로그인 계정</span>
+      {email ? (
+        <span data-testid="settings-provider-email" className="min-w-0 truncate text-sm text-foreground select-all" title={email}>
+          {email}
+        </span>
+      ) : (
+        <span className="min-w-0 text-xs break-keep text-muted-foreground">{text}</span>
+      )}
+    </div>
+  );
+}

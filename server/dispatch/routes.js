@@ -291,5 +291,8 @@ export function routeTable(d) {
       return { ok: true };
     }],
     ["POST", /^\/api\/providers\/refresh$/, async () => { await d.refreshProviders(); return d.providers(); }],
+    // For the settings page (#1023). Kept out of /api/state and SSE, so the state agents usually read has no email.
+    // Any local process can still GET it, as it could run `claude auth status` itself: no new exposure, not a secret.
+    ["GET", /^\/api\/providers\/accounts$/, async () => ({ accounts: await d.accounts() })],
   ];
 }
