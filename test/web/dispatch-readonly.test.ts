@@ -11,7 +11,7 @@ test('Claude, Codex and Gemini sessions can run; an unknown provider is read-onl
 });
 
 test('the runnable list matches the server hub PROVIDERS', () => {
-  const src = readFileSync(new URL('../../server/dispatch/hub.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../../server/dispatch/hub-util.js', import.meta.url), 'utf8');
   const m = src.match(/export const PROVIDERS = (\[[^\]]*\])/);
   assert.ok(m);
   assert.deepEqual(JSON.parse(m[1]), [...RUNNABLE_PROVIDERS]);
