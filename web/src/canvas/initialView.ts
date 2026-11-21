@@ -3,7 +3,8 @@
 // block alone never opens below 60% (#987); a file with several blocks or free shapes opens with all of them in view
 // (#1005). Once the user pans or zooms,
 // the file keeps the view they left it at: a reload (another tab, an agent editing the file) or switching back to
-// the file does not move it. Until then a reload fits again, so a block an agent adds comes into view.
+// the file does not move it. Until then a reload fits again, so a block an agent adds comes into view; while an agent
+// writes, the fit follows the block it added or redrew when the whole file would drop below 60% (#1043).
 // The first view Excalidraw reports after an open is the opening view (our fit, or its own default on an empty
 // canvas), never the user's (E494b). Any later move counts as the user's, programmatic ones too (focusing a block,
 // Excalidraw scrolling while a text is edited near the edge).
@@ -85,6 +86,7 @@ export function rememberView(path: string | undefined, v: View): void {
 /** Forget every remembered view (tests). */
 export function forgetViews(): void {
   views.clear();
+  shownSizes.clear();
 }
 
 /**
@@ -92,10 +94,12 @@ export function forgetViews(): void {
  * centres the content at 100%, as before). Unless it is the user's, the next view reported for `path` is taken
  * as this opening view, not as a move.
  */
-export function openingView(path: string | undefined, bounds: Bounds | null, width: number, height: number, opts?: FitOptions): View | null {
+export function openingView(path: string | undefined, bounds: Bounds | null, width: number, height: number, opts?: FitOptions, changed?: Bounds | null): View | null {
   const kept = rememberedView(path);
   if (kept) return kept;
-  const fit = fitView(bounds, width, height, opts);
+  // A reload of a file still at its fit (an agent's change the page could not apply in place) follows the block that
+  // changed, like an in-place change (followView); a first open fits as before.
+  const fit = changed && path && views.has(path) ? followFit(bounds, changed, width, height, opts) : fitView(bounds, width, height, opts);
   if (path) views.set(path, { view: fit, fitted: true, opening: true });
   return fit;
 }
@@ -110,4 +114,45 @@ export function refitView(path: string | undefined, bounds: Bounds | null, width
   if (!fit || same(fit, current)) return null;
   views.set(path, { view: fit, fitted: true, opening: true });
   return fit;
+}
+
+/**
+ * The fit while an agent writes (#1043): everything (`all`) when that fits at the 60% floor or above; else the block
+ * that changed (`changed`), at no less than the floor, so the diagram being written stays readable instead of
+ * shrinking with the whole file. Without a changed block it is the plain fit of everything.
+ */
+export function followFit(all: Bounds | null, changed: Bounds | null, width: number, height: number, base: FitOptions = {}): View | null {
+  const whole = fitView(all, width, height, { ...base, minZoom: FIT_ALL_MIN_ZOOM });
+  return whole && whole.zoom < FIT_MIN_ZOOM && changed ? fitView(changed, width, height, { ...base, minZoom: FIT_MIN_ZOOM }) : whole;
+}
+
+/**
+ * The view to switch to after a block was added or redrawn at another size (an agent writing, #1043), while the view
+ * of `path` is still its fit (the user has not moved it): followFit. Null when the user moved the view or the fit is
+ * `current` already. The next view reported counts as this fit, not a move.
+ */
+export function followView(path: string | undefined, all: Bounds | null, changed: Bounds | null, width: number, height: number, current: View, base?: FitOptions): View | null {
+  if (!path || rememberedView(path)) return null;
+  const fit = followFit(all, changed, width, height, base);
+  if (!fit || same(fit, current)) return null;
+  views.set(path, { view: fit, fitted: true, opening: true });
+  return fit;
+}
+
+// Path → block id → its picture's size as last shown, to tell which block an outside change added or redrew.
+const shownSizes = new Map<string, Map<string, string>>();
+
+/**
+ * The last of `blocks` (id, picture width and height) that is new or changed size since the last call for `path`,
+ * or null (nothing changed, or the first call: a first open follows no block). Remembers the sizes for next time.
+ */
+export function changedBlock(path: string | undefined, blocks: readonly { id: string; width: number; height: number }[]): string | null {
+  if (!path) return null;
+  const old = shownSizes.get(path);
+  const next = new Map(blocks.map((b) => [b.id, `${Math.round(b.width)}x${Math.round(b.height)}`]));
+  shownSizes.set(path, next);
+  if (!old) return null;
+  let hit: string | null = null;
+  for (const [id, size] of next) if (old.get(id) !== size) hit = id;
+  return hit;
 }

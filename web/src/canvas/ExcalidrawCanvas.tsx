@@ -26,7 +26,7 @@ import { diagramChildren, parse } from '../../../shared/dsl/index.ts';
 import { dslCodeRefs, mergeCodeRefs, type NodeCode } from '../../../shared/render/block-code.ts';
 import { bindArrows, frameFor, sceneToFreeform } from './freeform';
 import { CLEAN_APP_STATE, cleanElements, pretendardRefitIds } from './cleanStyle';
-import { PANE_FIT, openingView, refitView, rememberView } from './initialView';
+import { PANE_FIT, changedBlock, followView, openingView, refitView, rememberView } from './initialView';
 import { useFontRefit } from './useFontRefit';
 import './clean.css';
 import { CodePanel } from './CodePanel';
@@ -351,7 +351,10 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       // First open fits everything (at most 100%); a view the user left the file at is kept (E494).
       const live = elements.filter((e) => !e.isDeleted);
       const box = wrap.current?.getBoundingClientRect();
-      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0, fitFor(live, inSplit() ? PANE_FIT : undefined));
+      // A reload while an agent writes follows the block it added or redrew (#1043).
+      const hit = changedBlock(path, blocks.map((b, i) => ({ id: b.id, width: pics[i]!.width, height: pics[i]!.height })));
+      const hitEl = hit ? live.find((e) => blockIdOf(e as unknown as SceneEl) === hit) : undefined;
+      const view = openingView(path, live.length ? getCommonBounds(live) : null, box?.width ?? 0, box?.height ?? 0, fitFor(live, inSplit() ? PANE_FIT : undefined), hitEl ? getCommonBounds([hitEl]) : null);
       const files = Object.fromEntries(pics.map((p) => [p.fileId, fileData(p)]));
       if (!view) return { elements, files, appState: CLEAN_APP_STATE, scrollToContent: true };
       return { elements, files, appState: { ...CLEAN_APP_STATE, scrollX: view.scrollX, scrollY: view.scrollY, zoom: { value: view.zoom as NormalizedZoomValue } } };
@@ -452,6 +455,17 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
       }
       if (morphs2.size) setMorphs((m) => new Map([...m, ...morphs2]));
       if (changed) api.updateScene({ elements: next, captureUpdate: CaptureUpdateAction.NEVER });
+      // A block added or redrawn at another size (an agent writing) comes into view at a readable zoom, unless the
+      // user has moved the view (#1043).
+      const hit = changedBlock(pathRef.current, blocks.map((b, i) => ({ id: b.id, width: pics[i]!.width, height: pics[i]!.height })));
+      const box = wrap.current?.getBoundingClientRect();
+      if (changed && hit && box) {
+        const live = api.getSceneElements().filter((e) => !e.isDeleted);
+        const hitEl = live.find((e) => blockIdOf(e as unknown as SceneEl) === hit);
+        const st = api.getAppState();
+        const fit = followView(pathRef.current, live.length ? getCommonBounds(live) : null, hitEl ? getCommonBounds([hitEl]) : null, box.width, box.height, { scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom.value }, fitFor(live, inSplit() ? PANE_FIT : undefined));
+        if (fit) api.updateScene({ appState: { scrollX: fit.scrollX, scrollY: fit.scrollY, zoom: { value: fit.zoom as NormalizedZoomValue } }, captureUpdate: CaptureUpdateAction.NEVER });
+      }
       // A comment edit keeps the same picture (no scene change) but gives it a new anchor: the overlay needs it.
       else refreshFrame();
       tryFocus();
@@ -469,11 +483,17 @@ export default function ExcalidrawCanvas({ canvas, blocks, focus, dark, onChange
     const el = wrap.current;
     if (!el || !api || typeof ResizeObserver === 'undefined' || !el.closest('[data-split-canvas]')) return;
     let raf = 0;
+    // The observer also reports the size it starts at: that is no resize, and refitting then would undo the opening
+    // view (a reload that follows the block an agent changed, #1043).
+    const start = el.getBoundingClientRect();
+    let size = `${start.width}x${start.height}`;
     const run = () => {
       raf = 0;
+      const box = el.getBoundingClientRect();
+      if (`${box.width}x${box.height}` === size) return;
+      size = `${box.width}x${box.height}`;
       const live = api.getSceneElements().filter((e) => !e.isDeleted);
       if (!live.length) return;
-      const box = el.getBoundingClientRect();
       const st = api.getAppState();
       const next = refitView(pathRef.current, getCommonBounds(live), box.width, box.height, { scrollX: st.scrollX, scrollY: st.scrollY, zoom: st.zoom.value }, fitFor(live, PANE_FIT));
       if (next) api.updateScene({ appState: { scrollX: next.scrollX, scrollY: next.scrollY, zoom: { value: next.zoom as NormalizedZoomValue } }, captureUpdate: CaptureUpdateAction.NEVER });
