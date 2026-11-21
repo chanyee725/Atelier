@@ -246,6 +246,14 @@ test('a new plan goes to <area>/<feature>/계획.dpx.json: the area write_plan n
     const lead1 = await fresh();
     const again = await call('POST', '/api/pipeline/plan', { lead: lead1.id, folder: 'Server', feature: '단일-폴더-저장', goal: 'x', steps: one });
     assert.equal(again.body.path, 'Server/단일-폴더-저장/계획-2.dpx.json');
+    // An area or path that differs from an existing folder only in letter case reuses that folder (#1026).
+    const lead4 = await fresh();
+    const lower = await call('POST', '/api/pipeline/plan', { lead: lead4.id, area: 'server', feature: '단일-폴더-저장', goal: 'x', steps: one });
+    assert.equal(lower.body.path, 'Server/단일-폴더-저장/계획-3.dpx.json', JSON.stringify(lower.body));
+    const lead5 = await fresh();
+    const byPath = await call('POST', '/api/pipeline/plan', { lead: lead5.id, path: 'SERVER/경로-계획', goal: 'x', steps: one });
+    assert.equal(byPath.body.path, 'Server/경로-계획.dpx.json', JSON.stringify(byPath.body));
+    assert.ok(!existsSync(join(ws, 'server')) && !existsSync(join(ws, 'SERVER')));
     // No area and a lead without one: the folder every step's files share; the feature defaults to the title.
     const lead2 = await fresh();
     const inferred = await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '추론', goal: 'x', steps: [...one, { title: 'b', role: 'impl', files: ['./Proj/x/y.dpx.json'] }, { title: 'c', role: 'review' }] });

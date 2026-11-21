@@ -344,3 +344,40 @@ test('names like a:memo are fine; only drive paths are refused', async () => {
     if (process.platform !== 'win32') assert.equal((await call('POST', '/api/file', { path: 'C:/x' })).status, 400);
   });
 });
+
+test('folders that differ only in letter case reuse the existing folder; two such folders answer 409 (#1026)', async () => {
+  await withApp(async ({ call, ws: dir }) => {
+    assert.equal((await call('POST', '/api/folder', { path: 'web' })).status, 201);
+    // A folder of the same name in another case is the existing one: taken, like an exact name.
+    assert.equal((await call('POST', '/api/folder', { path: 'Web' })).status, 409);
+    let r = await call('POST', '/api/folder', { path: 'WEB/sub' });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.path, 'web/sub');
+    r = await call('POST', '/api/file', { path: 'Web/Sub/doc' });
+    assert.equal(r.status, 201);
+    assert.equal(r.body.path, 'web/sub/doc.dpx.json');
+    // Moves land in the existing folder; a folder moved next to a case-variant sibling is refused like a taken name.
+    await call('POST', '/api/file', { path: 'top' });
+    r = await call('POST', '/api/move', { from: 'top', to: 'WEB/top' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.path, 'web/top.dpx.json');
+    await call('POST', '/api/folder', { path: 'other/Sub' });
+    assert.equal((await call('POST', '/api/move', { from: 'other/Sub', to: 'web/SUB', type: 'folder' })).status, 409);
+    // With sub-documents: the document's folder may not land on a case variant of an existing folder.
+    await call('POST', '/api/file', { path: 'other/sub' });
+    assert.equal((await call('POST', '/api/move', { from: 'other/sub', to: 'web/Sub', type: 'file', withSubdocs: true })).status, 409);
+    // A case-only rename of the folder itself still works.
+    r = await call('POST', '/api/move', { from: 'other/Sub', to: 'other/SUB', type: 'folder' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.path, 'other/SUB');
+    assert.deepEqual((await readdir(dir)).filter((n) => !n.startsWith('.')).sort(), ['other', 'web']);
+    // Two existing folders that differ only in case (made outside the app) and no exact match: ambiguous, 409.
+    await mkdir(join(dir, 'Api'));
+    await mkdir(join(dir, 'API'));
+    r = await call('POST', '/api/file', { path: 'api/doc' });
+    assert.equal(r.status, 409);
+    assert.match(r.body.error, /대소문자/);
+    // An exact match still wins over its case variants.
+    assert.equal((await call('POST', '/api/file', { path: 'Api/doc' })).body.path, 'Api/doc.dpx.json');
+  });
+});

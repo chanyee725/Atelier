@@ -37,7 +37,8 @@ export function createWritePlan(c) {
     if (problem) throw new StoreError(400, problem);
     const all = entries();
     let path;
-    if (typeof body.path === 'string' && body.path.trim()) path = ws.runs.fileRel(body.path.trim().endsWith(FILE_EXT) ? body.path.trim() : body.path.trim() + FILE_EXT);
+    // Folders differing only in letter case resolve to the existing one (#1026), before the path is looked up.
+    if (typeof body.path === 'string' && body.path.trim()) path = await ws.matchFolderCase(ws.runs.fileRel(body.path.trim().endsWith(FILE_EXT) ? body.path.trim() : body.path.trim() + FILE_EXT));
     else {
       // Without a path, a lead revises its own draft.
       const own = leadEntries(lead.id, 'plan')[0];
@@ -81,7 +82,7 @@ export function createWritePlan(c) {
           const have = folders.length ? ` 지금 영역: ${folders.slice(0, 20).join(', ')}` : '';
           throw new StoreError(400, `area(영역)를 정해 주세요. 프로젝트 구조를 보고 고르고, 있는 영역은 다시 써요.${have}`);
         }
-        path = await freePath(`${leadFolder}/${feature ?? planFileName(built.title)}`);
+        path = await freePath(await ws.matchFolderCase(`${leadFolder}/${feature ?? planFileName(built.title)}`, { last: true }));
       }
       const r = await ws.createFile(path, { title: built.title, document: built.document, blocks: [built.block], plan: built.plan });
       path = r.path;

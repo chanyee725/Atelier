@@ -20,10 +20,41 @@ export function createFileOps(c) {
   const trashMany = (...a) => c.trashMany(...a); // store-trash.js
   const trashQuietly = (...a) => c.trashQuietly(...a); // store-trash.js
 
+  // ---- folder name case (#1026) ----
+  // A folder that differs from an existing sibling only in letter case (`Web/` next to `web/`) splits one area in two.
+  // Every create and move reuses the existing folder instead: each folder segment of `rel` (the last one too with
+  // `last`) that has no exact match but exactly one case-insensitive sibling folder takes that folder's name. Two or
+  // more such siblings and no exact one are ambiguous: 409. Segments past the first missing folder stay as written.
+  const caseKey = (s) => s.normalize('NFC').toLowerCase();
+  async function matchFolderCase(rel, { last = false } = {}) {
+    const segs = rel.split('/');
+    const count = last ? segs.length : segs.length - 1;
+    let dir = c.fsr.root;
+    for (let i = 0; i < count; i++) {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        if (err.code === 'ENOENT' || err.code === 'ENOTDIR') break;
+        throw err;
+      }
+      const seg = segs[i];
+      if (!entries.some((e) => e.name === seg)) {
+        const key = caseKey(seg);
+        const same = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.') && caseKey(e.name) === key).map((e) => e.name);
+        if (same.length > 1) throw new StoreError(409, `대소문자만 다른 폴더가 여러 개예요: ${same.join(', ')}`);
+        if (same.length === 1) segs[i] = same[0];
+        else break;
+      }
+      dir = join(dir, segs[i]);
+    }
+    return segs.join('/');
+  }
+
   // ---- file operations ----
   // `body` may carry starting content (document, canvas, blocks, plan), e.g. a pipeline template; it is checked like a save.
   async function createFile(rel, body = {}) {
-    rel = checkedFileRel(rel);
+    rel = await matchFolderCase(checkedFileRel(rel));
     checkFolderNames(rel.split('/').slice(0, -1));
     const abs = await wrapPath(rel).catch((err) => {
       throw asParentClash(err);
@@ -207,6 +238,7 @@ export function createFileOps(c) {
 
   async function createFolder(rel) {
     parseOrThrow(rel);
+    rel = await matchFolderCase(rel, { last: true });
     checkFolderNames(rel.split('/'));
     const abs = await wrapPath(rel);
     return serial(async () => {
@@ -236,6 +268,7 @@ export function createFileOps(c) {
   async function move(from, to, type, { withSubdocs = false } = {}) {
     parseOrThrow(from);
     parseOrThrow(to);
+    to = await matchFolderCase(to);
     if (type !== undefined && type !== 'file' && type !== 'folder') throw new StoreError(400, 'type must be "file" or "folder"');
     if (withSubdocs) {
       if (type !== 'file') throw new StoreError(400, 'withSubdocs needs type "file"');
@@ -264,7 +297,9 @@ export function createFileOps(c) {
     const fromAbs = await wrapPath(fileFrom);
     if (!(await statOrNull(fromAbs))?.isFile()) throw new StoreError(404, 'not found');
     const subFrom = fileFrom.slice(0, -FILE_EXT.length);
-    const subTo = fileTo.slice(0, -FILE_EXT.length);
+    const subRaw = fileTo.slice(0, -FILE_EXT.length);
+    const subMatched = await matchFolderCase(subRaw, { last: true });
+    const subTo = subMatched === subFrom ? subRaw : subMatched; // a case-only rename keeps its own spelling
     const subAbs = await wrapPath(subFrom);
     const hasSub = (await statOrNull(subAbs))?.isDirectory();
     if (hasSub && (subTo === subFrom || subTo.startsWith(subFrom + '/'))) throw new StoreError(400, 'cannot move a folder into itself');
@@ -309,6 +344,9 @@ export function createFileOps(c) {
 
   async function moveFolder(from, fromAbs, toRel) {
     checkFolderNames(toRel.split('/'));
+    // The target name reuses a case-variant sibling (then refused below as taken), except the folder itself: `Web` → `web`.
+    const matched = await matchFolderCase(toRel, { last: true });
+    if (matched !== from) toRel = matched;
     if (toRel === from || toRel.startsWith(from + '/')) throw new StoreError(400, 'cannot move a folder into itself');
     const toAbs = await wrapPath(toRel).catch((err) => {
       throw asParentClash(err);
@@ -426,5 +464,5 @@ export function createFileOps(c) {
     for (const k of [...knownDirs]) if (k.startsWith(rel + '/')) knownDirs.delete(k);
   }
 
-  return { createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget };
+  return { matchFolderCase, createFile, readFileAt, fileExists, syncExternal, writeFileAt, patchPlanAt, patchDiscussionsAt, editDocumentAt, createFolder, parseOrThrow, move, moveWithSubdocs, moved, moveFile, moveFolder, knownEntry, adopt, pruneEmptyDirs, removeFile, removeFolder, forget };
 }
