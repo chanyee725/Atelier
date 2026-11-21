@@ -8,7 +8,7 @@
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
 // parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
 import { AGENT_COLORS } from '../dispatch/colors.js';
-import { changedCentre, changedDocSpot, changedKeys, docBlocksOf, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
+import { changedCentre, changedDiagram, changedDocSpot, changedKeys, docBlocksOf, docIndexOfBlock, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
 import { agentStatus } from '../../shared/dispatch/agent-status.ts';
 
 const ATTRIBUTE_MS = 60_000;
@@ -35,11 +35,18 @@ const EMPTY = new Map();
 // document's top-level blocks as `.doc`.
 const snapshotOf = (file) => Object.assign(shapesOf(file), { doc: docBlocksOf(file) });
 const docOf = (s) => s?.doc ?? [];
-// Where a change lands: `{ x, y }` on the canvas and/or `{ doc: { index, offset } }` in the document (E529, #619).
+// Where a change lands: `{ x, y }` on the canvas and/or `{ doc: { index, offset } }` in the document (E529, #619),
+// plus `{ diagram: { id, line?, node? } }` when a diagram block changed (E712, #1039). A diagram change that left the
+// document JSON as it was (only the block's code) lands on the document's diagram block that shows it.
 const spotOf = (before, after) => {
   const at = changedCentre(before, after);
-  const doc = changedDocSpot(docOf(before), docOf(after));
-  return at || doc ? { ...(at ?? {}), ...(doc ? { doc } : {}) } : null;
+  const diagram = changedDiagram(before, after);
+  let doc = changedDocSpot(docOf(before), docOf(after));
+  if (!doc && diagram) {
+    const index = docIndexOfBlock(docOf(after), diagram.id);
+    if (index >= 0) doc = { index, offset: 0 };
+  }
+  return at || doc || diagram ? { ...(at ?? {}), ...(doc ? { doc } : {}), ...(diagram ? { diagram } : {}) } : null;
 };
 const OUTSIDE_NAME = '에이전트';
 // Workspace paths in `/api/file?path=…` URLs (decoded; the API adds `.dpx.json` when it is missing, #653).
@@ -328,10 +335,10 @@ export async function setup(ctx) {
     ctx.hub.broadcast('cursor', e);
   }
   // The place fields of a cursor event, for the replay to a page that connects later.
-  const placeFields = (e) => ({ ...(e.x !== undefined ? { x: e.x, y: e.y } : {}), ...(e.doc ? { doc: e.doc } : {}) });
+  const placeFields = (e) => ({ ...(e.x !== undefined ? { x: e.x, y: e.y } : {}), ...(e.doc ? { doc: e.doc } : {}), ...(e.diagram ? { diagram: e.diagram } : {}) });
   // What part of the file a change was in: a diagram (a place on the canvas or an embedded diagram), a table, text.
   function targetOf(at, after) {
-    if (at.x !== undefined && !at.doc) return 'diagram';
+    if (at.diagram || (at.x !== undefined && !at.doc)) return 'diagram';
     const type = docBlocksOf(after)[at.doc?.index]?.type ?? '';
     if (/table/i.test(type)) return 'table';
     if (/diagram|drawing|canvas/i.test(type)) return 'diagram';

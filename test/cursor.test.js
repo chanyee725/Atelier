@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { blockText, changedCentre, changedDocSpot, docBlocksOf, mentionsFile, shapesOf } from '../server/cursor/model.js';
+import { blockText, changedCentre, changedDiagram, changedDocSpot, changedLine, docBlocksOf, mentionsFile, nodeOfLine, shapesOf } from '../server/cursor/model.js';
 import { setup } from '../server/cursor/index.js';
 import { Hub } from '../server/dispatch/hub.js';
 
@@ -646,5 +646,49 @@ test('cursor module: status label follows the running call; page saves are never
   r.hub.emit('removed', { id: 's1' });
   assert.equal(seen.at(-1), null);
   assert.deepEqual(r.sent.at(-1).data, { sid: 's1', gone: true });
+  m.close();
+});
+
+// E712 (#1039): a diagram write says which block, line and node changed, and lands on the document's diagram block.
+test('nodeOfLine and changedLine: the node a DSL line names, the first changed line', () => {
+  assert.equal(nodeOfLine('로봇 데이터 녹화 [icon: database]'), '로봇 데이터 녹화');
+  assert.equal(nodeOfLine('A > B: calls'), 'B');
+  assert.equal(nodeOfLine('Server {'), 'Server');
+  assert.equal(nodeOfLine('  }'), null);
+  assert.equal(nodeOfLine('direction right'), null);
+  assert.equal(nodeOfLine('// note'), null);
+  assert.equal(changedLine('a\nb', 'a\nc'), 2);
+  assert.equal(changedLine('a\nb', 'a\nb\nc'), 3);
+  assert.equal(changedLine('a\nb\nc', 'a\nb'), 2);
+  assert.equal(changedLine('a', 'a'), null);
+});
+
+test('changedDiagram: block id, first changed line and its node; a new block at its last line', () => {
+  const a = shapesOf(file([], [block('b1', 0, 0, 'A [icon: x]\nB\nA > B')]));
+  assert.equal(changedDiagram(a, a), null);
+  const b = shapesOf(file([], [block('b1', 0, 0, 'A [icon: x]\nB\nC [color: red]\nA > B')]));
+  assert.deepEqual(changedDiagram(a, b), { id: 'b1', line: 3, node: 'C' });
+  // Only moved: no line.
+  assert.deepEqual(changedDiagram(a, shapesOf(file([], [{ ...block('b1', 50, 0, 'A [icon: x]\nB\nA > B') }]))), { id: 'b1' });
+  // A new block: its last line with text.
+  assert.deepEqual(changedDiagram(a, shapesOf(file([], [block('b1', 0, 0, 'A [icon: x]\nB\nA > B'), block('b2', 0, 300, 'X\nY\n\n')]))), { id: 'b2', line: 2, node: 'Y' });
+  // A closing brace: the node above it.
+  assert.deepEqual(changedDiagram(shapesOf(file([], [block('g', 0, 0, 'G {\n  A\n')])), shapesOf(file([], [block('g', 0, 0, 'G {\n  A\n}')]))), { id: 'g', line: 3, node: 'A' });
+});
+
+test('cursor module: a code-only diagram write lands on the document diagram block with its line and node (#1039)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const withDiagram = (code) => ({ ...file([], [block('b1', 100, 0, code)]), document: { type: 'doc', content: [head('Plan'), para('intro'), { type: 'diagram', attrs: { blockId: 'b1' } }] } });
+  r.files.set('d.dpx.json', withDiagram('A\nB'));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running', color: '#0f766e' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', text: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d' -H 'x-drawing: 1'` } });
+  await r.tick();
+  await r.change('d.dpx.json', withDiagram('A\nB\nA > B'));
+  const { at, ...rest } = r.sent[0].data;
+  assert.deepEqual(rest, {
+    sid: 's1', name: 'Otto', role: 'impl', color: '#0f766e', file: 'd.dpx.json', x: 200, y: 50,
+    doc: { index: 2, offset: 0 }, diagram: { id: 'b1', line: 3, node: 'B' }, live: true, status: '다이어그램 작성 중…',
+  });
   m.close();
 });
