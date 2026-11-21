@@ -5,7 +5,7 @@
 //   CHROME=/path/to/chrome PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core node scripts/record-demo.mjs [outDir]
 //
 // outDir defaults to docs/images. PLAYWRIGHT_CORE must match a Playwright ffmpeg build in ~/.cache/ms-playwright
-// (recordVideo needs it); the system ffmpeg then turns the raw video into demo.mp4 and demo.gif (~1200px wide).
+// (recordVideo needs it); the system ffmpeg then turns the raw video into demo.mp4 (H.264, 1280px wide). No GIF is made.
 //
 // No new dependency: it uses an existing playwright-core and Chrome, like the e2e tests. The server runs on a free
 // port against a scratch workspace inside a scratch git repo (one commit) in a temp dir, with a scratch HOME and the
@@ -198,13 +198,9 @@ try {
   const raw = await video.path();
   mkdirSync(outDir, { recursive: true });
   const mp4 = join(outDir, 'demo.mp4');
-  const gif = join(outDir, 'demo.gif');
   const ff = (...a) => execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', ...a], { stdio: 'inherit' });
   ff('-i', raw, '-vf', 'scale=1280:-2', '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4);
-  const pal = join(scratch, 'palette.png');
-  ff('-i', raw, '-vf', 'fps=10,scale=1200:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff', pal);
-  ff('-i', raw, '-i', pal, '-lavfi', 'fps=10,scale=1200:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle', gif);
-  for (const f of [mp4, gif]) console.log(`${f} ${(statSync(f).size / 1024 / 1024).toFixed(2)} MB`);
+  for (const f of [mp4]) console.log(`${f} ${(statSync(f).size / 1024 / 1024).toFixed(2)} MB`);
 } catch (e) {
   console.error(String(e?.stack ?? e).slice(0, 2000));
   process.exitCode = 1;

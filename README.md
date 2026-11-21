@@ -10,9 +10,7 @@
 [![Codex plugin](https://img.shields.io/badge/Codex-plugin-111111)](#-claude-code--codex에-스킬-설치)
 [![local only](https://img.shields.io/badge/127.0.0.1-local_only-0ea5e9)](#-개인정보와-로컬-전용)
 
-<img src="docs/images/demo.gif" alt="문서를 쓰고, /로 다이어그램을 넣고, 코드를 고쳐 그림을 바꾸고, 캔버스에서 손본 뒤 세션 보드를 여는 30초 데모" width="900">
-
-<sub>30초 데모 · <a href="docs/images/demo.mp4">MP4로 보기</a> · 가짜 데이터로 찍었어요</sub>
+<sub>데모 영상 · <a href="docs/images/demo.mp4">MP4로 보기</a> · YouTube 링크는 올린 뒤 여기에 넣어요 · 가짜 데이터로 찍었어요</sub>
 
 </div>
 
@@ -336,7 +334,7 @@ Mac에서는 Ctrl 대신 ⌘ 을 써요. `Ctrl/⌘+K` 로 여는 명령 팔레�
 | `npm test` | 서버, 파서, 렌더, 웹 로직 테스트 |
 | `npm run build` | 웹 앱을 `public/` 에 빌드 |
 | `npm run dev:web` | Vite 개발 서버 (`/api` 는 4330 포트 서버로 넘겨요) |
-| `node scripts/record-demo.mjs` | README 데모 영상을 다시 찍어요. 빈 포트·임시 작업 폴더·가짜 데이터로 돌고 `docs/images/demo.{gif,mp4}`를 써요. `CHROME`, `PLAYWRIGHT_CORE`가 필요해요 |
+| `node scripts/record-demo.mjs` | README 데모 영상을 다시 찍어요. 빈 포트·임시 작업 폴더·가짜 데이터로 돌고 `docs/images/demo.mp4`를 써요. `CHROME`, `PLAYWRIGHT_CORE`가 필요해요 |
 
 `npm test` 는 `test/test-env` 를 읽어 `DRAW_WORKSPACE_WATCH=poll` 로 돌아요. 테스트 서버가 여러 개 떠도 inotify 한도(EMFILE)에 걸리지 않게 파일 감시를 폴링으로 바꾸는 거예요. 폴링은 250ms마다 작업 폴더 전체를 동기로 훑으니 테스트에서만 써요. 실제 `fs.watch` 경로는 `test/workspace-outside.test.js` 의 테스트 하나가 따로 확인해요.
 
