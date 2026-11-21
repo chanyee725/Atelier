@@ -147,6 +147,25 @@ export function writeInterval(store: Store | undefined, id: IntervalId) {
   }
 }
 
+/** Whether the viewer folded the 타임라인 card down to its title row; blocked or missing storage reads as open. */
+export const FOLDED_KEY = 'atelier.timeline.folded';
+export function readFolded(store: Pick<Storage, 'getItem'> | undefined): boolean {
+  try {
+    return store?.getItem(FOLDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+/** Remembers the fold; a full or blocked storage just forgets it. */
+export function writeFolded(store: Pick<Storage, 'setItem' | 'removeItem'> | undefined, folded: boolean) {
+  try {
+    if (folded) store?.setItem(FOLDED_KEY, '1');
+    else store?.removeItem(FOLDED_KEY);
+  } catch {
+    /* not remembered */
+  }
+}
+
 /**
  * Spans redrawn at `bucketMs`: the window is cut on the wall-clock grid of the bucket (first and last bucket clipped
  * to it), each bucket takes the strongest state that touches it (as in mergeSpans), and equal neighbours join. A

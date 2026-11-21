@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INTERVALS, INTERVAL_KEY, MIN_MARK, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
+import { FOLDED_KEY, INTERVALS, INTERVAL_KEY, MIN_MARK, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy, timelineTeams, trackX, writeFolded, writeInterval } from '../../web/src/dispatch/lib/timeline.ts';
 
 const mk = (id: string, role: string, folder: string | null, startedAt: number, parent: string | null = null) => ({ id, role, folder, startedAt, parent });
 const roles = [{ id: 'lead' }, { id: 'impl' }, { id: 'review' }];
@@ -133,6 +133,23 @@ test('readInterval/writeInterval remember the pick and survive blocked or broken
   assert.doesNotThrow(() => writeInterval(blocked, '30s'));
   assert.equal(readInterval(undefined), '5m');
   assert.doesNotThrow(() => writeInterval(undefined, '30s'));
+});
+
+test('readFolded/writeFolded remember the folded 타임라인 card and survive blocked storage', () => {
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+  assert.equal(readFolded(store), false);
+  writeFolded(store, true);
+  assert.equal(mem.get(FOLDED_KEY), '1');
+  assert.equal(readFolded(store), true);
+  writeFolded(store, false);
+  assert.equal(mem.has(FOLDED_KEY), false);
+  assert.equal(readFolded(store), false);
+  const blocked = { getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('QuotaExceededError'); }, removeItem: () => { throw new Error('SecurityError'); } };
+  assert.equal(readFolded(blocked), false);
+  assert.doesNotThrow(() => writeFolded(blocked, true));
+  assert.equal(readFolded(undefined), false);
+  assert.doesNotThrow(() => writeFolded(undefined, false));
 });
 
 test('bucketSpans draws each bucket in its strongest state on the wall-clock grid (#936)', () => {

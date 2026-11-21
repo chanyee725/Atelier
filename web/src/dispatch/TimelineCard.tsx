@@ -9,7 +9,8 @@
 // The interval picker (30초 · 1분 · 5분) sets the bucket bars are drawn at and the axis ticks; the stretch shown stays
 // 30 minutes (#944). While the page is visible the card polls every 5s; each update blinks a dot once beside
 // 최근 업데이트 and slides the marks along 300ms linear. Hidden pages stop polling; reduced motion only changes the text.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+// Clicking the title row folds the card down to that row (remembered per viewer), so 세션 above takes the freed height.
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Card, EmptyState } from '../home/dash';
 import { cn } from '../lib/utils';
@@ -21,8 +22,8 @@ import { api, useDispatch } from './store';
 import { useScope } from './scope';
 import type { Scope } from './lib/folder.ts';
 import {
-  INTERVALS, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readInterval, spanBox, teamBusy,
-  timelineTeams, trackX, writeInterval,
+  INTERVALS, REFRESH_MS, WINDOW_MS, agoLabel, axisTicks, bucketSpans, gridTicks, intervalOf, mergeSpans, readFolded, readInterval, spanBox, teamBusy,
+  timelineTeams, trackX, writeFolded, writeInterval,
   type IntervalId, type Span, type Team,
 } from './lib/timeline.ts';
 import type { Session, SessionState } from './types';
@@ -214,7 +215,7 @@ function Updated({ at, now }: { at: number | null; now: number }) {
 
 /**
  * 타임라인 card (#879, #928): the teams of `projectId` (the board's picked project; 전체 = undefined, 미분류 = null)
- * over the last 30 minutes. `focus` (#board=timeline) scrolls the card into view.
+ * over the last 30 minutes. `focus` (#board=timeline) unfolds the card and scrolls it into view.
  */
 export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; onOpen: (id: string) => void; focus?: boolean }) {
   const all = useDispatch(s => s.sessions);
@@ -240,8 +241,22 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
     }
   };
 
+  /** Folded down to the title row; read once from storage, `focus` always opens it. */
+  const [folded, setFolded] = useState(() => !focus && readFolded(typeof localStorage === 'undefined' ? undefined : localStorage));
+  const fold = (next: boolean) => {
+    setFolded(next);
+    try {
+      writeFolded(localStorage, next);
+    } catch {
+      /* no storage: the fold lasts this visit */
+    }
+  };
+  const panelId = useId();
+
   useEffect(() => {
-    if (focus) ref.current?.scrollIntoView({ block: 'start' });
+    if (!focus) return;
+    setFolded(false);
+    ref.current?.scrollIntoView({ block: 'start' });
   }, [focus]);
 
   // Every 5s while the page is visible (#944): reload the history and move 지금 along. A hidden page stops both and
@@ -280,13 +295,23 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
   const roleOf = (s: Session) => roleNames.get(s.role) ?? (s.roleName || s.role);
 
   return (
-    <div ref={ref} className="scroll-mt-4">
-      <Card id="timeline" title="타임라인" count={count || undefined} hint={interval.hint} flush actions={
-        <ToggleGroup aria-label="간격" variant="segmented" size="sm" value={interval.id} onValueChange={pickInterval}>
-          {INTERVALS.map(iv => <ToggleGroupItem key={iv.id} value={iv.id} className="tabular-nums">{iv.label}</ToggleGroupItem>)}
-        </ToggleGroup>
-      }>
-        {!count ? (
+    // The title button's ::before covers the whole header row, so a click anywhere on it folds; the actions sit above it.
+    <div ref={ref} data-folded={folded || undefined} className="scroll-mt-4 [&_header]:relative">
+      <Card id="timeline" count={count || undefined} hint={folded ? undefined : interval.hint} flush title={
+        <button type="button" aria-expanded={!folded} aria-controls={panelId} onClick={() => fold(!folded)}
+          className="inline-flex items-center gap-1 focus-visible:outline-none before:absolute before:inset-0 before:rounded-[inherit] before:transition-colors hover:before:bg-foreground/[0.03] focus-visible:before:ring-2 focus-visible:before:ring-ring focus-visible:before:ring-inset">
+          <ChevronRight aria-hidden className={cn('size-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ease-(--ease-out) motion-reduce:transition-none', !folded && 'rotate-90')} />
+          타임라인
+        </button>
+      } actions={folded ? undefined : (
+        <div className="relative z-10">
+          <ToggleGroup aria-label="간격" variant="segmented" size="sm" value={interval.id} onValueChange={pickInterval}>
+            {INTERVALS.map(iv => <ToggleGroupItem key={iv.id} value={iv.id} className="tabular-nums">{iv.label}</ToggleGroupItem>)}
+          </ToggleGroup>
+        </div>
+      )}>
+        <div id={panelId} hidden={folded}>
+        {folded ? null : !count ? (
           <EmptyState>{projectId === undefined ? '아직 세션이 없어요.' : '이 프로젝트에는 아직 세션이 없어요.'}</EmptyState>
         ) : (
           <div className="@container flex flex-col gap-1 px-2 py-3">
@@ -301,6 +326,7 @@ export function TimelineCard({ projectId, onOpen, focus }: { projectId: Scope; o
             <Updated at={updatedAt} now={now} />
           </div>
         )}
+        </div>
       </Card>
     </div>
   );
