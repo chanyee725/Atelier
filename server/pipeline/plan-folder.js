@@ -4,16 +4,14 @@
 // project's structure (no fixed list) and reuses the ones that exist. 기획 is the one fixed folder.
 import { readdir } from 'node:fs/promises';
 import { topFolder } from '../dispatch/session-folder.js';
-import { RESERVED_PROJECT_NAMES } from '../workspace/paths.js';
+import { DRAFT_FOLDER, RESERVED_PROJECT_NAMES } from '../workspace/paths.js';
 
 /** File name of a plan inside its feature folder. */
 export const PLAN_FILE_STEM = '계획';
 
-/**
- * A new plan is drafted in 기획/<feature>/ (#1045) and moves to its area when 시작하기 starts the run. The one fixed
- * top-level folder; an existing one differing only in letter case is reused (#1026).
- */
-export const DRAFT_FOLDER = '기획';
+// A new plan is drafted in 기획/<feature>/ (#1045) and moves to its area when 시작하기 starts the run: the one fixed
+// top-level folder (workspace/paths.js); an existing one differing only in letter case is reused (#1026).
+export { DRAFT_FOLDER };
 
 /** The workspace's top-level folders as the tree lists them (no hidden folders, no symlinks, no reserved names). */
 export async function topFolders(root) {

@@ -121,6 +121,8 @@ test('an unknown area keeps the plan in 기획 with a line saying so', { timeout
     const steps = [{ title: 'a', role: 'impl', files: ['web/a.ts'] }, { title: 'b', role: 'impl', files: ['server/b.js'] }];
     const w = (await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '반반', goal: 'x', steps })).body;
     assert.equal(w.area, null);
+    // The sidebar lists 기획 first, ahead of App, server and web.
+    assert.deepEqual((await call('GET', '/api/tree')).body.tree.filter((n) => n.type === 'folder').map((n) => n.name)[0], '기획');
     const r = await call('POST', '/api/pipeline/start', { path: w.path, revision: w.revision });
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(r.body.path, '기획/반반/계획.dpx.json');
