@@ -108,7 +108,7 @@ export function pickRows<U extends { x0: number; x1: number; y0: number; y1: num
  * already the best fit.
  */
 export function wrapTopLevel(input: WrapInput): WrapResult | undefined {
-  const { rects, parent, edges } = input;
+  const { rects, edges } = input;
   if (input.top.filter((id) => input.isGroup(id) && rects.has(id)).length < 2) return undefined;
   // Work as if the flow ran left to right; a top-to-bottom flow is mirrored on the diagonal and back.
   const flip = (): void => {
