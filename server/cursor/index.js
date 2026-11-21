@@ -8,7 +8,7 @@
 // `onChange`). Several sessions left: see `pick`. Results are paired with calls by `callId` (Claude: tool_use id, so
 // parallel and subagent calls cannot swap); without one, in call order. Codex entries are `final`: already finished.
 import { AGENT_COLORS } from '../dispatch/colors.js';
-import { blockSigsOf, changedCentre, changedDocSpot, changedKeys, docBlocksOf, embedSpot, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
+import { blockSigsOf, changedBlockId, changedCentre, changedLine, changedDocSpot, changedKeys, docBlocksOf, embedSpot, mentionsFile, sectionAt, shapesOf, textMentions } from './model.js';
 import { agentStatus } from '../../shared/dispatch/agent-status.ts';
 
 const ATTRIBUTE_MS = 60_000;
@@ -325,7 +325,10 @@ export async function setup(ctx) {
     const status = statusOf(s.id);
     if (status) statuses.set(s.id, status);
     // `live`: the page keeps this cursor until the session ends or moves on (a `gone` event), it does not fade.
-    const e = { sid: s.id, name: s.name, role: s.role, ...color, file: rel, ...(at ?? {}), live: true, ...(status ? { status } : {}), at: now };
+    // The canvas block whose code changed, and the first line of it that did (E712, #1039: the code panel marks it).
+    const blockId = changedBlockId(blocksOf(base), blocksOf(after));
+    const block = blockId ? { block: blockId, line: changedLine(blocksOf(base).get(blockId)?.code ?? '', blocksOf(after).get(blockId).code) ?? 1 } : {};
+    const e = { sid: s.id, name: s.name, role: s.role, ...color, file: rel, ...(at ?? {}), ...block, live: true, ...(status ? { status } : {}), at: now };
     const last = lastCursor.get(s.id);
     lastCursor.set(s.id, { ...e, ...(at ? {} : last?.file === rel ? placeFields(last) : {}) });
     ctx.hub.broadcast('cursor', e);

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { blockSigsOf, blockText, changedCentre, changedDocSpot, docBlocksOf, embedSpot, mentionsFile, shapesOf } from '../server/cursor/model.js';
+import { blockSigsOf, blockText, changedBlockId, changedCentre, changedDocSpot, changedLine, docBlocksOf, embedSpot, mentionsFile, shapesOf } from '../server/cursor/model.js';
 import { setup } from '../server/cursor/index.js';
 import { Hub } from '../server/dispatch/hub.js';
 
@@ -420,7 +420,39 @@ test('cursor module: a diagram block edit lands on the embedded diagram in the d
   assert.deepEqual(e.doc, { index: 1, offset: 0 });
   assert.equal(e.live, true);
   assert.equal(typeof e.y, 'number');
+  assert.equal(e.block, 'b1');
+  assert.equal(e.line, 1);
   m.close();
+});
+
+test('cursor module: the changed block and its first changed line ride on the cursor event (E712, #1039)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const doc = (code) => ({ ...docFile(head('Plan'), embed('b1')), blocks: [block('b1', 0, 0, code)] });
+  r.files.set('d.dpx.json', doc('a\nb\nc'));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', text: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d.dpx.json' -d @/tmp/x.json` } });
+  await r.tick();
+  await r.change('d.dpx.json', doc('a\nB\nc'));
+  const e = r.sent.filter((x) => x.event === 'cursor').at(-1).data;
+  assert.equal(e.block, 'b1');
+  assert.equal(e.line, 2);
+  // Only a block property changed (no code line): the first line.
+  const moved = { ...doc('a\nB\nc'), blocks: [{ ...block('b1', 0, 0, 'a\nB\nc'), w: 300 }] };
+  await r.change('d.dpx.json', moved);
+  assert.equal(r.sent.filter((x) => x.event === 'cursor').at(-1).data.line, 1);
+  m.close();
+});
+
+test('changedLine / changedBlockId: first differing line; null when same; the first changed block', () => {
+  assert.equal(changedLine('a\nb', 'a\nb'), null);
+  assert.equal(changedLine('a\nb\nc', 'a\nX\nc'), 2);
+  assert.equal(changedLine('a\nb', 'a'), 2);
+  assert.equal(changedLine('', 'x'), 1);
+  const before = blockSigsOf(file([], [block('p', 0, 0), block('q', 0, 0)]));
+  const after = blockSigsOf(file([], [block('p', 0, 0), block('q', 0, 0, 'z')]));
+  assert.equal(changedBlockId(before, after), 'q');
+  assert.equal(changedBlockId(before, before), null);
 });
 
 test('blockText: text nodes only, nested blocks included', () => {

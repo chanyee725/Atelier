@@ -127,13 +127,31 @@ export function docBlocksOf(file) {
   });
 }
 
-/** Signature of each canvas block (`file.blocks`) by id: its code and properties, so a change inside a block is seen. */
+/**
+ * Each canvas block (`file.blocks`) by id: `sig` (its code and properties, so a change inside a block is seen) and
+ * `code` (its text, to find the line that changed).
+ */
 export function blockSigsOf(file) {
   const out = new Map();
   for (const b of Array.isArray(file?.blocks) ? file.blocks : []) {
-    if (b && typeof b.id === 'string') out.set(b.id, hash(JSON.stringify(b)));
+    if (b && typeof b.id === 'string') out.set(b.id, { sig: hash(JSON.stringify(b)), code: typeof b.code === 'string' ? b.code : '' });
   }
   return out;
+}
+
+/** The first block (by id, in `after`) whose signature changed from `before` (blockSigsOf), or null. */
+export function changedBlockId(beforeSigs = new Map(), afterSigs = new Map()) {
+  for (const [id, v] of afterSigs) if (beforeSigs.get(id)?.sig !== v.sig) return id;
+  return null;
+}
+
+/** 1-based number of the first line of `after` that differs from `before` (block code); null when they are the same. */
+export function changedLine(before = '', after = '') {
+  const a = after.split('\n');
+  const b = before.split('\n');
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i === a.length && i === b.length ? null : i + 1;
 }
 
 /**
@@ -143,7 +161,7 @@ export function blockSigsOf(file) {
  */
 export function embedSpot(beforeSigs = new Map(), afterSigs = new Map(), docAfter = []) {
   const changed = new Set();
-  for (const [id, sig] of afterSigs) if (beforeSigs.get(id) !== sig) changed.add(id);
+  for (const [id, v] of afterSigs) if (beforeSigs.get(id)?.sig !== v.sig) changed.add(id);
   for (let i = docAfter.length - 1; i >= 0; i--) {
     if (docAfter[i].ref !== undefined && changed.has(docAfter[i].ref)) return { index: i, offset: 0 };
   }
