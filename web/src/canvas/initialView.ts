@@ -4,7 +4,9 @@
 // (#1005). Once the user pans or zooms,
 // the file keeps the view they left it at: a reload (another tab, an agent editing the file) or switching back to
 // the file does not move it. Until then a reload fits again, so a block an agent adds comes into view; while an agent
-// writes, the fit follows the block it added or redrew when the whole file would drop below 60% (#1043).
+// writes, the fit follows the block it added or redrew when the whole file would drop below 60% (#1043). The 둘 다
+// pane has no 60% floor (#1043): the canvas sits beside the document, so a wide diagram shows every node, smaller,
+// instead of a readable middle cut off at both sides; while an agent writes, the block it changed shows whole.
 // The first view Excalidraw reports after an open is the opening view (our fit, or its own default on an empty
 // canvas), never the user's (E494b). Any later move counts as the user's, programmatic ones too (focusing a block,
 // Excalidraw scrolling while a text is edited near the edge).
@@ -16,9 +18,13 @@ export type Bounds = readonly [number, number, number, number];
 
 /** Largest zoom of a fitted view: a small drawing stays at its real size. */
 export const FIT_MAX_ZOOM = 1;
-/** The 둘 다 view fits with a fixed 48px margin and may enlarge a small drawing up to this zoom (#976). */
-export const PANE_FIT = { marginPx: 48, maxZoom: 2 } as const;
-export type FitOptions = { marginPx?: number; maxZoom?: number; minZoom?: number };
+/**
+ * The 둘 다 view fits with a fixed 48px margin, may enlarge a small drawing up to this zoom (#976), and always shows
+ * a block whole (`whole`, #1043).
+ */
+export const PANE_FIT = { marginPx: 48, maxZoom: 2, whole: true } as const;
+/** `whole`: no 60% floor, what is fitted always shows whole (the 둘 다 pane, #1043). */
+export type FitOptions = { marginPx?: number; maxZoom?: number; minZoom?: number; whole?: boolean };
 /**
  * Smallest zoom of a fitted view of a lone block (#987): below it the text is too small to read. A wider diagram or
  * plan opens at this zoom, centred, and the rest is a scroll away.
@@ -39,6 +45,8 @@ export function fitMinZoom(blockIds: readonly (string | null)[]): number {
 export const FIT_MARGIN = 0.9;
 /** Excalidraw's zoom step: fitted zooms are rounded down to it, like its own fit. */
 const ZOOM_STEP = 0.1;
+/** Step of a whole fit (the 둘 다 pane) below the 60% floor, where a 0.1 step loses up to a third of the room. */
+const FINE_ZOOM_STEP = 0.02;
 
 /**
  * The view that shows `bounds` whole and centred in a `width`×`height` viewport, or null when there is nothing to
@@ -54,9 +62,12 @@ export function fitView(bounds: Bounds | null, width: number, height: number, op
   // A fixed pixel margin when asked (the viewport must be bigger than it), else a share of the viewport.
   const raw = m !== undefined && width > 2 * m && height > 2 * m ? Math.min((width - 2 * m) / w, (height - 2 * m) / h) : Math.min(width / w, height / h) * FIT_MARGIN;
   const maxZoom = opts.maxZoom ?? FIT_MAX_ZOOM;
-  // Rounded down to the step (a hair over a step counts as on it), then kept within the limits.
-  const stepped = Math.floor(raw / ZOOM_STEP + 1e-9) * ZOOM_STEP;
-  const zoom = Math.min(maxZoom, Math.max(opts.minZoom ?? FIT_MIN_ZOOM, Number(stepped.toFixed(2))));
+  // Rounded down to the step (a hair over a step counts as on it), then kept within the limits. A whole fit below
+  // the 60% floor rounds to a finer step: 0.29 to 0.2 would leave a third of the pane empty (#1043).
+  const step = opts.whole && raw < FIT_MIN_ZOOM ? FINE_ZOOM_STEP : ZOOM_STEP;
+  const stepped = Math.floor(raw / step + 1e-9) * step;
+  const floor = opts.whole ? FIT_ALL_MIN_ZOOM : (opts.minZoom ?? FIT_MIN_ZOOM);
+  const zoom = Math.min(maxZoom, Math.max(floor, Number(stepped.toFixed(2))));
   return { zoom, scrollX: width / 2 / zoom - (x1 + x2) / 2, scrollY: height / 2 / zoom - (y1 + y2) / 2 };
 }
 
@@ -119,7 +130,8 @@ export function refitView(path: string | undefined, bounds: Bounds | null, width
 /**
  * The fit while an agent writes (#1043): everything (`all`) when that fits at the 60% floor or above; else the block
  * that changed (`changed`), at no less than the floor, so the diagram being written stays readable instead of
- * shrinking with the whole file. Without a changed block it is the plain fit of everything.
+ * shrinking with the whole file; in the 둘 다 pane (`whole`) the changed block shows whole, below the floor if need
+ * be. Without a changed block it is the plain fit of everything.
  */
 export function followFit(all: Bounds | null, changed: Bounds | null, width: number, height: number, base: FitOptions = {}): View | null {
   const whole = fitView(all, width, height, { ...base, minZoom: FIT_ALL_MIN_ZOOM });

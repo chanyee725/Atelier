@@ -18,6 +18,7 @@ import { useRunSteps } from '../run/runStore';
 import { DiagramEmbed } from './extensions';
 import { createShownMemory } from './shownMemory';
 import { docPicWidths, picBox, stageWide } from './diagramScale';
+import { StageBar } from './StageBar';
 import type { CanvasEl } from './model';
 
 export type DocCtx = {
@@ -171,13 +172,16 @@ function DiagramView({ node, selected }: ReactNodeViewProps) {
   return (
     <NodeViewWrapper as="figure" className={`doc-diagram${selected ? ' is-selected' : ''}`} data-diagram="" data-block-id={id} contentEditable={false}>
       {block ? (
-        <div ref={stage} className="doc-diagram-stage">
+        <>
+          <div ref={stage} className="doc-diagram-stage">
           <button type="button" className="doc-diagram-pic" title="캔버스에서 보기" aria-label={`${label}, 캔버스에서 보기`} onClick={() => onShow(id)}>
             {pic ? <img ref={img} src={pic.dataURL} alt={label} width={pic.width} height={pic.height} draggable={false} style={{ width: '100%', ...docPicWidths(pic.width), ...(morph ? { visibility: 'hidden' } : null) }} /> : <span className="doc-diagram-wait">그리는 중이에요…</span>}
           </button>
           {morph && <MorphLayer from={morph.from} to={morph.to} dark={dark} left={morph.left} top={morph.top} scale={morph.scale} onDone={() => setMorph(null)} />}
           {board && box && <RunLayer scene={board.scene} steps={board.steps} left={box.left} top={box.top} scale={box.scale} hideEta />}
-        </div>
+          </div>
+          <StageBar stage={stage} pic={pic} />
+        </>
       ) : (
         <p className="doc-diagram-gone">캔버스에서 지운 다이어그램이에요. 이 줄을 지워도 돼요.</p>
       )}
