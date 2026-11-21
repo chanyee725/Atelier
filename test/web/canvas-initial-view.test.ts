@@ -38,12 +38,24 @@ test('a small drawing is not blown up past 100%', () => {
 
 test('a wide drawing stops at 60% (#987), centred, the rest a scroll away', () => {
   assert.equal(FIT_MIN_ZOOM, 0.6);
-  for (const opts of [undefined, PANE_FIT]) {
-    const v = fitView([0, 0, 1e6, 1e6], 1000, 1000, opts)!;
-    assert.equal(v.zoom, FIT_MIN_ZOOM);
-    const c = onScreen(v, 5e5, 5e5);
-    assert.ok(Math.abs(c.x - 500) < 1e-6 && Math.abs(c.y - 500) < 1e-6, 'centred');
+  const v = fitView([0, 0, 1e6, 1e6], 1000, 1000)!;
+  assert.equal(v.zoom, FIT_MIN_ZOOM);
+  const c = onScreen(v, 5e5, 5e5);
+  assert.ok(Math.abs(c.x - 500) < 1e-6 && Math.abs(c.y - 500) < 1e-6, 'centred');
+});
+
+test('in the 둘 다 pane a lone wide diagram shows whole, below the 60% floor (#1043)', () => {
+  // The issue's six-node row (PLC … Robot controller) in the 1280x800 둘 다 pane (448x732), even with the lone-block
+  // floor fitFor adds: every corner on screen.
+  const bounds = [0, 0, 1290, 260] as const;
+  const v = fitView(bounds, 448, 732, { ...PANE_FIT, minZoom: FIT_MIN_ZOOM })!;
+  assert.ok(v.zoom < FIT_MIN_ZOOM, `zoom ${v.zoom}`);
+  for (const [x, y] of [[0, 0], [1290, 260]] as const) {
+    const p = onScreen(v, x, y);
+    assert.ok(p.x >= 0 && p.x <= 448 && p.y >= 0 && p.y <= 732, `(${x},${y}) on screen at ${p.x},${p.y}`);
   }
+  // A huge one stops at Excalidraw's lowest zoom.
+  assert.equal(fitView([0, 0, 1e6, 1e6], 1000, 1000, PANE_FIT)!.zoom, FIT_ALL_MIN_ZOOM);
 });
 
 test('the 60% floor is for a lone block only; several blocks or free shapes all come into view (#1005)', () => {
@@ -166,11 +178,14 @@ test('fitView with a pixel margin leaves 48px each side and may enlarge a small 
 });
 
 test('while an agent writes, the fit follows the changed block at the 60% floor when the whole file would be smaller (#1043)', () => {
-  // Two blocks side by side in the 둘 다 pane (456x730): the whole row fits only at ~20%.
+  // Two blocks side by side, each 900 wide, on a 500x900 canvas: the whole row fits only at 20%.
   const all = [0, 0, 2000, 400] as const;
   const b2 = [1100, 0, 2000, 300] as const;
+  const full = followFit(all, b2, 500, 900)!;
+  assert.equal(full.zoom, FIT_MIN_ZOOM, 'the changed block at the floor');
+  // In the 둘 다 pane (456x730) the changed block shows whole: (456 - 96) / 900 = 0.4, centred.
   const v = followFit(all, b2, 456, 730, PANE_FIT)!;
-  assert.equal(v.zoom, FIT_MIN_ZOOM);
+  assert.equal(v.zoom, 0.4);
   const c = onScreen(v, 1550, 150);
   assert.ok(Math.abs(c.x - 228) < 1e-6 && Math.abs(c.y - 365) < 1e-6, 'the changed block is centred');
   // Everything fits at the floor or above: the whole file stays in view.
@@ -184,7 +199,7 @@ test('followView refits only a view the user has not moved, and the refit is not
   openingView('f', [0, 0, 100, 100], 1000, 1000);
   rememberView('f', { scrollX: 450, scrollY: 450, zoom: 1 });
   const v = followView('f', [0, 0, 2000, 400], [1100, 0, 2000, 300], 456, 730, cur, PANE_FIT)!;
-  assert.equal(v.zoom, FIT_MIN_ZOOM);
+  assert.equal(v.zoom, 0.4);
   rememberView('f', v);
   assert.equal(rememberedView('f'), null, 'still the fit');
   rememberView('f', { scrollX: 1, scrollY: 2, zoom: 0.5 });
@@ -197,7 +212,7 @@ test('a reload of a fitted file follows the changed block; a first open fits eve
   assert.ok(first.zoom < FIT_MIN_ZOOM, 'first open: the whole file');
   rememberView('r', first);
   const again = openingView('r', all, 456, 730, { ...PANE_FIT, minZoom: FIT_ALL_MIN_ZOOM }, [1100, 0, 2000, 300])!;
-  assert.equal(again.zoom, FIT_MIN_ZOOM, 'reload: the changed block');
+  assert.equal(again.zoom, 0.4, 'reload: the changed block, whole');
 });
 
 test('changedBlock names the last block added or resized since the last call; none on the first call', () => {
