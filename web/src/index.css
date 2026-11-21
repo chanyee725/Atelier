@@ -487,6 +487,8 @@ body {
 /* Holds the picture button and, as its sibling, the run overlay (positioned over the img). A picture held at its 60%
    floor scrolls sideways inside the block (#987); the overlay layers scroll with it. */
 .doc-diagram-stage { position: relative; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
+/* Scrolled to its end, the picture keeps a 12px gap from the block's right edge (#1005). */
+.doc-diagram-stage[data-wide] { padding-inline-end: 12px; }
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: 14px; padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 
