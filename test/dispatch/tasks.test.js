@@ -30,12 +30,12 @@ import { defaultEta, stageMedianMinutes } from "../../server/dispatch/tasks.js";
 import { Hub } from "../../server/dispatch/hub.js";
 
 const done = (...spans) => {
-  // spans: [stage, minutes] visited in order, then done
+  // spans: [stage, minutes] visited in order, then done (closed with a confirmed merge)
   const stages = [];
   let at = 0;
   for (const [stage, min] of spans) { stages.push({ stage, at }); at += min * M; }
   stages.push({ stage: "done", at });
-  return { stage: "done", stages };
+  return { stage: "done", stages, mergeCheck: { ok: true } };
 };
 
 test("stageMedianMinutes: median of the same stage in finished tasks only (#1028)", () => {
@@ -52,6 +52,14 @@ test("stageMedianMinutes: median of the same stage in finished tasks only (#1028
   assert.equal(stageMedianMinutes([], "impl"), null);
 });
 
+test("stageMedianMinutes: only merged tasks count, and a stage passed in under a minute is left out", () => {
+  const dropped = { ...done(["impl", 2]), mergeCheck: { ok: null } }; // closed without a commit
+  const failed = { ...done(["impl", 3]), mergeCheck: { ok: false } };
+  const tasks = [done(["plan", 0.5], ["impl", 40]), dropped, failed, done(["plan", 0.2], ["impl", 50])];
+  assert.equal(stageMedianMinutes(tasks, "impl"), 45);
+  assert.equal(stageMedianMinutes(tasks, "plan"), null);
+});
+
 test("defaultEta keeps a lead ETA still ahead, else estimates or clears", () => {
   const hist = [done(["review", 8])];
   const lead = { stage: "review", etaAt: 50 * M, etaEstimated: false };
@@ -63,6 +71,9 @@ test("defaultEta keeps a lead ETA still ahead, else estimates or clears", () => 
   const none = { stage: "test", etaAt: 20 * M, etaEstimated: true };
   defaultEta(none, hist, 10 * M);
   assert.deepEqual([none.etaAt, none.etaEstimated, none.etaSetAt], [null, false, null]);
+  const blocked = { stage: "blocked", etaAt: null };
+  defaultEta(blocked, hist, 0);
+  assert.equal(blocked.etaAt, null);
 });
 
 test("setTask fills etaAt from history on a new stage without eta_minutes", async () => {
@@ -74,11 +85,13 @@ test("setTask fills etaAt from history on a new stage without eta_minutes", asyn
   const t = await hub.setTask("lead", { title: "새 일" });
   assert.equal(t.etaEstimated, true);
   assert.ok(Math.abs(t.etaAt - Date.now() - 3 * M) < 5000);
+  assert.match(hub.boardNote("lead"), /분 남음\(예상\)/, "the lead sees the estimate is not its own promise");
   await hub.setTask("lead", { id: t.id, stage: "impl" });
   assert.deepEqual([t.etaAt, t.etaEstimated], [null, false], "no impl history: empty");
   await hub.setTask("lead", { id: t.id, stage: "review", eta_minutes: 40 });
   assert.equal(t.etaEstimated, false);
   await hub.setTask("lead", { id: t.id, stage: "test" });
   assert.ok(t.etaAt - Date.now() > 39 * M, "the lead's ETA still ahead stays");
+  assert.match(hub.boardNote("lead"), /분 남음\)/);
   assert.equal(t.stuck, null);
 });

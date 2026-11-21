@@ -14,23 +14,23 @@ export function enterStage(t, stage, at = Date.now()) {
   return t;
 }
 
-
 /** Stages a default ETA is estimated for; done and blocked have no time left to guess. */
 const ESTIMATED = new Set(["plan", "impl", "review", "test", "merge"]);
 const RECENT = 20;
 
 /**
  * Median minutes the finished tasks in `tasks` spent in `stage` (#1028): each visit lasts from its entry to the
- * next entry in `stages`. Uses the latest RECENT visits; null when there are none or the stage gets no estimate.
+ * next entry in `stages`. Only tasks closed with a confirmed merge count, and a visit under a minute (moved on in
+ * the same turn) is left out. Uses the latest RECENT visits; null when there are none or the stage gets no estimate.
  */
 export function stageMedianMinutes(tasks, stage) {
   if (!ESTIMATED.has(stage)) return null;
   const visits = [];
   for (const t of tasks || []) {
-    if (t?.stage !== "done" || !Array.isArray(t.stages)) continue;
+    if (t?.stage !== "done" || t.mergeCheck?.ok !== true || !Array.isArray(t.stages)) continue;
     for (let i = 0; i < t.stages.length - 1; i++) {
       const a = t.stages[i], b = t.stages[i + 1];
-      if (a.stage !== stage || !(b.at >= a.at)) continue;
+      if (a.stage !== stage || !(b.at - a.at >= 60_000)) continue;
       visits.push({ at: a.at, ms: b.at - a.at });
     }
   }

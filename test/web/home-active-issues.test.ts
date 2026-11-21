@@ -114,3 +114,20 @@ test('boardStage: a step shows with or without board tasks, none once merged (#1
   assert.equal(boardStage('merge', []), 'merge');
   assert.equal(boardStage('merged', [task('a', 'done')]), null);
 });
+
+test('step count shows without lead input and agrees with the stage (#1028)', () => {
+  assert.equal(boardStage('impl', []), 'impl');
+  assert.equal(boardStage('review', []), 'review');
+  assert.equal(boardStage('merge', []), 'merge');
+  assert.equal(boardStage('merged', []), null);
+  assert.equal(boardStage('impl', [task('a', 'plan'), task('a', 'impl')]), 'plan');
+  assert.equal(boardStage('review', [task('a', 'test')]), 'test');
+  assert.equal(boardStage('impl', [task('a', 'merge')]), 'impl');
+  const now = 1_000_000;
+  const tasks = [{ ...task('impl-a', 'review', now + 12 * 60_000), etaEstimated: true }];
+  const x = activeIssues(issueRows(ISSUES, SESSIONS), SESSIONS, tasks).find((i) => i.number === 702)!;
+  assert.equal(x.etaEstimated, true);
+  assert.equal(x.boardStage, 'impl'); // an open working session without a PR keeps it at 구현
+  assert.deepEqual(issueEta(x.etaAt, now, x.etaEstimated), { text: '약 12분 남음(예상)', late: false, estimated: true });
+  assert.deepEqual(issueEta(now - 14 * 60_000, now), { text: '14분 지남', late: true, estimated: false });
+});

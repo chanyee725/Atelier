@@ -45,6 +45,9 @@ test("summary has usage, leads with open tasks, team and issue PRs", () => {
   assert.deepEqual(l.tasks, [{ title: "엔드포인트", stage: "impl", owner: "구현자", etaAt: NOW - 5 * M, late: true,
     stuck: "예상 10분의 1.5배를 넘겼어요", updatedAt: NOW - 20 * M }]);
   assert.equal(s.leads[1].tasks[0].owner, null);
+  // A past estimated ETA (#1028) does not mark the task late.
+  const est = agentsSummary({ sessions: [lead], tasks: [{ ...tasks[0], stuck: null, etaEstimated: true }], now: NOW });
+  assert.equal(est.leads[0].tasks[0].late, false);
 });
 
 test("summary carries no transcript text, account labels, ids or paths", () => {

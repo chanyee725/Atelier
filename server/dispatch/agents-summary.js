@@ -33,7 +33,7 @@ function task(t, names, now) {
   return {
     title: text(t.title, MAX_TITLE), stage: text(t.stage, 20),
     owner: names.get(t.owner) ?? null,
-    etaAt: time(t.etaAt), late: !!(t.etaAt && t.etaAt < now && t.stage !== "done"),
+    etaAt: time(t.etaAt), late: !!(t.etaAt && !t.etaEstimated && t.etaAt < now && t.stage !== "done"),
     stuck: t.stuck ? text(t.stuck.label || t.stuck.reason, MAX_TITLE) : null,
     updatedAt: time(t.stageAt ?? t.createdAt),
   };
