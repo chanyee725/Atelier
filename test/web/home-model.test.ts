@@ -1,18 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { INDENT, ROW_HEIGHT, filterDocs, plansByArea, wholeProject, flatFiles, locationOf, pollWhileVisible, relativeTime, runningBelow, runningIn, subCount } from '../../web/src/home/model.ts';
+import { ROW_HEIGHT, filterDocs, plansByArea, wholeProject, flatFiles, locationOf, pollWhileVisible, relativeTime, runningIn } from '../../web/src/home/model.ts';
 import type { ProjectDoc, ProjectInfo } from '../../web/src/api.ts';
 
 const d = (path: string, title: string, children: ProjectDoc[] = []): ProjectDoc => ({ path, name: path, title, bundle: false, createdAt: 1, modifiedAt: 2, children });
 const docs = [d('a', 'Login', [d('a/t', 'Token', [d('a/t/r', 'Refresh')])]), d('b', 'Collect')];
-
-test('subCount counts sub-docs at every level; runningBelow sees a run anywhere under a parent but not the parent itself', () => {
-  assert.equal(subCount(docs[0]), 2);
-  assert.equal(subCount(docs[1]), 0);
-  assert.equal(runningBelow(docs[0], new Set(['a/t/r'])), true);
-  assert.equal(runningBelow(docs[0], new Set(['a'])), false);
-  assert.equal(runningBelow(docs[1], new Set(['a/t'])), false);
-});
 
 function fakePage(state: 'visible' | 'hidden') {
   const listeners = new Set<() => void>();
@@ -77,7 +69,6 @@ test('relativeTime in Korean, and row metrics match the spec (41px rows, 24px in
   assert.equal(relativeTime(now - 3 * 3_600_000, now), '3시간 전');
   assert.equal(relativeTime(0, now), '-');
   assert.equal(ROW_HEIGHT, 41);
-  assert.equal(INDENT, 24);
 });
 
 test('runningIn counts running files inside the project folder only', () => {

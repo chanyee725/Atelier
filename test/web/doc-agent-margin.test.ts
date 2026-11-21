@@ -12,7 +12,6 @@ import {
   editSentence,
   formOf,
   formWithRail,
-  dividerAt,
   shareAt,
   CANVAS_MIN,
   DOC_SHARE,
@@ -27,11 +26,17 @@ import {
   pruneIdle,
   readCollapsed,
   RECENT_MAX,
-  stepOf,
   WRITING_MS,
   type BlockInfo,
   type MarginMap,
 } from '../../web/src/doc/agentMargin.ts';
+
+/** Where index.css puts the split's divider for a share: the oracle the shareAt checks below compare against. */
+const dividerAt = (r: { box: number; share: number; chrome: number; rail: boolean }): number => {
+  if (formOf(r) !== 'side') return r.share * r.box;
+  const want = r.rail ? r.share * r.box + RAIL_W : (r.share * r.box) / DOC_SHARE;
+  return Math.min(want, r.box - CANVAS_MIN);
+};
 
 const ev = (doc?: unknown, extra = {}) => ({ sid: 's1', name: 'Faye', role: 'impl', color: '#0f766e', file: 'a.dpx.json', ...(doc ? { doc } : {}), ...extra }) as never;
 const H = (text: string, level = 2): BlockInfo => ({ type: 'heading', text, level });
@@ -166,15 +171,11 @@ test('doingLines: from the latest change, the tool activity and the step', () =>
   assert.deepEqual(doingLines({ phase: 'waiting', place, step: 's' }), { main: '사람의 답을 기다리는 중', sub: '단계: s' });
 });
 
-test('ago, stepOf, blocksOfJson, formOf, readCollapsed', () => {
+test('ago, blocksOfJson, formOf, readCollapsed', () => {
   assert.equal(ago(0), '방금');
   assert.equal(ago(-5), '방금');
   assert.equal(ago(12_400), '12초 전');
   assert.equal(ago(185_000), '3분 전');
-  const runs = [[{ title: '설계', view: 'done', agents: [{ name: 'Faye' }] }, { title: '화면 지도 그리기', view: 'active', agents: [{ name: 'Faye' }] }], [{ view: 'active', agents: [{ name: 'Cal' }] }]];
-  assert.equal(stepOf('Faye', runs), '화면 지도 그리기');
-  assert.equal(stepOf('Cal', runs), null, 'a step without a title says nothing');
-  assert.equal(stepOf('', runs), null);
   assert.deepEqual(
     blocksOfJson({ type: 'doc', content: [{ type: 'heading', attrs: { level: 2, id: 'x' }, content: [{ type: 'text', text: '가' }, { type: 'text', text: '나', marks: [{ type: 'bold' }] }] }, { type: 'diagram', attrs: { blockId: 'b' } }, { type: 'bulletList', content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'i' }] }] }] }] }),
     [{ type: 'heading', text: '가나', level: 2 }, { type: 'diagram', text: '' }, { type: 'bulletList', text: 'i' }],

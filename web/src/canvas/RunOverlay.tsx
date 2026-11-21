@@ -74,7 +74,7 @@ export function RunOverlay({ api, wrap, pictureOf, hide }: Props) {
         const steps = runs.get(p.blockId);
         return steps ? (
           <Fragment key={p.blockId}>
-            <RunLayer scene={p.scene} steps={steps} left={p.left} top={p.top} scale={p.scale} motionInside={p.top < MOTION_ROOM} />
+            <RunLayer scene={p.scene} steps={steps} left={p.left} top={p.top} scale={p.scale} motionInside={p.top < MOTION_ROOM} hideEta />
             <CanvasLegend scene={p.scene} steps={steps} left={p.left} top={p.top} scale={p.scale} area={area} />
           </Fragment>
         ) : null;

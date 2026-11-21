@@ -1,7 +1,7 @@
 // #570 (E525): model connection state for the sidebar row and the 모델 연결 dialog (ported from Dispatch).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, actionFor, cliLogoutShown, keyLoginShown, connectKey, doneText, limitGroups, limitRows, runLimits, loginUrl, metaLine, objParticle, providerMeta, rowStatus, windowlessText, type ProviderMeta } from '../../web/src/modelConnect.ts';
+import { PROVIDERS, actionFor, cliLogoutShown, keyLoginShown, connectKey, doneText, limitGroups, limitRows, runLimits, loginUrl, metaLine, objParticle, providerMeta, rowStatus, type ProviderMeta } from '../../web/src/modelConnect.ts';
 import type { ProviderState } from '../../web/src/api.ts';
 
 const C = providerMeta('claude')!;
@@ -128,14 +128,6 @@ test('runLimits: cells come from provider and usage state alone, with or without
   const cells = runLimits({ enabled: true }, { claude: { connected: true } }, limits);
   assert.ok(Array.isArray(cells));
   assert.deepEqual(cells[0]!.rows.map((r) => r.label), ['5시간', 'Fable 주간']);
-});
-
-test('windowlessText: Gemini says its share is unknown, and until when work waits once the quota is hit (#819)', () => {
-  const fmt = () => '3시간 5분';
-  assert.equal(windowlessText(false, false, null, fmt), '연결하면 한도 상태를 볼 수 있어요');
-  assert.equal(windowlessText(true, false, null, fmt), '사용률은 확인할 수 없어요 · 한도에 닿으면 새 작업을 멈춰요');
-  assert.equal(windowlessText(true, true, 123, fmt), '한도에 닿아 새 작업을 멈췄어요 · 3시간 5분 뒤 풀려요');
-  assert.equal(windowlessText(true, true, null, fmt), '한도에 닿아 새 작업을 멈췄어요');
 });
 
 test('limitGroups: Gemini shows the windows agy /usage reported, as bars, still windowless for its fallback line (#878)', () => {

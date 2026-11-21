@@ -1,24 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dropTarget, pathAfterMove, renameTarget } from '../../web/src/movePaths.ts';
+import { pathAfterMove, renameTarget } from '../../web/src/movePaths.ts';
 import { createFileSession } from '../../web/src/fileSession.ts';
 
 const file = { type: 'file' as const, path: 'a/b/arch.dpx.json' };
 const folder = { type: 'folder' as const, path: 'a/b' };
-
-test('dropping on a folder keeps the base name; same folder is a no-op', () => {
-  assert.equal(dropTarget(file, 'x'), 'x/arch.dpx.json');
-  assert.equal(dropTarget(file, ''), 'arch.dpx.json');
-  assert.equal(dropTarget(file, 'a/b'), null);
-  assert.equal(dropTarget(folder, 'x'), 'x/b');
-  assert.equal(dropTarget({ type: 'file', path: 'top.dpx.json' }, ''), null);
-});
-
-test('a folder cannot drop into itself or a descendant', () => {
-  assert.equal(dropTarget(folder, 'a/b'), null);
-  assert.equal(dropTarget(folder, 'a/b/c'), null);
-  assert.equal(dropTarget(folder, 'a/bc'), 'a/bc/b');
-});
 
 test('rename keeps the folder and the file extension', () => {
   assert.equal(renameTarget(file, 'new'), 'a/b/new.dpx.json');

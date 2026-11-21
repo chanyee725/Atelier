@@ -16,14 +16,3 @@ export function awaitsAnswer(s: Session): boolean {
   const t = s as Session & TurnFields;
   return !!t.asksUser && s.state === 'waiting' && s.pending.length === 0;
 }
-
-/**
- * The "지금 …" line: what a running session is doing, from `s.activity` only. The activity is a category
- * name the server keeps in memory ("단위 테스트", "파일 수정"), never the command text, and this reads
- * nothing else (not `last`, not the transcript) so command text cannot reach the board.
- */
-export function nowLine(s: Pick<Session, 'activity'>): { label: string; since: number } | null {
-  const a = s.activity;
-  if (!a || typeof a.label !== 'string' || !a.label) return null;
-  return { label: a.label, since: a.since };
-}

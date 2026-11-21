@@ -2,9 +2,6 @@
 import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
 import { whenLabel } from '../lib/when.ts';
 
-/** Real documents below `d` (bundles are folders, not documents, so they are not counted). */
-export const subCount = (d: ProjectDoc): number => d.children.reduce((n, c) => n + (c.bundle ? 0 : 1) + subCount(c), 0);
-
 export type Placed = { doc: ProjectDoc; project: ProjectInfo | null; /** Title of the document (or bundle) right above, if any. */ parent: string | null };
 
 /** Every real document (bundles skipped), depth first, with the project and parent it sits in. */
@@ -92,7 +89,6 @@ export const CHORD_MS = 1000;
 
 /** Spec: rows are 41px tall, sub-docs indent 24px per level. */
 export const ROW_HEIGHT = 41;
-export const INDENT = 24;
 
 /** Every document as a flat row, newest edit first (the 전체 tab; 고친 때 is the default sort). */
 export function flatFiles(projects: ProjectInfo[], unfiled: ProjectDoc[]): RecentFile[] {
@@ -104,9 +100,6 @@ export function flatFiles(projects: ProjectInfo[], unfiled: ProjectDoc[]): Recen
 /** Files with a run going now that sit in `project` (its folder or any sub-folder). */
 export const runningIn = (project: Pick<ProjectInfo, 'path'>, running: ReadonlySet<string>) =>
   [...running].filter((f) => f.startsWith(`${project.path}/`)).length;
-
-/** True when a file below `doc` (any level, not `doc` itself) has a run going now: a folded parent shows it. */
-export const runningBelow = (doc: ProjectDoc, running: ReadonlySet<string>): boolean => doc.children.some((c) => running.has(c.path) || runningBelow(c, running));
 
 type VisibilityDoc = { visibilityState: string; addEventListener: (t: 'visibilitychange', fn: () => void) => void; removeEventListener: (t: 'visibilitychange', fn: () => void) => void };
 type Timers = { setInterval: (fn: () => void, ms: number) => unknown; clearInterval: (t: unknown) => void };

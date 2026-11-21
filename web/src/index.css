@@ -472,7 +472,8 @@ body {
 .doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic, .doc-diagram-gone) { border-top: 1px solid var(--border); }
 .doc-diagram-pic {
   display: flex;
-  justify-content: center;
+  /* safe: a picture wider than the column (held at 60%, #987) starts at the left edge instead of being cut on both sides. */
+  justify-content: safe center;
   width: 100%;
   padding: 12px;
   border: 0;
@@ -483,8 +484,9 @@ body {
 .doc-diagram.is-selected { box-shadow: 0 0 0 2px var(--primary); }
 .doc-diagram-pic:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; border-radius: var(--radius-card); }
 .doc-diagram-pic img { max-width: 100%; height: auto; }
-/* Holds the picture button and, as its sibling, the run overlay (positioned over the img). */
-.doc-diagram-stage { position: relative; }
+/* Holds the picture button and, as its sibling, the run overlay (positioned over the img). A picture held at its 60%
+   floor scrolls sideways inside the block (#987); the overlay layers scroll with it. */
+.doc-diagram-stage { position: relative; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: thin; }
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: 14px; padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 
@@ -589,6 +591,8 @@ body {
   font: 400 12px/16px var(--font-sans); pointer-events: none;
 }
 .doc-diagram > .run-eta { position: static; align-self: flex-end; margin: 8px 0 0; }
+/* On the canvas the rows are part of the legend card under the picture (#987), not a card of their own. */
+.run-legend .run-eta { position: static; margin: 4px 0 0; padding: 0; border: 0; background: none; max-inline-size: none; }
 .run-eta ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .run-eta li { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
 .run-eta-badge { flex: none; inline-size: 16px; block-size: 16px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 600; }
@@ -655,9 +659,9 @@ body {
   transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
 }
 /* Legend (E26): weighted progress, then the agents and states present. HTML in CSS px, so it stays readable at any
-   zoom. On the canvas it sits beside the picture on the side with room, clamped inside the overlay, and lets clicks
-   through to the shapes under it except on its fold toggle; in the document it flows under the picture.
-   Either way it never covers a node. */
+   zoom. On the canvas it sits under the picture (#987) with the per-agent time left inside, moved sideways to stay
+   inside the overlay but never up over the picture, and lets clicks through to the shapes under it except on its
+   fold toggle. It never covers a node. */
 .run-legend {
   inline-size: max-content; min-inline-size: 168px; max-inline-size: 280px;
   padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background);

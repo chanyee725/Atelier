@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendSpot, MARK_INSET, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendOpen, legendScale, legendSpot, MARK_INSET, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -68,7 +68,10 @@ export function RunEta({ steps }: { steps: readonly RunStep[] }) {
   return <EtaCorner panel={panel} />;
 }
 
-/** Per-agent time left, bottom-right corner of the picture (#735). One row per working agent, the rest fold into "+N". */
+/**
+ * Per-agent time left (#735). One row per working agent, the rest fold into "+N". In the document it is a card under
+ * the picture (`RunEta`); on the canvas it is the middle part of the legend card under the picture (#987).
+ */
 function EtaCorner({ panel }: { panel: EtaPanel }) {
   if (!panel.rows.length) return null;
   return (
@@ -121,14 +124,14 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
 }
 
 /**
- * Agents on the step as round initial badges on the node's top edge at the left, overlapping, in their role colour (#687).
+ * Agents on the step as round initial badges in the band above the node, at the left, overlapping, in their role colour (#687).
  * Hover shows the full name, role, model and state (native SVG tooltip); the step's accessible name already lists them.
  * The first agent is drawn last so it sits on top.
  */
 function Badges({ n }: { n: OverlayNode }) {
   const { shown, more } = n.badges;
   if (!shown.length) return null;
-  const cy = n.rect.y;
+  const cy = markY(n.rect);
   const cx = (i: number) => n.rect.x + MARK_INSET + BADGE_R + i * BADGE_STEP;
   return (
     <g className="run-badges" aria-hidden="true">
@@ -163,7 +166,7 @@ const MIN_HIT = 24;
 export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number): { left: number; top: number; width: number; height: number } {
   const count = Math.max(1, n.badges.shown.length + (n.badges.more > 0 ? 1 : 0));
   const x = n.rect.x + MARK_INSET;
-  const y = n.rect.y - BADGE_R;
+  const y = markY(n.rect) - BADGE_R;
   const w = BADGE_R * 2 + (count - 1) * BADGE_STEP;
   const h = BADGE_R * 2;
   const width = Math.max(MIN_HIT, w * scale);
@@ -172,13 +175,16 @@ export function badgeBox(n: Pick<OverlayNode, 'rect' | 'badges'>, scale: number)
 }
 
 /**
- * The canvas legend: placed in overlay px on the side of the picture with room (`legendSpot`), measured after it
- * renders so the clamp knows its size. Shown only when the board is (`boardShown`), like the document's.
+ * The canvas legend: one card under the picture (`legendSpot`, #987), never over a node, with the progress, the
+ * per-agent time left (the document shows the same rows in its card under the picture) and the legend. Measured
+ * after it renders so the clamp knows its size, and scaled with the picture between 80% and 100% (`legendScale`).
+ * Shown only when the board is (`boardShown`), like the document's.
  */
 export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Props, 'motionInside'> & { area: Size }) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<Size | null>(null);
   const shown = useMemo(() => boardShown(scene, steps), [scene, steps]);
+  const etas = useMemo(() => etaPanel(steps), [steps]);
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -190,16 +196,19 @@ export function CanvasLegend({ scene, steps, left, top, scale, area }: Omit<Prop
   }, [shown]);
   if (!shown) return null;
   const pic = { left, top, width: scene.width * scale, height: scene.height * scale };
-  const at = size && area.width > 0 ? legendSpot(pic, size, area, 12) : null;
-  return <RunLegend ref={ref} steps={steps} canvas style={at ? { left: at.left, top: at.top } : { visibility: 'hidden' }} />;
+  // Scaled with the picture (#987); the transform leaves the measured size alone, so place it by the scaled size.
+  const k = legendScale(scale);
+  const at = size && area.width > 0 ? legendSpot(pic, { width: size.width * k, height: size.height * k }, area, 12) : null;
+  // The individual `scale` property, set even at 1 so the stacking context never flips as the zoom changes.
+  const zoom: CSSProperties = { scale: String(k), transformOrigin: '0 0' };
+  return <RunLegend ref={ref} steps={steps} etas={etas} canvas style={at ? { left: at.left, top: at.top, ...zoom } : { visibility: 'hidden' }} />;
 }
 
 /**
  * The board's legend (§5.1): the weighted progress bar and text, then a collapsible list of the agents and states in
- * the run. Beside the picture on the canvas (`CanvasLegend`) and under the picture in the document, so it never
- * covers a node.
+ * the run. Under the picture on the canvas (`CanvasLegend`), so it never covers a node.
  */
-export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunStep[]; canvas?: boolean; style?: CSSProperties; ref?: Ref<HTMLDivElement> }) {
+export function RunLegend({ steps, etas, canvas, style, ref }: { steps: readonly RunStep[]; etas?: EtaPanel; canvas?: boolean; style?: CSSProperties; ref?: Ref<HTMLDivElement> }) {
   const id = useId();
   const p = useMemo(() => runProgress(steps), [steps]);
   const legend = useMemo(() => legendOf(steps), [steps]);
@@ -209,7 +218,9 @@ export function RunLegend({ steps, canvas, style, ref }: { steps: readonly RunSt
         {progressLabel(p)}
       </p>
       {p.total > 0 && <progress className="run-progress" value={p.percent} max={100} aria-labelledby={id} />}
-      <details open>
+      {etas && <EtaCorner panel={etas} />}
+      {/* On the canvas a long list starts folded (#987), so the card under the picture stays short. */}
+      <details open={legendOpen(legend.agents.length, canvas)}>
         <summary>범례</summary>
         <ul aria-label="에이전트">
           {legend.agents.map((a) => (

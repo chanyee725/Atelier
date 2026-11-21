@@ -16,6 +16,7 @@ import type {
 } from './scene.ts';
 import { FONT_SIZE, PLATE_PAD, lineHeightOf, linesWidth, textWidth, wrapText } from './text.ts';
 import { sanitizeColor } from './theme.ts';
+import { RUN_BAND } from './badge.ts';
 
 export const PAD = 24;
 
@@ -208,7 +209,9 @@ export function finishScene(type: Scene['type'], d: DiagramBase, items: SceneIte
     items.push(textItem(d.title.split(/\r?\n/), b.x0, b.y0 - 16 - lh * d.title.split(/\r?\n/).length, { size, font: pick<Typeface>(d.styles.typeface, ['rough', 'clean', 'mono']) ?? 'clean', anchor: 'start', weight: 600, tone: 'strong' }));
     b = boundsOf(items);
   }
-  const origin = { x: round(PAD - b.x0), y: round(PAD - b.y0) };
-  translate(items, PAD - b.x0, PAD - b.y0);
-  return { type, width: Math.ceil(b.x1 - b.x0 + PAD * 2), height: Math.ceil(b.y1 - b.y0 + PAD * 2), items, origin };
+  // A run-marked diagram keeps the run-mark band above its top row inside the picture (#987).
+  const top = PAD + (d.styles.runMarks === 'on' ? RUN_BAND : 0);
+  const origin = { x: round(PAD - b.x0), y: round(top - b.y0) };
+  translate(items, PAD - b.x0, top - b.y0);
+  return { type, width: Math.ceil(b.x1 - b.x0 + PAD * 2), height: Math.ceil(b.y1 - b.y0 + PAD + top), items, origin };
 }

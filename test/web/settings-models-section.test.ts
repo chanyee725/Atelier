@@ -1,4 +1,4 @@
-// 설정 modal's 역할별 모델 section (#624): model groups and role warnings.
+// 설정 modal's 모델 연결 + 역할별 모델 section (#624): model groups and role warnings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { modelGroups, roleChoice, subjParticle } from '../../web/src/settings/sections/modelsSection.ts';
@@ -37,3 +37,4 @@ test('subjParticle picks 이 after a final consonant', () => {
   assert.equal(subjParticle('제미닌'), '이');
   assert.equal(subjParticle('코덱스'), '가');
 });
+

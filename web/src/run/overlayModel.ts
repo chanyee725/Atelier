@@ -8,7 +8,7 @@ import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
-import { BADGE_H, badgeRect } from '../../../shared/render/badge.ts';
+import { BADGE_H, RUN_BAND, badgeRect } from '../../../shared/render/badge.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -126,8 +126,8 @@ export function nodeBadges(agents: readonly RunAgent[], colors: ReadonlyMap<stri
     color: colors.get(a.name) ?? roleColor(a.role),
     title: [a.name, roleLabel(a.role), ...(a.model ? [a.model] : []), ...(a.state ? [AGENT_STATE[a.state] ?? a.state] : [])].join(' · '),
   }));
-  // With one over the limit, drawing it beats a "+1" badge of the same size.
-  const n = all.length > max + 1 ? max : all.length;
+  // Past the limit the rest fold into one "+N" badge (#987), so the row never grows past max + 1 badges.
+  const n = Math.min(all.length, max);
   return { shown: all.slice(0, n), more: all.length - n };
 }
 
@@ -292,25 +292,34 @@ export const boardShown = (scene: Scene, steps: readonly RunStep[]): boolean => 
 export type Box = { left: number; top: number; width: number; height: number };
 export type Size = { width: number; height: number };
 
+/**
+ * Smallest and largest scale of the canvas legend (#987). Not as small as the picture's 60% floor: the card sits under
+ * the picture, never beside a node, so it can stay big enough to read.
+ */
+export const LEGEND_SCALE = { min: 0.8, max: 1 } as const;
+
+/**
+ * Scale of the canvas legend for a picture drawn at `scale` CSS px per scene unit: the same as the picture, so the
+ * card never looks bigger than the diagram, but within LEGEND_SCALE (never blown up, never too small to read).
+ */
+export const legendScale = (scale: number): number => (Number.isFinite(scale) ? Math.min(LEGEND_SCALE.max, Math.max(LEGEND_SCALE.min, scale)) : 1);
+
+/** Most agents the canvas legend lists open; more and the list starts folded (#987). */
+export const LEGEND_OPEN_MAX = 6;
+export const legendOpen = (agents: number, canvas?: boolean): boolean => !canvas || agents <= LEGEND_OPEN_MAX;
+
 /** Margin kept between the canvas legend and the overlay's edges. */
 const EDGE = 8;
 
 /**
- * Where the canvas legend goes, in overlay px (§5.1): under the picture (below the step labels), else left of it,
- * else right, else above; the first side where it fits whole inside the overlay. When none does it goes under the
- * picture. Either way it is clamped inside the overlay so the pane edge never cuts it.
+ * Where the canvas legend goes, in overlay px (§5.1, #987): always under the picture (below the step labels), lined
+ * up with its left edge, the same place the document puts its run card. It is moved sideways to stay inside the
+ * overlay but never up over the picture: when the picture reaches the pane's bottom the card is below the fold and
+ * shows when the canvas is scrolled, instead of covering nodes.
  */
 export function legendSpot(pic: Box, size: Size, area: Size, gap = 12, below = 0): { left: number; top: number } {
-  const sides = [
-    { left: pic.left, top: pic.top + pic.height + below + gap },
-    { left: pic.left - gap - size.width, top: pic.top },
-    { left: pic.left + pic.width + gap, top: pic.top },
-    { left: pic.left, top: pic.top - gap - size.height },
-  ];
-  const fits = (p: { left: number; top: number }) => p.left >= EDGE && p.top >= EDGE && p.left + size.width <= area.width - EDGE && p.top + size.height <= area.height - EDGE;
-  const p = sides.find(fits) ?? sides[0]!;
-  const clamp = (v: number, max: number) => Math.max(EDGE, Math.min(v, max - EDGE));
-  return { left: clamp(p.left, area.width - size.width), top: clamp(p.top, area.height - size.height) };
+  const left = Math.max(EDGE, Math.min(pic.left, area.width - size.width - EDGE));
+  return { left, top: Math.max(EDGE, pic.top + pic.height + below + gap) };
 }
 
 /** SVG path data through the edge's points (straight segments; the overlay traces, it does not redraw the connector). */
@@ -319,10 +328,15 @@ export function pathData(points: readonly Point[]): string {
 }
 
 /**
- * How far in from a node's left and right corners its marks sit (scene units). Every mark straddles the node's top
- * edge inside its width (#971), so nothing reaches into the gap where the next node, an edge or a neighbour's marks are.
+ * How far in from a node's left and right corners its marks sit (scene units). Every mark stays inside the node's
+ * width (#971), so nothing reaches sideways into the gap where the next node, an edge or a neighbour's marks are.
  */
 export const MARK_INSET = 10;
+/**
+ * Centre line of the marks: the middle of the band above the node's top edge (#987), outside the box, so the badges
+ * and chips never cover the node's title. The layout keeps that band free (`runMarks on`, shared/render/badge.ts).
+ */
+export const markY = (rect: Pick<Rect, 'y'>): number => rect.y - RUN_BAND / 2;
 /** Agent badge radius and the step between overlapping badges (scene units). */
 export const BADGE_R = 9;
 export const BADGE_STEP = 13;
@@ -352,17 +366,18 @@ export function badgeSpan(count: number): number {
 /**
  * What the run layer draws for a step (#935): only chips and a progress line, never a fill or a ring over the node,
  * so the node keeps the diagram's own look (eraser-diagrams rules) and the state never reshapes it.
- * The chips sit on the node's top edge, inside its width (#971): the agent badges at the left (`lead` is their span),
+ * The chips sit in the band above the node's top edge (#987), inside its width (#971): the agent badges at the left (`lead` is their span),
  * the state at the right. The label says "glyph state · agents" when that fits beside the badges, else the state
  * word alone, else only the glyph chip shows.
  */
 export function stepMarks(n: Pick<OverlayNode, 'rect' | 'glyph' | 'text' | 'live'>, labels: boolean, lead = 0): StepMarks {
   const { x, y, w, h } = n.rect;
   const right = x + w - MARK_INSET;
-  const chip = badgeRect(right - BADGE_H / 2, y, textWidth(n.glyph));
+  const my = markY(n.rect);
+  const chip = badgeRect(right - BADGE_H / 2, my, textWidth(n.glyph));
   const room = right - (x + MARK_INSET + lead + (lead ? 4 : 0));
   const fit = labels ? [`${n.glyph} ${n.text}`, `${n.glyph} ${n.text.split(' · ')[0]}`].find((t) => textWidth(t) + 12 <= room) : undefined;
-  const label = fit ? { x: right - (textWidth(fit) + 12), y: y - BADGE_H / 2, w: textWidth(fit) + 12, h: BADGE_H, text: fit } : undefined;
+  const label = fit ? { x: right - (textWidth(fit) + 12), y: my - BADGE_H / 2, w: textWidth(fit) + 12, h: BADGE_H, text: fit } : undefined;
   const inset = Math.min(6, w / 4);
   const progress = n.live ? { x1: x + inset, x2: x + w - inset, y: y + h - 2 } : undefined;
   return { chip, ...(label ? { label } : {}), ...(progress ? { progress } : {}) };

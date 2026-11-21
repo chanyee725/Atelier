@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REFETCH_DELAY_MS, REFETCH_MAX_WAIT_MS, REFETCH_TIMEOUT_MESSAGE, REFETCH_TIMEOUT_MS, aggregate, alwaysOnOrder, burnNow, cacheRate, createUsageRefetcher, hashOf, outliers, projectUsageFail, projectUsageOk,
+  REFETCH_DELAY_MS, REFETCH_MAX_WAIT_MS, REFETCH_TIMEOUT_MESSAGE, REFETCH_TIMEOUT_MS, aggregate, alwaysOnOrder, burnNow, cacheRate, createUsageRefetcher, outliers, projectUsageFail, projectUsageOk,
   projectUsageShown, rowHistory,
-  topSessions, totals, usageKey, viewOf, weekHint,
+  topSessions, totals, usageKey, weekHint,
 } from '../../web/src/dispatch/lib/usage.ts';
 import type { SessionState, UsageDay } from '../../shared/dispatch/types.ts';
 
@@ -59,17 +59,6 @@ test('always-on order: needs-a-person first, then start time and id, stable acro
   ];
   assert.deepEqual(alwaysOnOrder(list, s => s.st).map(s => s.id), ['f', 's', 'q', 'w1', 'w2', 'd']);
   assert.deepEqual(list[0].id, 'w2', 'input left alone');
-});
-
-test('view follows the hash; unknown hashes fall back to the board', () => {
-  assert.equal(viewOf('#usage'), 'usage');
-  assert.equal(viewOf('#timeline'), 'timeline');
-  assert.equal(viewOf('#tv'), 'tv');
-  assert.equal(viewOf('#settings'), 'settings');
-  assert.equal(viewOf(''), 'sessions');
-  assert.equal(viewOf('#nope'), 'sessions');
-  assert.equal(hashOf('sessions'), '');
-  assert.equal(hashOf('tv'), '#tv');
 });
 
 test('a timeline row adds the live state after the server history', () => {

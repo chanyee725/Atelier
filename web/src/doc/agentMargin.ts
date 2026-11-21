@@ -300,13 +300,6 @@ export function ago(ms: number): string {
   return `${Math.floor(s / 60)}분 전`;
 }
 
-/** The step a session (by name) works on now: an active step whose agents include it, in any shown run. */
-export function stepOf(name: string, runs: Iterable<readonly { title?: string; view: string; agents?: readonly { name: string }[] }[]>): string | null {
-  if (!name) return null;
-  for (const steps of runs) for (const s of steps) if (s.view === 'active' && s.title && s.agents?.some((a) => a.name === name)) return s.title;
-  return null;
-}
-
 /** The document's top-level blocks as the summary reads them, from ProseMirror JSON (`editor.getJSON()`). */
 export function blocksOfJson(doc: unknown): BlockInfo[] {
   const c = (doc as { content?: unknown } | null)?.content;
@@ -458,8 +451,6 @@ const textIn = (r: Pick<MarginRoom, 'chrome' | 'rail'>, pane: number) => (r.rail
 export const formOf = (r: MarginRoom): MarginForm => (textIn(r, sidePane(r)) >= TEXT_MIN - 0.01 ? 'side' : 'sheet');
 /** formOf for a room measured with the open panel, while the side panel may be collapsed to its rail (same render). */
 export const formWithRail = (r: MarginRoom, rail: boolean): MarginForm => formOf({ ...r, rail });
-/** Where the split's divider sits (px from the split's left) for a share, as index.css lays it out. */
-export const dividerAt = (r: MarginRoom & { share: number }): number => (formOf(r) === 'side' ? sidePane(r) : r.share * r.box);
 /**
  * The share that puts the divider under a pointer at `x` (px from the split's left), so a drag never makes it jump.
  * Past the canvas minimum the divider stops there. Between the widest sheet layout and the narrowest side layout no

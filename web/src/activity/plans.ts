@@ -42,6 +42,3 @@ export const planWaitingText = (p: Pick<WaitingPlan, 'lead'>) => (p.lead ? `${p.
 
 /** The plan's name: its title, else the file name. */
 export const planTitle = (p: Pick<WaitingPlan, 'path' | 'title'>) => p.title || fileStemOf(p.path) || p.path;
-
-/** Where it lives: area/feature folders ("web/run"), '' at the top. */
-export const planFolder = (path: string) => path.split('/').slice(0, -1).join('/');

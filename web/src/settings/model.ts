@@ -45,22 +45,6 @@ export function oneAtATime<A extends unknown[]>(fn: (...a: A) => Promise<unknown
   };
 }
 
-/**
- * Starts a provider login and, if the dialog closed while the request was in flight (the server first
- * refreshes every CLI's status, which can take seconds), cancels the login the server started meanwhile so
- * no CLI login is left running unseen (#228 review). Returns the login response.
- */
-export async function loginUnlessClosed<R extends { connected: boolean }>(
-  id: string,
-  login: (id: string) => Promise<R>,
-  cancel: (id: string) => Promise<unknown>,
-  isClosed: () => boolean,
-): Promise<R> {
-  const res = await login(id);
-  if (!res.connected && isClosed()) await cancel(id).catch(() => {});
-  return res;
-}
-
 // Usage-limit and session-length guards (E509c), edited in the 설정 modal and page. Defaults mirror the server's
 // (server/dispatch/settings.js GUARD_DEFAULTS). Each provider has its own usage guard (#676): Claude's 5시간·주간·Fable
 // windows (stored as guard.five/seven/fable, as in standalone Dispatch), Codex's 5시간·주간 windows (guard.openai), and
