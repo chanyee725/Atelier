@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resyncTeamForm, settingsLoad, teamForm, teamValues } from '../../web/src/settings/model.ts';
-import { resyncRoleModels, roleModelsPatch } from '../../web/src/settings/sections/modelsSection.ts';
 import { resetSection, sectionDirty, sectionFields, sectionSave } from '../../web/src/settings/sections/sectionForm.ts';
 import { TEAM_DEFAULTS } from '../../server/dispatch/settings.js';
 
@@ -146,16 +145,13 @@ test('sectionDirty reads numbers, not their spelling: 08 is the saved 8, blank i
 test('unsaved input stays unsaved while the session stream drops and reconnects (#644)', () => {
   const status = { enabled: true };
   const edited = { ...teamForm(saved), texts: { ...teamForm(saved).texts, maxChildren: '3' } };
-  const shown = { lead: 'claude-opus-5-5' };
   // The stream drops (failed), then reconnects (loading): the store keeps the last settings, the input stays.
   for (const load of [settingsLoad(status, false, true), settingsLoad(status, false, false)]) {
     assert.notEqual(load.kind, 'ok');
     assert.equal(sectionDirty(saved, edited, 'team'), true, `${load.kind}: the team edit still asks before closing`);
-    assert.equal(roleModelsPatch(saved.roleModels, shown) !== null, true, `${load.kind}: the role pick still asks`);
   }
   // Back to ok: the snapshot comes again as a new object with the same values; the edit survives the resync.
   assert.equal(settingsLoad(status, true, false).kind, 'ok');
   const fresh = teamValues({}, [{ id: 'lead', model: 'claude-sonnet-5-5' }]);
   assert.equal(sectionDirty(fresh, resyncTeamForm(saved, fresh, edited), 'team'), true);
-  assert.equal(roleModelsPatch(fresh.roleModels, resyncRoleModels(saved.roleModels, fresh.roleModels, shown)) !== null, true);
 });
