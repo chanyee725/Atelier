@@ -1,46 +1,111 @@
+<div align="center">
+
 # Atelier
 
-문서와 무한 캔버스를 파일 하나에 담는, 로컬 전용 다이어그램 도구예요. 글을 쓰다가 `/` 로 다이어그램을 넣고, 코드로 그린 그림을 캔버스에서 자유롭게 손볼 수 있어요.
+**문서 · 다이어그램 · 에이전트 팀을 한 화면에서. 내 컴퓨터에서만 도는 작업실이에요.**
 
-- 파일 하나에 문서와 캔버스가 함께 들어 있어요. (`*.dpx.json`)
-- 다이어그램은 코드로 써요. 아키텍처, 플로우차트, 시퀀스, ERD를 지원해요.
-- 캔버스에서는 도형, 화살표, 손그림을 자유롭게 그려요.
-- SVG, PNG, Markdown으로 내보내요. 옵션은 PNG 크기, 투명 배경, 라이트/다크예요.
-- 내 컴퓨터의 폴더 하나가 작업 공간이에요. 서버는 그 폴더 안에서만 읽고 써요.
+[![version](https://img.shields.io/badge/version-0.1.0-6366f1)](CHANGELOG.md)
+[![node](https://img.shields.io/badge/node-%E2%89%A522.18-339933?logo=nodedotjs&logoColor=white)](#-30초-빠른-시작)
+[![Claude Code plugin](https://img.shields.io/badge/Claude_Code-plugin-d97757)](#-claude-code--codex에-스킬-설치)
+[![Codex plugin](https://img.shields.io/badge/Codex-plugin-111111)](#-claude-code--codex에-스킬-설치)
+[![local only](https://img.shields.io/badge/127.0.0.1-local_only-0ea5e9)](#-개인정보와-로컬-전용)
 
-![문서와 캔버스를 함께 보는 화면](docs/images/overview.png)
+<img src="docs/images/demo.gif" alt="문서를 쓰고, /로 다이어그램을 넣고, 코드를 고쳐 그림을 바꾸고, 캔버스에서 손본 뒤 세션 보드를 여는 30초 데모" width="900">
 
-## 설치와 실행
+<sub>30초 데모 · <a href="docs/images/demo.mp4">MP4로 보기</a> · 가짜 데이터로 찍었어요</sub>
 
-필요한 것: Node.js 22.18 이상
+</div>
 
+## ✨ 핵심 기능
+
+- **문서 + 무한 캔버스**: 파일 하나(`*.dpx.json`)에 글과 캔버스가 같이 있어요. 문서에서 `/`로 다이어그램을 넣으면 캔버스에도 생겨요.
+- **코드로 그리는 다이어그램**: 아키텍처, 플로우차트, 시퀀스, ERD. 코드를 고치면 그림이 바로 바뀌고, 노드에 코드 위치를 붙여요.
+- **자유 캔버스**: 도형, 화살표, 손그림, 프레임으로 다이어그램 위를 손봐요.
+- **계획과 에이전트 팀**: 문서와 단계 다이어그램으로 계획을 쓰고 `시작하기` 한 번이면 Claude Code · Codex · Gemini 세션이 git worktree에서 일해요.
+- **세션 보드**: 누가 무엇을 하는지, 단계별 진행과 남은 시간, 사용량 한도를 한 화면에서 봐요.
+- **로컬 전용**: 서버는 `127.0.0.1`에만 열리고 밖으로 요청을 보내지 않아요.
+
+## 🚀 30초 빠른 시작
+
+필요한 것: Node.js 22.18 이상, git
+
+```bash
+git clone https://github.com/chanyee725/Atelier.git
+cd Atelier
+npm install && npm run build
+mkdir -p ~/atelier-notes && npm start -- ~/atelier-notes
 ```
-npm install
-npm run build
-npm start -- <작업 폴더>
-```
 
-터미널에 나온 주소(기본 `http://127.0.0.1:4330/`)를 브라우저로 열어요. `<작업 폴더>` 는 미리 만들어 둔 폴더여야 해요.
+터미널에 나온 주소(기본 `http://127.0.0.1:4330/`)를 브라우저로 열어요.
 
 | 설정 | 설명 |
 |---|---|
-| `<작업 폴더>` | 파일이 저장되는 폴더. 필수예요. |
+| `<작업 폴더>` | 파일이 저장되는 폴더. 미리 만들어 둬야 해요. |
 | `DRAW_PORT` | 포트 번호. 생략하면 4330. 예: `DRAW_PORT=4340 npm start -- <작업 폴더>` |
 
-- `npm run build` 를 건너뛰면 서버는 켜지지만 페이지 대신 "Web app not built" 메시지가 나와요.
-- 포트가 이미 쓰이고 있으면 서버가 바로 종료되고 다른 포트를 고르라는 메시지를 보여 줘요.
+- `npm run build`를 건너뛰면 페이지 대신 "Web app not built" 메시지가 나와요.
+- 포트가 이미 쓰이고 있으면 서버가 바로 끝나고 다른 포트를 고르라고 알려줘요.
 
-### Claude Code · Codex 플러그인
+## 🔌 Claude Code · Codex에 스킬 설치
 
-`plugin/` 폴더가 플러그인이에요. Atelier 기능을 스킬 15개(`atelier-*`)로 써요. 서버 켜기, 팀·세션·계획 실행, 문서·다이어그램·캔버스, 파일·버전·휴지통, 문서 속 질문, 상태·사용량·설정이 들어 있어요.
+GitHub 저장소에서 바로 설치해요. 저장소 루트의 marketplace가 `plugin/`을 가리켜요.
 
-| 어디서 | 설치 |
-|---|---|
-| Claude Code | `/plugin marketplace add <Atelier>/plugin` 다음 `/plugin install atelier@atelier` |
-| Codex CLI | `codex plugin marketplace add <Atelier>/plugin` 다음 `codex plugin add atelier@atelier` |
+**Claude Code**
 
-- 두 CLI 모두 플러그인을 캐시에 복사해서 써요. 그래서 서버 코드는 `DRAWING_HOME`(Atelier 체크아웃)이나 `atelier-update`가 푼 설치본(`~/.dispatch/drawing/current`)에서 찾아요.
-- Codex는 기본 샌드박스에서 네트워크를 막아요. `127.0.0.1` 서버를 부르는 스킬은 네트워크를 허용한 모드에서 써 주세요.
+```text
+/plugin marketplace add chanyee725/Atelier
+/plugin install atelier@atelier
+```
+
+**Codex CLI**
+
+```bash
+codex plugin marketplace add chanyee725/Atelier
+codex plugin add atelier@atelier
+```
+
+- 두 CLI 모두 플러그인을 캐시에 복사해서 써요. 서버 코드는 `DRAWING_HOME`(Atelier 체크아웃)이나 `atelier-update`가 푼 설치본에서 찾아요.
+- Codex 기본 샌드박스는 네트워크를 막아요. `127.0.0.1` 서버를 부르는 스킬은 네트워크를 허용한 모드에서 써요.
+- 이미 체크아웃이 있으면 `<체크아웃 경로>`를 저장소 이름 대신 넣어도 돼요.
+
+## 🧩 스킬 15개
+
+| 스킬 | 하는 일 | 이렇게 말해요 |
+|---|---|---|
+| `atelier-setup` | 프로젝트에서 서버 켜기·끄기, Claude·Codex·Gemini 연결 | "아틀리에 켜줘" |
+| `atelier-update` | 최신 GitHub 릴리즈로 업데이트하고 서버 다시 켜기 | "아틀리에 업데이트" |
+| `atelier-doc` | 문서를 단계별로 써서 화면에 바로 보이게 | "분석 문서 써줘" |
+| `atelier-diagram` | 코드 위치가 붙은 흐름·구조 다이어그램 | "코드 흐름 정리해줘" |
+| `atelier-canvas` | 캔버스에 상자·화살표·글자로 자유롭게 그리기 | "화이트보드처럼 그려줘" |
+| `atelier-files` | 문서 목록, 이름 바꾸기, 옮기기, 버전 되돌리기, 휴지통 | "예전 버전으로 돌려줘" |
+| `atelier-organize` | 프로젝트 코드 구조대로 문서 폴더 정리 | "폴더 정리해줘" |
+| `atelier-plan` | 문서 + 단계 다이어그램으로 계획 쓰기 | "계획 세워줘" |
+| `atelier-run` | 계획 실행 시작·멈춤·이어가기, 실행 기록 읽기 | "실행 멈춰" |
+| `atelier-team` | 관리자·구현자·리뷰어 팀 꾸리기 | "팀 꾸려서 진행해" |
+| `atelier-quickfix` | 1~3개 파일을 한 세션으로 빠르게 고치기 | "문구만 고쳐줘" |
+| `atelier-session` | 세션 하나 띄우기, 메시지·중단·권한 응답 | "세션 하나 띄워줘" |
+| `atelier-questions` | 문서 안에서 묻고 답하기 | "사용자한테 물어봐" |
+| `atelier-status` | 세션 상태, 남은 시간, 막힘, 사용량 한도 | "지금 뭐 하고 있어?" |
+| `atelier-settings` | 비용·토큰, 한도 가드, 역할별 모델 같은 설정 | "역할별 모델 바꿔줘" |
+
+## 🏗 구조
+
+```text
+server/   127.0.0.1 서버: 작업 폴더 API, 계획 실행, 에이전트 세션(server/dispatch)
+web/      React 앱: 문서(TipTap), 캔버스(Excalidraw), 세션 보드
+shared/   다이어그램 코드 파서와 렌더러(서버·웹 공용)
+plugin/   Claude Code · Codex 플러그인: 스킬 15개와 훅
+scripts/  아이콘·글꼴 빌드, 패키징, 데모 녹화(record-demo.mjs)
+test/     node:test 테스트, 가짜 CLI, 헤드리스 e2e
+```
+
+## 🔒 개인정보와 로컬 전용
+
+- 서버는 `127.0.0.1`에만 열려요. 같은 컴퓨터에서만 접속해요.
+- 서버 코드는 밖으로 요청을 보내지 않아요. 글꼴, 아이콘, 캔버스 자산은 같이 들어 있어요.
+- 작업 폴더, 그 폴더가 든 git 프로젝트, 공용 사용량 기록 폴더 안에서만 써요.
+- 에이전트 대화는 메모리에만 두고, 디스크에는 단계·시간·모델·토큰·브랜치·커밋 같은 메타데이터만 남겨요.
+- 세션은 사용자가 연결한 CLI(`claude`, `codex`, `agy`)만 쓰고, 그 자격 증명은 읽지 않아요.
 
 ## 쓰는 법
 
@@ -122,7 +187,7 @@ npm start -- <작업 폴더>
 | 문법 | 뜻 |
 |---|---|
 | `Name [icon: aws-ec2, color: blue]` | 노드와 속성. 주요 속성은 `icon`, `color`, `label`, `shape` |
-| `Web [icon: react, subtitle: React SPA]` | 부제(두 번째 줄). 우리 확장 속성이라 Eraser에는 없어요 |
+| `Web [icon: react, subtitle: React SPA]` | 부제(두 번째 줄). Atelier 확장 속성이에요 |
 | `API [badge: v2, badgeColor: red]` · `Phase 2 [shape: divider]` | 노드 우상단 배지(색 없으면 노드 색, 그다음 indigo) · 라벨로 끊기는 가로 구분선 |
 | `nodeStyle icon` | 아키텍처의 아이콘 노드를 상자 카드 대신 큰 아이콘 + 아래 글자로 그려요. 기본은 `box` |
 | `Group { ... }` | 그룹. 안에 그룹을 또 넣을 수 있어요 |
@@ -264,13 +329,14 @@ Mac에서는 Ctrl 대신 ⌘ 을 써요. `Ctrl/⌘+K` 로 여는 명령 팔레�
 
 코드 편집기에서는 `Ctrl+Space` 로 자동완성을 열어요.
 
-## 개발과 검사
+## 🛠 개발과 검사
 
 | 명령 | 설명 |
 |---|---|
 | `npm test` | 서버, 파서, 렌더, 웹 로직 테스트 |
 | `npm run build` | 웹 앱을 `public/` 에 빌드 |
 | `npm run dev:web` | Vite 개발 서버 (`/api` 는 4330 포트 서버로 넘겨요) |
+| `node scripts/record-demo.mjs` | README 데모 영상을 다시 찍어요. 빈 포트·임시 작업 폴더·가짜 데이터로 돌고 `docs/images/demo.{gif,mp4}`를 써요. `CHROME`, `PLAYWRIGHT_CORE`가 필요해요 |
 
 `npm test` 는 `test/test-env` 를 읽어 `DRAW_WORKSPACE_WATCH=poll` 로 돌아요. 테스트 서버가 여러 개 떠도 inotify 한도(EMFILE)에 걸리지 않게 파일 감시를 폴링으로 바꾸는 거예요. 폴링은 250ms마다 작업 폴더 전체를 동기로 훑으니 테스트에서만 써요. 실제 `fs.watch` 경로는 `test/workspace-outside.test.js` 의 테스트 하나가 따로 확인해요.
 
@@ -282,18 +348,11 @@ Mac에서는 Ctrl 대신 ⌘ 을 써요. `Ctrl/⌘+K` 로 여는 명령 팔레�
 DRAW_E2E=1 CHROME=/path/to/chrome-headless-shell PLAYWRIGHT_CORE=/path/to/node_modules/playwright-core npm test
 ```
 
-작업 목록은 `docs/tickets.md`, 조사 자료는 `docs/research/eraser/` 에 있어요.
-
-## 안전 원칙
-
-- **127.0.0.1 전용이에요.** 같은 컴퓨터에서만 접속할 수 있어요.
-- **밖으로 요청을 보내지 않아요.** 글꼴, 아이콘, 캔버스 자산은 모두 같이 들어 있어요.
-- **작업 폴더 안에서만 써요.**
+작업은 GitHub 이슈로 관리해요. 바뀐 점은 [CHANGELOG.md](CHANGELOG.md)에 있어요.
 
 ## 지원하지 않는 것
 
 - 여러 사람이 동시에 편집하는 협업
-- AI로 다이어그램 만들기
 - PDF 내보내기 (SVG, PNG, Markdown만 돼요)
 - AWS, Google Cloud, Azure 공식 아이콘 (비슷한 Lucide 아이콘으로 대신 그려요)
 - 시퀀스, ERD 블록의 노드 옮기기 (아키텍처와 플로우차트만 돼요)
