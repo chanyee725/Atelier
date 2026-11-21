@@ -20,6 +20,7 @@ import { mergeResult, pickResult } from '../runs/record.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
 import { planFileName } from './shared.js';
+import { createNote } from './note.js';
 import { resolvePlanRoles } from './plan-roles.js';
 import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
 import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
@@ -787,19 +788,9 @@ export async function setup(ctx) {
     return { path: r.path, revision: r.revision, lead: all?.[r.path]?.lead ?? null };
   }
 
-  // ---- note_step ----
-  function note(body) {
-    if (!dispatch()) throw new StoreError(409, 'Dispatch가 꺼져 있어요');
-    if (typeof body.lead !== 'string' || typeof body.step !== 'string') throw new StoreError(400, 'lead and step are required');
-    const text = redact(String(body.text ?? '')).replace(/\s+/g, ' ').trim();
-    if (!text) throw new StoreError(400, 'text가 비어 있어요');
-    const running = leadEntries(body.lead, 'running').find(([, e]) => e.steps?.includes(body.step));
-    if (!running) throw new StoreError(409, leadEntries(body.lead, 'running').length ? `승인된 계획에 단계 "${body.step.slice(0, 40)}"가 없어요` : '실행 중인 계획이 없어요');
-    const [path, e] = running;
-    return { path, step: body.step, note: recorder.noteStep(e.runId, body.step, text.slice(0, 200)) };
-  }
+  createNote(c);
 
-  const {} = c;
+  const { note } = c;
 
   const route = (method, path, fn) => ({
     method,
