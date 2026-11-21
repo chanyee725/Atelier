@@ -133,7 +133,7 @@ export function apply(ev: string, d: unknown) {
   }
 }
 
-/** Events this store listens to; `prefs` (theme) is the app shell's business, not this screen's. */
+/** Events this store listens to. */
 export const EVENTS = ['snapshot', 'session', 'removed', 'message', 'tasks', 'tickets', 'limits', 'settings', 'providers'] as const;
 
 /**

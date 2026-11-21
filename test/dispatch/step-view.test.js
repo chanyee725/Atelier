@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { STEP_VIEWS, carryBefore, edgeView, linkSteps, progress, progressLabel, relinkOffer, stepNode, stepView, waitingOnPerson } from "../../shared/dispatch/step-view.ts";
+import { STEP_VIEWS, carryBefore, edgeView, linkSteps, progress, progressLabel, stepNode, stepView } from "../../shared/dispatch/step-view.ts";
 
 const ses = (...states) => states.map(state => ({ state }));
 
@@ -13,15 +13,6 @@ test("linkSteps: steps without a node are listed, not dropped", () => {
   const r = linkSteps([{ id: "plan" }, { id: "impl", node: "build" }, { id: "gone" }], ["plan", "build", "extra"]);
   assert.deepEqual([...r.linked], [["plan", "plan"], ["impl", "build"]]);
   assert.deepEqual(r.missing, ["gone"]);
-});
-
-test("relinkOffer: only one lost step and one new node", () => {
-  const steps = [{ id: "plan" }, { id: "impl" }];
-  assert.deepEqual(relinkOffer(steps, ["plan", "impl"], ["plan", "build"]), { step: "impl", node: "build" });
-  assert.equal(relinkOffer(steps, ["plan", "impl"], ["plan", "build", "lint"]), null, "two new nodes");
-  assert.equal(relinkOffer(steps, ["plan", "impl"], ["build"]), null, "two lost steps");
-  assert.equal(relinkOffer(steps, ["plan", "impl"], ["plan", "impl", "build"]), null, "nothing lost");
-  assert.equal(relinkOffer([{ id: "a" }, { id: "b", node: "x" }], ["a"], ["x"]), null, "new node already claimed");
 });
 
 test("stepView: five states from stage and sessions", () => {
@@ -46,7 +37,6 @@ test("stepView: a session with undefined state is unknown, counts as active", ()
   assert.equal(stepView({ stage: "review", sessions: unknown }), "review");
   assert.equal(stepView({ stage: "done", sessions: unknown }), "done");
   assert.equal(stepView({ sessions: [{}, { state: "failed" }] }), "blocked", "a failed sibling still blocks");
-  assert.equal(waitingOnPerson({ sessions: unknown }), false);
 });
 
 test("stepView without a board stage falls back to sessions", () => {
@@ -54,14 +44,6 @@ test("stepView without a board stage falls back to sessions", () => {
   assert.equal(stepView({ sessions: ses("done", "done") }), "review", "finished sessions are not a merge");
   assert.equal(stepView({ stage: "done", sessions: ses("done", "done") }), "done", "only board stage done gives done");
   assert.equal(stepView({ sessions: ses("resting") }), "active");
-});
-
-test("waiting on a person is a tag, not a state", () => {
-  const s = { stage: "impl", sessions: ses("waiting") };
-  assert.equal(stepView(s), "active");
-  assert.equal(waitingOnPerson(s), true);
-  assert.equal(waitingOnPerson({ stage: "plan", sessions: ses("waiting") }), false);
-  assert.equal(waitingOnPerson({ stage: "review", sessions: ses("working") }), false);
 });
 
 test("every state has a glyph and a label", () => {

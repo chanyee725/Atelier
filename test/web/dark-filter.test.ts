@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DARK_CANVAS_BACKGROUND, DARK_FILTER, applyDarkFilter, darkCanvasSeen, inDarkReachNear, preDarkFilter, preDarkFilterColor } from '../../shared/render/darkFilter.ts';
+import { DARK_CANVAS_BACKGROUND, applyDarkFilter, inDarkReachNear, preDarkFilter, preDarkFilterColor } from '../../shared/render/darkFilter.ts';
 import { renderBlock } from '../../web/src/canvas/render.ts';
 import { THEMES, badgeColors } from '../../shared/render/theme.ts';
 import { sceneToSvg } from '../../shared/render/svg.ts';
@@ -14,7 +14,6 @@ const near = (a: number[], b: number[], tol: number, msg: string) =>
   assert.ok(a.every((x, i) => Math.abs(x - b[i]) <= tol), `${msg}: ${a.join(',')} vs ${b.join(',')}`);
 
 test('the filter is the one Excalidraw puts on its dark canvas', () => {
-  assert.equal(DARK_FILTER, 'invert(93%) hue-rotate(180deg)');
   // White comes out as Excalidraw's dark background, black as its light text.
   near(to255(applyDarkFilter([1, 1, 1])), [18, 18, 18], 0, 'white');
   near(to255(applyDarkFilter([0, 0, 0])), [237, 237, 237], 0, 'black');
@@ -106,7 +105,7 @@ test('#202: the node shadow stays visible on the dark canvas and in a dark expor
   // Excalidraw's dark canvas is white through the filter; a dark export fills with the theme background.
   const canvas = seen('#ffffff');
   assert.equal(canvas, '#121212');
-  const shadow = darkCanvasSeen(t.shadow);
+  const shadow = seen(preDarkFilterColor(t.shadow));
   assert.ok(contrast(shadow, canvas) >= 1.25, `shadow ${shadow} on canvas ${contrast(shadow, canvas).toFixed(2)}`);
   assert.ok(contrast(shadow, t.background) >= 1.2, `shadow ${shadow} on background ${contrast(shadow, t.background).toFixed(2)}`);
   const b = { id: 'darkshadow1', type: 'flowchart', code: 'A\nB\nA > B\n', x: 0, y: 0, w: 0, h: 0 };
@@ -137,7 +136,7 @@ test('#244: badges on the dark canvas keep their hue and white text at 4.5:1', a
     near(roundTrip(text), to255(rgbOf(text)), 1, `${name} text`);
   }
   // Before #244 the filter's nearest pick turned red orange and indigo text fell under 4.5:1.
-  assert.ok(contrast(darkCanvasSeen('#d92d20'), '#ededed') < 4.5);
+  assert.ok(contrast(seen(preDarkFilterColor('#d92d20')), '#ededed') < 4.5);
 });
 
 test('inDarkReachNear: in-reach colours come back as they are, out-of-reach ones keep their hue', () => {

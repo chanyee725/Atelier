@@ -121,7 +121,7 @@ export function adapt([method, path, fn, opts]) {
 
 /**
  * The route table. `d` is the running Dispatch instance from index.js:
- * { root, store, hub, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs,
+ * { root, store, hub, models, broadcast, snapshot, usage, projects,
  *   providers(), refreshProviders, setEnabled, login, cancelLogin, logout }
  */
 export function routeTable(d) {
@@ -142,8 +142,6 @@ export function routeTable(d) {
       if (!p || p.startsWith(".") || /[\/\\\0]/.test(p)) throw fail(400, "folder가 올바르지 않아요");
       return hub.folderUsage(p);
     }],
-    ["GET", /^\/api\/prefs$/, async () => d.readPrefs()],
-    ["POST", /^\/api\/prefs$/, async (_, b) => d.writePrefs(b || {})],
     ["GET", /^\/api\/projects$/, async () => ({ projects: await d.projects() })],
     ["POST", /^\/api\/settings$/, async (_, b) => {
       const before = { guard: store.data.settings.guard, team: store.data.settings.team };

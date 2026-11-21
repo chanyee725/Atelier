@@ -4,7 +4,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { bodySummary, closedIssues, createIssueList, joinIssues, referencedIssues } from "../../server/dispatch/issues.js";
+import { bodySummary, closedIssues, createIssueList, referencedIssues } from "../../server/dispatch/issues.js";
 import { setPrTracking } from "../../server/dispatch/pr-status.js";
 import { FAKE_MARKER } from "../../server/dispatch/cli.js";
 
@@ -58,8 +58,9 @@ test("listIssues.prsOf answers from the same cached gh run: branch, Closes and R
   assert.equal(f.calls().length, 2);
 });
 
-test("joinIssues matches PRs by branch name and Closes, keeps metadata only", () => {
-  const out = joinIssues(ISSUES, PRS);
+test("listIssues matches PRs by branch name and Closes, keeps metadata only", async () => {
+  const f = fakeGh({ "issue list": ISSUES, "pr list": PRS });
+  const out = (await createIssueList({ workspaceDir: f.ws, cwd: f.ws, env: f.env })()).issues;
   assert.deepEqual(out, [
     { number: 776, title: "E574: dashboard  shows issues", url: "https://github.com/o/r/issues/776", prs: [
       { number: 801, state: "open", url: "https://github.com/o/r/pull/801", branch: "dispatch/impl-1" },

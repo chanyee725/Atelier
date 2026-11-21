@@ -1,6 +1,6 @@
-// Helpers for the 설정 modal's 모델 연결 + 역할별 모델 section (#624): the model list grouped by provider, what a role's
-// chosen model needs to say (not listed, provider not connected), and the role-model patch and resync. React-free so
-// node --test can check them. Status only: no account, email or token reaches here.
+// Helpers for the 설정 modal's 역할별 모델 section (#624): the model list grouped by provider and what a role's chosen
+// model needs to say (not listed, provider not connected). React-free so node --test can check them. Status only: no
+// account, email or token reaches here.
 import { PROVIDERS } from '../../modelConnect.ts';
 
 export type ModelOption = { id: string; label: string; provider: string };

@@ -147,9 +147,9 @@ async function start(ws, file, deps) {
 test('server: drawing.json wins over state.json; 설정 changes are written back to it', async () => {
   const h = tempHome();
   const { root, ws } = scratchRepo();
-  // The old places: team settings and theme in the project's state.json, a PR switch nowhere.
+  // The old places: team settings in the project's state.json, a PR switch nowhere.
   mkdirSync(join(root, '.atelier'), { recursive: true });
-  writeFileSync(join(root, '.atelier', 'state.json'), JSON.stringify({ settings: { team: { rotateLead: 7, maxChildren: 3 } }, prefs: { theme: 'light' } }));
+  writeFileSync(join(root, '.atelier', 'state.json'), JSON.stringify({ settings: { team: { rotateLead: 7, maxChildren: 3 } } }));
   h.put({ version: 1, theme: 'dark', prStatus: false, team: { rotateLead: 2 }, guard: { five: 0.5 }, extra: { kept: true } });
   const s = await start(ws, h.file, fakeDeps(root));
   try {
@@ -157,7 +157,6 @@ test('server: drawing.json wins over state.json; 설정 changes are written back
     assert.equal(snap.file, '~/.atelier/drawing.json');
     assert.equal(snap.error, null);
     assert.equal(snap.values.theme, 'dark');
-    assert.equal((await (await fetch(`${s.base}/api/prefs`)).json()).theme, 'dark');
     // PR tracking: no workspace value, so the user's default (off) applies.
     assert.equal((await (await fetch(`${s.base}/api/workspace/pr-tracking`)).json()).on, false);
 
@@ -197,21 +196,16 @@ test('server: a hand edit to drawing.json is seen at once, without GET /api/user
   h.put({ prStatus: false });
   const s = await start(ws, h.file, fakeDeps(root));
   const pr = async () => (await (await fetch(`${s.base}/api/workspace/pr-tracking`)).json()).on;
-  const theme = async () => (await (await fetch(`${s.base}/api/prefs`)).json()).theme;
   try {
     assert.equal(await pr(), false);
-    assert.equal(await theme(), 'system');
     // The user edits the file by hand while the server runs; no route calls GET /api/user-defaults.
-    h.put({ prStatus: true, theme: 'dark' });
+    h.put({ prStatus: true });
     assert.equal(await pr(), true);
-    assert.equal(await theme(), 'dark');
-    h.put({ prStatus: false, theme: 'light' });
+    h.put({ prStatus: false });
     assert.equal(await pr(), false);
-    assert.equal(await theme(), 'light');
     // Deleting the file brings back the built-in defaults.
     rmSync(h.file);
     assert.equal(await pr(), true);
-    assert.equal(await theme(), 'system');
   } finally {
     await s.stop();
     rmSync(root, { recursive: true, force: true });
@@ -244,7 +238,6 @@ test('server: a broken drawing.json does not stop the server; it reports the err
   try {
     const snap = await (await fetch(`${s.base}/api/user-defaults`)).json();
     assert.match(snap.error, /drawing\.json/);
-    assert.equal((await (await fetch(`${s.base}/api/prefs`)).json()).theme, 'system');
     const r = await fetch(`${s.base}/api/settings`, { method: 'POST', headers: W, body: JSON.stringify({ team: { maxChildren: 5 } }) });
     assert.equal(r.status, 409);
     assert.match((await r.json()).error, /drawing\.json/);

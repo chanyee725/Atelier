@@ -357,17 +357,3 @@ export async function setup(ctx, { file } = {}) {
     ],
   };
 }
-
-/**
- * The theme the standalone Dispatch saved in prefs.json (copied from ~/.dispatch/ next to drawing.json), or null.
- * Read only: Atelier never writes that file.
- */
-export async function readLegacyTheme(file) {
-  if (!file) return null;
-  try {
-    const raw = JSON.parse(await readFile(path.join(path.dirname(file), 'prefs.json'), 'utf8'));
-    return THEMES.includes(raw?.theme) ? raw.theme : null;
-  } catch {
-    return null;
-  }
-}
