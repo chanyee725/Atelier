@@ -26,11 +26,10 @@ import { PERMS, ROLES } from "./roles.js";
 import { adapt, routeTable } from "./routes.js";
 import { patchProfiles, profileGrid, readStored, resolveProfile } from "./mode-profiles.js";
 import { effectiveRoles, teamSettings } from "./settings.js";
-import { readLegacyTheme, UserDefaults } from "../user-defaults.js";
+import { UserDefaults } from "../user-defaults.js";
 
 /** Hub events forwarded to the shared SSE stream; none collides with Drawing's `workspace`. */
 export const HUB_EVENTS = ["session", "message", "live", "limits", "removed", "tasks", "tickets"];
-const THEMES = ["system", "light", "dark", "monitor"];
 
 
 /** The git top level that holds dir, or null when dir is not in a git work tree. */
@@ -121,24 +120,6 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
   });
   hub.on("removed", ({ id }) => { lastStatus.delete(id); ledger.end(id); store.save(); });
 
-  // UI preferences: ~/.atelier/drawing.json first, then the project's state.json, then the standalone Dispatch's
-  // prefs.json copied from ~/.dispatch/ (read only), then "system".
-  const legacyTheme = dep.userDefaults ? await readLegacyTheme(userDefaults.file) : null;
-  const readPrefs = async () => {
-    const theme = [(await userDefaults.current()).theme, store.data.prefs?.theme, legacyTheme].find(t => THEMES.includes(t));
-    return { theme: theme ?? "system" };
-  };
-  async function writePrefs(patch) {
-    const next = await readPrefs();
-    if (THEMES.includes(patch.theme)) {
-      await userDefaults.update({ theme: patch.theme });
-      next.theme = patch.theme;
-    }
-    store.data.prefs = next;
-    store.save();
-    broadcast("prefs", next);
-    return next;
-  }
   /** Team and guard settings saved from the 설정 UI go to the user's defaults file (`enabled` stays per project). */
   async function saveUserDefaults({ team, guard }) {
     const patch = {};
@@ -162,7 +143,6 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
       roles: effectiveRoles(ROLES, store, models), perms: PERMS, models, providers,
       limits: hub.currentLimits(), settings: { ...store.data.settings, team: teamSettings(store) },
       sessions: hub.sessions.map(s => hub.publicSession(s)),
-      prefs: await readPrefs(),
       tasks: hub.tasks,
       tickets: hub.tickets,
     };
@@ -204,7 +184,7 @@ export async function createDispatch({ root, broadcast, port, workspaceDir, layo
 
   const d = {
     modeProfiles,
-    root, store, hub, ledger, models, broadcast, snapshot, usage, projects, readPrefs, writePrefs, saveUserDefaults,
+    root, store, hub, ledger, models, broadcast, snapshot, usage, projects, saveUserDefaults,
     providers: () => providers, refreshProviders, setEnabled,
     login: dep.login, logout: dep.logout, cancelLogin: dep.cancelLogin, loginWithKey: dep.loginWithKey,
     // PR number, state and CI rollup per branch through `gh` (pr-status.js); off per workspace, cached 30s.

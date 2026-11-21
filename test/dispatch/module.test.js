@@ -204,7 +204,7 @@ test('state goes to <project>/.atelier/state.json only: nothing in the workspace
   const { root, ws } = scratchRepo();
   const { deps } = fakeDeps(root);
   const { base, stop } = await start(ws, deps);
-  await fetch(`${base}/api/prefs`, { method: 'POST', headers: W, body: JSON.stringify({ theme: 'dark' }) });
+  assert.equal((await fetch(`${base}/api/settings`, { method: 'POST', headers: W, body: JSON.stringify({ team: { maxChildren: 3 } }) })).status, 200);
   await stop();
   try {
     assert.deepEqual(readdirSync(join(root, '.atelier')).sort(), ['state.json']);

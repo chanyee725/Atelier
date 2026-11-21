@@ -54,7 +54,7 @@ Each value is looked up key by key; the first place that has a valid value wins.
 
 | Value | 1st | 2nd | 3rd | Last |
 | --- | --- | --- | --- | --- |
-| Theme | `drawing.json` `theme` | project `state.json` `prefs.theme` | standalone Dispatch `~/.dispatch/prefs.json` (read only) | `system` |
+| Theme | `drawing.json` `theme` | — | — | `system` |
 | Team settings, guard thresholds | `drawing.json` `team` / `guard` | project `state.json` `settings` | — | built-in defaults |
 | Workspace for `npm start` | command-line folder | `drawing.json` `workspace` | `drawing.json` `lastWorkspace` | error with usage |
 | Port | `DRAW_PORT` | `drawing.json` `port` | — | 4330 |
@@ -90,9 +90,9 @@ These two keys are reserved for the workspace picker (issue #721, PR #723):
 ## Related code
 
 - `server/user-defaults.js`: `UserDefaults` (load, status, update), `readDefaultsSync`, `startDefaults`,
-  `checkPatch`, `readLegacyTheme`, routes `GET`/`POST /api/user-defaults`.
+  `checkPatch`, routes `GET`/`POST /api/user-defaults`.
 - `server/index.js`, `server/cli.js`: `npm start` workspace and port defaults.
-- `server/dispatch/index.js`: theme read order, `saveUserDefaults` for team and guard.
+- `server/dispatch/index.js`: `saveUserDefaults` for team and guard.
 - `server/dispatch/routes.js`: `POST /api/settings` writes `drawing.json` before `state.json`.
 - `server/dispatch/pr-status.js`: `prTrackingEnabled(workspaceDir, fallback)`; `server/workspace/index.js`
   `GET /api/workspace/pr-tracking`.
