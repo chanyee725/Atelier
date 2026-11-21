@@ -36,15 +36,17 @@ const SHOTS = process.env.DEMO_SHOTS; // optional folder for scene screenshots
 const W = 1440;
 const H = 900; // 16:10, scaled to 1280×800 in the MP4
 const MODEL = 'claude-sonnet-5-5';
-const MAX_SECONDS = 110; // final length cap; fast segments speed up to fit
+const MIN_SECONDS = 40; // final length; fast segments speed up or slow down (never below 1×) to land in between
+const MAX_SECONDS = 110;
 const ASK = 'PLC에서 데이터를 받아온 뒤 로봇을 움직이는 웹 페이지를 만들어야 해.';
 // Appended (not typed) to the visible one-liner: keeps the real run to planning only and in this order.
 const RULES = [
   '',
   '(데모 실행) 구현은 하지 말고 계획까지만 해요.',
   `1) 먼저 create_sessions로 문서화 팀원 1명(model "${MODEL}")을 만들어 "아키텍처" 문서를 쓰게 해요: PLC → 게이트웨이 → 서버 → 웹 → 로봇 컨트롤러 아키텍처 다이어그램 하나와 명령 흐름도 하나(atelier-diagram 스킬).`,
-  '2) 그다음 write_plan으로 계획을 써요: 요구사항, 테스트 조건(PLC 연결 끊김, 값 범위 밖, 로봇 정지 명령, 지연), 단계(구현·리뷰).',
-  '3) 계획 경로 한 줄로 턴을 끝내요. 시작하기는 누르지 않아요.',
+  '2) 그다음 write_plan으로 계획(목표, 단계(구현·리뷰), 위험)을 써요.',
+  '3) 이어서 atelier-doc 스킬로 그 계획 문서의 목표 아래에 "요구사항"과 "테스트 조건"(PLC 연결 끊김, 값 범위 밖, 로봇 정지 명령, 지연) 섹션을 넣어요. 단계 다이어그램 블록과 단계 목록은 건드리지 않아요.',
+  '4) 계획 경로 한 줄로 턴을 끝내요. 시작하기는 누르지 않아요.',
 ].join('\n');
 
 const freePort = () =>
@@ -248,8 +250,8 @@ try {
   if (diagramDoc) {
     await open(diagramDoc);
     mark(8);
-    // Stay while it grows: until the plan appears (the lead moved on) or the teammate is done.
-    await until(async () => ((await files()).some(isPlan) || (await sessions()).filter((s) => s.id !== lead?.id).every((s) => s.status === 'idle') ? true : null), FAKE ? 3000 : 8 * 60_000);
+    // Stay while it grows, until the teammate is done (idle, or removed after its report).
+    await until(async () => ((await sessions()).filter((s) => s.id !== lead?.id).every((s) => s.status === 'idle') ? true : null), FAKE ? 3000 : 8 * 60_000);
     mark(1);
     await sleep(1500);
     await shot('diagram');
@@ -285,13 +287,15 @@ try {
   const raw = await video.path();
   mkdirSync(outDir, { recursive: true });
 
-  // Segments → durations; fast ones (speed > 1) speed up further until the whole fits MAX_SECONDS.
+  // Segments → durations; fast ones (speed > 1) scale by k so the whole lands in MIN_SECONDS..MAX_SECONDS.
   const segs = marks.slice(0, -1).map((m, i) => ({ from: m.at, to: marks[i + 1].at, speed: m.speed })).filter((s) => s.to - s.from > 0.05);
-  const len = (k) => segs.reduce((a, s) => a + (s.to - s.from) / (s.speed > 1 ? s.speed * k : s.speed), 0);
+  const rate = (s, k) => (s.speed > 1 ? Math.max(1, s.speed * k) : s.speed);
+  const len = (k) => segs.reduce((a, s) => a + (s.to - s.from) / rate(s, k), 0);
   let k = 1;
   while (len(k) > MAX_SECONDS && k < 200) k *= 1.1;
+  while (len(k) < MIN_SECONDS && k > 0.01) k /= 1.1;
   const filter = segs
-    .map((s, i) => `[0:v]trim=start=${s.from.toFixed(3)}:end=${s.to.toFixed(3)},setpts=(PTS-STARTPTS)/${(s.speed > 1 ? s.speed * k : s.speed).toFixed(3)}[v${i}]`)
+    .map((s, i) => `[0:v]trim=start=${s.from.toFixed(3)}:end=${s.to.toFixed(3)},setpts=(PTS-STARTPTS)/${rate(s, k).toFixed(3)}[v${i}]`)
     .join(';') + `;${segs.map((_, i) => `[v${i}]`).join('')}concat=n=${segs.length}:v=1:a=0,fps=30,scale=1280:800:flags=lanczos[out]`;
   const mp4 = join(outDir, 'demo.mp4');
   const poster = join(outDir, 'demo-poster.png');
