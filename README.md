@@ -260,7 +260,7 @@ Mac에서는 Ctrl 대신 ⌘ 을 써요. `Ctrl/⌘+K` 로 여는 명령 팔레�
 | `npm run build` | 웹 앱을 `public/` 에 빌드 |
 | `npm run dev:web` | Vite 개발 서버 (`/api` 는 4330 포트 서버로 넘겨요) |
 
-`npm test` 는 `test/test-env` 를 읽어 `DRAW_WORKSPACE_WATCH=poll` 로 돌아요. 테스트 서버가 여러 개 떠도 inotify 한도(EMFILE)에 걸리지 않게 파일 감시를 폴링으로 바꾸는 거예요. 폴링은 250ms마다 작업 폴더 전체를 동기로 훑으니 테스트에서만 써요. 실제 `fs.watch` 경로는 `test/workspace.test.js` 의 테스트 하나가 따로 확인해요.
+`npm test` 는 `test/test-env` 를 읽어 `DRAW_WORKSPACE_WATCH=poll` 로 돌아요. 테스트 서버가 여러 개 떠도 inotify 한도(EMFILE)에 걸리지 않게 파일 감시를 폴링으로 바꾸는 거예요. 폴링은 250ms마다 작업 폴더 전체를 동기로 훑으니 테스트에서만 써요. 실제 `fs.watch` 경로는 `test/workspace-outside.test.js` 의 테스트 하나가 따로 확인해요.
 
 ### 브라우저 e2e
 
