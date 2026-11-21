@@ -1,12 +1,12 @@
 // Cloud architecture and flowchart: ELK layered layout with groups as compound nodes.
 
-import type { GraphChild, GraphDiagram, GraphEdge, GraphGroup, GraphNode } from '../dsl/index.ts';
-import { finishScene, fontSize, measureLabel, round, styleFor, textItem } from './common.ts';
+import type { GraphChild, GraphDiagram, GraphEdge, GraphGroup } from '../dsl/index.ts';
+import { finishScene, measureLabel, round, styleFor, textItem } from './common.ts';
 import type { ElementStyle, Label } from './common.ts';
 import { absolutePositions, edgeOffset, runElk } from './elk.ts';
 import type { ElkExtendedEdge, ElkNode } from './elk.ts';
 import { PLATE_PAD, textWidth } from './text.ts';
-import { BADGE_FONT_SIZE, BADGE_FONT_WEIGHT, RUN_BAND, badgeRect } from './badge.ts';
+import { BADGE_FONT_SIZE, BADGE_FONT_WEIGHT, badgeRect } from './badge.ts';
 import { sanitizeColor } from './theme.ts';
 import { BLOCK_LAYOUT_VERSION } from './block-layout.ts';
 import type { BlockLayout } from './block-layout.ts';
@@ -17,48 +17,23 @@ import { wrapTopLevel } from './layout-wrap.ts';
 import { routeOrthogonal } from './route-eraser.ts';
 import type { PartialRoute, RoutedEdge, RouterBox } from './route-eraser.ts';
 import type { Point, Scene, SceneBadge, SceneEdge, SceneHandle, SceneItem, ShapeKind } from './scene.ts';
-import { nodeAutoIcon, prepareIcons } from './auto-icon.ts';
+import { prepareIcons } from './auto-icon.ts';
 import { SPACING } from './layout-graph-common.ts';
 import type { Rect } from './layout-graph-common.ts';
 import { BAND_GAP, GRID_GAP, attachTail, bandColumns, gridColumns, packGrid, placePiece } from './layout-graph-pack.ts';
 import type { Piece } from './layout-graph-pack.ts';
 
 import { clipToShape, labelRect, placeLabel, snapToShape } from './layout-graph-label.ts';
+import { CARD_INSET, CARD_RIGHT, DIVIDER_GAP, GROUP_PAD, SUBTITLE_GAP, measureGroup, measureNode, runBand, textHeight, unifySizes } from './layout-graph-measure.ts';
+import type { GroupGeom, NodeGeom } from './layout-graph-measure.ts';
+import { definitionOrder, flipped, freeChildren, rootLayers } from './layout-graph-order.ts';
 export { bandColumns, gridColumns, packGrid } from './layout-graph-pack.ts';
 export { LABEL_SHIFT, placeLabel } from './layout-graph-label.ts';
-
-const SHAPES: readonly ShapeKind[] = [
-  'rectangle', 'circle', 'cylinder', 'diamond', 'document', 'ellipse',
-  'hexagon', 'oval', 'parallelogram', 'star', 'trapezoid', 'triangle',
-];
+export { runBand } from './layout-graph-measure.ts';
 
 const ELK_DIRECTION = { down: 'DOWN', up: 'UP', left: 'LEFT', right: 'RIGHT' } as const;
-const NODE_TEXT_MAX = 160;
 const EDGE_LABEL_SIZE = 12;
 
-// Eraser-like sizes and spacing, from the survey of its public examples
-// (docs/research/eraser/09-examples-style.md §1.1, §1.5, §1.6).
-/** Box nodes take a fixed width from these buckets instead of hugging their text. */
-const WIDTH_BUCKETS = [160, 200, 260] as const;
-/** Lines a label may wrap to before the node moves up a width bucket. */
-const MAX_LINES = 3;
-/** Box height for one line, and the least for two (title + subtitle). More text grows it by NODE_PAD_Y. */
-const NODE_MIN_H = 52;
-const NODE_TWO_LINE_H = 56;
-/** Space a box node keeps around its content: left + right, top + bottom. */
-const NODE_PAD_X = 32;
-const NODE_PAD_Y = 12;
-/**
- * Box card (spec §2.1, issue #114): an architecture node with an icon draws as a box with the icon on the
- * left, CARD_INSET from the edge, and its text centred in the room right of the icon (CARD_RIGHT from the edge).
- */
-const CARD_INSET = 20;
-const CARD_RIGHT = 16;
-/** Subtitle (`subtitle:`) size relative to the title (Eraser 10.44 / 13.05), and the gap above it. */
-const SUBTITLE_SCALE = 0.8;
-const SUBTITLE_GAP = 2;
-/** Shapes that get width buckets and one size per group. The rest keep shape-specific sizing. */
-const BUCKETED: ReadonlySet<ShapeKind> = new Set(['rectangle', 'cylinder', 'document']);
 /**
  * Siblings in one layer keep their source order (spec §1.3), even at the cost of a crossing. Set on the
  * root of every ELK run (`layoutScope`: the diagram and each free group). ELK only honours it at that
@@ -69,321 +44,10 @@ const MODEL_ORDER = {
   'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
   'elk.layered.crossingMinimization.forceNodeModelOrder': 'true',
 } as const;
-/**
- * Divider (`shape: divider`, spec §2.1, issue #115): a 1.3px line broken by its label in the middle. Its label
- * is the group-title size (12.18 / 13.05), its box at least DIVIDER_MIN_W wide, with DIVIDER_GAP either side of
- * the label before the line resumes.
- */
-const DIVIDER_SCALE = 0.93;
-const DIVIDER_MIN_W = 200;
-const DIVIDER_GAP = 8;
-const DIVIDER_H = 28;
 /** Gap above and below a divider that splits connected siblings into rows. */
 const DIVIDER_ROW_GAP = 24;
 /** Extra room at a group's sides and bottom when dividers split its children: edges run around the rows there. */
 const ROUTE_ROOM = 12;
-/** Group padding around its children; `top` includes the title line. */
-const GROUP_PAD = { top: 40, side: 16, bottom: 14 } as const;
-
-interface NodeGeom {
-  node: GraphNode;
-  style: ElementStyle;
-  label: Label;
-  shape: ShapeKind;
-  /** `nodeStyle icon`: architecture nodes with an icon draw as a big icon with the label underneath, no box. */
-  iconOnly: boolean;
-  /** Box card: icon on the left, text centred in the rest (architecture nodes with an icon, the default). */
-  card: boolean;
-  /** `shape: divider`: a line broken by the label instead of a box. */
-  divider?: boolean;
-  iconSize: number;
-  /** The icon drawn: `icon:` or the automatic one from the label (#734). */
-  icon?: string;
-  /** Second line from `subtitle:`, smaller and muted. */
-  sub?: Label;
-  w: number;
-  h: number;
-}
-
-interface GroupGeom {
-  group: GraphGroup;
-  style: ElementStyle;
-  label: Label;
-  iconSize: number;
-  header: number;
-  minW: number;
-}
-
-const subtitleOf = (node: GraphNode): string | undefined => node.attrs.subtitle?.trim() || undefined;
-
-/** The subtitle label, wrapped to `maxWidth`. */
-function measureSub(node: GraphNode, style: ElementStyle, maxWidth: number): Label | undefined {
-  const text = subtitleOf(node);
-  return text === undefined ? undefined : measureLabel(text, round(fontSize(style) * SUBTITLE_SCALE), style.typeface, style.wrap, maxWidth);
-}
-
-/** Height of the title plus the subtitle under it. */
-const textHeight = (label: Label, sub: Label | undefined): number => label.h + (sub ? SUBTITLE_GAP + sub.h : 0);
-
-function measureNode(d: GraphDiagram, node: GraphNode): NodeGeom {
-  const icon = node.attrs.icon ?? nodeAutoIcon(d, node);
-  const geom = measureNodeWith(d, node, icon);
-  return geom.iconSize ? { ...geom, icon } : geom;
-}
-
-function measureNodeWith(d: GraphDiagram, node: GraphNode, icon: string | undefined): NodeGeom {
-  const style = styleFor(d, node.attrs, node.span.line);
-  const size = fontSize(style);
-  const shapeAttr = node.attrs.shape?.toLowerCase();
-  if (shapeAttr === 'divider') {
-    const label = measureLabel(node.label, round(size * DIVIDER_SCALE), style.typeface, style.wrap, NODE_TEXT_MAX * 2);
-    const w = Math.ceil(Math.max(DIVIDER_MIN_W, label.w + 2 * (DIVIDER_GAP + 40)));
-    return { node, style, label, shape: 'rectangle', iconOnly: false, card: false, divider: true, iconSize: 0, w, h: Math.max(DIVIDER_H, Math.ceil(label.h + 8)) };
-  }
-  const shape = (SHAPES as readonly string[]).includes(shapeAttr ?? '') ? (shapeAttr as ShapeKind) : 'rectangle';
-  const card = d.type === 'cloud-architecture' && !!icon && !node.attrs.shape;
-  if (card && d.styles.nodeStyle === 'icon') {
-    const label = measureLabel(node.label, size, style.typeface, style.wrap, 120);
-    const sub = measureSub(node, style, 120);
-    const iconSize = Math.round(size * 3);
-    const w = Math.ceil(Math.max(iconSize, label.w, sub?.w ?? 0) + 8);
-    return { node, style, label, sub, shape, iconOnly: true, card: false, iconSize, w, h: Math.ceil(iconSize + 6 + textHeight(label, sub)) };
-  }
-  // Box-card icons stay 20px at every textSize (spec §2.1); other icons scale with the text.
-  const iconSize = icon ? (card ? 20 : Math.round(size * 1.5)) : 0;
-  const iconW = icon ? iconSize + 8 : 0;
-  if (BUCKETED.has(shape)) return measureBucketed(node, style, shape, iconSize, card);
-  const label = measureLabel(node.label, size, style.typeface, style.wrap, NODE_TEXT_MAX);
-  const sub = measureSub(node, style, NODE_TEXT_MAX);
-  const cw = Math.max(label.w, sub?.w ?? 0) + iconW;
-  const ch = Math.max(textHeight(label, sub), iconSize);
-  let w = Math.max(cw + 32, 96);
-  let h = Math.max(ch + 22, 44);
-  switch (shape) {
-    case 'diamond':
-      w = Math.max(cw * 1.6 + 40, 110);
-      h = Math.max(ch * 2 + 30, 70);
-      break;
-    case 'circle':
-      w = h = Math.max(cw + 30, ch + 30, 64);
-      break;
-    case 'ellipse':
-      w = Math.max(cw * 1.35 + 30, 100);
-      h = Math.max(ch * 1.6 + 20, 54);
-      break;
-    case 'oval':
-      w += h / 2;
-      break;
-    case 'hexagon':
-    case 'parallelogram':
-    case 'trapezoid':
-      w += 32;
-      break;
-    case 'triangle':
-      w = Math.max(cw * 2 + 40, 110);
-      h = Math.max(ch * 2.2 + 30, 80);
-      break;
-    case 'star':
-      w = h = Math.max(cw * 2 + 30, ch * 3 + 30, 100);
-      break;
-    default:
-      break;
-  }
-  return { node, style, label, sub, shape, iconOnly: false, card: false, iconSize, w: Math.ceil(w), h: Math.ceil(h) };
-}
-
-/** Label, width and height of a box node whose text wraps to fit `width`. */
-function sizeBox(g: Pick<NodeGeom, 'node' | 'style' | 'shape' | 'iconSize' | 'card'>, width: number): Pick<NodeGeom, 'label' | 'sub' | 'w' | 'h'> {
-  const size = fontSize(g.style);
-  const iconW = g.iconSize ? g.iconSize + 8 : 0;
-  const padX = g.card ? CARD_INSET + CARD_RIGHT : NODE_PAD_X;
-  const room = width - padX - iconW;
-  const label = measureLabel(g.node.label, size, g.style.typeface, g.style.wrap, room);
-  const sub = measureSub(g.node, g.style, room);
-  const w = Math.max(width, Math.ceil(Math.max(label.w, sub?.w ?? 0) + iconW + padX));
-  const least = label.lines.length + (sub?.lines.length ?? 0) >= 2 ? NODE_TWO_LINE_H : NODE_MIN_H;
-  let h = Math.max(least, Math.ceil(Math.max(textHeight(label, sub), g.iconSize) + NODE_PAD_Y));
-  if (g.shape === 'cylinder') h += 18;
-  else if (g.shape === 'document') h += 10;
-  return { label, sub, w, h };
-}
-
-/**
- * Box nodes (spec §1.1): the smallest width bucket whose wrap stays within MAX_LINES lines; failing that,
- * the widest (a long word or unwrapped line widens it).
- */
-function measureBucketed(node: GraphNode, style: ElementStyle, shape: ShapeKind, iconSize: number, card: boolean): NodeGeom {
-  const base = { node, style, shape, iconSize, card };
-  let pick: Pick<NodeGeom, 'label' | 'sub' | 'w' | 'h'> | undefined;
-  for (const b of WIDTH_BUCKETS) {
-    pick = sizeBox(base, b);
-    if (pick.w === b && pick.label.lines.length <= MAX_LINES && (pick.sub?.lines.length ?? 0) <= MAX_LINES) break;
-  }
-  return { ...base, ...pick!, iconOnly: false };
-}
-
-/**
- * Box nodes of the same shape in the same group get one size: the widest bucket among them, labels
- * re-wrapped to that width, then the tallest height. The root is not one group: there only nodes in the
- * same layer (`rootLayer`) share a size. Root nodes in the root grid (`loose`) share one size; other root
- * nodes without edges keep their own.
- */
-function unifySizes(
-  nodes: Iterable<NodeGeom>,
-  parent: ReadonlyMap<string, string | undefined>,
-  rootLayer: ReadonlyMap<string, number>,
-  loose: ReadonlySet<string>,
-): void {
-  const sets = new Map<string, NodeGeom[]>();
-  for (const g of nodes) {
-    if (g.iconOnly || g.divider || !BUCKETED.has(g.shape)) continue;
-    const p = parent.get(g.node.id);
-    const layer = p === undefined ? rootLayer.get(g.node.id) : undefined;
-    const at = p !== undefined ? `group:${p}` : loose.has(g.node.id) ? 'loose' : layer !== undefined ? `layer:${layer}` : undefined;
-    if (at === undefined) continue; // root node with no edge outside the grid: keeps its own size
-    const key = `${at}\u0000${g.shape}`;
-    const list = sets.get(key) ?? [];
-    list.push(g);
-    sets.set(key, list);
-  }
-  for (const list of sets.values()) {
-    const w = Math.max(...list.map((g) => g.w));
-    for (const g of list) Object.assign(g, sizeBox(g, w));
-    const h = Math.max(...list.map((g) => g.h));
-    for (const g of list) g.h = h;
-  }
-}
-
-/** Definition order of every node and group (pre-order over the source tree). */
-function definitionOrder(d: GraphDiagram): Map<string, number> {
-  const order = new Map<string, number>();
-  const walk = (c: GraphChild): void => {
-    order.set(c.id, order.size);
-    if (c.kind === 'group') for (const k of c.children) walk(k);
-  };
-  for (const c of d.children) walk(c);
-  return order;
-}
-
-/**
- * Whether ELK should lay `e` out from `to` to `from`. Undirected edges (`-`, `--`) do not set the flow
- * (spec §1.3): they point from the end defined first, so `Access - Distribution` under a `Distribution`
- * defined earlier keeps Distribution in the upper layer.
- */
-function flipped(e: GraphEdge, order: ReadonlyMap<string, number>): boolean {
-  if (e.startArrow || e.endArrow) return false;
-  return (order.get(e.to) ?? 0) < (order.get(e.from) ?? 0);
-}
-
-/**
- * Layer of every root-level item that has an edge: longest path from the sources over the edges between
- * root-level items (an edge into a group counts for the group), in ELK's direction. Approximates the
- * layers ELK will make, so root-level box nodes can share a size per layer (spec §1.1):
- * - a labelled edge spans two layers (ELK gives the label a layer of its own);
- * - a source sits right before its nearest target, as ELK's network-simplex layering pulls it;
- * - items with no edge get no layer (they keep their own size).
- * Edges that close a cycle are ignored.
- */
-function rootLayers(
-  d: GraphDiagram,
-  parent: ReadonlyMap<string, string | undefined>,
-  order: ReadonlyMap<string, number>,
-): Map<string, number> {
-  const top = (id: string): string | undefined => {
-    if (!parent.has(id)) return undefined;
-    let cur = id;
-    for (let p = parent.get(cur); p !== undefined; p = parent.get(cur)) cur = p;
-    return cur;
-  };
-  const out = new Map<string, { to: string; span: number }[]>();
-  const indeg = new Map<string, number>();
-  for (const c of d.children) indeg.set(c.id, 0);
-  const linked = new Set<string>();
-  const seen = new Map<string, { to: string; span: number }>();
-  for (const e of d.edges) {
-    const flip = flipped(e, order);
-    const a = top(flip ? e.to : e.from);
-    const b = top(flip ? e.from : e.to);
-    if (a === undefined || b === undefined || a === b) continue;
-    linked.add(a);
-    linked.add(b);
-    const span = e.label ? 2 : 1;
-    const prev = seen.get(`${a}\u0000${b}`);
-    if (prev) {
-      prev.span = Math.max(prev.span, span);
-      continue;
-    }
-    const link = { to: b, span };
-    seen.set(`${a}\u0000${b}`, link);
-    out.set(a, [...(out.get(a) ?? []), link]);
-  }
-  // Drop back edges (DFS in model order) so the rest is a DAG.
-  const state = new Map<string, 1 | 2>();
-  const dag = new Map<string, { to: string; span: number }[]>();
-  const visit = (id: string): void => {
-    state.set(id, 1);
-    for (const n of out.get(id) ?? []) {
-      if (state.get(n.to) === 1) continue;
-      dag.set(id, [...(dag.get(id) ?? []), n]);
-      indeg.set(n.to, (indeg.get(n.to) ?? 0) + 1);
-      if (!state.has(n.to)) visit(n.to);
-    }
-    state.set(id, 2);
-  };
-  for (const c of d.children) if (!state.has(c.id)) visit(c.id);
-  const layer = new Map<string, number>();
-  const queue = d.children.map((c) => c.id).filter((id) => indeg.get(id) === 0 && linked.has(id));
-  const sources = [...queue];
-  for (const id of queue) layer.set(id, 0);
-  for (let i = 0; i < queue.length; i++) {
-    const id = queue[i]!;
-    for (const n of dag.get(id) ?? []) {
-      layer.set(n.to, Math.max(layer.get(n.to) ?? 0, layer.get(id)! + n.span));
-      indeg.set(n.to, indeg.get(n.to)! - 1);
-      if (indeg.get(n.to) === 0) queue.push(n.to);
-    }
-  }
-  for (const id of sources) {
-    const next = (dag.get(id) ?? []).map((n) => (layer.get(n.to) ?? 0) - n.span);
-    if (next.length > 0) layer.set(id, Math.max(0, Math.min(...next)));
-  }
-  return layer;
-}
-
-/**
- * Which children are free: a node no edge touches, or a group no edge crosses (edges inside it are fine,
- * it gets laid out on its own). Free siblings go in a grid instead of ELK's first layer (spec §1.4).
- */
-function freeChildren(edges: readonly GraphEdge[], parent: ReadonlyMap<string, string | undefined>): (c: GraphChild) => boolean {
-  const touched = new Set<string>();
-  const crossed = new Set<string>();
-  const chain = (id: string): string[] => {
-    const out = [id];
-    for (let p = parent.get(id); p !== undefined; p = parent.get(p)) out.push(p);
-    return out;
-  };
-  for (const e of edges) {
-    touched.add(e.from);
-    touched.add(e.to);
-    const a = chain(e.from);
-    const b = chain(e.to);
-    for (const x of a) if (!b.includes(x)) crossed.add(x);
-    for (const x of b) if (!a.includes(x)) crossed.add(x);
-  }
-  return (c) => (c.kind === 'node' ? !touched.has(c.id) : !crossed.has(c.id));
-}
-
-function measureGroup(d: GraphDiagram, group: GraphGroup): GroupGeom {
-  const style = styleFor(d, group.attrs, group.span.line);
-  const size = fontSize(style);
-  const label = measureLabel(group.label, size, style.typeface, false, Infinity, true);
-  const iconSize = group.attrs.icon ? Math.round(size * 1.4) : 0;
-  const header = Math.max(GROUP_PAD.top, Math.max(label.h, iconSize) + 22) + runBand(d);
-  return { group, style, label, iconSize, header, minW: Math.ceil(label.w + (iconSize ? iconSize + 8 : 0) + 40) };
-}
-
-/** Extra room above every node for the run marks (`runMarks on`, #987), else 0. */
-export const runBand = (d: Pick<GraphDiagram, 'styles'>): number => (d.styles.runMarks === 'on' ? RUN_BAND : 0);
 
 /** A laid-out edge before overrides: its ELK route (layout coordinates) and what drawing it needs. */
 interface BaseEdge {
