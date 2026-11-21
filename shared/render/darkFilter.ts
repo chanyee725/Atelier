@@ -3,8 +3,6 @@
 // the dark palette: C = (0.93 - H^-1 T) / 0.86, with H the hue-rotate(180deg) matrix and T the wanted colour. The
 // filter works on sRGB values (Filter Effects §13.1, §13.2). It cannot make every colour (nothing darker than 7% grey,
 // and less saturation than sRGB has); for those the nearest colour it can make is used.
-/** The CSS filter Excalidraw uses for its dark theme (`THEME_FILTER` in Excalidraw). */
-export const DARK_FILTER = 'invert(93%) hue-rotate(180deg)';
 const INVERT = 0.93;
 
 type Vec = [number, number, number];
@@ -35,7 +33,6 @@ export function applyDarkFilter(rgb: Vec): Vec {
 }
 
 const M: Mat = H.map((r) => r.map((x) => (1 - 2 * INVERT) * x)) as Mat;
-const dist2 = (a: Vec, b: Vec) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 
 /** sRGB (0..1) to OKLab, to judge how far apart two colours look. */
 function oklab(rgb: Vec): Vec {
@@ -152,13 +149,6 @@ export function preDarkFilterColor(color: string): string {
   const out = preDarkFilter(rgb);
   if (alpha === null) return `#${out.map(hex2).join('')}`;
   return `rgba(${out.map((x) => Math.round(x * 255)).join(',')},${alpha})`;
-}
-
-/** The colour the dark canvas shows for `hex` once it is pre-filtered (preDarkFilterColor), as `#rrggbb`. */
-export function darkCanvasSeen(hex: string): string {
-  const painted = preDarkFilterColor(hex);
-  const rgb = [1, 3, 5].map((i) => parseInt(painted.slice(i, i + 2), 16) / 255) as Vec;
-  return `#${applyDarkFilter(rgb).map(hex2).join('')}`;
 }
 
 /** Whether the dark filter can show `rgb` exactly, with `margin` to spare on every painted channel. */
