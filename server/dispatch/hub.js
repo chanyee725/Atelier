@@ -487,7 +487,8 @@ export class Hub extends EventEmitter {
     const now = Date.now();
     const open = this.tasks.filter(t => t.lead === lead && t.stage !== "done");
     if (!open.length) return "";
-    const left = t => !t.etaAt ? "예상 없음" : t.etaAt < now ? `${Math.round((now - t.etaAt) / 60000)}분 지연` : `${Math.round((t.etaAt - now) / 60000)}분 남음`;
+    const guess = t => (t.etaEstimated ? "(예상)" : "");
+    const left = t => !t.etaAt ? "예상 없음" : t.etaAt < now ? `${Math.round((now - t.etaAt) / 60000)}분 지연${guess(t)}` : `${Math.round((t.etaAt - now) / 60000)}분 남음${guess(t)}`;
     const failed = t => (t.mergeCheck?.ok === false ? `, 닫기 보류: ${t.mergeCheck.reason}` : "");
     const lines = open.map(t => `- ${t.title} (id ${t.id}, ${t.stage}, ${t.owner || "담당 없음"}, ${left(t)}${failed(t)})`);
     return `\n\n[작업 보드] 이 보고로 바뀐 것을 같은 턴에 set_task(id)로 갱신한다(stage·owner·eta_minutes). 병합한 일은 이 id와 commit(브랜치나 커밋)으로 done, 그만둔 일은 commit 없이 done. 새 제목으로 다시 만들지 않는다:\n${lines.join("\n")}`;

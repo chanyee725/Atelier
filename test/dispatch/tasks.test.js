@@ -33,7 +33,7 @@ const done = (...spans) => {
   let at = 0;
   const stages = spans.map(([stage, m]) => { const h = { stage, at }; at += m * M; return h; });
   stages.push({ stage: "done", at });
-  return { stage: "done", stages };
+  return { stage: "done", stages, mergeCheck: { ok: true } };
 };
 
 test("stageMedianMinutes: median of the stage across finished tasks, revisits summed", () => {
@@ -47,6 +47,14 @@ test("stageMedianMinutes: median of the stage across finished tasks, revisits su
   assert.equal(stageMedianMinutes(tasks, "review"), 3);
   assert.equal(stageMedianMinutes(tasks, "test"), null);
   assert.equal(stageMedianMinutes([], "impl"), null);
+});
+
+test("stageMedianMinutes: only merged tasks count, and a stage passed in under a minute is left out", () => {
+  const dropped = { ...done(["impl", 2]), mergeCheck: { ok: null } }; // closed without a commit
+  const failed = { ...done(["impl", 3]), mergeCheck: { ok: false } };
+  const tasks = [done(["plan", 0.5], ["impl", 40]), dropped, failed, done(["plan", 0.2], ["impl", 50])];
+  assert.equal(stageMedianMinutes(tasks, "impl"), 45);
+  assert.equal(stageMedianMinutes(tasks, "plan"), null);
 });
 
 test("defaultStageEta: fills from history, keeps an explicit eta without history, clears a stale estimate", () => {
@@ -88,4 +96,7 @@ test("setTask: a stage entered without eta_minutes gets the stage median; an exp
   assert.ok(Math.abs(t.etaAt - (t0 + 40 * M)) < 5_000);
   await hub.setTask("lead", { id: t.id, stage: "test" }); // no history for test: the explicit eta stays
   assert.ok(Math.abs(t.etaAt - (t0 + 40 * M)) < 5_000);
+  assert.match(hub.boardNote("lead"), /분 남음\)/);
+  await hub.setTask("lead", { id: t.id, stage: "review" });
+  assert.match(hub.boardNote("lead"), /분 남음\(예상\)/); // the lead sees the estimate is not its own promise
 });

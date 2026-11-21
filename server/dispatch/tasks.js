@@ -14,18 +14,18 @@ export function enterStage(t, stage, at = Date.now()) {
   return t;
 }
 
-
 /** Stages a task works through; the ETA default and the 3/5 step count use these (#1028). */
 export const WORK_STAGES = ["plan", "impl", "review", "test", "merge"];
 
 /**
  * Median minutes finished tasks spent in `stage` (#1028), from their `stages` history: a stage visited twice counts
- * as one sum per task. Null without any finished task that went through it.
+ * as one sum per task. Only tasks closed with a confirmed merge count, and a stage passed in under a minute (moved
+ * on in the same turn) is left out. Null without any such task.
  */
 export function stageMedianMinutes(tasks, stage) {
   const mins = [];
   for (const t of tasks) {
-    if (t?.stage !== "done" || !Array.isArray(t.stages)) continue;
+    if (t?.stage !== "done" || t.mergeCheck?.ok !== true || !Array.isArray(t.stages)) continue;
     let ms = 0, seen = false;
     t.stages.forEach((h, i) => {
       const next = t.stages[i + 1];
@@ -33,7 +33,7 @@ export function stageMedianMinutes(tasks, stage) {
       seen = true;
       ms += Math.max(0, next.at - h.at);
     });
-    if (seen) mins.push(ms / 60_000);
+    if (seen && ms >= 60_000) mins.push(ms / 60_000);
   }
   if (!mins.length) return null;
   mins.sort((a, b) => a - b);
