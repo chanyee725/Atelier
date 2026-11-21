@@ -21,7 +21,7 @@
   background: var(--card);
   color: var(--card-foreground);
   box-shadow: 0 0 0 1px var(--border), 0 8px 28px rgb(0 0 0 / 0.12);
-  font-size: var(--text-xs);
+  font-size: var(--text-xs); letter-spacing: 0;
   overscroll-behavior: contain;
   overflow: hidden;
 }
@@ -132,7 +132,7 @@
   padding: 4px 16px;
   background: color-mix(in oklch, var(--warn) 18%, transparent);
   color: var(--foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-live-stale {
   display: flex;
@@ -164,13 +164,13 @@
 }
 .agent-live h3 {
   margin: 0;
-  font-size: var(--text-xs);
+  font-size: var(--text-xs); letter-spacing: 0;
   font-weight: 600;
   color: var(--foreground);
 }
 .agent-live h3 .agent-live-count {
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
@@ -182,7 +182,7 @@
 .agent-live-muted {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-live-error {
   margin: 0;
@@ -210,7 +210,7 @@
 .agent-live-now dt,
 .agent-live-stats dt {
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-live-now dd {
   margin: 0;
@@ -235,12 +235,12 @@
 }
 .agent-live-target {
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-live-at {
   flex: 0 0 40px;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 .agent-live-target {
@@ -255,7 +255,7 @@
   flex-shrink: 0;
   margin-left: auto;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 .agent-live-ok {
@@ -295,7 +295,7 @@
   align-items: center;
   gap: 8px;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-live-ctx meter {
   width: 100%;
@@ -333,7 +333,7 @@
   background: var(--card);
   color: var(--foreground);
   font: inherit;
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 500;
 }
 @media (hover: hover) {
@@ -383,7 +383,7 @@
   border-radius: 0;
   background: none;
   box-shadow: none;
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   color: var(--muted-foreground);
 }
 /* box-shadow: none above drops the trigger's ring, so keyboard focus gets an inset outline instead. */
@@ -434,7 +434,7 @@
 }
 .agent-work-sum {
   float: right;
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
@@ -473,7 +473,7 @@
   flex-shrink: 0;
   gap: 6px;
   margin-left: auto;
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 .agent-work-patch {
@@ -482,7 +482,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   line-height: 18px;
 }
 .agent-work-hunk {
@@ -525,7 +525,7 @@
   margin: 0;
   padding: 4px 8px;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 
 /* Panel head path (#942): where the panel was opened from, one quiet line above the title. Earlier steps are
@@ -542,7 +542,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   line-height: 18px;
   color: var(--muted-foreground);
   white-space: nowrap;
@@ -656,7 +656,7 @@ button.agent-org-node:hover {
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   line-height: 18px;
 }
 .agent-org-model {
@@ -668,13 +668,13 @@ button.agent-org-node:hover {
   margin-left: auto;
   flex: none;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
 }
 .agent-org-task {
   overflow: hidden;
   padding-left: 14px;
   color: var(--muted-foreground);
-  font-size: var(--text-2xs);
+  font-size: var(--text-2xs); letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

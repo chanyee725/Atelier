@@ -9,13 +9,13 @@
 .recent-main { flex: 999 1 480px; }
 .recent-side { flex: 1 1 320px; }
 .recent-card-head { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 16px 8px; }
-.recent-card-head h2 { margin: 0; font-size: var(--text-xs); font-weight: 600; }
-.recent-count { font-size: var(--text-2xs); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.recent-card-head h2 { margin: 0; font-size: var(--text-xs); letter-spacing: 0; font-weight: 600; }
+.recent-count { font-size: var(--text-2xs); letter-spacing: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 
 /* Kind filter: Radix toggle group, chips with a full radius; the pressed one gets a faint ink fill. */
 .recent-filter { margin-left: auto; gap: 2px; }
 .recent-filter [data-slot='toggle-group-item'] {
-  height: 24px; min-width: 0; padding: 0 10px; border-radius: 999px; font-size: var(--text-2xs); font-weight: 500;
+  height: 24px; min-width: 0; padding: 0 10px; border-radius: 999px; font-size: var(--text-2xs); letter-spacing: 0; font-weight: 500;
   color: var(--muted-foreground);
 }
 .recent-filter [data-slot='toggle-group-item'][aria-pressed='true'],
@@ -27,7 +27,7 @@
 .recent-row,
 .recent-trash-row {
   display: grid; align-items: center; gap: 10px; width: 100%; height: 40px; padding: 0 16px;
-  border-top: 1px solid var(--border); font-size: var(--text-xs); text-align: left; color: var(--foreground);
+  border-top: 1px solid var(--border); font-size: var(--text-xs); letter-spacing: 0; text-align: left; color: var(--foreground);
 }
 .recent-row {
   grid-template-columns: minmax(0, 1fr) 64px minmax(0, 160px) 84px; min-width: 480px;
@@ -39,22 +39,22 @@
 }
 .recent-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 6px; }
 .recent-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.recent-place { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); color: var(--muted-foreground); }
-.recent-when { font-size: var(--text-2xs); color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.recent-place { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); letter-spacing: 0; color: var(--muted-foreground); }
+.recent-when { font-size: var(--text-2xs); letter-spacing: 0; color: var(--muted-foreground); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .recent-kind {
-  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: var(--text-2xs);
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 500; color: var(--muted-foreground); background: color-mix(in srgb, var(--foreground) 6%, transparent);
 }
-.recent-foot { margin: 0; padding: 10px 16px; border-top: 1px solid var(--border); font-size: var(--text-2xs); color: var(--muted-foreground); }
-.recent-none { margin: 0; padding: 24px 16px; border-top: 1px solid var(--border); font-size: var(--text-xs); color: var(--muted-foreground); }
+.recent-foot { margin: 0; padding: 10px 16px; border-top: 1px solid var(--border); font-size: var(--text-2xs); letter-spacing: 0; color: var(--muted-foreground); }
+.recent-none { margin: 0; padding: 24px 16px; border-top: 1px solid var(--border); font-size: var(--text-xs); letter-spacing: 0; color: var(--muted-foreground); }
 
 .recent-empty {
   display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 48px 24px 56px; text-align: center;
   border-top: 1px solid var(--border);
 }
 .recent-empty-mark { stroke: var(--input); stroke-width: 1.5; stroke-linejoin: round; }
-.recent-empty-title { margin: 0; font-size: var(--text-xs); font-weight: 600; }
-.recent-empty-text { margin: 0; max-width: 28ch; font-size: var(--text-xs); color: var(--muted-foreground); text-wrap: pretty; }
+.recent-empty-title { margin: 0; font-size: var(--text-xs); letter-spacing: 0; font-weight: 600; }
+.recent-empty-text { margin: 0; max-width: 28ch; font-size: var(--text-xs); letter-spacing: 0; color: var(--muted-foreground); text-wrap: pretty; }
 
 /* Press feedback; hover colours stay with the Button primitive. */
 .recent-btn { transition: transform 140ms ease-out, background-color 150ms ease, border-color 150ms ease; }
