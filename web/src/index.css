@@ -498,6 +498,29 @@ body {
 /* Scrolled to its end, the picture keeps a 12px gap from the block's right edge (#1005): the picture overflows the
    button, so its padding does not count there; a 12px flex spacer after the picture does. */
 .doc-diagram-stage[data-wide] .doc-diagram-pic::after { content: ''; flex: none; width: 12px; height: 1px; }
+/* The part of a wide picture past the column fades out at the edge it continues past (#1043): overlay scrollbars
+   (macOS, headless) show nothing until the user scrolls, so the cut-off nodes read as the end of the diagram. A mask
+   band per edge, sized by a scroll-driven animation on the stage's own scroll: none at the start, none once scrolled
+   to the end, none when the picture fits (the timeline is inactive then). */
+@property --stage-fade-start { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@property --stage-fade-end { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.doc-diagram-stage {
+  --stage-fade: 2.5rem;
+  mask:
+    linear-gradient(black, black) no-clip subtract,
+    linear-gradient(to right, black, transparent) 0 0 / var(--stage-fade-start) 100% no-repeat no-clip,
+    linear-gradient(to right, transparent, black) 100% 0 / var(--stage-fade-end) 100% no-repeat no-clip;
+  animation: stage-fade-start linear both, stage-fade-end linear both;
+  animation-timeline: scroll(self inline);
+  animation-range: 0 var(--stage-fade), calc(100% - var(--stage-fade)) 100%;
+}
+@keyframes stage-fade-start { to { --stage-fade-start: var(--stage-fade); } }
+@keyframes stage-fade-end { from { --stage-fade-end: var(--stage-fade); } }
+/* Without scroll-driven animations: the end fade shows whenever the picture is wider than the column. */
+@supports not (animation-timeline: scroll()) {
+  .doc-diagram-stage { animation: none; }
+  .doc-diagram-stage[data-wide] { --stage-fade-end: var(--stage-fade); }
+}
 .doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: var(--text-sm); padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 

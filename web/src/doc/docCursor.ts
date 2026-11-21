@@ -26,7 +26,19 @@ export type DocCursor = {
   status: string;
   /** The diagram block its place is on, with the node it wrote (E712, #1039): the caret sits by that node. */
   diagram?: DiagramSpot;
+  /**
+   * A text place that came while the caret was held on a diagram it just wrote (#1043), and when it takes over:
+   * the caret stays on the diagram block until then (releaseHeld).
+   */
+  held?: { spot: DocSpot; at: number };
 };
+
+/**
+ * A text edit this soon after a diagram edit of the same session leaves its caret on the diagram block this long
+ * after the diagram edit (#1043): an agent that writes a diagram and then a line about it would otherwise pull the
+ * caret off the diagram at once.
+ */
+export const DIAGRAM_HOLD_MS = 3000;
 
 /** Glide length (ms) with an ease-out. */
 export const DOC_MOVE_MS = 280;
@@ -68,6 +80,17 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
     return new Map(cursors).set(e.sid, { ...old, color: cursorColor(e.color) || old.color, editAt: now, live: e.live ?? old.live, status: statusAfter(e, old.status) });
   }
   const diagram = diagramSpot(e.diagram);
+  // A text place right after a diagram place of this session in this file: the caret stays on the diagram for now.
+  if (!diagram && old?.diagram && old.file === file && now - old.moveAt < DIAGRAM_HOLD_MS) {
+    return new Map(cursors).set(e.sid, {
+      ...old,
+      color: cursorColor(e.color) || old.color,
+      editAt: now,
+      live: e.live === true,
+      status: statusAfter(e, old.status),
+      held: { spot, at: old.moveAt + DIAGRAM_HOLD_MS },
+    });
+  }
   return new Map(cursors).set(e.sid, {
     sid: e.sid,
     name: e.name ?? old?.name ?? '',
@@ -83,12 +106,24 @@ export function applyDocCursor(cursors: ReadonlyMap<string, DocCursor>, e: Curso
   });
 }
 
-/** Drop cursors that have faded out; returns the same map when none did. */
+/** Drop cursors that have faded out, and move held carets to their text place once their hold is over (#1043). */
 export function pruneDocGone(cursors: ReadonlyMap<string, DocCursor>, now: number): ReadonlyMap<string, DocCursor> {
   let next: Map<string, DocCursor> | null = null;
-  for (const [sid, c] of cursors) if (phaseOf(c, now) === 'gone') (next ??= new Map(cursors)).delete(sid);
+  for (const [sid, c] of cursors) {
+    if (phaseOf(c, now) === 'gone') (next ??= new Map(cursors)).delete(sid);
+    else if (c.held && now >= c.held.at) (next ??= new Map(cursors)).set(sid, releaseHeld(c));
+  }
   return next ?? cursors;
 }
+
+/** `c` moved to the text place it was held from: it glides there now and is no longer on a diagram. */
+function releaseHeld(c: DocCursor): DocCursor {
+  const { held, diagram: _d, ...rest } = c;
+  return { ...rest, spot: held!.spot, moveAt: held!.at };
+}
+
+/** When `c`'s held caret moves to its text place, or Infinity. */
+export const heldUntil = (c: Pick<DocCursor, 'held'>): number => c.held?.at ?? Infinity;
 
 /**
  * The editor position of a document place: inside top-level block `index` (clamped to the last block), after

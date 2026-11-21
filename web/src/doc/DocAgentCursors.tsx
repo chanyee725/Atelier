@@ -11,7 +11,7 @@ import type { Editor } from '@tiptap/core';
 import { roleLabel } from '../run/overlayModel';
 import { nextPhaseAt, phaseOf } from '../canvas/agentCursor';
 import { now, reducedMotion } from '../canvas/cursorStore';
-import { docPos, glideAt, gliding, nextGlide, type DocCursor, type DocGlide } from './docCursor';
+import { docPos, glideAt, gliding, heldUntil, nextGlide, type DocCursor, type DocGlide } from './docCursor';
 import { docCursorsNow, pruneDocCursors, subscribeDocCursors, useDocCursors } from './docCursorStore';
 
 type Props = { editor: Editor; file: string };
@@ -97,7 +97,8 @@ export function DocAgentCursors({ editor, file }: Props) {
         const phase = phaseOf(c, t);
         if (el.dataset.phase !== phase) el.dataset.phase = phase;
         if (gliding(g, t, reduced)) glide = true;
-        wake = Math.min(wake, nextPhaseAt(c, t));
+        // A caret held on a diagram (#1043) moves to its text place when the hold ends: pruneDocCursors moves it.
+        wake = Math.min(wake, nextPhaseAt(c, t), heldUntil(c));
       }
       for (const sid of glides.current.keys()) if (!docCursorsNow().has(sid)) glides.current.delete(sid);
       pruneDocCursors(t);

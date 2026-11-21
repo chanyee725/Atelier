@@ -1,7 +1,7 @@
 // E494: the canvas fits every block on a file's first open, and keeps the view the user left it at afterwards.
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { FIT_ALL_MIN_ZOOM, FIT_MAX_ZOOM, FIT_MIN_ZOOM, PANE_FIT, fitMinZoom, fitView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
+import { FIT_ALL_MIN_ZOOM, FIT_MAX_ZOOM, FIT_MIN_ZOOM, PANE_FIT, changedBlock, fitMinZoom, fitView, followFit, followView, forgetViews, openingView, rememberView, rememberedView } from '../../web/src/canvas/initialView.ts';
 
 beforeEach(() => forgetViews());
 
@@ -163,4 +163,47 @@ test('fitView with a pixel margin leaves 48px each side and may enlarge a small 
   rememberView('a.dpx.json', { ...wider!, zoom: 0.5 }); // the user zooms
   assert.equal(refitView('a.dpx.json', [0, 0, 2000, 1000], 1000, 600, { ...wider!, zoom: 0.5 }, PANE_FIT), null);
   forgetViews();
+});
+
+test('while an agent writes, the fit follows the changed block at the 60% floor when the whole file would be smaller (#1043)', () => {
+  // Two blocks side by side in the 둘 다 pane (456x730): the whole row fits only at ~20%.
+  const all = [0, 0, 2000, 400] as const;
+  const b2 = [1100, 0, 2000, 300] as const;
+  const v = followFit(all, b2, 456, 730, PANE_FIT)!;
+  assert.equal(v.zoom, FIT_MIN_ZOOM);
+  const c = onScreen(v, 1550, 150);
+  assert.ok(Math.abs(c.x - 228) < 1e-6 && Math.abs(c.y - 365) < 1e-6, 'the changed block is centred');
+  // Everything fits at the floor or above: the whole file stays in view.
+  const small = followFit([0, 0, 600, 200], [300, 0, 600, 200], 1440, 900)!;
+  assert.equal(small.zoom, FIT_MAX_ZOOM);
+  assert.deepEqual(followFit(all, null, 456, 730, PANE_FIT), fitView(all, 456, 730, { ...PANE_FIT, minZoom: FIT_ALL_MIN_ZOOM }));
+});
+
+test('followView refits only a view the user has not moved, and the refit is not taken as a move (#1043)', () => {
+  const cur = { scrollX: 0, scrollY: 0, zoom: 1 };
+  openingView('f', [0, 0, 100, 100], 1000, 1000);
+  rememberView('f', { scrollX: 450, scrollY: 450, zoom: 1 });
+  const v = followView('f', [0, 0, 2000, 400], [1100, 0, 2000, 300], 456, 730, cur, PANE_FIT)!;
+  assert.equal(v.zoom, FIT_MIN_ZOOM);
+  rememberView('f', v);
+  assert.equal(rememberedView('f'), null, 'still the fit');
+  rememberView('f', { scrollX: 1, scrollY: 2, zoom: 0.5 });
+  assert.equal(followView('f', [0, 0, 2000, 400], [1100, 0, 2000, 300], 456, 730, cur, PANE_FIT), null, 'the user moved it');
+});
+
+test('a reload of a fitted file follows the changed block; a first open fits everything (#1005, #1043)', () => {
+  const all = [0, 0, 2000, 400] as const;
+  const first = openingView('r', all, 456, 730, { ...PANE_FIT, minZoom: FIT_ALL_MIN_ZOOM }, [1100, 0, 2000, 300])!;
+  assert.ok(first.zoom < FIT_MIN_ZOOM, 'first open: the whole file');
+  rememberView('r', first);
+  const again = openingView('r', all, 456, 730, { ...PANE_FIT, minZoom: FIT_ALL_MIN_ZOOM }, [1100, 0, 2000, 300])!;
+  assert.equal(again.zoom, FIT_MIN_ZOOM, 'reload: the changed block');
+});
+
+test('changedBlock names the last block added or resized since the last call; none on the first call', () => {
+  assert.equal(changedBlock('c', [{ id: 'a', width: 100, height: 50 }]), null);
+  assert.equal(changedBlock('c', [{ id: 'a', width: 100, height: 50 }]), null);
+  assert.equal(changedBlock('c', [{ id: 'a', width: 100, height: 50 }, { id: 'b', width: 10, height: 10 }]), 'b');
+  assert.equal(changedBlock('c', [{ id: 'a', width: 120, height: 50 }, { id: 'b', width: 10, height: 10 }]), 'a');
+  assert.equal(changedBlock(undefined, [{ id: 'a', width: 1, height: 1 }]), null);
 });
