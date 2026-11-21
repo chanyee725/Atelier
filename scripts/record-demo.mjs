@@ -125,7 +125,8 @@ const cleanup = async () => {
   for (const s of await sessions().catch(() => [])) await call('POST', `/api/sessions/${s.id}/remove`, {}).catch(() => {});
   if (gate) writeFileSync(gate, '');
   await browser?.close().catch(() => {});
-  server.kill();
+  // Wait for the server to exit: it saves its state on SIGTERM, which would otherwise land after the rm below.
+  await new Promise((r) => (server.exitCode !== null ? r() : (server.once('exit', r), server.kill(), setTimeout(r, 5000))));
   fake?.cleanup();
   rmSync(scratch, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 };
