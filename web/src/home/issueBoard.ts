@@ -5,7 +5,7 @@
 // PRs are a detail of an issue. Pure functions only, so tests run without a browser.
 import { isOpen } from '../dispatch/lib/format.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
-import { issueOfBranch } from '../../../shared/dispatch/issue-branch.js';
+import { issueOfBranch } from '../../../shared/dispatch/issue-branch.ts';
 
 export type IssuePr = { number: number; state: 'open' | 'closed' | 'merged'; url?: string; branch?: string };
 export type ApiIssue = { number: number; title: string; url?: string; prs: IssuePr[] };
@@ -27,7 +27,7 @@ export type IssueRow = ApiIssue & {
   branches: string[];
 };
 
-/** The issue a branch works on: only `<type>/<n>-…` (`feat/747-x`, `fix/issue-12`); see shared/dispatch/issue-branch.js. */
+/** The issue a branch works on: only `<type>/<n>-…` (`feat/747-x`, `fix/issue-12`); see shared/dispatch/issue-branch.ts. */
 export { issueOfBranch };
 
 /**

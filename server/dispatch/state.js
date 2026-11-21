@@ -9,11 +9,11 @@ import { createHash } from "node:crypto";
 //   failed   — the last turn ended in an error
 //   resting  — turn finished, nothing asked; waiting for the next instruction
 //   done     — closed
-import { askIndex, askLineOf, linesOf } from "../../shared/dispatch/ask.js";
+import { askIndex, askLineOf, linesOf } from "../../shared/dispatch/ask.ts";
 
 export const STATES = ["working", "waiting", "stuck", "failed", "resting", "done"];
 
-/** True when a final answer ends by asking its reader something (see shared/ask.js). */
+/** True when a final answer ends by asking its reader something (see shared/dispatch/ask.ts). */
 export function asksUser(text) {
   if (!text) return false;
   return askIndex(linesOf(text)) >= 0;

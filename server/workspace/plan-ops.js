@@ -1,10 +1,10 @@
 // Step-level edits for PATCH /api/file/plan (docs/workspace-api.md "Pipeline `plan`").
 // Ops only reshape the plan; the result is checked with the shared plan rules when the file is normalized.
 import { ValidationError } from './model.js';
+import { isObj } from '../../shared/is-obj.ts';
 
 export const MAX_PLAN_OPS = 200;
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const stepId = (s) => s.id ?? s.node;
 
 function findStep(plan, id, at) {

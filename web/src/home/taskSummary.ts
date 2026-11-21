@@ -10,7 +10,7 @@
 //      this session's: ahead of 4 and 5 it would put one title on every teammate and hide what a lead wrote.
 // The type (fix, feat, chore, docs, review) comes from the branch prefix, else from the reviewer role.
 // Pure functions only, so tests run without a browser.
-import { issueOfBranch } from '../../../shared/dispatch/issue-branch.js';
+import { issueOfBranch } from '../../../shared/dispatch/issue-branch.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { BoardTask } from '../dispatch/types.ts';
 

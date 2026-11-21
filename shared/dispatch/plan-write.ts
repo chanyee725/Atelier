@@ -2,6 +2,7 @@
 // and the "바뀐 점" between two plans that the start confirm shows and the lead receives on approval.
 // Pure: the server validates and writes, the web only reads `planChanges`.
 import { MAX_PLAN_N, MAX_PLAN_STEPS, PLAN_MODES, PLAN_PERMS, type Plan, type PlanStep } from './plan.ts';
+import { isObj } from '../is-obj.ts';
 
 /** Step ids are short and safe in DSL code and run records (server/runs/plan.js uses the same rule). */
 export const PLAN_STEP_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -43,7 +44,6 @@ export interface WrittenPlan {
   plan: Plan;
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const line = (v: unknown, max = MAX_PLAN_LINE) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
 /** Why `input` is not a usable write_plan call, or null. Messages are for the lead (Korean, plain). */

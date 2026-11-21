@@ -14,8 +14,9 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
-import { ACCOUNT_KEYS, checkAccountLabel, cleanAccountLabels } from '../shared/dispatch/accounts.js';
+import { ACCOUNT_KEYS, checkAccountLabel, cleanAccountLabels } from '../shared/dispatch/accounts.ts';
 import { userDir } from './dispatch/paths.js';
+import { isObj } from '../shared/is-obj.ts';
 
 export const SCHEMA_VERSION = 1;
 export const THEMES = ['system', 'light', 'dark'];
@@ -30,7 +31,6 @@ const GUARD_NUM = ['five', 'seven', 'fable'];
 
 export const BROKEN_MESSAGE = '~/.atelier/drawing.json 파일을 읽지 못했어요. 파일을 고치거나 지우면 다시 저장할 수 있어요. 지금은 기본값을 써요.';
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 /** ~/.atelier/drawing.json for this HOME, or null when DRAWING_USER_DEFAULTS=off. */

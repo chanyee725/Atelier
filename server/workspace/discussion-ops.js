@@ -3,8 +3,8 @@
 import { randomUUID } from 'node:crypto';
 import { ValidationError } from './model.js';
 import { DISCUSSIONS_VERSION, MAX_ANSWER, USER, questionProblem } from '../../shared/dispatch/discussions.ts';
+import { isObj } from '../../shared/is-obj.ts';
 
-const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * `discussions` with a new open question from `askedBy` (a session name or "outside"); `askedById` is the asking

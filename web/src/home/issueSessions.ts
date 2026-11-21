@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { isOpen, totalTok } from '../dispatch/lib/format.ts';
 import { shownAccount, type AccountLabels } from '../accountLabels';
-import type { IssueSession as ApiIssueSession } from '../../../shared/dispatch/accounts.js';
+import type { IssueSession as ApiIssueSession } from '../../../shared/dispatch/accounts.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { IssueSession } from './issueTotals.ts';
 

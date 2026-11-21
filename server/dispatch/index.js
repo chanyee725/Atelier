@@ -12,7 +12,7 @@ import { Burn } from "./burn.js";
 import { Store } from "./dispatch-store.js";
 import { currentBranch } from "./git.js";
 import { Ledger } from "./ledger.js";
-import { accountLabelOf } from "../../shared/dispatch/accounts.js";
+import { accountLabelOf } from "../../shared/dispatch/accounts.ts";
 import { Hub } from "./hub.js";
 import { createPrStatus } from "./pr-status.js";
 import { createBranchTree, createLiveBranches } from "./live-branches.js";

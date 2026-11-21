@@ -12,18 +12,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-
-// Answers the in-app dialog (#732): types `text` into its field when given, presses its confirm button and
-// returns the dialog's text.
-async function answerDialog(page, text) {
-  const d = page.locator('dialog[data-app-dialog][open]');
-  await d.waitFor();
-  const message = await d.innerText();
-  if (text !== undefined) await d.getByRole('textbox').fill(text);
-  await d.locator('button[value="ok"]').click();
-  await d.waitFor({ state: 'detached' });
-  return message;
-}
+import { answerDialog } from '../helpers/answer-dialog.mjs';
 
 const ON = process.env.DRAW_E2E === '1' && process.env.CHROME && process.env.PLAYWRIGHT_CORE;
 const SHOTS = process.env.DRAW_SHOTS;

@@ -4,9 +4,9 @@
 // looks like an email, and nothing here reads an account, email or id from a CLI.
 import { useEffect, useState } from 'react';
 import { api } from './api';
-import { accountKey, checkAccountLabel as checkShared, defaultAccountLabel } from '../../shared/dispatch/accounts.js';
+import { accountKey, checkAccountLabel as checkShared, defaultAccountLabel } from '../../shared/dispatch/accounts.ts';
 
-export { ACCOUNT_LABEL_MAX } from '../../shared/dispatch/accounts.js';
+export { ACCOUNT_LABEL_MAX } from '../../shared/dispatch/accounts.ts';
 export const ACCOUNT_LABELS_CHANGED = 'drawing:account-labels-changed';
 
 export type AccountLabels = Readonly<Record<string, string>>;

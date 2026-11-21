@@ -2,6 +2,7 @@
 // Rules shared by the server (checks saves) and the web (merges DSL refs for display / free-form conversion).
 // Design: docs/design/code-linked-nodes.md §1.
 import { codePathProblem, normalizeCodePath, MAX_CODE_NOTE, MAX_CODE_SPAN, MAX_CODE_SYMBOL, type CodeRef } from '../dsl/code-refs.ts';
+import { isObj } from '../is-obj.ts';
 
 export type { CodeRef };
 
@@ -22,7 +23,6 @@ export interface BlockCode {
   nodes: Record<string, NodeCode>;
 }
 
-const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function refProblem(r: unknown, at: string): string | null {
   if (!isObj(r)) return `${at} must be an object`;

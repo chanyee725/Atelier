@@ -2,6 +2,9 @@
 // code from server/state.js STATES — never message text, tokens or account data.
 // Pure, so the server (recording, trimming) and the browser (drawing spans) share it.
 
+/** One state change: when, and the state code. */
+export type Entry = [at: number, state: string];
+
 export const HISTORY_MAX = 200;
 export const WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -9,7 +12,7 @@ export const WINDOW_MS = 2 * 60 * 60 * 1000;
  * Appends `state` at `at` when it differs from the last entry, dropping the oldest entries past `max`.
  * Mutates and returns `history` (an array of `[at, state]`).
  */
-export function recordState(history, state, at, max = HISTORY_MAX) {
+export function recordState(history: Entry[], state: string, at: number, max = HISTORY_MAX): Entry[] {
   const last = history[history.length - 1];
   if (last && last[1] === state) return history;
   // Clocks can step back (NTP); keep the history ordered so spans never run backwards.
@@ -22,10 +25,10 @@ export function recordState(history, state, at, max = HISTORY_MAX) {
  * The entries that matter for a window ending at `now`: the last one at or before the window start
  * (the state the row opens with) and every one after it.
  */
-export function trimToWindow(history, now, windowMs = WINDOW_MS) {
+export function trimToWindow(history: Entry[], now: number, windowMs = WINDOW_MS): Entry[] {
   const start = now - windowMs;
   let i = history.length - 1;
-  while (i > 0 && history[i][0] > start) i--;
+  while (i > 0 && history[i]![0] > start) i--;
   return history.slice(Math.max(0, i));
 }
 
@@ -34,13 +37,17 @@ export function trimToWindow(history, now, windowMs = WINDOW_MS) {
  * a session entered `failed` inside the window (drawn as ticks). Nothing before the first entry: a
  * session that started inside the window has an empty stretch on its left.
  */
-export function windowSpans(history, now, windowMs = WINDOW_MS) {
+export function windowSpans(
+  history: Entry[],
+  now: number,
+  windowMs = WINDOW_MS,
+): { spans: { state: string; from: number; to: number }[]; fails: number[] } {
   const start = now - windowMs;
-  const spans = [];
-  const fails = [];
+  const spans: { state: string; from: number; to: number }[] = [];
+  const fails: number[] = [];
   for (let i = 0; i < history.length; i++) {
-    const [at, state] = history[i];
-    const next = i + 1 < history.length ? history[i + 1][0] : now;
+    const [at, state] = history[i]!;
+    const next = i + 1 < history.length ? history[i + 1]![0] : now;
     if (state === "failed" && at >= start && at <= now) fails.push(at);
     const from = Math.max(at, start);
     const to = Math.min(next, now);

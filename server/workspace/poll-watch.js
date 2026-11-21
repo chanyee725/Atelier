@@ -3,7 +3,7 @@
 // servers do not exhaust the machine's inotify instance limit. Normal runs keep the real fs.watch.
 // TEST ONLY: every tick walks and stats the whole folder synchronously (default every 250 ms), blocking the
 // event loop for that long. Fine for small scratch workspaces; never use it for a real workspace.
-// It also never emits 'error', so the watcher restart path is covered by the fake-watcher tests in test/workspace.test.js.
+// It also never emits 'error', so the watcher restart path is covered by the fake-watcher tests in test/workspace-outside.test.js.
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 

@@ -1,7 +1,7 @@
 // Usage screen numbers (E29): week totals, per-model and per-role sums, unusual days, top sessions, the always-on
 // order and the screen picked by the URL hash. Pure: node --test loads it directly. Inputs are the metadata the
 // server already keeps (daily cost and token counts, session cost); nothing here reads or keeps a transcript.
-import { recordState, type Entry } from '../../../../shared/dispatch/timeline.js';
+import { recordState, type Entry } from '../../../../shared/dispatch/timeline.ts';
 import type { Session, SessionState, Usage, UsageDay } from '../../../../shared/dispatch/types.ts';
 import { stateOf } from './format.ts';
 
