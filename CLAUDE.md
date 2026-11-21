@@ -4,7 +4,7 @@ Atelier: a local, internal-only diagramming tool that works and looks like Erase
 
 ## Rules
 
-- Talk to the user in Korean. Code, comments, identifiers, commit messages and this file in English. `README.md` in Korean. UI copy in Korean 해요체, short and plain. New web components follow docs/design/ui-libraries.md (reuse primitives and specialist libraries, one standout per screen, new dependencies proposed only).
+- Talk to the user in Korean. Code, comments, identifiers, commit messages and this file in English. `README.md` in English, `README.ko.md` in Korean (keep both in sync). UI copy in Korean 해요체, short and plain. New web components follow docs/design/ui-libraries.md (reuse primitives and specialist libraries, one standout per screen, new dependencies proposed only).
 - GitHub flow on `chanyee725/Atelier`, integration branch `develop`: one issue per ticket or bug (`gh issue create`, title `E<n>: ...`), branch off `develop` (`feat/`, `fix/`, `docs/`, `chore/`), PR against `develop` with `Closes #<issue>` and what was checked, review findings as PR comments, then `gh pr merge --merge`. No force-push, no deleting remote branches, nothing goes to `main`.
 - Commits: English conventional commits, `type(scope): summary`.
 - Issue work is summarized only in `Issues/<number>.md` on the issue's branch (Korean, at most 10 lines: title, what changed, PR, checks). No new entries in `docs/` (tickets, design docs) or other documents for issue work unless the issue asks for that document.
