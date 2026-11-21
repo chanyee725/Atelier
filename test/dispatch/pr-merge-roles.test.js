@@ -56,3 +56,13 @@ test("the lead hands PRs and merges to the two roles and runs neither command it
   assert.doesNotMatch(role("lead").prompt, /PR을 병합한다/);
   assert.doesNotMatch(role("impl").prompt + CHILD_PROMPT, /gh pr (create|merge)/);
 });
+
+test("team rules: leads and implementers open no PR and merge nothing; the two roles check open PRs", async () => {
+  const { readFileSync } = await import("node:fs");
+  const rules = readFileSync(new URL("../../plugin/skills/atelier-team/reference/rules.md", import.meta.url), "utf8");
+  assert.match(rules, /Leads and implementers open no PR and merge nothing/);
+  assert.match(rules, /PR role \(`pr`\): changes no code/);
+  assert.match(rules, /Merge role \(`merge`, one per project\): the only one who runs `gh pr merge --merge`/);
+  assert.match(rules, /two or more: stop and report/);
+  assert.doesNotMatch(rules, /The main session merges/);
+});
