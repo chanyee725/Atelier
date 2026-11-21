@@ -68,14 +68,16 @@ export function span(ms: number): string {
 }
 
 /**
- * The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done. An
- * ETA the server estimated from past runs (#1028) reads 약 N분 남음(예상).
+ * The ETA line of an open task: minutes left, or how far past it is; null when none was set or the task is done.
+ * A server estimate (#1028: `etaEstimated`, the stage median of finished tasks) says so: 약 N분 남음(예상).
  */
-export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; late: boolean } | null {
+export function etaLine(t: Pick<BoardTask, 'stage' | 'etaAt' | 'etaEstimated'>, now: number): { text: string; late: boolean; estimated: boolean } | null {
   if (t.stage === 'done' || t.etaAt == null) return null;
+  const estimated = !!t.etaEstimated;
   const left = t.etaAt - now;
-  if (left >= 60_000) return { text: t.etaEstimated ? `약 ${span(left)} 남음(예상)` : `${span(left)} 남음`, late: false };
-  return left > -60_000 ? { text: '곧 끝나요', late: false } : { text: `${span(-left)} 지남`, late: true };
+  if (left >= 60_000) return { text: estimated ? `약 ${span(left)} 남음(예상)` : `${span(left)} 남음`, late: false, estimated };
+  if (left > -60_000) return { text: '곧 끝나요', late: false, estimated };
+  return { text: `${span(-left)} 지남`, late: true, estimated };
 }
 
 /** The 작업 보드 card's ETA text, saying 예상 once: 약 N분 남음(예상), N분 남음, 곧 끝나요 or 예상보다 N분 지남 (#1028). */
@@ -83,8 +85,8 @@ export function etaCardText(eta: { text: string; late: boolean }): string {
   return eta.late ? `예상보다 ${eta.text}` : eta.text;
 }
 
-/** The five stages a task works through, as the step count shows them (#1028). */
-export const WORK_STEPS: { id: TaskStage; label: string }[] = [
+/** The stages a task walks through in order (#1028); 완료 and 막힘 are not steps. */
+export const PROGRESS_STAGES: { id: TaskStage; label: string }[] = [
   { id: 'plan', label: '계획' },
   { id: 'impl', label: '구현' },
   { id: 'review', label: '리뷰' },
@@ -92,12 +94,13 @@ export const WORK_STEPS: { id: TaskStage; label: string }[] = [
   { id: 'merge', label: '머지' },
 ];
 
-/** Where a task stands among 계획 → 구현 → 리뷰 → 테스트 → 머지 (e.g. 리뷰 · 3/5); null when done or blocked. */
-export function stageStep(stage: TaskStage): { stage: TaskStage; label: string; n: number; total: number; text: string } | null {
-  const i = WORK_STEPS.findIndex(s => s.id === stage);
+/** Where a task is on 계획 → 구현 → 리뷰 → 테스트 → 머지, e.g. { step: 3, total: 5, text: '리뷰 · 3/5' }; null when done or blocked. */
+export function stageProgress(stage: TaskStage): { stage: TaskStage; label: string; step: number; total: number; text: string } | null {
+  const i = PROGRESS_STAGES.findIndex(s => s.id === stage);
   if (i < 0) return null;
-  const { label } = WORK_STEPS[i]!;
-  return { stage, label, n: i + 1, total: WORK_STEPS.length, text: `${label} · ${i + 1}/${WORK_STEPS.length}` };
+  const total = PROGRESS_STAGES.length;
+  const label = PROGRESS_STAGES[i]!.label;
+  return { stage, label, step: i + 1, total, text: `${label} · ${i + 1}/${total}` };
 }
 
 /**

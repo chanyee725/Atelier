@@ -4,7 +4,7 @@
 // PRs' review answer (GET /api/prs). An issue is in progress while a session on it is open or a PR on it is open;
 // everything else stays only in the 이슈 card. Pure functions only, so tests run without a browser.
 import { isOpen } from '../dispatch/lib/format.ts';
-import { WORK_STEPS, etaLine } from '../dispatch/lib/board.ts';
+import { PROGRESS_STAGES, etaLine } from '../dispatch/lib/board.ts';
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { BoardTask, TaskStage } from '../dispatch/types.ts';
 import type { IssueRow } from './issueBoard.ts';
@@ -40,12 +40,12 @@ export type ActiveIssue = {
   mergedPrs: number;
   /** PRs merged out of all its PRs (closed unmerged ones left out); only when the issue is split into 2 or more PRs. */
   progress: { merged: number; total: number } | null;
-  /** When the last open task on it should end (the board's ETA); null when no task set one. */
+  /** When the last open task on it should end (the board's ETA); null when no task has one. */
   etaAt: number | null;
-  /** The server estimated that ETA from past runs (#1028). */
+  /** That ETA is the server's guess from finished tasks (#1028), shown as 약 N분 남음(예상). */
   etaEstimated: boolean;
-  /** Where it stands among 계획 → 구현 → 리뷰 → 테스트 → 머지 (#1028); null once merged. */
-  step: TaskStage | null;
+  /** Step on 계획 → 구현 → 리뷰 → 테스트 → 머지 (#1028); null once merged. */
+  boardStage: TaskStage | null;
 };
 
 const isLead = (s: Session) => s.role === 'lead';
@@ -79,17 +79,17 @@ export function activeStage(row: IssueRow, tasks: readonly BoardTask[], approved
   return row.prs.some((p) => p.state === 'merged') ? 'merged' : 'impl';
 }
 
-const FALLBACK_STEP: Record<ActiveStage, TaskStage | null> = { impl: 'impl', review: 'review', merge: 'merge', merged: null };
+const DEFAULT_STEP: Record<ActiveStage, TaskStage | null> = { impl: 'impl', review: 'review', merge: 'merge', merged: null };
+const stepRank = (s: TaskStage) => PROGRESS_STAGES.findIndex((x) => x.id === s);
 
 /**
- * The issue's step (#1028): the least advanced open board task that agrees with the issue stage (a 계획 task under
- * 구현, a 테스트 task under 리뷰), else the issue stage itself, so it shows without any lead input.
+ * The issue's step for the progress display (#1028): the least advanced open task stage inside its issue stage
+ * (계획 vs 구현, 리뷰 vs 테스트), else the issue stage itself, so it shows without any board task.
  */
-export function issueStep(stage: ActiveStage, tasks: readonly BoardTask[]): TaskStage | null {
-  const order = WORK_STEPS.map((s) => s.id);
-  const fits = tasks.map((t) => t.stage).filter((st) => order.includes(st) && taskStage(st) === stage);
-  if (fits.length) return fits.reduce((a, b) => (order.indexOf(b) < order.indexOf(a) ? b : a));
-  return FALLBACK_STEP[stage];
+export function boardStage(stage: ActiveStage, tasks: readonly BoardTask[]): TaskStage | null {
+  const inside = tasks.map((t) => t.stage).filter((st) => taskStage(st) === stage && stepRank(st) >= 0);
+  if (inside.length) return inside.reduce((a, b) => (stepRank(b) < stepRank(a) ? b : a));
+  return DEFAULT_STEP[stage];
 }
 
 /** The in-progress issues: earlier stages first (the work that still needs hands on top), newest number first inside. */
@@ -129,11 +129,11 @@ export function activeIssues(
       progress: total >= 2 ? { merged: mergedPrs, total } : null,
       etaAt: last?.etaAt ?? null,
       etaEstimated: !!last?.etaEstimated,
-      step: issueStep(stage, mine),
+      boardStage: boardStage(stage, mine),
     });
   }
   return out.sort((a, b) => RANK[a.stage] - RANK[b.stage] || b.number - a.number);
 }
 
 /** The ETA line of an issue (the board's wording); null without an ETA. */
-export const issueEta = (etaAt: number | null, now: number, estimated = false) => etaLine({ stage: 'impl', etaAt, etaEstimated: estimated }, now);
+export const issueEta = (etaAt: number | null, now: number, etaEstimated = false) => etaLine({ stage: 'impl', etaAt, etaEstimated }, now);

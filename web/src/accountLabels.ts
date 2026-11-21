@@ -1,7 +1,8 @@
-// Account labels (#747): a short name the user gives each provider connection in 설정 > 모델 연결 ("Max", "팀 계정"),
-// shown next to the provider and model wherever a session is named. Kept in the user's defaults
-// (~/.dispatch/drawing.json via /api/user-defaults), never in documents. A label only: the form refuses anything that
-// looks like an email, and nothing here reads an account, email or id from a CLI.
+// Account labels (#747): a short name per provider connection ("Max", "팀 계정"), shown next to the provider and model
+// wherever a session is named. Kept in the user's defaults (~/.dispatch/drawing.json via /api/user-defaults), never in
+// documents, and never an email (checkAccountLabel refuses one). Since #1023 설정 > 모델 연결 shows the CLI's logged-in
+// email instead of a label field, so labels saved before stay shown but can only be changed through /api/user-defaults.
+// Nothing here reads an account or email from a CLI; that is ProvidersSection's /api/providers/accounts, memory only.
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { accountKey, checkAccountLabel as checkShared, defaultAccountLabel } from '../../shared/dispatch/accounts.ts';

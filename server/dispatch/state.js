@@ -194,7 +194,7 @@ export function taskStuck(t, owner, activity, now, cfg) {
     return { reason: "stage-mismatch", label: `보드는 ${ko}인데 ${cfg.stuckMismatchMinutes}분 넘게 ${activity.label} 중이에요`,
       stage: t.stage, activity: activity.label, sinceMs: activity.since };
   }
-  // A server-estimated ETA (#1028, stage median) is a hint, not the lead's promise: it never flags the task.
+  // A server estimate (#1028) is a guess from past tasks, not a plan the lead made; it does not flag the task.
   if (t.etaAt && !t.etaEstimated && cfg.stuckEtaRatio > 0) {
     const base = t.etaSetAt ?? t.stageAt ?? t.createdAt;
     const planned = t.etaAt - base;

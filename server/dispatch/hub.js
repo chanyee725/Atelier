@@ -4,7 +4,7 @@ import path from "node:path";
 import { runCli, spawnCli } from "./cli.js";
 import { redact } from "./redact.js";
 import { branchStatus, dropWorktree, integrationBranch, prepareWorkdir, verifyMerged } from "./git.js";
-import { defaultStageEta, enterStage } from "./tasks.js";
+import { defaultEta, enterStage } from "./tasks.js";
 import { AUTO_CLOSE_STAGES, closeEvidence } from "./task-close.js";
 import { NAMES } from "./roles.js";
 import { MODE_IDS } from "./mode-profiles.js";
@@ -362,8 +362,8 @@ export class Hub extends EventEmitter {
       const why = this.taskStepCheck ? this.taskStepCheck(lead, step) : "실행 중인 계획이 없어요";
       if (why) throw Object.assign(new Error(why), { status: 409 });
     }
-    let t = (input.id && all[input.id]) || Object.values(all).find(x => x.lead === lead && x.title === title && x.stage !== "done");
     let created = false;
+    let t = (input.id && all[input.id]) || Object.values(all).find(x => x.lead === lead && x.title === title && x.stage !== "done");
     if (!t) {
       if (!title) throw new Error("title이 필요해요");
       // Closing work by creating a fresh "done" task left the real one open with a stale eta.
@@ -401,10 +401,10 @@ export class Hub extends EventEmitter {
       t.etaSetAt = t.etaAt ? Date.now() : null;
       t.etaEstimated = false;
     } else if (stage || created) {
-      // A stage entered without eta_minutes gets this project's median for it (#1028); no history keeps it empty.
-      defaultStageEta(t, Object.values(all));
+      // A new stage without eta_minutes: estimate from finished tasks of this project (#1028).
+      defaultEta(t, Object.values(all));
     }
-    if (t.stage === "done") t.etaAt = null;
+    if (t.stage === "done") { t.etaAt = null; t.etaEstimated = false; }
     if (input.note !== undefined) t.note = redact(String(input.note || "")).slice(0, 200);
     t.updatedAt = Date.now();
     t.stuck = this.taskStuckOf(t);

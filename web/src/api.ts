@@ -165,6 +165,8 @@ export const api = {
   /** The CLI's own API-key login: the server hands the key to the CLI on stdin. The web keeps no copy (no storage, no logs). */
   providerKey: (id: string, key: string) => call<{ ok: boolean; connected: boolean }>('POST', `/api/providers/${encodeURIComponent(id)}/key`, { key }),
   providerRefresh: () => call<Record<string, ProviderInfo>>('POST', '/api/providers/refresh', {}),
+  /** The email each provider's CLI is logged in with (#1023; Claude only, others null). Settings page only: not kept, not logged. */
+  providerAccounts: () => call<{ accounts: Record<string, string | null> }>('GET', '/api/providers/accounts').then((r) => r.accounts ?? {}),
   saveDispatchSettings: (patch: { guard?: Partial<Omit<DispatchSettings["guard"], "fable" | "openai">> & { fable?: number | null; openai?: Record<string, number> }; team?: Partial<DispatchSettings['team']> }) =>
     call<DispatchSettings>('POST', '/api/settings', patch),
   /** The user's defaults in ~/.dispatch/drawing.json (E555): `error` is set when the file could not be read. */

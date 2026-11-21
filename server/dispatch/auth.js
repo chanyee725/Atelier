@@ -2,7 +2,9 @@ import { runCli as run, spawnCli } from "./cli.js";
 
 // Providers as standalone Dispatch has them (issue #587): Claude (claude), OpenAI Codex (codex) and
 // Gemini (agy, the Antigravity CLI). Login itself is delegated to each CLI: it opens the browser OAuth
-// flow and keeps its own credentials. Drawing never reads or stores tokens, keys, or account emails.
+// flow and keeps its own credentials. Drawing never reads or stores tokens or keys. The one account detail it
+// passes on is the Claude account email `claude auth status` prints (#1023): asked only for the settings page
+// (claudeAccount), answered from memory, never stored, logged or put in the state agents read.
 const CLI = {
   gemini: { bin: "agy", login: ["install"], logout: null, store: "~/.gemini/antigravity-cli" },
   claude: { bin: "claude", login: ["auth", "login"], logout: ["auth", "logout"], store: "~/.claude" },
@@ -31,6 +33,20 @@ async function claudeStatus() {
     return { connected: !!s.loggedIn, method };
   } catch {
     return { connected: false, method: null };
+  }
+}
+
+// Only an address-shaped value of sane length is passed on; anything else reads as unknown.
+const EMAIL = /^[^\s@<>"'`]{1,64}@[^\s@<>"'`]{1,190}$/;
+
+/** The email of the account the Claude CLI is logged in with, or null. Not kept anywhere. */
+export async function claudeAccount() {
+  try {
+    const { stdout } = await run("claude", ["auth", "status"], { timeout: 15000 });
+    const s = JSON.parse(stdout);
+    return s.loggedIn && typeof s.email === "string" && EMAIL.test(s.email) ? s.email : null;
+  } catch {
+    return null;
   }
 }
 

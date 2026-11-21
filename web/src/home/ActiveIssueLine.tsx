@@ -1,26 +1,21 @@
 // An issue a team works on now (#898), as one block at the top of the 이슈 card (#1025; it was the 진행 중 card's 이슈
 // tab, which listed the same issues a second time): number and title with the stage chip (구현, 리뷰, 머지 대기, 머지됨),
 // then who has it (관리자, 팀원), the PR counts, a merged-of-total bar when the issue is split into several PRs, and the
-// time left when a board task has an ETA (set by the lead, or estimated from past runs: #1028). The chip shows the
-// step count (리뷰 · 3/5). Quiet on purpose: the dashboard's standout is the working-session number.
+// time left when a board task has an ETA (the lead's, or the server's guess, #1028); the stage as a step on
+// 계획 → 구현 → 리뷰 → 테스트 → 머지 (StageProgress) until merged. Quiet on purpose: the dashboard's standout is the working-session number.
 import { GitPullRequest } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { openIssueTeam } from '../live/issueStore';
-import { StageStep } from '../dispatch/StageStep';
+import { StageProgress } from '../dispatch/StageProgress';
 import { ACTIVE_STAGE, issueEta, type ActiveIssue } from './activeIssues';
 import type { Session } from '../../../shared/dispatch/types.ts';
 
-/** The stage chip: the step count (리뷰 · 3/5, #1028) when the issue has one, else its stage (머지됨). */
-function StageChip({ stage, step }: { stage: ActiveIssue['stage']; step: ActiveIssue['step'] }) {
+function StageChip({ stage }: { stage: ActiveIssue['stage'] }) {
   const st = ACTIVE_STAGE[stage];
   return (
-    <span data-active-stage={stage} className="inline-flex h-6 min-w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
-      {step ? <StageStep stage={step} /> : (
-        <>
-          <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', st.dot)} />
-          <span className="truncate">{st.label}</span>
-        </>
-      )}
+    <span data-active-stage={stage} className="inline-flex h-6 w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/6 px-2.5 text-xs text-muted-foreground">
+      <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', st.dot)} />
+      <span className="truncate">{st.label}</span>
     </span>
   );
 }
@@ -42,7 +37,7 @@ export function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: n
         <button type="button" aria-expanded={open} aria-label={`#${x.number} 팀 모니터링 열기`} onClick={(e) => openIssueTeam(x.number, e.currentTarget)} className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border-0 bg-transparent p-0 text-left text-inherit hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
           {title}
         </button>
-        <StageChip stage={x.stage} step={x.step} />
+        {x.boardStage ? <StageProgress stage={x.boardStage} /> : <StageChip stage={x.stage} />}
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {x.leads.length > 0 && (
@@ -64,7 +59,7 @@ export function ActiveLine({ issue: x, now, open }: { issue: ActiveIssue; now: n
           </span>
         )}
         {eta && (
-          <span data-active-eta className={cn('ml-auto shrink-0 tabular-nums', eta.late ? 'text-[color-mix(in_oklch,var(--warn)_65%,var(--foreground))]' : 'text-foreground')}>
+          <span data-active-eta data-estimated={eta.estimated || undefined} className={cn('ml-auto shrink-0 tabular-nums', eta.late ? 'text-[color-mix(in_oklch,var(--warn)_65%,var(--foreground))]' : 'text-foreground')}>
             {eta.text}
           </span>
         )}
