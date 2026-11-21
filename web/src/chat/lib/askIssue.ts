@@ -24,8 +24,6 @@ export function askAboutIssue(issue: AskedIssue, opts: { ask?: boolean; partner?
 const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
 const read = () => current;
 export const useAskRequest = () => useSyncExternalStore(subscribe, read, read);
-/** For tests and non-React readers. */
-export const readAskRequest = read;
 
 /** The helper's first message for an issue: a short proposal, explicitly not a start. */
 export const issueAskText = (n: number) => `#${n} 이슈를 읽고 무엇을 할지, 범위, 팀 구성을 짧게 제안해 줘. 아직 시작하지 마`;

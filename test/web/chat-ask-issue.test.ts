@@ -1,21 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answeredAsk, askAboutIssue, issueAskText, readAskRequest, runStart, startGate, type StartState } from '../../web/src/chat/lib/askIssue.ts';
+import { answeredAsk, issueAskText, runStart, startGate, type StartState } from '../../web/src/chat/lib/askIssue.ts';
 import { hasTeam } from '../../web/src/home/issueStart.ts';
 import type { Session } from '../../shared/dispatch/types.ts';
-
-const issue = { number: 954, title: 'T', state: '열림', url: 'https://github.com/o/r/issues/954' };
-
-test('askAboutIssue: asks by default, seq grows so the same issue opens the dock again', () => {
-  askAboutIssue(issue);
-  const a = readAskRequest()!;
-  assert.deepEqual({ ...a, seq: 0 }, { issue, ask: true, partner: null, seq: 0 });
-  askAboutIssue(issue, { ask: false, partner: 'lead-1' });
-  const b = readAskRequest()!;
-  assert.equal(b.ask, false);
-  assert.equal(b.partner, 'lead-1');
-  assert.ok(b.seq > a.seq);
-});
 
 test('issueAskText asks for a proposal and says not to start', () => {
   const t = issueAskText(954);

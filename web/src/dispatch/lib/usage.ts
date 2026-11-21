@@ -4,7 +4,6 @@
 import { recordState, type Entry } from '../../../../shared/dispatch/timeline.js';
 import type { Session, SessionState, Usage, UsageDay } from '../../../../shared/dispatch/types.ts';
 import { stateOf } from './format.ts';
-import { viewPart } from './folder.ts';
 
 export const WEEK = 7;
 
@@ -74,14 +73,6 @@ const RANK: Record<SessionState, number> = { failed: 0, stuck: 1, waiting: 2, wo
 export function alwaysOnOrder<T extends { id: string; startedAt: number }>(list: readonly T[], stateOf: (s: T) => SessionState): T[] {
   return [...list].sort((a, b) => (RANK[stateOf(a)] ?? 9) - (RANK[stateOf(b)] ?? 9) || a.startedAt - b.startedAt || a.id.localeCompare(b.id));
 }
-
-/** Screens of /dispatch, picked by the URL hash so a wall display can open `#tv` directly and survive a reload. */
-export type View = 'sessions' | 'timeline' | 'usage' | 'settings' | 'tv';
-export function viewOf(hash: string): View {
-  const h = viewPart(hash);
-  return h === 'timeline' || h === 'usage' || h === 'settings' || h === 'tv' ? h : 'sessions';
-}
-export const hashOf = (v: View) => (v === 'sessions' ? '' : `#${v}`);
 
 /** A timeline row's history: the server's entries plus the live state, if a session event moved it after the last fetch. */
 export function rowHistory(s: Pick<Session, 'status' | 'state' | 'stateSince'>, server: readonly Entry[] | undefined, now: number): Entry[] {

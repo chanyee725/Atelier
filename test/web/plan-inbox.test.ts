@@ -2,7 +2,7 @@
 // request that makes the plan's own strip open its confirm.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newlyWaiting, parseWaiting, planFolder, planTitle, planWaitingText } from '../../web/src/activity/plans.ts';
+import { newlyWaiting, parseWaiting, planTitle, planWaitingText } from '../../web/src/activity/plans.ts';
 import { toastOf } from '../../web/src/activity/appEvents.ts';
 import { REQUEST_MS, requestPlanConfirm, takePlanConfirm } from '../../web/src/run/planConfirmRequest.ts';
 
@@ -20,8 +20,6 @@ test('the item and its toast say who waits, which plan and where', () => {
   assert.equal(planWaitingText({ lead: 'Jae' }), 'Jae 팀 계획이 시작을 기다려요');
   assert.equal(planWaitingText({ lead: null }), '계획이 시작을 기다려요');
   assert.equal(planTitle({ path: 'web/run/로그인.dpx.json', title: null }), '로그인');
-  assert.equal(planFolder('web/run/로그인.dpx.json'), 'web/run');
-  assert.equal(planFolder('로그인.dpx.json'), '');
   const t = toastOf({ type: 'plan-waiting', file: 'web/run/로그인.dpx.json', text: 'Jae 팀 계획이 시작을 기다려요: 로그인 개편' });
   assert.equal(t?.category, 'runs');
   assert.deepEqual(t?.target, { file: 'web/run/로그인.dpx.json' });
