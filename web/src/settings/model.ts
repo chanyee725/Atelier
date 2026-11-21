@@ -6,7 +6,6 @@ import { SUB_BUCKETS } from '../modelConnect.ts';
 /** Polling stops after this long even if the server still says a login runs. */
 export const LOGIN_POLL_LIMIT_MS = 10 * 60_000;
 export const LOGIN_POLL_EVERY_MS = 2000;
-export const LOGIN_POLL_TIMEOUT_NOTE = '로그인을 너무 오래 기다렸어요. 취소하고 다시 해 주세요.';
 
 type Clock = { now: () => number; setInterval: (fn: () => void, ms: number) => unknown; clearInterval: (t: unknown) => void };
 const realClock: Clock = { now: () => Date.now(), setInterval: (fn, ms) => setInterval(fn, ms), clearInterval: (t) => clearInterval(t as number) };
@@ -27,8 +26,6 @@ export function pollLogins(load: () => void, onGiveUp: () => void, clock: Clock 
   }, LOGIN_POLL_EVERY_MS);
   return () => clock.clearInterval(t);
 }
-
-export const LOGIN_ENDED_NOTE = '로그인이 끝났지만 연결되지 않았어요. 다시 해 주세요.';
 
 /**
  * Wraps an async action so a second call while the first runs is dropped (double clicks before the button

@@ -87,9 +87,6 @@ const subscribe = (f: () => void) => {
 };
 const read = () => snap;
 
-/** For tests and the e2e hook: apply one `cursor` event as if it came from the stream. */
-export const applyMarginCursor = (e: StatusEvent) => onCursor(e);
-
 // ---- the hook ----
 
 export type { MarginCard, MarginChange } from './agentMargin.ts';

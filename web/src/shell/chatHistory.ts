@@ -90,8 +90,3 @@ export function useChatHistory(): HistoryState {
   return s;
 }
 
-/** Test hook: reset the store. */
-export function _resetHistory() {
-  state = { chats: [], loaded: false, error: null };
-  inflight = null;
-}

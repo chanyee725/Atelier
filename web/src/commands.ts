@@ -86,7 +86,3 @@ export function useCommandSource(registry: CommandRegistry, name: string, source
   useEffect(() => registry.register(name, () => latest.current()), [registry, name]);
 }
 
-/** useCommandSource with the registry from context, for features below the app root. */
-export function useRegisterCommands(name: string, source: CommandSource): void {
-  useCommandSource(useCommandRegistry(), name, source);
-}

@@ -44,5 +44,3 @@ export function stepLine(step: string, plan: Plan | null | undefined): string {
   return `단계 ${typeof node === 'string' && node ? node : step} 막힘`;
 }
 
-/** Count text for the badges: "질문 2". */
-export const questionCount = (n: number) => `질문 ${n}`;
