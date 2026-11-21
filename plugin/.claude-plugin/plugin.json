@@ -1,7 +1,7 @@
 {
   "name": "atelier",
   "version": "0.1.0",
-  "description": "Atelier skills and hooks: start Atelier in a project, run a team or a quickfix, write plans, documents and diagrams, watch status, and update from the release bundle.",
+  "description": "Atelier skills and hooks: start Atelier in a project, run teams, sessions and plans, write documents, diagrams and canvases, manage files and questions, and watch status, limits and settings.",
   "author": {
     "name": "chanyee725",
     "url": "https://github.com/chanyee725"
@@ -14,7 +14,9 @@
     "worktree",
     "diagrams",
     "codex",
-    "gemini"
+    "gemini",
+    "canvas",
+    "documents"
   ],
   "types": "./types/index.d.ts"
 }

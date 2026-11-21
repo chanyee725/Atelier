@@ -43,10 +43,12 @@ export function packBundle({ root = DEFAULT_ROOT, out = join(root, 'dist') } = {
     if (existsSync(join(root, 'NOTICE.md'))) cpSync(join(root, 'NOTICE.md'), join(top, 'NOTICE.md'));
     // package.json keeps "type": "module" (server code is ESM) without the dev dependencies.
     writeFileSync(join(top, 'package.json'), JSON.stringify({ name: pkg.name, version, private: true, type: 'module', engines: pkg.engines }, null, 2) + '\n');
-    // The plugin version always follows the bundle version.
-    const manifest = join(top, 'plugin', '.claude-plugin', 'plugin.json');
-    if (existsSync(manifest)) {
-      writeFileSync(manifest, JSON.stringify({ ...JSON.parse(readFileSync(manifest, 'utf8')), version }, null, 2) + '\n');
+    // The plugin version always follows the bundle version (Claude Code and Codex manifests alike).
+    for (const kind of ['.claude-plugin', '.codex-plugin']) {
+      const manifest = join(top, 'plugin', kind, 'plugin.json');
+      if (existsSync(manifest)) {
+        writeFileSync(manifest, JSON.stringify({ ...JSON.parse(readFileSync(manifest, 'utf8')), version }, null, 2) + '\n');
+      }
     }
     mkdirSync(out, { recursive: true });
     const file = join(out, `${name}.tgz`);

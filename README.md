@@ -30,6 +30,18 @@ npm start -- <작업 폴더>
 - `npm run build` 를 건너뛰면 서버는 켜지지만 페이지 대신 "Web app not built" 메시지가 나와요.
 - 포트가 이미 쓰이고 있으면 서버가 바로 종료되고 다른 포트를 고르라는 메시지를 보여 줘요.
 
+### Claude Code · Codex 플러그인
+
+`plugin/` 폴더가 플러그인이에요. Atelier 기능을 스킬 15개(`atelier-*`)로 써요. 서버 켜기, 팀·세션·계획 실행, 문서·다이어그램·캔버스, 파일·버전·휴지통, 문서 속 질문, 상태·사용량·설정이 들어 있어요.
+
+| 어디서 | 설치 |
+|---|---|
+| Claude Code | `/plugin marketplace add <Atelier>/plugin` 다음 `/plugin install atelier@atelier` |
+| Codex CLI | `codex plugin marketplace add <Atelier>/plugin` 다음 `codex plugin add atelier@atelier` |
+
+- 두 CLI 모두 플러그인을 캐시에 복사해서 써요. 그래서 서버 코드는 `DRAWING_HOME`(Atelier 체크아웃)이나 `atelier-update`가 푼 설치본(`~/.dispatch/drawing/current`)에서 찾아요.
+- Codex는 기본 샌드박스에서 네트워크를 막아요. `127.0.0.1` 서버를 부르는 스킬은 네트워크를 허용한 모드에서 써 주세요.
+
 ## 쓰는 법
 
 1. 왼쪽 사이드바의 `+` 로 파일을 만들어요. 폴더는 `새 폴더` 로 만들어요.

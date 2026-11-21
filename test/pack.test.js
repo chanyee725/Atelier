@@ -18,6 +18,7 @@ function fakeRoot({ version = '1.2.3', withPublic = true, withStart = true } = {
   put('server/node_modules/dep/index.js');
   put('shared/dispatch/plan.ts');
   put('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'atelier', version: '0.0.0' }));
+  put('plugin/.codex-plugin/plugin.json', JSON.stringify({ name: 'atelier', version: '0.0.0', skills: './skills/' }));
   put('plugin/hooks/hooks.json', '{}');
   put('plugin/skills/atelier-setup/SKILL.md');
   for (const f of ['restart.sh', 'stop.sh']) {
@@ -61,6 +62,9 @@ test('pack: plugin version follows package.json and dev dependencies are dropped
     execFileSync('tar', ['-xzf', packBundle({ root, out }), '-C', dest]);
     const plugin = JSON.parse(readFileSync(join(dest, 'drawing-2.0.1/plugin/.claude-plugin/plugin.json'), 'utf8'));
     assert.equal(plugin.version, '2.0.1');
+    const codex = JSON.parse(readFileSync(join(dest, 'drawing-2.0.1/plugin/.codex-plugin/plugin.json'), 'utf8'));
+    assert.equal(codex.version, '2.0.1');
+    assert.equal(codex.skills, './skills/');
     const pkg = JSON.parse(readFileSync(join(dest, 'drawing-2.0.1/package.json'), 'utf8'));
     assert.equal(pkg.type, 'module');
     assert.equal(pkg.devDependencies, undefined);
@@ -99,8 +103,14 @@ test('pack: shipped plugin has valid manifests, hooks.json and skills', () => {
   const mp = JSON.parse(readFileSync(join(dir, '.claude-plugin/marketplace.json'), 'utf8'));
   assert.equal(mp.name, 'atelier');
   assert.equal(JSON.parse(readFileSync(join(dir, '.claude-plugin/plugin.json'), 'utf8')).name, 'atelier');
+  const codex = JSON.parse(readFileSync(join(dir, '.codex-plugin/plugin.json'), 'utf8'));
+  assert.equal(codex.name, 'atelier');
+  assert.equal(codex.skills, './skills/');
+  const codexMp = JSON.parse(readFileSync(join(dir, '.agents/plugins/marketplace.json'), 'utf8'));
+  assert.deepEqual(codexMp.plugins.map((p) => [p.name, p.source.path]), [['atelier', './']]);
   assert.ok(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8')).hooks.PostToolUse);
-  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-organize', 'atelier-status', 'atelier-update'];
+  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-organize', 'atelier-status', 'atelier-update',
+    'atelier-session', 'atelier-run', 'atelier-canvas', 'atelier-files', 'atelier-questions', 'atelier-settings'];
   assert.deepEqual(readdirSync(join(dir, 'skills')).sort(), [...skills].sort());
   for (const s of skills) {
     const md = readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8');

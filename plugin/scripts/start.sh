@@ -19,6 +19,11 @@ top=$(git -C "$project" rev-parse --show-toplevel 2>/dev/null) || { echo "Not a 
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 home=${DRAWING_HOME:-$(cd "$here/../.." && pwd -P)}
+if [ -z "${DRAWING_HOME:-}" ] && [ ! -f "$home/server/index.js" ]; then
+  # A plugin copy in Claude Code's or Codex's plugin cache: fall back to the installed release (atelier-update).
+  inst="${DRAWING_INSTALL_BASE:-$HOME/.dispatch/drawing}/current"
+  if [ -f "$inst/server/index.js" ]; then home=$(cd "$inst" && pwd -P); fi
+fi
 [ -f "$home/server/index.js" ] || { echo "Drawing server not found in $home (DRAWING_HOME must be a Drawing checkout)" >&2; exit 1; }
 
 workspace=$project/.atelier
