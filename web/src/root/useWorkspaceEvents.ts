@@ -3,7 +3,7 @@ import { api, type DpxFile } from '../api';
 import type { CursorEvent, CursorStatusEvent } from '../canvas/agentCursor';
 import { applyCursorEvent, applyCursorStatusEvent, clearCursors } from '../canvas/cursorStore';
 import { applyDocCursorEvent, applyDocCursorStatusEvent, clearDocCursors } from '../doc/docCursorStore';
-import { canApplyLive, type WorkspaceEvent } from '../externalChange';
+import { canApplyLive, movedOpenPath, type WorkspaceEvent } from '../externalChange';
 import type { FileSession } from '../fileSession';
 import { events } from '../lib/events';
 import { onRunEvent, reloadRun } from '../run/runData';
@@ -32,6 +32,25 @@ export function useWorkspaceEvents({ session, load, refreshTree, ownMoves, remov
     const offWorkspace = events.subscribeJson<WorkspaceEvent>('workspace', (e) => {
       // This tab's own move already renames the open file; the echo must not close it.
       if (e.kind === 'tree' && e.from !== undefined && ownMoves.current.delete(e.from)) {
+        void refreshTree();
+        return;
+      }
+      // An outside move of the open file (or its folder) follows it to the new path instead of closing it.
+      const next = movedOpenPath(e, session.getState().path);
+      if (next) {
+        void api.readFile(next).then(
+          (f) => {
+            session.rename(next, f.revision);
+            setHashPath(next);
+          },
+          () => {
+            // The new path cannot be read: close it as before.
+            if (session.external(e, (p) => api.readFile(p), () => {}) === 'close') {
+              setHashPath(null);
+              setError('열어 둔 파일이 지워졌거나 옮겨졌어요');
+            }
+          },
+        );
         void refreshTree();
         return;
       }

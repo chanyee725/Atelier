@@ -7,6 +7,8 @@ import { isObj } from '../is-obj.ts';
 /** Step ids are short and safe in DSL code and run records (server/runs/plan.js uses the same rule). */
 export const PLAN_STEP_ID = /^[A-Za-z0-9_-]{1,64}$/;
 export const MAX_PLAN_TITLE = 120;
+/** Document and folder titles stay short (#1045): about 12 characters, at most 20; details go in the first line. */
+export const MAX_SHORT_TITLE = 20;
 export const MAX_PLAN_LINE = 300;
 export const MAX_PLAN_LIST = 20;
 /** Id of the generated flowchart block. */
@@ -45,6 +47,19 @@ export interface WrittenPlan {
 }
 
 const line = (v: unknown, max = MAX_PLAN_LINE) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+
+/**
+ * `text` cut to at most `max` characters (code points) at a word boundary, without trailing punctuation: the default
+ * title made from a goal (#1045). A first word longer than `max` is cut inside the word.
+ */
+export function shortTitle(text: unknown, max = MAX_SHORT_TITLE): string {
+  const trim = (s: string) => s.replace(/[\s.,;:!?·…—–-]+$/u, '');
+  const chars = [...line(text)];
+  if (chars.length <= max) return trim(chars.join(''));
+  const head = chars.slice(0, max + 1).join('');
+  const cut = head.lastIndexOf(' ');
+  return trim(cut > 0 ? head.slice(0, cut) : chars.slice(0, max).join(''));
+}
 
 /** Why `input` is not a usable write_plan call, or null. Messages are for the lead (Korean, plain). */
 export function writePlanProblem(input: unknown): string | null {
@@ -108,7 +123,7 @@ function stepTask(s: WritePlanStep): string {
 export function buildPlanFile(input: WritePlanInput, previous?: Block | null): WrittenPlan {
   const steps = input.steps.map((s, i) => ({ ...s, id: s.id ?? `s${i + 1}` }));
   const goal = line(input.goal);
-  const title = line(input.title, MAX_PLAN_TITLE) || line(goal, 60);
+  const title = line(input.title, MAX_PLAN_TITLE) || shortTitle(goal);
   const code = [
     'direction right',
     '',

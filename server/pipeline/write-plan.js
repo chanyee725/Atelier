@@ -5,8 +5,8 @@ import { FILE_EXT } from '../workspace/model.js';
 import { effectiveRoles } from '../dispatch/settings.js';
 import { topFolder } from '../dispatch/session-folder.js';
 import { resolvePlanRoles } from './plan-roles.js';
-import { inferPlanFolder, isFolderName, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
-import { buildPlanFile, writePlanProblem, PLAN_BLOCK_ID } from '../../shared/dispatch/plan-write.ts';
+import { DRAFT_FOLDER, draftFeatureFolder, isFolderName, planArea, PLAN_FILE_STEM, topFolders } from './plan-folder.js';
+import { buildPlanFile, shortTitle, writePlanProblem, PLAN_BLOCK_ID, MAX_SHORT_TITLE } from '../../shared/dispatch/plan-write.ts';
 import { planFileName } from './shared.js';
 
 export function createWritePlan(c) {
@@ -44,10 +44,11 @@ export function createWritePlan(c) {
       const own = leadEntries(lead.id, 'plan')[0];
       path = own ? own[0] : null;
     }
-    // A new plan the lead names no path for goes to <area>/<feature>/계획.dpx.json (#782). The area is the one
-    // write_plan names (`area`, or the older `folder`), else the lead's, else the one top-level folder every file the
-    // steps name sits in; it may be new (the lead picks areas from the project's structure). The feature defaults to
-    // the title. Names that are not one plain path segment are refused even when a path is given.
+    // A new plan the lead names no path for is drafted in 기획/<feature>/계획.dpx.json (#1045); 시작하기 moves the
+    // feature folder to the plan's area (start.js). The area is the one write_plan names (`area`, or the older
+    // `folder`), else the top-level folder most files the steps name sit in (a tie: none), else the lead's; it may be
+    // new. It is kept in the plan's entry, since the plan file does not keep the steps' files. The feature defaults to
+    // the short title. Names that are not one plain path segment are refused even when a path is given.
     const named = (key, label) => {
       const v = body[key];
       if (v == null || v === '') return null;
@@ -58,7 +59,8 @@ export function createWritePlan(c) {
     const area = named('area', '영역') ?? named('folder', '영역');
     const feature = named('feature', '기능');
     const folders = await topFolders(ws.root);
-    const leadFolder = area ?? (lead.folder && isFolderName(lead.folder) ? lead.folder : null) ?? inferPlanFolder(input.steps, folders);
+    const leadArea = lead.folder && lead.folder !== DRAFT_FOLDER && isFolderName(lead.folder) ? lead.folder : null;
+    const target = area ?? planArea(input.steps, folders, leadArea);
     const existing = path ? all[path] : null;
     if (existing?.state === 'paused') throw new StoreError(409, '멈춘 계획이에요. 사용자가 계획 다시 열기를 누르면 고칠 수 있어요');
     if (existing?.state === 'running') throw new StoreError(409, '실행 중인 계획은 바꿀 수 없어요. 바뀐 점은 note_step으로 남겨 주세요');
@@ -68,36 +70,43 @@ export function createWritePlan(c) {
     if (current && !existing && current.plan) throw new StoreError(409, '사람이 쓴 계획 파일이에요. path 없이 새로 써 주세요');
     let revision;
     let built;
+    // A draft whose area is unknown says so at the top: 시작하기 leaves it in 기획.
+    const stays = (p) => !target && draftFeatureFolder(p);
+    const noteStays = (b) => {
+      b.document.content.unshift({ type: 'paragraph', content: [{ type: 'text', text: '영역을 정할 수 없어 시작하기 뒤에도 기획 폴더에 그대로 있어요.' }] });
+      return b;
+    };
     if (current) {
       const prevId = current.plan?.block ?? PLAN_BLOCK_ID;
       const prev = (current.blocks ?? []).find((b) => b.id === prevId) ?? null;
       built = buildPlanFile(input, prev);
+      if (stays(path)) noteStays(built);
       const blocks = prev ? current.blocks.map((b) => (b.id === prev.id ? built.block : b)) : [...(current.blocks ?? []), built.block];
       const r = await ws.writeFile(path, { revision: current.revision, title: built.title, document: built.document, canvas: current.canvas, blocks, plan: built.plan });
       revision = r.revision;
     } else {
       built = buildPlanFile(input, null);
-      if (!path) {
-        if (!leadFolder) {
-          const have = folders.length ? ` 지금 영역: ${folders.slice(0, 20).join(', ')}` : '';
-          throw new StoreError(400, `area(영역)를 정해 주세요. 프로젝트 구조를 보고 고르고, 있는 영역은 다시 써요.${have}`);
-        }
-        path = await freePath(await ws.matchFolderCase(`${leadFolder}/${feature ?? planFileName(built.title)}`, { last: true }));
-      }
+      if (!path) path = await freePath(await ws.matchFolderCase(`${DRAFT_FOLDER}/${feature ?? planFileName(shortTitle(built.title))}`, { last: true }));
+      if (stays(path)) noteStays(built);
       const r = await ws.createFile(path, { title: built.title, document: built.document, blocks: [built.block], plan: built.plan });
       path = r.path;
       revision = r.revision;
     }
-    // The lead works for the project its plan lives in.
+    // The lead works for the project its plan lives in; a draft in 기획 joins its area on 시작하기.
     const planFolder = topFolder(path);
-    if (planFolder && planFolder !== lead.folder) d.hub.touch(lead, { folder: planFolder });
-    all[path] = { lead: lead.id, state: 'plan', waitingSince: Date.now(), draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }), ...(existing?.lastApprovedRevision != null && { lastApprovedRevision: existing.lastApprovedRevision }) };
+    if (planFolder && planFolder !== lead.folder && planFolder !== DRAFT_FOLDER) d.hub.touch(lead, { folder: planFolder });
+    all[path] = { lead: lead.id, area: target ?? null, state: 'plan', waitingSince: Date.now(), draftRevision: revision, approvedRevision: null, approvedAt: null, runId: null, steps: [], links: {}, ...(existing?.carry && { carry: existing.carry }), ...(existing?.lastApprovedRevision != null && { lastApprovedRevision: existing.lastApprovedRevision }) };
     drafts.set(path, built.plan);
     save();
     await ws.labelVersion(path, 'draft');
     ctx.hub.broadcast('workspace', { kind: 'change', path, revision });
     changed(path);
-    const out = { path, revision, state: 'plan' };
+    const out = { path, revision, state: 'plan', area: target ?? null };
+    // Titles stay short (#1045): a long one is kept, with a warning the lead sees.
+    const warnings = [];
+    if ([...built.title].length > MAX_SHORT_TITLE) warnings.push(`제목이 ${[...built.title].length}자예요. ${MAX_SHORT_TITLE}자 안으로 줄이고 자세한 건 goal에 써 주세요`);
+    if (feature && [...feature].length > MAX_SHORT_TITLE) warnings.push(`기능 폴더 이름이 ${[...feature].length}자예요. ${MAX_SHORT_TITLE}자 안으로 줄여 주세요`);
+    if (warnings.length) out.warnings = warnings;
     if (body.autostart === true && built.plan.steps.length === 1) {
       const started = await start({ path, revision }, { auto: true });
       return { ...out, state: 'running', runId: started.runId };

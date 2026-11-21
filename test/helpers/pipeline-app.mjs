@@ -88,7 +88,8 @@ export async function running(t, steps = STEPS) {
   const go = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
   assert.equal(go.status, 200, JSON.stringify(go.body));
   await until(() => ['idle', 'done'].includes(d.hub.get(lead.id).status), 10_000);
-  return { path: w.body.path, runId: go.body.runId };
+  // 시작하기 moves a draft from 기획 to its area (#1045): the running plan lives at the path start returns.
+  return { path: go.body.path, runId: go.body.runId };
 }
 export const told = (d, id) => d.hub.transcript(id).filter((m) => m.kind === 'user').map((m) => m.text).join('\n');
 export const statusOf = async (call, path) => (await call('GET', `/api/pipeline?path=${encodeURIComponent(path)}`)).body;

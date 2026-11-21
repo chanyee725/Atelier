@@ -11,6 +11,9 @@ export class PathError extends Error {}
 /** Top-level workspace names project mode keeps for itself (#782): agent git worktrees, never document folders. */
 export const RESERVED_PROJECT_NAMES = Object.freeze(['worktrees']);
 
+/** Top-level folder for draft plans before 시작하기 (#1045); the tree lists it first. */
+export const DRAFT_FOLDER = '기획';
+
 /** Validate an API path and return its segments. Throws PathError. */
 export function parseRelPath(p) {
   if (typeof p !== 'string' || p === '') throw new PathError('path is required');

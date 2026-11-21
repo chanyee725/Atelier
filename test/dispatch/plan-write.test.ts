@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildPlanFile, planChanges, writePlanProblem, PLAN_BLOCK_ID, MAX_PLAN_LIST } from '../../shared/dispatch/plan-write.ts';
+import { buildPlanFile, planChanges, shortTitle, writePlanProblem, PLAN_BLOCK_ID, MAX_PLAN_LIST, MAX_SHORT_TITLE } from '../../shared/dispatch/plan-write.ts';
 import { planProblem, MAX_PLAN_N, type Plan } from '../../shared/dispatch/plan.ts';
 import { parse } from '../../shared/dsl/index.ts';
 
@@ -90,4 +90,14 @@ test('planChanges caps the list', () => {
   const before: Plan = { v: 1, block: 'b', steps: [] };
   const after: Plan = { v: 1, block: 'b', steps: Array.from({ length: 5 }, (_, i) => ({ id: `s${i}`, node: `s${i}`, role: 'r' })) };
   assert.deepEqual(planChanges(before, after, 3), ['단계 s0 추가', '단계 s1 추가', '단계 s2 추가', '그 밖에 2개']);
+});
+
+test('shortTitle cuts a goal to at most 20 characters at a word boundary (#1045)', () => {
+  assert.equal(shortTitle('로봇 제어 화면'), '로봇 제어 화면');
+  assert.equal(shortTitle('PLC 데이터 수신 후 로봇 제어 웹 페이지를 만들어요'), 'PLC 데이터 수신 후 로봇 제어 웹');
+  assert.ok([...shortTitle('PLC 데이터 수신 후 로봇 제어 웹 페이지를 만들어요')].length <= MAX_SHORT_TITLE);
+  assert.equal(shortTitle('가'.repeat(30)), '가'.repeat(20));
+  assert.equal(shortTitle('매직 링크로 로그인해요.'), '매직 링크로 로그인해요');
+  assert.equal(buildPlanFile({ goal: '아주 긴 목표 문장이 여기 있어요 그리고 더 길어져요', steps: [{ title: 'a', role: 'r' }] }).title, '아주 긴 목표 문장이 여기 있어요');
+  assert.equal(buildPlanFile({ title: '사람이 정한 아주아주아주아주 긴 계획 제목이에요', goal: 'g', steps: [{ title: 'a', role: 'r' }] }).title, '사람이 정한 아주아주아주아주 긴 계획 제목이에요');
 });

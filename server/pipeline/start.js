@@ -2,6 +2,7 @@
 // Moved out of index.js as is (#1000); `c` is the context setup builds.
 import { StoreError } from '../workspace/store.js';
 import { topFolder } from '../dispatch/session-folder.js';
+import { DRAFT_FOLDER, draftFeatureFolder } from './plan-folder.js';
 import { planChanges } from '../../shared/dispatch/plan-write.ts';
 import { applyStepOverrides } from '../../shared/dispatch/plan-overrides.ts';
 
@@ -11,13 +12,54 @@ export function createStart(c) {
 
   /** A session that is finished for good: only `done` (an `error` one can be messaged back to running). */
   const isFinished = (s) => s.status === 'done';
+  /** Plan entries a 시작하기 is working on: a second one meanwhile is refused (the move below takes a while). */
+  const starting = new Set();
+
+  /**
+   * A draft in 기획/<feature>/ moves to <area>/<feature>/ when its run starts (#1045), with its diagrams and
+   * sub-documents. A feature folder of that name already in the area: <feature>-2, -3, …. The store's move event
+   * carries the plan's entry, its draft, run records, history and sessions along (index.js). A feature folder another
+   * plan shares does not move. Returns the move done, or why the plan stayed in 기획 ({ from, to } | { stayed }).
+   */
+  async function moveToArea(path, entry) {
+    const from = draftFeatureFolder(path);
+    if (!from) return null;
+    const area = typeof entry.area === 'string' && entry.area && entry.area !== DRAFT_FOLDER ? entry.area : null;
+    if (!area) return { stayed: '영역을 정할 수 없어 기획 폴더에 그대로 뒀다' };
+    // Another plan shares this feature folder (freePath's 계획-2 and so on): moving the folder would take that plan
+    // along, from under its own run. The folder stays; the lead can move this plan by hand.
+    const other = Object.keys(entries() ?? {}).find((p) => p !== path && p.startsWith(`${from}/`));
+    if (other) return { stayed: `같은 기능 폴더에 다른 계획(${other.slice(from.length + 1)})이 있어 폴더를 옮기지 않고 기획 폴더에 그대로 뒀다` };
+    const name = from.slice(DRAFT_FOLDER.length + 1);
+    for (let i = 1; i < 20; i++) {
+      try {
+        const r = await ws.move(from, `${area}/${name}${i === 1 ? '' : `-${i}`}`, 'folder');
+        return { from, to: r.path };
+      } catch (err) {
+        if (err instanceof StoreError && err.status === 409 && /already exists/.test(err.message)) continue;
+        return { stayed: `${area}로 옮기지 못해 기획 폴더에 그대로 뒀다(${String(err?.message ?? err).slice(0, 80)})` };
+      }
+    }
+    return { stayed: `${area}에 같은 이름 폴더가 너무 많아 기획 폴더에 그대로 뒀다` };
+  }
+
+  async function start(body, opts = {}) {
+    const key = typeof body?.path === 'string' ? entries()?.[ws.runs.fileRel(body.path)] : null;
+    if (key && starting.has(key)) throw new StoreError(409, '이미 시작하는 중이에요');
+    if (key) starting.add(key);
+    try {
+      return await startNow(body, opts);
+    } finally {
+      if (key) starting.delete(key);
+    }
+  }
 
   // ---- 시작하기 ----
-  async function start(body, { auto = false } = {}) {
+  async function startNow(body, { auto = false } = {}) {
     const d = dispatch();
     if (!d) throw new StoreError(409, 'Dispatch가 꺼져 있어요');
     if (typeof body.path !== 'string') throw new StoreError(400, 'path is required');
-    const path = ws.runs.fileRel(body.path);
+    let path = ws.runs.fileRel(body.path);
     if (!Number.isInteger(body.revision)) throw new StoreError(400, 'revision is required');
     const entry = entries()[path];
     if (entry?.state === 'running') throw new StoreError(409, '이미 실행 중이에요');
@@ -35,6 +77,10 @@ export function createStart(c) {
     const changes = planChanges(drafts.get(path), file.plan);
     const chosen = planChanges(file.plan, effective);
     const carry = await carryOf(path, entry);
+    // The draft joins its area before the run record is made, so the record starts at the new path.
+    const draftPath = path;
+    const moved = await moveToArea(path, entry);
+    if (moved?.to) path = `${moved.to}${draftPath.slice(moved.from.length)}`;
     const record = await recorder.startRun({ file: path, plan: effective, revision: file.revision, carry });
     const carried = Object.keys(record.steps).filter((id) => record.steps[id].carried);
     const prevCarry = entry.carry;
@@ -62,6 +108,7 @@ export function createStart(c) {
     save();
     const lines = [
       `[계획 승인 · rev ${file.revision}] ${path}`,
+      ...(moved?.to ? [`계획 폴더를 ${moved.from}에서 ${moved.to}로 옮겼다. 이제 이 경로를 쓴다.`] : moved?.stayed ? [`계획 폴더: ${moved.stayed}.`] : []),
       auto ? '단계 하나짜리 계획이라 바로 시작했다.' : '사용자가 이 계획으로 시작하기를 눌렀다.',
       changes.length ? `바뀐 점(네 초안 이후 사용자가 고친 것):\n${changes.map((c) => `- ${c}`).join('\n')}` : '바뀐 점: 없음',
       ...(chosen.length ? [`시작 창에서 사용자가 이번 실행만 바꾼 구성(계획 파일은 그대로, 이 구성으로 팀원을 만든다):\n${chosen.map((c) => `- ${c}`).join('\n')}`] : []),
@@ -76,6 +123,8 @@ export function createStart(c) {
       if (prevApproved == null) delete entry.lastApprovedRevision;
       save();
       await recorder.endRun(record.id, 'stopped').catch(() => {});
+      // The plan goes back to 기획 as it was (its entry and records follow the move back).
+      if (moved?.to) await ws.move(moved.to, moved.from, 'folder').catch((e) => console.error('pipeline move back:', e?.code ?? e?.name));
       throw new StoreError(409, err.message);
     }
     await ws.labelVersion(path, 'approved');

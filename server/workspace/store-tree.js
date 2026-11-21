@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { parseStored } from './model.js';
 import { openQuestions } from '../../shared/dispatch/discussions.ts';
 import { isDpx } from './store-shared.js';
+import { DRAFT_FOLDER } from './paths.js';
 
 export function createTree(c) {
   const { fsr, skip } = c;
@@ -58,8 +59,9 @@ export function createTree(c) {
         out.push(row);
       }
     }
-    // folders first
-    return out.sort((a, b) => (a.type === b.type ? 0 : a.type === 'folder' ? -1 : 1));
+    // folders first; at the top level the draft plans folder (기획) leads (#1045)
+    const rank = (n) => (n.type === 'folder' ? (!relDir && n.name === DRAFT_FOLDER ? 0 : 1) : 2);
+    return out.sort((a, b) => rank(a) - rank(b));
   }
 
   const tree = () => walk(fsr.root, '');
