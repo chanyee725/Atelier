@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { parse } from '../../shared/dsl/index.ts';
 import { edgeKey, layoutDiagram, nodeRects } from '../../shared/render/index.ts';
 import type { Scene } from '../../shared/render/index.ts';
-import { agentColors, boardShown, legendOf, legendOpen, legendScale, legendSpot, liveTargets, nodeBoxes, nodeBadges, pressAction, overlayModel, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
+import { agentColors, boardShown, legendOf, legendOpen, legendScale, legendSpot, liveTargets, nodeBoxes, nodeBadges, pressAction, overlayModel, badgeTextSize, BADGE_R, MARK_FONT, textWidth, pathData, roleColor, roleLabel, runProgress, stepMarks } from '../../web/src/run/overlayModel.ts';
 import { FIXTURE_BLOCKED, FIXTURE_CODE, FIXTURE_STEPS } from '../../web/src/run/fixture.ts';
-import { RUN_BAND } from '../../shared/render/badge.ts';
+import { BADGE_FONT_SIZE, RUN_BAND } from '../../shared/render/badge.ts';
+import { readFileSync } from 'node:fs';
 
 async function scene(code: string): Promise<Scene> {
   const { ast } = parse(code, 'flowchart');
@@ -325,4 +326,23 @@ test('canvas legend list (#987): starts folded past six agents, always open in t
   assert.equal(legendOpen(6, true), true);
   assert.equal(legendOpen(12, true), false, 'a 12-agent list would run the card off the pane');
   assert.equal(legendOpen(12, false), true);
+});
+
+test('run mark text size comes from the model, not the CSS (#1025): label fits its pill, chip matches badge:, "+N" fits the circle', async () => {
+  const css = readFileSync(new URL('../../web/src/index.css', import.meta.url), 'utf8');
+  for (const sel of ['.run-corner text', '.run-label text', '.run-badge text', '.run-badge-more text']) {
+    const rule = css.match(new RegExp(`^${sel.replace(/\./g, '\\.')} \\{([^}]*)\\}`, 'm'));
+    assert.ok(rule, sel);
+    assert.doesNotMatch(rule[1]!, /font-size|font:/, `${sel} leaves the size to the SVG attribute`);
+  }
+  const tsx = readFileSync(new URL('../../web/src/run/RunLayer.tsx', import.meta.url), 'utf8');
+  assert.equal(tsx.match(/fontSize=\{MARK_FONT\}/g)?.length, 2, 'label and corner chip text use MARK_FONT');
+  assert.equal(MARK_FONT, BADGE_FONT_SIZE);
+  // A long Hangul label still sits inside its pill with the 6px padding on each side.
+  const rect = { x: 0, y: 40, w: 220, h: 60 };
+  const label = stepMarks({ rect, glyph: '▶', text: '진행 중 · 구현자 한 명', live: false }, true).label!;
+  assert.ok(label, 'the label fits this node');
+  assert.ok(textWidth(label.text, MARK_FONT) + 12 <= label.w);
+  for (const t of ['J', '주', '+3', '+12']) assert.ok(textWidth(t, badgeTextSize(t)) <= BADGE_R * 2 - 2, t);
+  assert.equal(badgeTextSize('J'), 10);
 });

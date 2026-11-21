@@ -114,7 +114,7 @@ export function CommandPalette({ commands, onClose, scope, onlyGroup }: Props) {
                 if (e.key === 'Backspace' && !query && group && !e.nativeEvent.isComposing) setGroup(undefined);
               }}
               placeholder={only?.placeholder ?? '명령이나 파일 이름을 입력해요'}
-              className="h-12 text-[15px]"
+              className="h-12 text-base"
             />
             {only && (
               // A real button, so keyboard and screen reader users can widen the search too (#216 review).

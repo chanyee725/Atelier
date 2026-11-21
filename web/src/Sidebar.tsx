@@ -253,7 +253,7 @@ function PipelineBadge({ state }: { state: PipelineMark['state'] }) {
       aria-label={`파이프라인: ${m.text}`}
       title={`파이프라인 ${m.text}`}
       style={m.dot ? { color: m.dot } : undefined}
-      className={cn('ml-auto flex w-4 shrink-0 items-center justify-center text-[11px] leading-4', !m.dot && 'text-muted-foreground')}
+      className={cn('ml-auto flex w-4 shrink-0 items-center justify-center text-2xs leading-4', !m.dot && 'text-muted-foreground')}
     >
       <span aria-hidden>{m.glyph}</span>
     </span>
@@ -268,7 +268,7 @@ export function QuestionBadge({ count }: { count: number }) {
       data-question-badge=""
       aria-label={`답을 기다리는 질문 ${count}개`}
       title={`답을 기다리는 질문 ${count}개`}
-      className="ml-auto flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-[11px] leading-4 font-medium tabular-nums text-foreground"
+      className="ml-auto flex shrink-0 items-center gap-0.5 rounded-sm px-1 text-2xs leading-4 font-medium tabular-nums text-foreground"
     >
       <span aria-hidden className="text-[var(--step-blocked)]">
         ?

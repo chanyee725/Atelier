@@ -132,10 +132,10 @@ function QuestionCard({ q, plan, onSend }: { q: Discussion; plan: Plan | undefin
     <article
       data-question={q.id}
       aria-label={`${whoLabel(q.askedBy)}의 질문`}
-      className="card-surface px-4 py-3 text-[13px]"
+      className="card-surface px-4 py-3 text-xs"
     >
       <Meta q={q} plan={plan} />
-      <p className="mt-1.5 text-[13px] leading-5 whitespace-pre-wrap">{q.question}</p>
+      <p className="mt-1.5 text-xs leading-5 whitespace-pre-wrap">{q.question}</p>
       {q.choices && q.choices.length > 0 && (
         <ToggleGroup
           variant="outline"
@@ -192,12 +192,12 @@ function QuestionCard({ q, plan, onSend }: { q: Discussion; plan: Plan | undefin
 
 function AnsweredRow({ q }: { q: Discussion }) {
   return (
-    <li data-question={q.id} data-answered="" className="px-4 py-2.5 text-[13px]">
+    <li data-question={q.id} data-answered="" className="px-4 py-2.5 text-xs">
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-[13px] text-muted-foreground whitespace-pre-wrap">{q.question}</p>
-        <span className="shrink-0 rounded-sm border px-1.5 text-[11px] leading-5 text-muted-foreground">{answeredLine(q)}</span>
+        <p className="min-w-0 flex-1 text-xs text-muted-foreground whitespace-pre-wrap">{q.question}</p>
+        <span className="shrink-0 rounded-sm border px-1.5 text-2xs leading-5 text-muted-foreground">{answeredLine(q)}</span>
       </div>
-      <p className="mt-0.5 text-[13px] whitespace-pre-wrap">{q.answer}</p>
+      <p className="mt-0.5 text-xs whitespace-pre-wrap">{q.answer}</p>
       <div className="mt-0.5">
         <Meta q={q} />
       </div>

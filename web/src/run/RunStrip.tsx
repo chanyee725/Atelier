@@ -4,6 +4,7 @@
 // 이어서 하기 and 계획 다시 열기 while paused; amber while the usage-limit guard holds the run. E28: 복제해서 새 계획 on a
 // done run (opens the new draft); while a past run is picked it says so, draws that run on the canvas and offers
 // 최근 실행 보기.
+import { TriangleAlert } from 'lucide-react';
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../components/ui/button';
 import { connect } from '../dispatch/store.ts';
@@ -134,9 +135,7 @@ export function RunStrip({ code, inRunView, onRunView, onOpenFile, asking }: Pro
       </div>
       {error && !confirming && (
         <div className="flex min-h-8 items-center gap-2 border-t px-3" role="alert" data-run-error>
-          <span aria-hidden className="text-destructive">
-            ⚠
-          </span>
+          <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-destructive" strokeWidth={2.25} />
           <span className="min-w-0 flex-1 truncate text-foreground" title={error}>
             {error}
           </span>
@@ -147,9 +146,7 @@ export function RunStrip({ code, inRunView, onRunView, onOpenFile, asking }: Pro
       )}
       {first && (
         <div className="flex min-h-8 items-center gap-2 border-t px-3" role="alert">
-          <span aria-hidden className="text-warn">
-            ⚠
-          </span>
+          <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-warn" strokeWidth={2.25} />
           <span className="min-w-0 flex-1 truncate text-foreground">
             확인 필요 {s.attention.length} · {first.text}
           </span>

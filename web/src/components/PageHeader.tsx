@@ -12,7 +12,7 @@ export function PageHeader({ title, narrow, actions }: { title: ReactNode; narro
           <Menu className="size-[17px]" />
         </SidebarTrigger>
       )}
-      <h1 className="m-0 min-w-0 shrink truncate text-[15px] font-semibold tracking-[-0.01em]">{title}</h1>
+      <h1 className="m-0 min-w-0 shrink truncate text-base font-semibold tracking-[-0.01em]">{title}</h1>
       <span className="ml-auto flex shrink-0 items-center gap-1">
         {actions}
       </span>

@@ -35,15 +35,15 @@ export function LiveSummaryView({ d, now, compact, titleId, plain }: { d: Summar
   const tone = liveStateTone(state);
   const label = liveStateLabel(state, !!d.current);
   return (
-    <div className={cn('grid min-w-0 gap-1', compact && 'text-[12px]')} data-live-summary={d.sid}>
+    <div className={cn('grid min-w-0 gap-1', compact && 'text-2xs')} data-live-summary={d.sid}>
       <div className="flex min-w-0 items-start gap-2">
         {plain ? (
-          <h2 id={titleId} className="m-0 flex min-w-0 items-baseline gap-2 text-[13px] font-normal">
+          <h2 id={titleId} className="m-0 flex min-w-0 items-baseline gap-2 text-xs font-normal">
             <span className="truncate text-sm font-semibold text-foreground" data-live-name>{d.name}</span>
             {d.role && <span className="truncate text-xs text-muted-foreground">{d.role}</span>}
           </h2>
         ) : (
-          <h2 id={titleId} className="m-0 flex min-w-0 items-start gap-2 text-[13px] font-normal">
+          <h2 id={titleId} className="m-0 flex min-w-0 items-start gap-2 text-xs font-normal">
             <AgentTag agent={{ sid: d.sid, name: d.name, color: d.color }} size={compact ? 'sm' : 'md'} />
             {d.role && <span className="mt-[7px] truncate text-xs leading-5 text-muted-foreground">{d.role}</span>}
           </h2>

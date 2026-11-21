@@ -51,7 +51,7 @@ function Row({ item, now, onClick }: { item: AttentionItem; now: number; onClick
         type={onClick ? 'button' : undefined}
         onClick={onClick}
         className={cn(
-          'group/row grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 px-4 py-2 text-left text-[13px]',
+          'group/row grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 px-4 py-2 text-left text-xs',
           onClick && 'cursor-pointer transition-colors hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.04] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none',
         )}
       >

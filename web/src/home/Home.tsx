@@ -151,13 +151,13 @@ function ProjectHeader({ project, running }: { project: ProjectInfo; running: nu
   const titleId = useId();
   return (
     <section aria-labelledby={titleId} className="flex items-start gap-4 border-b px-4 pt-6 pb-4 max-sm:pt-4">
-      <span aria-hidden className="grid size-[39px] shrink-0 place-items-center rounded-xl bg-muted text-[17px] font-bold text-foreground">
+      <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-xl bg-muted text-lg font-semibold text-foreground">
         {project.icon}
       </span>
       <div className="min-w-0">
-        <h1 id={titleId} className="m-0 truncate text-[22px] leading-[30px] font-semibold">{project.name}</h1>
+        <h1 id={titleId} className="m-0 truncate text-xl font-semibold">{project.name}</h1>
         {project.description && <p className="mt-1 mb-0 text-sm text-muted-foreground">{project.description}</p>}
-        <ul aria-label="프로젝트 정보" className="m-0 mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[13px] text-muted-foreground">
+        <ul aria-label="프로젝트 정보" className="m-0 mt-2 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs text-muted-foreground">
           <li className="inline-flex items-center gap-1.5 tabular-nums">
             <FileText aria-hidden className="size-[15px]" />
             문서 {project.docCount}개
@@ -235,7 +235,7 @@ function ProjectHome({ info: project, ...p }: Shared & { info: ProjectInfo }) {
             <dt className="text-muted-foreground">문서</dt>
             <dd className="m-0">{project.docCount}개</dd>
             <dt className="text-muted-foreground">폴더</dt>
-            <dd className="m-0 font-mono text-[13px]">{project.path}/</dd>
+            <dd className="m-0 font-mono text-xs">{project.path}/</dd>
             <dt className="text-muted-foreground">고친 때</dt>
             <dd className="m-0">{relativeTime(project.modifiedAt)}</dd>
           </dl>

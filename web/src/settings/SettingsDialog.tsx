@@ -129,7 +129,7 @@ export default function SettingsDialog({ section, onClose }: { section?: Section
       <SettingsContext.Provider value={ctx}>
         <div className="relative flex h-full min-h-0 max-md:flex-col">
           <aside className="flex w-[220px] shrink-0 flex-col bg-background px-2 py-4 max-md:w-full max-md:gap-2 max-md:border-b max-md:px-(--overlay-x) max-md:py-3">
-            <h2 id={titleId} className="px-2 pb-3 text-[15px] font-semibold max-md:p-0 max-md:pr-10">
+            <h2 id={titleId} className="px-2 pb-3 text-base font-semibold max-md:p-0 max-md:pr-10">
               설정
             </h2>
             <nav ref={navRef} aria-label="설정 항목" className="min-h-0 overflow-y-auto max-md:hidden">

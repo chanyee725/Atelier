@@ -21,7 +21,7 @@ import type { Session } from '../../../shared/dispatch/types.ts';
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border bg-card px-4 py-3">
-      <span className="text-[13px] text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-2xl font-semibold tracking-tight tabular-nums">{value}</span>
       {hint && <span className="truncate text-xs text-muted-foreground" title={hint}>{hint}</span>}
     </div>
@@ -33,7 +33,7 @@ function Panel({ title, note, children, className }: { title: string; note?: str
   return (
     <section aria-labelledby={id} className={cn('flex min-w-0 flex-col rounded-lg border bg-card p-4', className)}>
       <header className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 id={id} className="text-[15px] font-semibold">{title}</h2>
+        <h2 id={id} className="text-base font-semibold">{title}</h2>
         {note && <span className="truncate text-sm text-muted-foreground tabular-nums">{note}</span>}
       </header>
       {children}
@@ -90,7 +90,7 @@ function DailyPanel({ days }: { days: UsageDay[] }) {
           return (
             <li key={d.day} data-day={d.day} title={text} aria-label={text} className="relative flex h-full flex-1 flex-col items-center justify-end">
               {r != null && (
-                <span className="absolute flex items-center gap-0.5 text-[11px] font-semibold whitespace-nowrap tabular-nums" style={{ bottom: `calc(${h}% + 4px)` }}>
+                <span className="absolute flex items-center gap-0.5 text-2xs font-semibold whitespace-nowrap tabular-nums" style={{ bottom: `calc(${h}% + 4px)` }}>
                   <TriangleAlert aria-hidden className="size-3 text-warn" strokeWidth={2.5} />
                   {r}배
                 </span>

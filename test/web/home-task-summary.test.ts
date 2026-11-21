@@ -18,7 +18,7 @@ test('issue number with a known title wins over every other source', () => {
 test('an issue named only by the branch gets its title and the branch type', () => {
   const x = taskSummary(s({ branch: 'fix/886-hidden-question' }), titles, []);
   assert.deepEqual(x, { kind: 'fix', text: '#886 질문이 안 보이는 사람 기다림', from: 'issue' });
-  assert.equal(summaryLine(x!), 'fix — #886 질문이 안 보이는 사람 기다림');
+  assert.equal(summaryLine(x!), 'fix · #886 질문이 안 보이는 사람 기다림');
 });
 
 test('board: own open task; done and blocked tasks are skipped', () => {
@@ -66,4 +66,10 @@ test('type: branch prefix, else review for a reviewer', () => {
   assert.equal(summaryKind({ branch: 'docs/x', role: 'impl' }), 'docs');
   assert.equal(summaryKind({ branch: 'dispatch/review-3', role: 'review' }), 'review');
   assert.equal(summaryKind({ branch: null, role: 'impl' }), null);
+});
+
+test('a reviewer card reads 리뷰 · …, a branch type stays as is (#1025)', () => {
+  assert.equal(summaryLine({ kind: 'review', text: '#905 작업 보기', from: 'issue' }), '리뷰 · #905 작업 보기');
+  assert.equal(summaryLine({ kind: 'feat', text: 'x', from: 'branch' }), 'feat · x');
+  assert.equal(summaryLine({ kind: null, text: 'x', from: 'task' }), 'x');
 });

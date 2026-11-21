@@ -1,10 +1,10 @@
-// 문서 tab of the 진행 중 card (#975): documents a session writes now and plans that run now, one line each. Click opens
+// 진행 중인 문서 card (#975; its 이슈 tab moved into the 이슈 card, #1025): documents a session writes now and plans that run now, one line each. Click opens
 // the document (a running plan opens in its run view). Quiet on purpose: the dashboard's standout stays the working-session number.
 import { useEffect, useMemo, useState } from 'react';
 import { FileText, LoaderCircle } from 'lucide-react';
 import { ProviderIcon } from '../ProviderIcon';
 import { cn } from '../lib/utils';
-import { EmptyState } from './dash';
+import { Card, EmptyState } from './dash';
 import { activeDocs, stepProgress, type ActiveDoc, type DocFacts, type RunProgress } from './activeDocs';
 import { pollWhileVisible, relativeTime } from './model';
 import { allDocs } from './model';
@@ -56,6 +56,16 @@ export function useActiveDocs(project: ProjectInfo, agents: AgentPresence[] | 'o
   const running = useMemo(() => facts.filter((d) => d.plan === 'running').map((d) => d.path), [facts]);
   const progress = useRunProgress(running);
   return useMemo(() => activeDocs(Array.isArray(agents) ? agents : [], facts, progress, project.path), [agents, facts, progress, project.path]);
+}
+
+/** The card: as tall as its rows up to a cap, then the rows scroll inside (like 세션 요청). */
+export function ActiveDocsCard({ project, agents, onOpen }: { project: ProjectInfo; agents: AgentPresence[] | 'off' | 'failed' | null; onOpen: (path: string) => void }) {
+  const docs = useActiveDocs(project, agents);
+  return (
+    <Card id="active-docs" title="진행 중인 문서" count={docs.length} flush scroll className="max-h-80 shrink-0">
+      <ActiveDocsList docs={docs} onOpen={onOpen} />
+    </Card>
+  );
 }
 
 export function ActiveDocsList({ docs, onOpen, now = Date.now() }: { docs: readonly ActiveDoc[]; onOpen: (path: string) => void; now?: number }) {

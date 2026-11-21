@@ -4,6 +4,7 @@
 // default; when a team started now would get another model (provider not connected, model gone), the server's note
 // says which and why. With Dispatch off it shows read-only with the reason (#620). Spec: docs/design/mode-profiles.md.
 // The section id stays `roles` so the dirty mark and close-confirm keep working.
+import { TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { NativeSelect } from '../../components/ui/native-select';
@@ -282,7 +283,7 @@ export default function RolesSection() {
                               data-testid="settings-mode-fallback"
                               className={cn('col-span-2 text-xs md:col-span-3 md:col-start-2', warn ? 'text-warn' : 'text-muted-foreground')}
                             >
-                              <span aria-hidden>⚠ </span>
+                              <TriangleAlert aria-hidden className="mr-1 inline size-3 -translate-y-px align-middle" strokeWidth={2.25} />
                               {fb.model ? (
                                 <>
                                   대신 <strong className="font-semibold">{fb.model}</strong>: {fb.text}
@@ -310,7 +311,7 @@ export default function RolesSection() {
                               }}
                               className={cn('h-8 min-w-0 flex-1 rounded-control border border-(--line-strong) bg-card px-2 text-sm max-md:h-11', FOCUS)}
                             />
-                            {custom && <span className="shrink-0 rounded-full bg-(--sunken) px-2 text-[11px] text-muted-foreground">직접 씀</span>}
+                            {custom && <span className="shrink-0 rounded-full bg-(--sunken) px-2 text-2xs text-muted-foreground">직접 씀</span>}
                           </div>
                         </fieldset>
                       );

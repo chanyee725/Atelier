@@ -60,7 +60,7 @@ export function CodeBadge({ x, y, on, label, onOpen }: { x: number; y: number; o
       data-code-badge={label}
       aria-label={`${label} 코드 보기`}
       aria-pressed={on}
-      className="pointer-events-auto absolute flex h-4 cursor-pointer -translate-x-1/2 -translate-y-1/2 items-center rounded-[4px] border border-border bg-popover px-1 font-mono text-[9px] leading-none text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground aria-pressed:border-blue-500 aria-pressed:text-blue-500"
+      className="pointer-events-auto absolute flex h-4 cursor-pointer -translate-x-1/2 -translate-y-1/2 items-center rounded-[4px] border border-border bg-popover px-1 font-mono text-2xs leading-none text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground aria-pressed:border-blue-500 aria-pressed:text-blue-500"
       style={{ left: x, top: y }}
       // The press must not reach Excalidraw (it would start a box selection under the badge).
       onPointerDown={(e) => {

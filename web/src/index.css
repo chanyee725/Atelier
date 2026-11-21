@@ -219,15 +219,18 @@
   padding: var(--popover-y) var(--popover-x) var(--popover-end);
 }
 
-@theme inline {
-  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
-  /* UI type scale (doc 6 §4.2): UI 14/22 (text-sm), meta 13/17 (text-xs), kbd and badges 12 (text-2xs),
-     screen title 22/30 (text-xl); the document body is 14/1.65 (.doc-editor; 2px smaller on the user's request). */
+/* UI type scale (doc 6 §4.2), the one place font sizes are defined (#1025): badges and kbd 12 (text-2xs), meta 13/17
+   (text-xs), UI 14/22 (text-sm), emphasis 15 (text-base), section titles 19 (text-lg), screen titles 22/30 (text-xl);
+   the document body is 14/1.65 (.doc-editor; 2px smaller on the user's request). Nothing is smaller than 12px, and
+   13px and under drop the body's -0.01em tracking (letter-spacing 0, #1025). Not
+   inline and static, so plain CSS reads the same steps as var(--text-xs) etc. Use a step, not an arbitrary px size. */
+@theme static {
   --text-2xs: 12px;
   --text-2xs--line-height: 16px;
+  --text-2xs--letter-spacing: 0;
   --text-xs: 13px;
   --text-xs--line-height: 17px;
+  --text-xs--letter-spacing: 0;
   --text-sm: 14px;
   --text-sm--line-height: 22px;
   --text-base: 15px;
@@ -238,6 +241,11 @@
   --text-xl--line-height: 30px;
   --text-doc: 14px;
   --text-doc--line-height: 1.65;
+}
+
+@theme inline {
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
   /* Radius steps (#889): controls 6 (sm, md), cards 10 (lg), panels 12 (xl), chips full. The named ones say which
      layer a box is: rounded-control, rounded-card, rounded-panel. */
   --radius-sm: calc(var(--radius) - 4px);
@@ -295,7 +303,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font: 14px/22px var(--font-sans);
+  font: var(--text-sm)/22px var(--font-sans);
   font-feature-settings: "cv11";
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
@@ -375,7 +383,7 @@ body {
 .doc-editor {
   min-height: 60vh;
   outline: none;
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -415,7 +423,7 @@ body {
   overflow-x: auto;
   line-height: 1.5;
 }
-.doc-editor pre code { background: none; border: none; padding: 0; font-size: 12px; }
+.doc-editor pre code { background: none; border: none; padding: 0; font-size: var(--text-2xs); letter-spacing: 0; }
 .doc-editor table { border-collapse: collapse; width: 100%; table-layout: fixed; overflow: hidden; }
 .doc-editor th, .doc-editor td { border: 1px solid var(--border); padding: 0.35em 0.6em; vertical-align: top; position: relative; }
 .doc-editor th { background: var(--muted); font-weight: 600; text-align: left; }
@@ -450,7 +458,7 @@ body {
 .doc-diagram > figcaption {
   min-width: 0;
   padding: 8px 12px;
-  font-size: 12px;
+  font-size: var(--text-2xs); letter-spacing: 0;
   color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -459,14 +467,14 @@ body {
 .doc-diagram > figcaption strong { color: var(--foreground); font-weight: 600; }
 .doc-diagram-actions { display: flex; align-items: center; gap: 2px; padding: 0 8px; min-width: 0; }
 .doc-diagram-actions button {
-  height: 24px; padding: 0 8px; border-radius: var(--radius-control); font-size: 12px; font-weight: 500; flex: none; white-space: nowrap;
+  height: 24px; padding: 0 8px; border-radius: var(--radius-control); font-size: var(--text-2xs); letter-spacing: 0; font-weight: 500; flex: none; white-space: nowrap;
   color: var(--muted-foreground); transition: background-color 150ms ease, color 150ms ease;
 }
 @media (hover: hover) { .doc-diagram-actions button:hover { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 5%, transparent); } }
 .doc-diagram-actions .doc-diagram-start { margin-left: 6px; color: var(--primary-foreground); background: var(--primary); }
 @media (hover: hover) { .doc-diagram-actions .doc-diagram-start:hover { color: var(--primary-foreground); background: color-mix(in srgb, var(--primary) 88%, var(--foreground)); } }
 .doc-diagram-actions .doc-diagram-start[aria-disabled], .doc-diagram-actions .doc-diagram-start:disabled { opacity: 0.5; cursor: not-allowed; }
-.doc-diagram-note { align-self: center; flex: 0 1 auto; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
+.doc-diagram-note { align-self: center; flex: 0 1 auto; min-width: 0; max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-2xs); letter-spacing: 0; color: var(--muted-foreground); }
 .doc-diagram-actions button:focus-visible { color: var(--foreground); outline: 2px solid var(--primary); outline-offset: 2px; }
 /* The head row's rule: drawn on the row under it, so it spans both head cells. */
 .doc-diagram > :is(.doc-diagram-stage, .doc-diagram-pic, .doc-diagram-gone) { border-top: 1px solid var(--border); }
@@ -490,7 +498,7 @@ body {
 /* Scrolled to its end, the picture keeps a 12px gap from the block's right edge (#1005): the picture overflows the
    button, so its padding does not count there; a 12px flex spacer after the picture does. */
 .doc-diagram-stage[data-wide] .doc-diagram-pic::after { content: ''; flex: none; width: 12px; height: 1px; }
-.doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: 14px; padding: 1.5em; }
+.doc-diagram-wait, .doc-diagram-gone { color: var(--muted-foreground); font-size: var(--text-sm); padding: 1.5em; }
 .doc-diagram-gone { text-align: center; }
 
 /* The `/` and `+` menus (and the canvas insert list): a dense command list on the app-chrome tokens. */
@@ -505,7 +513,7 @@ body {
   background: var(--popover);
   color: var(--popover-foreground);
   box-shadow: var(--shadow-pop);
-  font-size: 14px;
+  font-size: var(--text-sm);
   line-height: 22px;
   animation: doc-slash-in 120ms ease-out;
 }
@@ -523,7 +531,7 @@ body {
   text-align: left;
 }
 .doc-slash button[aria-selected="true"] { background: var(--accent); color: var(--accent-foreground); }
-.doc-slash-hint { color: var(--muted-foreground); font-size: 13px; white-space: nowrap; }
+.doc-slash-hint { color: var(--muted-foreground); font-size: var(--text-xs); letter-spacing: 0; white-space: nowrap; }
 .doc-slash-empty { padding: 6px 8px; color: var(--muted-foreground); }
 
 .doc-table-bar {
@@ -538,7 +546,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--background);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 .doc-table-bar button { height: 1.75rem; padding: 0 0.6rem; border-radius: 6px; }
 @media (hover: hover) { .doc-table-bar button:hover { background: var(--accent); } }
@@ -553,9 +561,9 @@ body {
 @media (hover: hover) { .doc-outline-btn:hover { color: var(--foreground); } }
 .doc-outline { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; width: 260px; max-height: 50vh; overflow-y: auto; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover); color: var(--popover-foreground); box-shadow: var(--shadow-pop); }
 .doc-outline ul { list-style: none; margin: 0; padding: 0; }
-.doc-outline li > button { display: block; width: 100%; text-align: left; font-size: 14px; padding: 3px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-outline li > button { display: block; width: 100%; text-align: left; font-size: var(--text-sm); padding: 3px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (hover: hover) { .doc-outline li > button:hover { background: var(--accent); } }
-.doc-outline-empty { font-size: 14px; color: var(--muted-foreground); padding: 4px 6px; }
+.doc-outline-empty { font-size: var(--text-sm); color: var(--muted-foreground); padding: 4px 6px; }
 .doc-editor h1, .doc-editor h2, .doc-editor h3 { position: relative; }
 .doc-h-link { position: absolute; left: -1.3em; top: 0; width: 1.1em; font-size: 0.7em; line-height: 1.8; color: var(--muted-foreground); opacity: 0; user-select: none; }
 .doc-editor h1:hover .doc-h-link, .doc-editor h2:hover .doc-h-link, .doc-editor h3:hover .doc-h-link, .doc-h-link:focus-visible { opacity: 1; }
@@ -591,14 +599,14 @@ body {
 .run-eta {
   position: absolute; right: 0; top: 100%; margin-top: 32px; max-inline-size: min(320px, calc(100% - 8px)); padding: 4px 6px;
   border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground);
-  font: 400 12px/16px var(--font-sans); pointer-events: none;
+  font: 400 var(--text-2xs)/16px var(--font-sans); letter-spacing: 0; pointer-events: none;
 }
 .doc-diagram > .run-eta { position: static; align-self: flex-end; margin: 8px 0 0; }
 /* On the canvas the rows are part of the legend card under the picture (#987), not a card of their own. */
 .run-legend .run-eta { position: static; margin: 4px 0 0; padding: 0; border: 0; background: none; max-inline-size: none; }
 .run-eta ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .run-eta li { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
-.run-eta-badge { flex: none; inline-size: 16px; block-size: 16px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 10px; font-weight: 600; }
+.run-eta-badge { flex: none; inline-size: 16px; block-size: 16px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: var(--text-2xs); letter-spacing: 0; font-weight: 600; }
 .run-eta-name { flex: none; font-weight: 500; }
 .run-eta-step { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); }
 .run-eta-time { flex: none; white-space: nowrap; }
@@ -609,19 +617,20 @@ body {
 .run-progress-line line { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .run-progress-track { stroke-opacity: 0.25; }
 .run-progress-bar { stroke-dasharray: 50 100; }
+/* SVG run marks take their font-size from overlayModel (MARK_FONT, badgeTextSize) as an attribute, in scene units. */
 .run-corner rect { fill: var(--background); stroke: currentColor; stroke-width: 1.5; }
-.run-corner text { fill: currentColor; font: 600 11px var(--font-sans); }
+.run-corner text { fill: currentColor; font-weight: 600; font-family: var(--font-sans); letter-spacing: 0; }
 .run-label rect { fill: var(--background); stroke: currentColor; stroke-width: 1; }
-.run-label text { fill: var(--foreground); font: 500 11px var(--font-sans); }
+.run-label text { fill: var(--foreground); font-weight: 500; font-family: var(--font-sans); letter-spacing: 0; }
 /* Agent badges over a node (#687): role colour fill, a ring in the page colour so overlapping badges stay apart. */
 .run-badge { pointer-events: auto; cursor: default; }
 .run-badge circle { fill: currentColor; stroke: var(--background); stroke-width: 2; }
-.run-badge text { fill: var(--background); font: 600 10px var(--font-sans); }
+.run-badge text { fill: var(--background); font-weight: 600; font-family: var(--font-sans); letter-spacing: 0; }
 .run-badge-more circle { fill: var(--muted); }
 /* In-progress node → live view (#736): a clear button over the badge row; hover or focus shows the card. */
 .run-node-live { position: absolute; padding: 0; border: 0; border-radius: 999px; background: transparent; pointer-events: auto; cursor: pointer; }
 .run-node-live:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.run-badge-more text { fill: var(--foreground); font-size: 9px; }
+.run-badge-more text { fill: var(--foreground); }
 .run-edge { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .run-edge[data-edge-kind='flow'] { stroke-dasharray: 6 6; }
 /* Static form (reduced motion, or paused): the progress line stays half full and the dashed edge stands still. */
@@ -646,7 +655,7 @@ body {
 @keyframes run-flow { to { stroke-dashoffset: -12; } }
 .run-motion {
   position: absolute; right: 0; bottom: 100%; margin-bottom: 6px; pointer-events: auto;
-  font-size: 12px; line-height: 16px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: var(--text-2xs); letter-spacing: 0; line-height: 16px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px;
   background: var(--background); color: var(--muted-foreground); white-space: nowrap;
 }
 /* In the document there is text right above the picture, so the switch sits in the frame's top-right corner. */
@@ -668,7 +677,7 @@ body {
 .run-legend {
   inline-size: max-content; min-inline-size: 168px; max-inline-size: 280px;
   padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background);
-  color: var(--foreground); font: 400 12px/16px var(--font-sans);
+  color: var(--foreground); font: 400 var(--text-2xs)/16px var(--font-sans); letter-spacing: 0;
 }
 .run-legend[data-on-canvas] { position: absolute; pointer-events: none; }
 .run-legend[data-on-canvas] summary { pointer-events: auto; }
@@ -704,7 +713,7 @@ body {
 .agent-cursor-tag {
   position: absolute; left: 13px; top: 15px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
   padding: 1px 7px; border-radius: 6px; background: var(--agent); color: #fff;
-  font: 600 12px/16px var(--font-sans); box-shadow: var(--shadow-pop);
+  font: 600 var(--text-2xs)/16px var(--font-sans); letter-spacing: 0; box-shadow: var(--shadow-pop);
 }
 /* The status (E536) is one line: it truncates with an ellipsis rather than growing the tag over the drawing. */
 /* max-content: the tag sits in the 16px cursor box, whose width would otherwise squeeze the status. */
@@ -725,7 +734,7 @@ body {
    name tag above it. Beside the editor, never in it, and it takes no pointer events or selection. */
 .doc-agent-cursors { position: absolute; inset: 0; z-index: 2; pointer-events: none; user-select: none; overflow: visible; }
 .doc-agent-caret { display: block; width: 2px; height: var(--caret-h, 18px); border-radius: 1px; background: currentColor; }
-.doc-agent-cursor .agent-cursor-tag { left: -1px; top: auto; bottom: calc(100% + 2px); padding: 0 6px; font-size: 11px; line-height: 16px; border-bottom-left-radius: 0; }
+.doc-agent-cursor .agent-cursor-tag { left: -1px; top: auto; bottom: calc(100% + 2px); padding: 0 6px; font-size: var(--text-2xs); letter-spacing: 0; line-height: 16px; border-bottom-left-radius: 0; }
 .doc-agent-cursor[data-below] .agent-cursor-tag { top: calc(100% + 2px); bottom: auto; border-bottom-left-radius: 6px; border-top-left-radius: 0; }
 
 /* PDF export (print dialog): only the document column is printed while <html> has .print-doc. */
@@ -873,11 +882,11 @@ body {
 }
 
 /* The 시작하기 confirm's team (#972): one quiet row per step; the one standout is the start button. */
-.start-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.7fr); gap: 6px; align-items: center; font-size: 12px; }
+.start-row { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.7fr); gap: 6px; align-items: center; font-size: var(--text-2xs); letter-spacing: 0; }
 .start-row-name { display: flex; min-width: 0; flex-direction: column; }
 .start-row [data-slot="native-select"] { display: flex; }
 @media (max-width: 640px) { .start-row { grid-template-columns: 1fr 1fr; } .start-row-name { grid-column: 1 / -1; } }
-.start-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 12px; }
+.start-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; font-size: var(--text-2xs); letter-spacing: 0; }
 .start-meter { display: inline-flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
 .start-meter-bar { width: 72px; height: 4px; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--foreground) 10%, transparent); }
 .start-meter-bar > span { display: block; height: 100%; background: var(--muted-foreground); }

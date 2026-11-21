@@ -8,7 +8,7 @@ import { edgePaths, nodeRects, type Rect } from '../../../shared/render/overlay.
 import { edgeView, linkSteps, progress, stepNode, type Progress, type StepView } from '../../../shared/dispatch/step-view.ts';
 import type { SessionState } from '../../../shared/dispatch/types.ts';
 import { NODE_TONES, nodeStatus, type NodeTone } from './nodeStatus.ts';
-import { BADGE_H, RUN_BAND, badgeRect } from '../../../shared/render/badge.ts';
+import { BADGE_FONT_SIZE, BADGE_H, RUN_BAND, badgeRect } from '../../../shared/render/badge.ts';
 
 /** Dispatch role ids (server/dispatch/roles.js). Unknown roles draw in the neutral `--idle` colour. */
 export const ROLES = { lead: '관리자', impl: '구현자', review: '리뷰어', test: '테스터', design: '디자이너', docs: '문서화' } as const;
@@ -362,7 +362,22 @@ export const markY = (rect: Pick<Rect, 'y'>): number => rect.y - RUN_BAND / 2;
 /** Agent badge radius and the step between overlapping badges (scene units). */
 export const BADGE_R = 9;
 export const BADGE_STEP = 13;
-export const MARK_FONT = 11;
+/**
+ * Text size of the state chip and label (scene units, scaled with the diagram): the diagram's `badge:` chip size, so
+ * both chips match. RunLayer sets it on the SVG text and the CSS gives only weight and family, so the drawn text and
+ * the width measured here cannot drift apart.
+ */
+export const MARK_FONT = BADGE_FONT_SIZE;
+/** Text size of an agent badge's initial (scene units). */
+export const BADGE_TEXT = 10;
+/** Room inside a badge circle for its text: the diameter less the 2px ring, which is centred on the edge. */
+const BADGE_ROOM = BADGE_R * 2 - 2;
+
+/** Text size for a badge circle ("J", "+3", "+12"): BADGE_TEXT, smaller when that would spill out of the circle. */
+export function badgeTextSize(text: string): number {
+  const perUnit = textWidth(text, 100) / 100;
+  return Math.min(BADGE_TEXT, Math.floor((BADGE_ROOM / perUnit) * 2) / 2);
+}
 
 /** Rough text width for the label plate: Hangul and other wide characters about one em, the rest about 0.6 em. */
 export function textWidth(s: string, size = MARK_FONT): number {

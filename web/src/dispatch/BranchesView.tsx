@@ -38,13 +38,13 @@ function Owners({ sessions }: { sessions: BranchSession[] }) {
         <span
           key={s.id}
           aria-hidden
-          className={cn('-ml-1 grid size-5 place-items-center rounded-full text-[9px] font-semibold text-background ring-2 ring-background first:ml-0', !s.open && 'opacity-60')}
+          className={cn('-ml-1 grid size-5 place-items-center rounded-full text-2xs font-semibold text-background ring-2 ring-background first:ml-0', !s.open && 'opacity-60')}
           style={{ background: roleColor(s.role) }}
         >
           {initials(s.name)}
         </span>
       ))}
-      {sessions.length > 3 && <span aria-hidden className="ml-1 text-[11px] text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
+      {sessions.length > 3 && <span aria-hidden className="ml-1 text-2xs text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
     </span>
   );
 }
@@ -182,7 +182,7 @@ function BranchList({ rows, base, now }: { rows: BranchRow[]; base: string | nul
           <li key={r.branch} data-branch-row data-merged={r.merged || undefined} className={cn('flex min-w-0 flex-col gap-1 border-b px-4 py-2 text-xs last:border-b-0', r.merged && 'opacity-50')}>
             <span className="flex min-w-0 items-center gap-2">
               <Owners sessions={r.sessions} />
-              <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground" title={r.branch}>{r.branch}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-2xs text-foreground" title={r.branch}>{r.branch}</span>
               {r.dirty && <span className="shrink-0 text-warn" title="커밋하지 않은 변경이 있어요">●<span className="sr-only">커밋하지 않은 변경 있음</span></span>}
             </span>
             <span className="block truncate text-muted-foreground" title={r.subject}>{r.lastAt ? whenLabel(r.lastAt, now) : '—'} · {r.subject}</span>
@@ -230,7 +230,7 @@ export function BranchesWidget({ folder = '', limit = 5, className }: { folder?:
             <li key={r.branch} data-branch-row data-merged={r.merged || undefined} className={cn('flex min-w-0 items-center gap-2 border-b py-1.5 text-sm last:border-b-0', r.merged && 'opacity-50')}>
               <Owners sessions={r.sessions} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-mono text-[13px]" title={r.branch}>{r.branch}</span>
+                <span className="block truncate font-mono text-xs" title={r.branch}>{r.branch}</span>
                 <span className="block truncate text-xs text-muted-foreground">
                   {r.lastAt ? ago(r.lastAt, now) : '—'} · {r.subject}
                 </span>

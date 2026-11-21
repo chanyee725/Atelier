@@ -22,18 +22,16 @@
   width: var(--chat-dock-fab);
   height: var(--chat-dock-fab);
   border-radius: 999px;
-  /* Brand gradient (2026-11-20, from the planned Atelier logo): cyan → blue → violet, with a soft glow of the same hues.
-     The one coloured object on the page, so it reads as "talk to Atelier". */
-  --chat-dock-grad: linear-gradient(135deg, oklch(0.65 0.12 215) 0%, oklch(0.62 0.2 262) 52%, oklch(0.6 0.24 305) 100%);
-  background: var(--chat-dock-grad);
-  color: white;
-  box-shadow: 0 0 0 1px oklch(0.55 0.2 270 / 0.55), 0 6px 22px oklch(0.62 0.2 262 / 0.38), 0 0 18px oklch(0.7 0.13 212 / 0.22);
+  /* Solid primary like the 연결 button (#1025): the gradient stays on the logo only. A plain shadow, no coloured glow. */
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.16), 0 1px 2px rgb(0 0 0 / 0.12);
   cursor: pointer;
   transition: scale 140ms ease-out, filter 150ms ease, right 200ms ease-out;
 }
 @media (hover: hover) {
   .chat-dock-fab:hover {
-    filter: brightness(1.08) saturate(1.1);
+    filter: brightness(1.1);
   }
 }
 .chat-dock-fab:active {
@@ -54,7 +52,7 @@
   background: var(--primary);
   color: var(--primary-foreground);
   box-shadow: 0 0 0 2px var(--background);
-  font-size: 11px;
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 600;
   line-height: 18px;
   text-align: center;
@@ -75,7 +73,7 @@
   background: var(--card);
   color: var(--card-foreground);
   box-shadow: 0 0 0 1px var(--border), 0 8px 28px rgb(0 0 0 / 0.14);
-  font-size: 13px;
+  font-size: var(--text-xs); letter-spacing: 0;
   overflow: hidden;
   overscroll-behavior: contain;
   --overlay-x: 16px;
@@ -110,7 +108,7 @@
   margin: 0;
   padding: 0 var(--overlay-x);
   min-height: 0;
-  font-size: 12px;
+  font-size: var(--text-2xs); letter-spacing: 0;
   line-height: 20px;
   color: var(--muted-foreground);
 }
@@ -145,7 +143,7 @@
   margin-left: 6px;
   overflow: hidden;
   color: var(--muted-foreground);
-  font-size: 11.5px;
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -223,7 +221,7 @@
   margin: 0;
   overflow-y: auto;
   list-style: none;
-  font-size: 13px;
+  font-size: var(--text-xs); letter-spacing: 0;
   line-height: 1.55;
 }
 .chat-prior p {
@@ -233,10 +231,10 @@
 }
 .chat-prior-who {
   color: var(--muted-foreground);
-  font-size: 11.5px;
+  font-size: var(--text-2xs); letter-spacing: 0;
   font-weight: 600;
 }
 .chat-prior-note {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: var(--text-2xs); letter-spacing: 0;
 }

@@ -18,7 +18,7 @@ export const getJson = <T,>(url: string, signal: AbortSignal) =>
 export const Block = ({ title, note, children }: { title: string; note?: React.ReactNode; children: React.ReactNode }) => (
   <section aria-label={title} className="min-w-0 rounded-lg border bg-card">
     <header className="flex items-center gap-2 border-b px-4 py-2.5">
-      <h2 className="m-0 text-[15px] font-semibold">{title}</h2>
+      <h2 className="m-0 text-base font-semibold">{title}</h2>
       <span className="ml-auto text-sm text-muted-foreground">{note}</span>
     </header>
     {children}

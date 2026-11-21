@@ -37,11 +37,11 @@ function TaskCard({ t, now }: { t: BoardTask; now: number }) {
         </p>
       )}
       {t.stage === 'blocked' && t.note && <p data-blocked-reason className="line-clamp-2 text-xs text-destructive" title={t.note}>{t.note}</p>}
-      <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+      <div className="flex min-w-0 items-center gap-2 text-2xs text-muted-foreground tabular-nums">
         <span className="min-w-0 truncate" title={owner}>{owner}</span>
         <span data-in-stage className="ml-auto shrink-0" title="이 단계에 있은 시간">{stageLabel(t.stage)} {inStage(now - t.stageAt)}</span>
       </div>
-      {eta && <p data-eta className={cn('text-[11px] tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>예상 {eta.text}</p>}
+      {eta && <p data-eta className={cn('text-2xs tabular-nums', eta.late ? 'text-destructive' : 'text-muted-foreground')}>예상 {eta.text}</p>}
       <div role="img" aria-label={`단계별 시간: ${spans.map(s => `${stageLabel(s.stage)} ${span(s.ms)}`).join(', ')}`} className="flex h-1.5 gap-px overflow-clip rounded-full bg-sunken">
         {spans.map((s, i) => <span key={i} data-bar={s.stage} style={{ flexGrow: s.ms / total }} className={cn('min-w-px basis-0', BAR[s.stage])} />)}
       </div>
