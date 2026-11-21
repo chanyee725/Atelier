@@ -284,8 +284,7 @@ export async function setup(ctx) {
       const guard = d && usesClaude ? d.hub.guardCheck(sessions) : null;
       if (guard) blockers.push(guard);
     }
-    // legacyModels: always empty since every provider runs again (#587); kept so older web builds still read it.
-    return { blockers, sessions, legacyModels: {} };
+    return { blockers, sessions };
   }
 
   async function status(path) {
@@ -294,8 +293,8 @@ export async function setup(ctx) {
     if (!file) throw new StoreError(404, 'not found');
     const entry = entries()?.[path] ?? null;
     const state = entry?.state ?? (file.plan ? 'plan' : null);
-    const { blockers, sessions, legacyModels } =
-      state === 'running' || state === 'done' ? { blockers: [], sessions: 0, legacyModels: {} } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0, legacyModels: {} } : await check(path, file, entry);
+    const { blockers, sessions } =
+      state === 'running' || state === 'done' ? { blockers: [], sessions: 0 } : state === 'paused' ? { blockers: resumeBlockers(entry), sessions: 0 } : await check(path, file, entry);
     const l = dispatch()?.hub.currentLimits() ?? null;
     return {
       path,
@@ -312,7 +311,6 @@ export async function setup(ctx) {
       pause: state === 'paused' ? (entry.pause ?? null) : null,
       doneAt: state === 'done' ? (entry.doneAt ?? null) : null,
       blockers,
-      legacyModels,
       changes: state === 'plan' && entry ? planChanges(drafts.get(path), file.plan) : [],
       sessions,
       limits: l ? { five: l.five ?? null, seven: l.seven ?? null, fiveReset: l.fiveReset ?? null, sevenReset: l.sevenReset ?? null } : null,

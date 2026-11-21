@@ -142,8 +142,6 @@ export function routeTable(d) {
       if (!p || p.startsWith(".") || /[\/\\\0]/.test(p)) throw fail(400, "folder가 올바르지 않아요");
       return hub.folderUsage(p);
     }],
-    // Other projects are no longer probed over the network: this server's own usage only.
-    ["GET", /^\/api\/usage\/all$/, async () => ({ projects: (await d.projects()).map(p => ({ ...p, ...d.usage() })) })],
     ["GET", /^\/api\/prefs$/, async () => d.readPrefs()],
     ["POST", /^\/api\/prefs$/, async (_, b) => d.writePrefs(b || {})],
     ["GET", /^\/api\/projects$/, async () => ({ projects: await d.projects() })],
@@ -235,9 +233,6 @@ export function routeTable(d) {
       if (!d.postAccounts) return { ok: false, reason: "disabled", summary: a.summary };
       return { ...(await d.postAccounts({ pr, issue, summary: a.summary })), summary: a.summary };
     }],
-    ["GET", /^\/api\/tickets$/, async () => ({ tickets: hub.tickets })],
-    ["POST", /^\/api\/tickets\/([\w-]+)\/resume$/, async ([id]) => ({ ok: hub.resumeTicket(id) })],
-    ["POST", /^\/api\/tickets\/([\w-]+)\/close$/, async ([id]) => { hub.closeTicket(id); return { ok: true }; }],
     ["POST", /^\/api\/tasks$/, async (_, b) => {
       const isNew = !b?.id;
       const t = await hub.setTask(b?.lead || null, b || {});

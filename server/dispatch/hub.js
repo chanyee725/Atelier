@@ -1297,15 +1297,6 @@ export class Hub extends EventEmitter {
     return true;
   }
 
-  closeTicket(id) {
-    const t = (this.store.data.tickets ||= {})[id];
-    if (!t) return;
-    t.status = "closed";
-    t.updatedAt = Date.now();
-    this.store.save();
-    this.emit("tickets", this.tickets);
-  }
-
   checkTeams(now = Date.now()) {
     this.checkTickets(now);
     const leads = this.sessions.filter(s => s.canSpawn && isOpenStatus(s.status));

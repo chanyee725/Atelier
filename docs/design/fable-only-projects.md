@@ -56,7 +56,7 @@ What is kept, so old data still opens:
 
 "Project" means the web app's project: a top-level folder of the workspace (`server/workspace/projects.js`). Files at the root are 미분류. It is identified by its folder `path`, never by the `.project.json` display `name`.
 
-Server Dispatch already uses "project" for the git project (`/api/projects`, `/api/usage/all`, `clearAll`). To keep the two apart, the new session field and query parameter are called `folder`; the UI still says 프로젝트.
+Server Dispatch already uses "project" for the git project (`/api/projects`, `clearAll`). To keep the two apart, the new session field and query parameter are called `folder`; the UI still says 프로젝트.
 
 ### Server (E505c)
 
