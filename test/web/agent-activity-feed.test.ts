@@ -1,11 +1,11 @@
-// E537 (#654): the app's activity log — add and read marks, and which events go out as a browser notification.
+// E537 (#654): the app's activity log — adding events and which events go out as a browser notification.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addEvent, alertRoute, markRead } from '../../web/src/activity/activity.ts';
+import { addEvent, alertRoute } from '../../web/src/activity/activity.ts';
 import type { ActivityEvent, ActivityLog } from '../../shared/dispatch/agent-activity.ts';
 
 const ev = (id: string, at: number, kind: ActivityEvent['kind'] = 'start', extra: Partial<ActivityEvent> = {}): ActivityEvent => ({ id, at, kind, sid: 's1', name: 'Jude', role: 'impl', file: 'P/07 서버.dpx.json', ...extra });
-const empty: ActivityLog = { events: [], readAt: 0 };
+const empty: ActivityLog = { events: [] };
 
 test('addEvent: oldest first, no duplicates, malformed dropped', () => {
   let log = addEvent(empty, ev('b', 2000));
@@ -13,14 +13,6 @@ test('addEvent: oldest first, no duplicates, malformed dropped', () => {
   assert.deepEqual(log.events.map((e) => e.id), ['a', 'b']);
   assert.equal(addEvent(log, ev('a', 1000)), log, 'same id: same log');
   assert.equal(addEvent(log, { id: 'x' }), log, 'malformed: same log');
-});
-
-test('markRead: the mark never moves back', () => {
-  const log = addEvent(addEvent(empty, ev('a', 1000)), ev('b', 2000));
-  const read = markRead(log, 1000);
-  assert.equal(read.readAt, 1000);
-  assert.equal(markRead(read, 500), read);
-  assert.equal(markRead(read, 'x'), read);
 });
 
 test('alertRoute: no toast in view (#811), notification when hidden and on, progress never pops up', () => {

@@ -12,10 +12,6 @@ export function addEvent(log: ActivityLog, e: unknown): ActivityLog {
   return { ...log, events };
 }
 
-/** The log after a read mark from any page (never moves back). */
-export const markRead = (log: ActivityLog, readAt: unknown): ActivityLog =>
-  typeof readAt === 'number' && Number.isFinite(readAt) && readAt > log.readAt ? { ...log, readAt } : log;
-
 /** Progress events come often (one per section): they never go out as a notification. */
 export const alerts = (e: Pick<ActivityEvent, 'kind'>) => e.kind !== 'progress';
 
