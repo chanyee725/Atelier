@@ -91,14 +91,14 @@ function EntryView({ m, agent }: { m: Entry; agent: string }) {
             <ChevronRight aria-hidden className="ml-auto size-3.5 shrink-0 transition-transform group-open:rotate-90" />
           </summary>
           {detail && (
-            <pre className="max-h-64 overflow-auto border-t px-3 py-2 font-mono text-[11px] leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]"><ShellText text={detail} /></pre>
+            <pre className="max-h-64 overflow-auto border-t px-3 py-2 font-mono text-2xs leading-5 whitespace-pre-wrap [overflow-wrap:anywhere]"><ShellText text={detail} /></pre>
           )}
         </details>
       );
     }
     case 'tool_result':
       return m.text ? (
-        <pre className={cn('-mt-2 max-h-40 overflow-y-auto border-l-2 py-0.5 pl-3 font-mono text-[11px] leading-5 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]', m.error ? 'border-destructive' : 'border-border')}><ShellText text={m.text} /></pre>
+        <pre className={cn('-mt-2 max-h-40 overflow-y-auto border-l-2 py-0.5 pl-3 font-mono text-2xs leading-5 whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]', m.error ? 'border-destructive' : 'border-border')}><ShellText text={m.text} /></pre>
       ) : null;
     case 'perm':
       return (
@@ -219,7 +219,7 @@ function ThinkingLine({ s }: { s: Session }) {
   if (!live) return null;
   const t = turn(s);
   return (
-    <div className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
+    <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
       <span className="font-medium text-foreground">응답하는 중…</span>
       <span className="truncate tabular-nums">
         ({fmtElapsed(now - (t.at ?? now))}{t.tokens ? ` · 토큰 ${fmtK(t.tokens)}` : ''})
@@ -246,7 +246,7 @@ export function Chat({ s, report, thinking = true, after }: { s: Session; report
     <div
       ref={box}
       onScroll={e => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}
-      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body-mid text-[13px] leading-[1.55] [&>*]:shrink-0"
+      className="flex h-full flex-col gap-4 overflow-y-auto overlay-body-mid text-xs leading-[1.55] [&>*]:shrink-0"
     >
       {!entries && <p className="text-muted-foreground">대화를 불러오는 중이에요…</p>}
       {entries?.length === 0 && (
@@ -276,9 +276,9 @@ export function Info({ s }: { s: Session }) {
   const ratio = s.ctxWindow ? s.ctx / s.ctxWindow : null;
   const usage: [string, number][] = [['입력', s.usage.input], ['출력', s.usage.output], ['캐시 읽기', s.usage.cacheRead], ['캐시 쓰기', s.usage.cacheWrite]];
   const section = 'border-t border-border/70 py-4 first:border-t-0 first:pt-1';
-  const heading = 'm-0 mb-2.5 text-[13px] font-semibold text-foreground';
+  const heading = 'm-0 mb-2.5 text-xs font-semibold text-foreground';
   return (
-    <div className="flex h-full flex-col overflow-y-auto overlay-body font-sans text-[13px] leading-[1.55]">
+    <div className="flex h-full flex-col overflow-y-auto overlay-body font-sans text-xs leading-[1.55]">
       <section aria-label="세션" className={section}>
         <h3 className={heading}>세션</h3>
         <dl className="m-0 grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-2">
@@ -293,7 +293,7 @@ export function Info({ s }: { s: Session }) {
 
       <section aria-label="컨텍스트" className={section}>
         <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h3 className="m-0 text-[13px] font-semibold text-foreground">컨텍스트</h3>
+          <h3 className="m-0 text-xs font-semibold text-foreground">컨텍스트</h3>
           <span className="tabular-nums text-muted-foreground">
             <span className="font-semibold text-foreground">{pct(ratio)}</span> · {fmtK(s.ctx)} / {fmtK(s.ctxWindow)}
           </span>
@@ -305,16 +305,16 @@ export function Info({ s }: { s: Session }) {
 
       <section aria-label="토큰과 비용" className={section}>
         <div className="mb-2.5 flex items-baseline justify-between gap-3">
-          <h3 className="m-0 text-[13px] font-semibold text-foreground">토큰</h3>
+          <h3 className="m-0 text-xs font-semibold text-foreground">토큰</h3>
           <span className="text-muted-foreground">
-            비용 <span className="text-[15px] font-semibold tracking-[-0.01em] text-foreground tabular-nums">{fmtUsd(s.cost)}</span>
+            비용 <span className="text-base font-semibold tracking-[-0.01em] text-foreground tabular-nums">{fmtUsd(s.cost)}</span>
           </span>
         </div>
         <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {usage.map(([k, v]) => (
             <div key={k}>
               <dt className="text-xs text-muted-foreground">{k}</dt>
-              <dd className="m-0 text-[15px] font-semibold tracking-[-0.01em] tabular-nums">{fmtK(v)}</dd>
+              <dd className="m-0 text-base font-semibold tracking-[-0.01em] tabular-nums">{fmtK(v)}</dd>
             </div>
           ))}
         </dl>
@@ -322,7 +322,7 @@ export function Info({ s }: { s: Session }) {
       </section>
 
       <details className={cn(section, 'group')}>
-        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px] font-semibold marker:hidden">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-semibold marker:hidden">
           역할 프롬프트
           <span className="text-xs font-normal text-muted-foreground group-open:hidden">펼치기</span>
           <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">접기</span>
@@ -356,7 +356,7 @@ export function Composer({ s, text, setText, inputRef, report }: { s: Session; t
     sending.current = false;
     setBusy(false);
   };
-  if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-[13px] leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>;
+  if (!canRun(s)) return <p role="note" className="overlay-foot border-t text-xs leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>;
   return (
     <div className="overlay-foot flex items-end gap-2 border-t">
       <Textarea
@@ -366,7 +366,7 @@ export function Composer({ s, text, setText, inputRef, report }: { s: Session; t
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229 && !e.repeat) { e.preventDefault(); void send(); } }}
         placeholder={`${s.name}에게 메시지 보내기`}
         aria-label="메시지"
-        className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-[13px] leading-[1.55] md:text-[13px]"
+        className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-xs leading-[1.55] md:text-xs"
         rows={1}
       />
       <Button size="icon" onClick={() => void send()} disabled={!text.trim() || busy} aria-label="보내기"><SendHorizontal /></Button>

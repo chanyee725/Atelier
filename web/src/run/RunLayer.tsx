@@ -5,7 +5,7 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { progressLabel } from '../../../shared/dispatch/step-view.ts';
 import type { Scene } from '../../../shared/render/index.ts';
-import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, legendOpen, legendScale, legendSpot, MARK_INSET, nodeBoxes, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
+import { boardShown, etaPanel, legendOf, BADGE_R, BADGE_STEP, badgeSpan, badgeTextSize, MARK_FONT, legendOpen, legendScale, legendSpot, MARK_INSET, nodeBoxes, markY, overlayModel, pathData, runProgress, stepMarks, type OverlayNode, type RunStep, type Size } from './overlayModel';
 import { setStill, useStill } from './runStore';
 import { fmtDur } from './runModel';
 import type { AgentEta, EtaPanel } from './overlayModel';
@@ -107,14 +107,14 @@ function Step({ n, labels }: { n: OverlayNode; labels: boolean }) {
       {label ? (
         <g className="run-label" aria-hidden="true">
           <rect x={label.x} y={label.y} width={label.w} height={label.h} rx={label.h / 2} />
-          <text x={label.x + label.w / 2} y={label.y + label.h / 2} textAnchor="middle" dominantBaseline="central">
+          <text x={label.x + label.w / 2} y={label.y + label.h / 2} fontSize={MARK_FONT} textAnchor="middle" dominantBaseline="central">
             {label.text}
           </text>
         </g>
       ) : (
         <g className="run-corner" aria-hidden="true">
           <rect x={chip.x} y={chip.y} width={chip.w} height={chip.h} rx={chip.h / 2} />
-          <text x={chip.x + chip.w / 2} y={chip.y + chip.h / 2} textAnchor="middle" dominantBaseline="central">
+          <text x={chip.x + chip.w / 2} y={chip.y + chip.h / 2} fontSize={MARK_FONT} textAnchor="middle" dominantBaseline="central">
             {n.glyph}
           </text>
         </g>
@@ -139,7 +139,7 @@ function Badges({ n }: { n: OverlayNode }) {
         <g className="run-badge run-badge-more">
           <title>{`${more}명 더`}</title>
           <circle cx={cx(shown.length)} cy={cy} r={BADGE_R} />
-          <text x={cx(shown.length)} y={cy} textAnchor="middle" dominantBaseline="central">
+          <text x={cx(shown.length)} y={cy} fontSize={badgeTextSize(`+${more}`)} textAnchor="middle" dominantBaseline="central">
             +{more}
           </text>
         </g>
@@ -149,7 +149,7 @@ function Badges({ n }: { n: OverlayNode }) {
           <g key={b.name} className="run-badge" data-agent={b.name} style={{ color: b.color }}>
             <title>{b.title}</title>
             <circle cx={cx(i)} cy={cy} r={BADGE_R} />
-            <text x={cx(i)} y={cy} textAnchor="middle" dominantBaseline="central">
+            <text x={cx(i)} y={cy} fontSize={badgeTextSize(b.initial)} textAnchor="middle" dominantBaseline="central">
               {b.initial}
             </text>
           </g>

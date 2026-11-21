@@ -69,22 +69,3 @@ export function stepProgress(steps: Record<string, { state: string }> | undefine
   const all = Object.values(steps ?? {});
   return all.length ? { done: all.filter((s) => s.state === 'done').length, total: all.length } : null;
 }
-
-/** The persisted tab of the card; anything unknown is 이슈. Reads and writes never throw (private mode, no storage). */
-export type ActiveTab = 'issues' | 'docs';
-export const ACTIVE_TAB_KEY = 'atelier.active-card-tab';
-type Store = Pick<Storage, 'getItem' | 'setItem'>;
-export function readActiveTab(store?: Store | null): ActiveTab {
-  try {
-    return (store ?? localStorage).getItem(ACTIVE_TAB_KEY) === 'docs' ? 'docs' : 'issues';
-  } catch {
-    return 'issues';
-  }
-}
-export function saveActiveTab(tab: ActiveTab, store?: Store | null): void {
-  try {
-    (store ?? localStorage).setItem(ACTIVE_TAB_KEY, tab);
-  } catch {
-    /* storage unavailable: the choice just is not remembered */
-  }
-}

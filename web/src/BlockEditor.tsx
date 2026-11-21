@@ -16,7 +16,7 @@ export type BlockEditorHandle = { cursorLine: () => number | null };
 type Props = { code: string; type: string; dark: boolean; onChange: (code: string) => void; ref?: Ref<BlockEditorHandle> };
 
 const baseTheme = EditorView.theme({
-  '&': { fontSize: '13.5px', background: 'var(--muted)', color: 'var(--foreground)' },
+  '&': { fontSize: 'var(--text-xs)', background: 'var(--muted)', color: 'var(--foreground)' },
   '.cm-content': { fontFamily: 'var(--font-mono)', caretColor: 'var(--foreground)', padding: '6px 0' },
   '.cm-gutters': { background: 'transparent', color: 'var(--muted-foreground)', border: 'none' },
   '.cm-activeLine, .cm-activeLineGutter': { background: 'color-mix(in oklab, var(--foreground) 5%, transparent)' },

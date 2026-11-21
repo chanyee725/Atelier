@@ -71,7 +71,7 @@ export function SessionCard({ agent: a, summary, title, onOpen, trail }: { agent
             {editing ? (
               <AgentTag agent={a} size="sm" className="-mt-1 min-w-0" />
             ) : (
-              <span data-agent-name className="min-w-0 truncate text-[15px] leading-5 font-semibold tracking-[-0.01em] text-foreground">{a.name}</span>
+              <span data-agent-name className="min-w-0 truncate text-base leading-5 font-semibold tracking-[-0.01em] text-foreground">{a.name}</span>
             )}
             <RoleBadge agent={a} className="shrink-0" />
             <span data-agent-state className={cn('ml-auto inline-flex shrink-0 items-center gap-1.5 font-medium whitespace-nowrap', tone)} title={state}>

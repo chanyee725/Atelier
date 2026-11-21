@@ -8,8 +8,8 @@
 // `fill` (#819, the home 대시보드): side by side, both columns end at the pane's bottom edge. 실행 중인 세션 takes 2 parts
 // and 이슈 3 parts of the left column (each list scrolls inside; issues page to the rows that fit, the pager on the
 // card's bottom edge); the tabbed card takes what 세션 요청 leaves. At a narrow main pane (under 880px) the halves
-// stack, work first, and the page scrolls as before. 진행 중인 이슈 (#898) sits between them (as tall as its rows, capped) and only shows
-// while an issue has an open session or PR. Live sessions show as small cards, 4 a row (#799, #875).
+// stack, work first, and the page scrolls as before. 진행 중인 문서 (#975) sits between them (as tall as its rows, capped); the issues
+// a team works on now lead the 이슈 card (#898, #1025), so an issue shows once. Live sessions show as small cards, 4 a row (#799, #875).
 import { useMemo } from 'react';
 import { boardHash, plainClick } from '../projectNav';
 import { ArrowRight, RotateCw } from 'lucide-react';
@@ -25,7 +25,7 @@ import { PrsCard } from './WorkCards';
 import { WorkTabsCard } from './WorkTabsCard';
 import { SessionRequestsCard } from './SessionRequestsCard';
 import { useIssues, usePrTracking, usePrs, useBranches, useProjectState, useSessionBranches } from './projectFeeds';
-import { ActiveIssuesCard } from './ActiveIssuesCard';
+import { ActiveDocsCard } from './ActiveDocsList';
 import { IssuePanel } from './IssuePanel';
 import { issueTitles, taskSummary, type TaskSummary } from './taskSummary';
 import { SessionCard, SessionGrid } from './SessionCard';
@@ -66,8 +66,8 @@ export function ProjectDashboard({ project, onOpen, onBoard, fill, onSession, ap
     <DashGrid ratio="3fr 2fr" fill={fill}>
       <DashColumn label="진행 중인 작업" fill={fill}>
         <SessionsCard agents={agents} summaryOf={(sid) => summaries.get(sid) ?? null} onRetry={retry} titleOf={(f) => titles.get(f)} onOpen={onOpen} folder={project.path} onBoard={onBoard} />
-        <ActiveIssuesCard issues={issues} sessions={sessions} tasks={tasks} prs={prs} project={project} agents={agents} onOpen={onOpen} />
-        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} fill={fill ? 3 : undefined} />
+        <ActiveDocsCard project={project} agents={agents} onOpen={onOpen} />
+        <IssuesCard issues={issues} sessions={sessions} branches={branches} prs={prs} tasks={tasks} fill={fill ? 3 : undefined} />
         {/* The team panel of the issue rows above (#954); other issue rows go to the chat dock. */}
         <IssuePanel issues={issues} sessions={sessions} tasks={tasks} prs={prs} />
       </DashColumn>

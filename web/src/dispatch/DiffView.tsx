@@ -21,7 +21,7 @@ function FileBlock({ f, open, onToggle }: { f: FileDiff; open: boolean; onToggle
         <span className="shrink-0 text-destructive tabular-nums">−{f.del}</span>
       </Button>
       {open && (f.binary ? <p className="px-3 py-2 text-xs text-muted-foreground">바이너리 파일</p> : (
-        <div className="overflow-x-auto font-mono text-[11px] leading-5">
+        <div className="overflow-x-auto font-mono text-2xs leading-5">
           {f.lines.map((l, i) => l.kind === 'hunk' ? (
             <div key={i} className="border-y bg-muted/40 px-3 py-0.5 text-muted-foreground">{l.text || '⋯'}</div>
           ) : (

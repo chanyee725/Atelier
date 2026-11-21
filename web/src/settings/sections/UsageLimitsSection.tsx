@@ -58,7 +58,7 @@ function ProviderUsage({ load }: { load: SettingsLoad }) {
           <div key={g.id} data-provider={g.id} className="flex flex-col gap-2.5 rounded-card bg-background px-4 py-3.5">
             <h5 className="text-sm font-medium">
               {g.name}
-              {g.plan && <span className="ml-2 rounded-full bg-(--sunken) px-2 text-[11px] font-normal text-muted-foreground">{g.plan}</span>}
+              {g.plan && <span className="ml-2 rounded-full bg-(--sunken) px-2 text-2xs font-normal text-muted-foreground">{g.plan}</span>}
             </h5>
             {g.windows.length > 0 ? (
               <ul className="flex flex-col gap-3">

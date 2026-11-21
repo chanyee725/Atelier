@@ -1,4 +1,4 @@
-// What a session works on, as one short line for its card (#912): `fix — #886 질문이 안 보이는 사람 기다림`.
+// What a session works on, as one short line for its card (#912): `fix · #886 질문이 안 보이는 사람 기다림`.
 // Built from metadata only, never from the transcript. Sources, first that answers wins:
 //   1. the session's issue (its `issue`, else the number its branch names) with the issue title from GET /api/issues;
 //   2. an open task on the board (set_task) owned by this session;
@@ -87,8 +87,11 @@ export function taskSummary(
   return lt ? { kind, text: clean(lt.title), from: 'board' } : null;
 }
 
-/** The summary as one string (`fix — #886 …`), for a title attribute or an accessible name. */
-export const summaryLine = (x: TaskSummary) => (x.kind ? `${x.kind} — ${x.text}` : x.text);
+/** The prefix the card shows: the branch type as is (`fix`), a reviewer's in Korean (`리뷰`, #1025). */
+export const kindLabel = (kind: string) => (kind === 'review' ? '리뷰' : kind);
+
+/** The summary as one string (`fix · #886 …`), for a title attribute or an accessible name. */
+export const summaryLine = (x: TaskSummary) => (x.kind ? `${kindLabel(x.kind)} · ${x.text}` : x.text);
 
 /** An issue-title lookup over the issue feed's answer (or nothing while it loads or fails). */
 export function issueTitles(issues: readonly { number: number; title: string }[] | null | undefined): (n: number) => string | null {

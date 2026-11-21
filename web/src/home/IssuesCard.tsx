@@ -5,6 +5,8 @@
 // the sessions' accounts. Branches no issue claims have their own dashboard card (이슈 없는 브랜치). Read-only. The
 // number and title (#954) open the team panel when a team has the issue, else the chat dock's helper, which proposes
 // a plan and starts it only on 시작하기. The GitHub button and PR links open GitHub in a new tab.
+// #1025: the issues a team works on now come first as fuller blocks (ActiveLine: stage, lead, members, PRs, ETA) and
+// are left out of the rows below, so each issue shows once; the dashboard has no second issue list.
 import { useId, useRef, useState } from 'react';
 import { ChevronRight, ExternalLink, GitBranch, GitPullRequest } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -14,6 +16,8 @@ import { cn } from '../lib/utils';
 import { Card, EmptyState, StatusDot, TONE } from './dash';
 import { RunningMark } from './ActiveDocsList';
 import { PrIssueSessions } from './IssueSessionList';
+import { ActiveLine } from './ActiveIssueLine';
+import { useActiveIssueList } from './IssuePanel';
 import { Pager, useBoxRows, usePaging } from './Pager';
 import { openIssueTeam, useIssueTeamTarget } from '../live/issueStore';
 import { askAboutIssue } from '../chat/lib/askIssue';
@@ -22,6 +26,7 @@ import { fromSessions } from './issueSessions';
 import { ISSUE_STATE, initials, issueRows, issuesBlankReason, ownerSessions, type IssueRow, type IssuesAnswer } from './issueBoard';
 import type { Branches, Feed, PrAnswer } from './projectFeeds';
 import type { Session } from '../../../shared/dispatch/types.ts';
+import type { BoardTask } from '../dispatch/types.ts';
 
 const CI: Record<string, { label: string; tone: 'ok' | 'warn' | 'bad' } | null> = {
   success: { label: 'CI 통과', tone: 'ok' },
@@ -38,6 +43,8 @@ type Props = {
   branches: Feed<Branches>;
   /** CI, review and conflicts of the open PRs' branches. */
   prs: Feed<ReadonlyMap<string, PrAnswer>>;
+  /** Board tasks, for the in-progress blocks' stage and ETA. */
+  tasks?: readonly BoardTask[];
   /** The list's filter and sort; a change goes back to page 1 (#800). */
   filterKey?: string;
   /** Share of a filled dashboard column (#819): the card takes the rest of the column and pages to the rows that fit. */
@@ -53,25 +60,37 @@ const ISSUE_ROW_PX = 37;
 export const openPrBranches = (answer: Feed<IssuesAnswer>) =>
   answer && answer !== 'failed' && answer.ok ? [...new Set(answer.issues.flatMap((i) => i.prs.flatMap((p) => (p.state === 'open' && p.branch ? [p.branch] : []))))] : [];
 
-export function IssuesCard({ issues, sessions, branches, prs, filterKey = '', fill }: Props) {
+const NO_TASKS: readonly BoardTask[] = [];
+
+export function IssuesCard({ issues, sessions, branches, prs, tasks = NO_TASKS, filterKey = '', fill }: Props) {
   const list = Array.isArray(sessions) ? sessions : [];
-  const rows = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
+  const all = issues && issues !== 'failed' && issues.ok ? issueRows(issues.issues, list) : [];
+  const { list: active } = useActiveIssueList({ issues, sessions, tasks, prs });
+  const busy = new Set(active.map((x) => x.number));
+  const rows = all.filter((r) => !busy.has(r.number));
   const box = useRef<HTMLDivElement | null>(null);
   const size = useBoxRows(box, { rowHeight: ISSUE_ROW_PX, min: 3, max: 60, fallback: ISSUES_PER_PAGE });
   const paged = usePaging(rows, size, filterKey);
   const shown = useIssueTeamTarget();
   return (
-    <Card id="issues" title="이슈" count={rows.length || undefined} flush fill={fill}>
+    <Card id="issues" title="이슈" count={all.length || undefined} flush fill={fill}>
       {issues === null ? (
         <EmptyState>GitHub에서 이슈를 찾는 중이에요</EmptyState>
       ) : issues === 'failed' ? (
         <EmptyState>{issuesBlankReason('error')}</EmptyState>
       ) : !issues.ok ? (
         <EmptyState>{issuesBlankReason(issues.reason)}</EmptyState>
-      ) : rows.length === 0 ? (
+      ) : all.length === 0 ? (
         <EmptyState>열린 이슈가 없어요.</EmptyState>
       ) : (
         <>
+          {active.length > 0 && (
+            <ul aria-label="진행 중인 이슈" data-active-issues className="m-0 shrink-0 list-none p-0 *:border-t">
+              {active.map((x) => (
+                <ActiveLine key={x.number} issue={x} now={Date.now()} open={shown === x.number} />
+              ))}
+            </ul>
+          )}
           {/* Filled: this box takes the card's spare height, so the pager below sits on the card's bottom edge. */}
           <div ref={box} data-issues-box className={cn(fill !== undefined && '@min-[880px]:min-h-0 @min-[880px]:flex-1 @min-[880px]:overflow-y-auto')}>
             <ul aria-label="열린 이슈" className="m-0 list-none p-0 *:border-t">
@@ -113,11 +132,11 @@ function Owners({ sessions }: { sessions: Session[] }) {
     <span data-issue-owners className="flex shrink-0 items-center" title={names}>
       <span className="sr-only">맡은 세션 {names}</span>
       {shown.map((s) => (
-        <span key={s.id} aria-hidden className="-ml-1 grid size-5 place-items-center rounded-full bg-muted text-[9px] font-semibold text-foreground ring-2 ring-card first:ml-0">
+        <span key={s.id} aria-hidden className="-ml-1 grid size-5 place-items-center rounded-full bg-muted text-2xs font-semibold text-foreground ring-2 ring-card first:ml-0">
           {initials(s.name)}
         </span>
       ))}
-      {sessions.length > 3 && <span aria-hidden className="ml-1 text-[11px] text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
+      {sessions.length > 3 && <span aria-hidden className="ml-1 text-2xs text-muted-foreground tabular-nums">+{sessions.length - 3}</span>}
     </span>
   );
 }

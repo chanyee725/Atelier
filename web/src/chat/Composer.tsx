@@ -101,8 +101,8 @@ export function Composer(p: Props) {
           <CommandList id="chat-slash-list" className="max-h-56">
             {items.map(item => (
               <CommandItem key={item.name} value={item.name} onSelect={() => take(item)} className="flex-col items-start gap-0.5 py-1.5">
-                <span className="font-mono text-[12.5px]">/{item.name}</span>
-                {item.description && <span className="line-clamp-1 text-[12px] text-muted-foreground">{item.description}</span>}
+                <span className="font-mono text-2xs">/{item.name}</span>
+                {item.description && <span className="line-clamp-1 text-2xs text-muted-foreground">{item.description}</span>}
               </CommandItem>
             ))}
           </CommandList>
@@ -177,7 +177,7 @@ export function Composer(p: Props) {
           }}
           placeholder={p.placeholder}
           aria-label="메시지"
-          className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-[13px] leading-[1.55] md:text-[13px]"
+          className="max-h-40 min-h-10 resize-none rounded-[10px] px-3 py-2 text-xs leading-[1.55] md:text-xs"
           rows={1}
         />
         {p.running ? (

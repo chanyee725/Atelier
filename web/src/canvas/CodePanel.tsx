@@ -116,15 +116,15 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
                       <span className="shrink-0">{file}</span>
                       <span className="shrink-0 text-muted-foreground">{lines}</span>
                     </span>
-                    {r.symbol && <span className="truncate font-mono text-[11px]">{r.symbol}</span>}
-                    {r.note && <span className="text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{r.note}</span>}
+                    {r.symbol && <span className="truncate font-mono text-2xs">{r.symbol}</span>}
+                    {r.note && <span className="text-2xs text-muted-foreground [overflow-wrap:anywhere]">{r.note}</span>}
                   </button>
                 </li>
               );
             })}
           </ul>
           <div className="flex min-h-0 flex-1 flex-col gap-1">
-            {preview.state === 'ok' && preview.win.truncated && <p className="text-[11px] text-muted-foreground">범위가 길어서 앞쪽 400줄만 보여 줘요</p>}
+            {preview.state === 'ok' && preview.win.truncated && <p className="text-2xs text-muted-foreground">범위가 길어서 앞쪽 400줄만 보여 줘요</p>}
             {preview.state === 'error' && (
               <p role="status" className="text-xs text-muted-foreground">
                 {preview.text}
@@ -138,7 +138,7 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
                 aria-label={`${refText(ref!)} 미리보기`}
                 tabIndex={0}
                 data-code-preview=""
-                className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-background font-mono text-[11px] leading-[1.6]"
+                className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-background font-mono text-2xs leading-[1.6]"
               >
                 <div className="w-max min-w-full py-1">
                   {preview.win.lines.map((text, i) => {
@@ -162,7 +162,7 @@ export function CodePanel({ label, code, orphans = 0, onCleanOrphans, onClose }:
         <p className="text-xs text-muted-foreground">연결된 코드 위치가 없어요</p>
       )}
       {orphans > 0 && onCleanOrphans && (
-        <div className="flex items-center gap-2 border-t border-border pt-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 border-t border-border pt-2 text-2xs text-muted-foreground">
           <span>이름이 바뀌어 연결이 끊긴 코드가 {orphans}개 있어요</span>
           <Button variant="outline" size="sm" className="ml-auto" onClick={onCleanOrphans}>
             연결 안 된 코드 정리

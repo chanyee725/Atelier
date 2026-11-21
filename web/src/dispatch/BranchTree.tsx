@@ -95,14 +95,14 @@ function TreeRow({ commit: c, base, now, renderTip }: { commit: Commit<TreeEntry
       {row ? (
         <span className="flex min-w-0 shrink-0 items-center gap-1.5">
           <GitBranch aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="max-w-[16rem] truncate font-mono text-[13px] font-medium" title={row.branch}>{row.branch}</span>
+          <span className="max-w-[16rem] truncate font-mono text-xs font-medium" title={row.branch}>{row.branch}</span>
           {row.issue != null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">#{row.issue}</span>}
           {row.merged && <span className="shrink-0 text-xs text-muted-foreground">병합됨</span>}
         </span>
       ) : baseTip ? (
         <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
           <GitBranch aria-hidden className="size-3.5 shrink-0" />
-          <span className="font-mono text-[13px]">{base}</span>
+          <span className="font-mono text-xs">{base}</span>
         </span>
       ) : null}
       <span className={cn('min-w-0 flex-1 truncate', !row && 'text-muted-foreground')} title={c.message}>{c.message}</span>

@@ -87,7 +87,7 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
                 aria-label="파일 제목"
                 title={title || undefined}
                 aria-current="page"
-                className={`h-(--h-row) w-full min-w-24 rounded-control md:w-auto md:max-w-md md:field-sizing-content bg-transparent px-1.5 text-[15px] font-semibold tracking-[-0.01em] text-foreground outline-none placeholder:text-muted-foreground hover:bg-accent focus-visible:bg-background ${FOCUS_RING}`}
+                className={`h-(--h-row) w-full min-w-24 rounded-control md:w-auto md:max-w-md md:field-sizing-content bg-transparent px-1.5 text-base font-semibold tracking-[-0.01em] text-foreground outline-none placeholder:text-muted-foreground hover:bg-accent focus-visible:bg-background ${FOCUS_RING}`}
               />
             </li>
           </ol>

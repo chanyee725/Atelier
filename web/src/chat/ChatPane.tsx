@@ -63,7 +63,7 @@ export default function ChatPane(p: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center gap-1 border-b py-2 pr-2 pl-4">
-        <h2 id={titleId} className="m-0 shrink-0 text-[13px] font-semibold">채팅</h2>
+        <h2 id={titleId} className="m-0 shrink-0 text-xs font-semibold">채팅</h2>
         {spend && <span className="chat-dock-spend" title="이 대화의 토큰과 비용">{spend}</span>}
         <div className="ml-auto flex items-center">
           <Button size="icon-sm" variant="ghost" className="text-muted-foreground" aria-label="새 대화" title="새 대화" onClick={p.onNew}>
@@ -96,7 +96,7 @@ export default function ChatPane(p: Props) {
             <li className="chat-prior-note">이어서 보내면 이 대화를 이어 가요.</li>
           </ol>
         ) : (
-          <div className="flex h-full flex-col justify-end gap-1 overlay-body-mid text-[13px] leading-[1.55]">
+          <div className="flex h-full flex-col justify-end gap-1 overlay-body-mid text-xs leading-[1.55]">
             <p className="m-0 font-medium">무엇이든 물어보세요</p>
             <p role={p.notice ? 'note' : undefined} className="m-0 text-muted-foreground">
               {p.notice ?? '/ 로 스킬을 고르고, 이미지는 붙여 넣거나 끌어 놓아요.'}
@@ -106,7 +106,7 @@ export default function ChatPane(p: Props) {
       </div>
       <p role="status" className="chat-dock-thinking">{thinking ? '생각 중… Esc로 멈춰요' : ''}</p>
       {readOnly ? (
-        <p role="note" className="overlay-foot m-0 border-t text-[13px] leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>
+        <p role="note" className="overlay-foot m-0 border-t text-xs leading-[1.55] text-muted-foreground">{READ_ONLY_NOTICE}</p>
       ) : (
         <Composer
           inputRef={input}
