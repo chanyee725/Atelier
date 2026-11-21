@@ -10,6 +10,7 @@ Documents are `.dpx.json` files in the workspace (`<project>/atelier`). The API 
 ## Steps
 
 1. Find or create the file. `GET /api/tree` lists files. Create with `POST /api/file {path, title}` (409 when it exists).
+   Keep the title (and the file name) short: about 12 characters, at most 20, a noun phrase; details go in the first line of the body.
    Done when: `GET /api/file?path=<file>` returns a `revision`.
 2. Write in small passes. Read the whole file, change `document` (and `blocks` when a diagram goes in), and `PUT /api/file?path=<file>` the whole JSON back with its `revision`. One section per PUT, so the reader sees it grow. A 409 means someone saved first: read again and redo the change.
    Done when: each PUT returns the new `revision`.

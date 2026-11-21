@@ -1,6 +1,6 @@
 ---
 name: atelier-organize
-description: Sort an Atelier project's documents into area and feature folders taken from the project's own code structure (web/, server/, packages, apps) — no fixed list, no "pipelines" folder. Use for "폴더 정리해줘", "문서 분류해줘", "프로젝트 구조대로 나눠줘", before a lead's first plan in a project, or when plans and docs pile up at the top.
+description: Sort an Atelier project's documents into area and feature folders taken from the project's own code structure (web/, server/, packages, apps) — no fixed list except the 기획 folder for draft plans, no "pipelines" folder. Use for "폴더 정리해줘", "문서 분류해줘", "프로젝트 구조대로 나눠줘", before a lead's first plan in a project, or when plans and docs pile up at the top.
 ---
 
 # Atelier organize
@@ -16,6 +16,9 @@ Atelier keeps one tree per project: **area → feature → documents**.
   server/
     단일-폴더-저장/
       계획.dpx.json
+  기획/                    draft plans before 시작하기 (the one fixed folder)
+    로봇-제어/
+      계획.dpx.json
 ```
 
 The workspace is the folder the server serves (`GET /api/info` → `workspace`). The API is in `docs/workspace-api.md` of the Atelier repo. Every non-GET request needs `x-drawing: 1`.
@@ -24,15 +27,15 @@ The workspace is the folder the server serves (`GET /api/info` → `workspace`).
 
 1. Read the project's structure, not the workspace. List the top-level folders of the git project and one level inside the main ones (`web/src`, `server`, `packages/*`, `apps/*`, `services/*`). Skip `node_modules`, `test`, `dist`, `build`, hidden folders and the workspace itself.
    Done when: you can name 2–6 parts of the code, each with the folder it comes from.
-2. Pick the areas. One area per part, named exactly like its code folder, letter case included (`web/` → `web`, `server/` → `server`, `apps/admin` → `admin`). Check the existing areas first (`GET /api/tree`) and reuse one that matches in any letter case; never make two for the same part (`Web/` next to `web/`). The server also files a path under an existing folder that differs only in case, and answers 409 when two such folders exist. Never use `pipelines`, `docs`, `misc` or `etc`.
+2. Pick the areas. One area per part, named exactly like its code folder, letter case included (`web/` → `web`, `server/` → `server`, `apps/admin` → `admin`). Check the existing areas first (`GET /api/tree`) and reuse one that matches in any letter case; never make two for the same part (`Web/` next to `web/`). The server also files a path under an existing folder that differs only in case, and answers 409 when two such folders exist. Never use `pipelines`, `docs`, `misc` or `etc`. `기획` is not an area: leave it and what is in it alone.
    Done when: you have the area list, existing ones first.
 3. Create the missing areas: `POST /api/folder {path: "<Area>"}` (409 means it exists, which is fine).
    Done when: `GET /api/tree` shows every area at the top.
-4. File the loose items. For each top-level document or folder that is not an area, choose the area of its main change and a feature name: short Korean, 2–4 words joined by `-`, no issue number, no goal sentence (`이슈-대시보드`, `단일-폴더-저장`). Create `<Area>/<feature>` with `POST /api/folder`, then move:
+4. File the loose items. For each top-level document or folder that is not an area, choose the area of its main change and a feature name: short Korean, 2–4 words joined by `-`, at most 20 characters, no issue number, no goal sentence (`이슈-대시보드`, `단일-폴더-저장`). Create `<Area>/<feature>` with `POST /api/folder`, then move:
    - a plan → `POST /api/move {from, to: "<Area>/<feature>/계획.dpx.json", type: "file"}`
    - any other doc → `<Area>/<feature>/<short-name>.dpx.json`
    Moves keep history, run records and the plan's pipeline state. A target that exists returns 409: pick another short name.
-   Done when: nothing but areas is left at the top.
+   Done when: nothing but areas and `기획` is left at the top.
 5. Remove the empty leftovers (`DELETE /api/folder?path=<folder>`), such as an old `pipelines/`. Only remove a folder that `GET /api/tree` shows empty.
    Done when: the tree is area → feature → docs and nothing else.
 6. Report the tree in a few lines: each area, its features, and what moved where.
@@ -42,4 +45,4 @@ Documents inside a feature are optional: an area or a feature folder may stay em
 
 ## Later plans
 
-A lead writing a plan puts it at `<Area>/<feature>/계획.dpx.json` (`write_plan` with that `path`). Run this skill again when a new part of the code appears or items land at the top.
+A lead's new plan is drafted in `기획/<feature>/계획.dpx.json` (`write_plan` with `area` and `feature`, no `path`); 시작하기 moves the feature folder to `<Area>/<feature>/`. Run this skill again when a new part of the code appears or items land at the top.

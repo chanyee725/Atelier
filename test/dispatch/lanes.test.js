@@ -100,9 +100,10 @@ test("agent prompts call the tool Atelier, carry the lanes and the merge hand-of
   assert.match(SPAWN_PROMPT, /머지 담당\(merge\)/);
   assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
   assert.doesNotMatch(SPAWN_PROMPT, /20분/);
-  // Areas (#782): no fixed list, taken from the project, reused; plans at <영역>/<기능>/계획.dpx.json.
+  // Areas (#782): no fixed list, taken from the project, reused; plans drafted in 기획 and moved on 시작하기 (#1045).
   assert.match(SPAWN_PROMPT, /\[영역\]/);
-  assert.match(SPAWN_PROMPT, /<영역>\/<기능>\/계획\.dpx\.json/);
+  assert.match(SPAWN_PROMPT, /기획\/<기능>\/계획\.dpx\.json/);
+  assert.match(SPAWN_PROMPT, /시작하기 때 <영역>\/<기능>\/으로 옮겨진다/);
   assert.match(SPAWN_PROMPT, /고정 목록이 아니다/);
   assert.match(SPAWN_PROMPT, /이미 있는 영역을 다시 쓴다/);
   assert.doesNotMatch(all, /pipelines/);
