@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { initials, issueOfBranch, issueRows, issueState, issuesBlankReason, looseBranches, ownerSessions, ISSUE_STATE, type ApiIssue } from '../../web/src/home/issueBoard.ts';
+import { initials, issueOfBranch, issueRows, issueState, issuesBlankReason, ownerSessions, ISSUE_STATE, type ApiIssue } from '../../web/src/home/issueBoard.ts';
 import type { Session } from '../../shared/dispatch/types.ts';
 
 const s = (id: string, branch: string | null, status = 'running', extra: Record<string, unknown> = {}) =>
@@ -57,7 +57,6 @@ test('issueRows matches sessions by issue, branch name and PR head branch; worke
   assert.deepEqual(rows[2].branches, ['feat/748-x']);
   assert.deepEqual(ownerSessions(rows[2]), []); // its only session is done
   assert.deepEqual(ownerSessions(rows[0]).map((x) => x.id).sort(), ['b', 'c']);
-  assert.deepEqual(looseBranches(rows, sessions), ['feat/999-other']);
 });
 
 test('issuesBlankReason says why in one sentence', () => {

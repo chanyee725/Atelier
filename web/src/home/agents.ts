@@ -42,13 +42,6 @@ export function agentsIn(all: readonly AgentPresence[], project: string): AgentP
   );
 }
 
-/** Who holds each file, for the marks on document rows. */
-export function holdersByFile(agents: readonly AgentPresence[]): ReadonlyMap<string, AgentPresence[]> {
-  const m = new Map<string, AgentPresence[]>();
-  for (const a of agents) if (a.file) m.set(a.file, [...(m.get(a.file) ?? []), a]);
-  return m;
-}
-
 /**
  * Editing a diagram right now: the cursor module's status (server/cursor, shared/dispatch/agent-status.ts) says it is
  * writing or planning a diagram, and it holds a file. That is exactly when its live cursor sits on a canvas, so the
