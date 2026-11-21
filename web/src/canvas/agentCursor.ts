@@ -216,17 +216,18 @@ export function applyCursor(cursors: ReadonlyMap<string, Cursor>, e: CursorEvent
 export type CodeLineMark = { sid: string; name: string; role: string; color: string; status: string; line: number };
 
 /**
- * Agents whose last change was in diagram block `blockId` of `file` and named a code line, and that are still shown
- * at `now` (not gone), in a stable order. One mark per agent: its latest line.
+ * Agents whose last change was in diagram block `blockId` of `file` and named a code line, still at work there at
+ * `now` (editing or thinking; a fading or gone cursor has moved on), newest edit first. One mark per agent.
  */
 export function codeLineMarks(cursors: ReadonlyMap<string, Cursor>, file: string, blockId: string, now: number): CodeLineMark[] {
-  const out: CodeLineMark[] = [];
+  const out: (CodeLineMark & { at: number })[] = [];
   for (const c of cursors.values()) {
     const d = c.diagram;
-    if (c.file !== file || d?.id !== blockId || !d.line || phaseOf(c, now) === 'gone') continue;
-    out.push({ sid: c.sid, name: c.name, role: c.role, color: c.color, status: c.status, line: d.line });
+    const phase = phaseOf(c, now);
+    if (c.file !== file || d?.id !== blockId || !d.line || (phase !== 'editing' && phase !== 'thinking')) continue;
+    out.push({ sid: c.sid, name: c.name, role: c.role, color: c.color, status: c.status, line: d.line, at: c.editAt });
   }
-  return out.sort((a, b) => a.line - b.line || a.sid.localeCompare(b.sid));
+  return out.sort((a, b) => b.at - a.at || a.sid.localeCompare(b.sid)).map(({ at: _at, ...m }) => m);
 }
 
 /**
@@ -263,4 +264,20 @@ export type ScreenView = { scrollX: number; scrollY: number; zoom: { value: numb
 export function toScreen(p: Pt, st: ScreenView, wrapRect: { left: number; top: number }): Pt {
   const z = st.zoom.value;
   return { x: (p.x + st.scrollX) * z + st.offsetLeft - wrapRect.left, y: (p.y + st.scrollY) * z + st.offsetTop - wrapRect.top };
+}
+
+/** The parts of a scene element blockShift reads. */
+type SceneBox = { x: number; y: number; width: number; height: number; isDeleted?: boolean; customData?: Record<string, unknown> | null };
+
+/**
+ * How far to move `c` so it lands on the centre of its diagram block's picture on the canvas (E712, #1039): the server
+ * places a diagram change at the block's saved box, which the canvas may have placed elsewhere (a new block) or moved
+ * since. No shift without a diagram place or a picture of that block.
+ */
+export function blockShift(c: Pick<Cursor, 'to' | 'diagram'>, elements: readonly SceneBox[]): Pt {
+  const id = c.diagram?.id;
+  if (!id) return { x: 0, y: 0 };
+  const el = elements.find((e) => !e.isDeleted && e.customData?.blockId === id);
+  if (!el) return { x: 0, y: 0 };
+  return { x: el.x + el.width / 2 - c.to.x, y: el.y + el.height / 2 - c.to.y };
 }

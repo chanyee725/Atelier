@@ -1,7 +1,7 @@
 // E56 live agent cursor: position and interpolation model.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCursor, applyStatus, easeOut, nextPhaseAt, FADE_AFTER_MS, FADE_MS, MOVE_MS, moving, phaseOf, positionAt, pruneGone, THINK_MS, toScreen, type Cursor } from '../../web/src/canvas/agentCursor.ts';
+import { applyCursor, applyStatus, blockShift, codeLineMarks, diagramSpot, easeOut, nextPhaseAt, FADE_AFTER_MS, FADE_MS, MOVE_MS, moving, phaseOf, positionAt, pruneGone, THINK_MS, toScreen, type Cursor } from '../../web/src/canvas/agentCursor.ts';
 
 const ev = (x?: number, y?: number, extra = {}) => ({ sid: 's1', name: 'Remy', role: 'impl', file: 'a.dpx.json', ...(x === undefined ? {} : { x, y }), ...extra });
 
@@ -185,4 +185,50 @@ test('a live cursor left behind (another file, or a doc-only edit) stops being l
   const docOnly = applyCursor(m, { ...ev(), doc: { index: 0, offset: 0 }, live: true } as never, 500, false).get('s1')!;
   assert.equal(docOnly.live, false);
   assert.equal(docOnly.editAt, 0, 'a recent cursor keeps its own fade time');
+});
+
+// E712 (#1039): a diagram write carries its block, line and node; the code panel marks the line until the agent leaves.
+test('diagramSpot: only a usable id, a positive line and a short node pass', () => {
+  assert.deepEqual(diagramSpot({ id: 'b1', line: 3, node: ' B ' }), { id: 'b1', line: 3, node: 'B' });
+  assert.deepEqual(diagramSpot({ id: 'b1', line: 0, node: '' }), { id: 'b1' });
+  assert.equal(diagramSpot({ id: '' }), undefined);
+  assert.equal(diagramSpot('b1'), undefined);
+});
+
+test('codeLineMarks: the marked line follows the agent, and goes when it moves on or leaves', () => {
+  const dia = (line: number, id = 'b1') => ({ diagram: { id, line, node: 'B' }, live: true, color: '#0f766e' });
+  let m = applyCursor(new Map(), ev(100, 50, dia(3)), 0, false);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b1', 10), [{ sid: 's1', name: 'Remy', role: 'impl', color: '#0f766e', status: '', line: 3 }]);
+  // Another file or block: none.
+  assert.deepEqual(codeLineMarks(m, 'b.dpx.json', 'b1', 10), []);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b2', 10), []);
+  // A live agent keeps its mark while it thinks; an edit without a place keeps the line.
+  assert.equal(codeLineMarks(m, 'a.dpx.json', 'b1', 60_000).length, 1);
+  m = applyCursor(m, { sid: 's1', file: 'a.dpx.json', live: true }, 61_000, false);
+  assert.equal(codeLineMarks(m, 'a.dpx.json', 'b1', 61_000)[0].line, 3);
+  // A newer line, then another block: the mark moves.
+  m = applyCursor(m, ev(100, 50, dia(5)), 62_000, false);
+  assert.equal(codeLineMarks(m, 'a.dpx.json', 'b1', 62_000)[0].line, 5);
+  m = applyCursor(m, ev(400, 50, dia(1, 'b2')), 63_000, false);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b1', 63_000), []);
+  // A canvas edit outside any diagram: no mark anywhere.
+  m = applyCursor(m, ev(0, 0, { live: true }), 64_000, false);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b2', 64_000), []);
+  // The session leaves (gone): the mark goes with its cursor.
+  m = applyCursor(m, ev(100, 50, dia(2)), 65_000, false);
+  m = applyCursor(m, { sid: 's1', gone: true }, 66_000, false);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b1', 66_000), []);
+  // An outside writer's (not live) mark ends when its cursor fades.
+  m = applyCursor(new Map(), { ...ev(100, 50), diagram: { id: 'b1', line: 2 } }, 0, false);
+  assert.equal(codeLineMarks(m, 'a.dpx.json', 'b1', THINK_MS).length, 1);
+  assert.deepEqual(codeLineMarks(m, 'a.dpx.json', 'b1', FADE_AFTER_MS), []);
+});
+
+test('blockShift: the cursor lands on the block picture where the canvas has it now', () => {
+  const m = applyCursor(new Map(), ev(100, 50, { diagram: { id: 'b1', line: 1 } }), 0, false);
+  const c = m.get('s1')!;
+  const pic = { x: 500, y: 300, width: 200, height: 100, customData: { blockId: 'b1' } };
+  assert.deepEqual(blockShift(c, [pic]), { x: 500, y: 300 });
+  assert.deepEqual(blockShift(c, [{ ...pic, isDeleted: true }]), { x: 0, y: 0 });
+  assert.deepEqual(blockShift({ ...c, diagram: undefined }, [pic]), { x: 0, y: 0 });
 });

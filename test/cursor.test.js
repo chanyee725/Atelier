@@ -390,6 +390,43 @@ test('changedDocSpot: appended, edited, replaced and removed blocks', () => {
   assert.deepEqual(spot(a, docFile(head('Plan'), para('one'), { type: 'diagram', attrs: { blockId: 'b1' } })), { index: 2, offset: 0 });
 });
 
+const embed = (id) => ({ type: 'diagram', attrs: { blockId: id } });
+test('cursor module: a diagram block edit lands on the embedded diagram in the document (E712, #1039)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const doc = (code) => ({ ...docFile(head('Plan'), embed('b1'), para('done')), blocks: [block('b1', 0, 0, code)] });
+  r.files.set('d.dpx.json', doc('a > b'));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', text: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d.dpx.json' -d @/tmp/x.json` } });
+  await r.tick();
+  await r.change('d.dpx.json', doc('a > x'));
+  const e = r.sent.filter((x) => x.event === 'cursor').at(-1).data;
+  assert.equal(e.sid, 's1');
+  assert.deepEqual(e.doc, { index: 1, offset: 0 });
+  assert.equal(e.live, true);
+  assert.equal(typeof e.y, 'number');
+  assert.deepEqual(e.diagram, { id: 'b1', line: 1, node: 'x' });
+  m.close();
+});
+
+test('cursor module: the changed block, its first changed line and node ride on the cursor event (E712, #1039)', async () => {
+  const r = rig();
+  const m = await setup(r.ctx);
+  const doc = (code) => ({ ...docFile(head('Plan'), embed('b1')), blocks: [block('b1', 0, 0, code)] });
+  r.files.set('d.dpx.json', doc('a\nb\nc'));
+  r.hub.sessions.s1 = { id: 's1', name: 'Otto', role: 'impl', status: 'running' };
+  r.hub.emit('message', { id: 's1', entry: { kind: 'tool', name: 'Bash', text: `curl -X PUT 'http://127.0.0.1:1/api/file?path=d.dpx.json' -d @/tmp/x.json` } });
+  await r.tick();
+  await r.change('d.dpx.json', doc('a\nB\nc'));
+  const e = r.sent.filter((x) => x.event === 'cursor').at(-1).data;
+  assert.deepEqual(e.diagram, { id: 'b1', line: 2, node: 'B' });
+  // Only a block property changed (no code line): the block, without a line.
+  const moved = { ...doc('a\nB\nc'), blocks: [{ ...block('b1', 0, 0, 'a\nB\nc'), w: 300 }] };
+  await r.change('d.dpx.json', moved);
+  assert.deepEqual(r.sent.filter((x) => x.event === 'cursor').at(-1).data.diagram, { id: 'b1' });
+  m.close();
+});
+
 test('blockText: text nodes only, nested blocks included', () => {
   const list = { type: 'bulletList', content: [{ type: 'listItem', content: [para('ab')] }, { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'c' }, { type: 'hardBreak' }, { type: 'text', text: 'd' }] }] }] };
   assert.equal(blockText(list), 'abcd');
