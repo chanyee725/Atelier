@@ -11,7 +11,6 @@
       "name": "atelier",
       "description": "Skills and hooks to start Atelier in a project, run a team or a quickfix in git worktrees, write plans, documents and diagrams, and watch status and limits.",
       "source": "./plugin",
-      "version": "0.1.0",
       "category": "productivity"
     }
   ]
