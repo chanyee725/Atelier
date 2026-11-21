@@ -1,7 +1,7 @@
 // 시작하기 from the dashboard (E579, #786): a 세션 요청 row opens the plan document and asks its PlanStrip to open the same
 // confirm dialog as the strip's own 시작하기 (openPlanConfirm). One request at a time; the strip of that file takes it.
-/** `a/b`, `a/b.dpx` and `a/b.dpx.json` are the same file. */
-const stem = (p: string) => p.replace(/\.dpx(\.json)?$/i, '');
+import { stem } from '../movePaths.ts';
+
 export const samePlan = (a: string, b: string) => stem(a) === stem(b);
 
 /** A request not taken within this long is dropped, so it never opens the confirm later on its own (#803). */

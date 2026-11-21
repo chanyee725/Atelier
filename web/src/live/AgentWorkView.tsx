@@ -15,10 +15,9 @@ import { events } from '../lib/events.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import type { FileDiff } from '../dispatch/lib/patch.ts';
+import { stem } from '../movePaths';
 import { middle } from './format';
 import { changedFiles, samePath, WORK_POLL_MS, workMode, type ChangedFile, type DiffAnswer } from './workView';
-
-const stem = (p: string) => p.replace(/\.dpx(\.json)?$/i, '');
 
 interface Props {
   sid: string;
