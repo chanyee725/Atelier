@@ -7,7 +7,7 @@ import { toastResult } from '../activity/actionToast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from '../components/ui/sidebar';
 import { ago, reloadHistory, removeChat, rowTitle, useChatHistory, type ChatSummary } from './chatHistory';
-import { openChatSession } from './chatOpen';
+import { openChatSession } from '../chat';
 
 /** 지우기: asks first, then removes the saved file; a failure keeps the row and says so. */
 async function confirmRemove(chat: ChatSummary) {
