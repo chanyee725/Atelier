@@ -71,12 +71,6 @@ export function initials(name: string | null | undefined): string {
   return pick.toUpperCase();
 }
 
-/** Open session branches that no listed issue claims (still shown, under the list). */
-export function looseBranches(rows: readonly IssueRow[], sessions: readonly Session[]): string[] {
-  const claimed = new Set(rows.flatMap((r) => r.branches));
-  return [...new Set(sessions.filter((s) => isOpen(s) && s.branch && !claimed.has(s.branch)).map((s) => s.branch!))];
-}
-
 /** Why the list is empty or missing, in one sentence. */
 export function issuesBlankReason(reason: string): string {
   if (reason === 'gh-missing') return 'gh를 찾지 못해서 이슈를 볼 수 없어요.';

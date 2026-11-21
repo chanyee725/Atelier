@@ -1,7 +1,7 @@
-// 설정 modal's 모델 연결 + 역할별 모델 section (#624): model groups, role warnings, role-model patch and resync.
+// 설정 modal's 모델 연결 + 역할별 모델 section (#624): model groups and role warnings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { modelGroups, resyncRoleModels, roleChoice, roleModelsPatch, sameModels, savedRoleModels, subjParticle } from '../../web/src/settings/sections/modelsSection.ts';
+import { modelGroups, roleChoice, subjParticle } from '../../web/src/settings/sections/modelsSection.ts';
 
 const models = [
   { id: 'gpt-x', label: 'GPT X', provider: 'openai' },
@@ -38,30 +38,3 @@ test('subjParticle picks 이 after a final consonant', () => {
   assert.equal(subjParticle('코덱스'), '가');
 });
 
-test('roleModelsPatch sends only changed roles, null when none', () => {
-  const saved = { lead: 'a', impl: 'b' };
-  assert.equal(roleModelsPatch(saved, { lead: 'a', impl: 'b' }), null);
-  assert.deepEqual(roleModelsPatch(saved, { lead: 'a', impl: 'c' }), { impl: 'c' });
-  assert.equal(roleModelsPatch(saved, { lead: '' , impl: 'b' }), null);
-});
-
-test('resyncRoleModels follows untouched roles, keeps picks, adds new roles and drops gone ones', () => {
-  const prev = { lead: 'a', impl: 'b', old: 'x' };
-  const next = { lead: 'a2', impl: 'b2', rev: 'r' };
-  const shown = { lead: 'a', impl: 'mine', old: 'x' };
-  assert.deepEqual(resyncRoleModels(prev, next, shown), { lead: 'a2', impl: 'mine', rev: 'r' });
-});
-
-test('savedRoleModels reads the override first, else the role model (#616)', () => {
-  const roles = [{ id: 'lead', model: 'm1' }, { id: 'impl', model: 'm2' }];
-  assert.deepEqual(savedRoleModels({ roleModels: { impl: 'over', lead: '' } }, roles), { lead: 'm1', impl: 'over' });
-  assert.deepEqual(savedRoleModels(undefined, roles), { lead: 'm1', impl: 'm2' });
-  assert.deepEqual(savedRoleModels({ roleModels: 'bad' }, roles), { lead: 'm1', impl: 'm2' });
-});
-
-test('sameModels compares keys and values', () => {
-  assert.ok(sameModels({}, {}));
-  assert.ok(sameModels({ a: '1' }, { a: '1' }));
-  assert.ok(!sameModels({ a: '1' }, { a: '2' }));
-  assert.ok(!sameModels({ a: '1' }, { a: '1', b: '2' }));
-});

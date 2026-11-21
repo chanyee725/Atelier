@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LOGIN_POLL_EVERY_MS, LOGIN_POLL_LIMIT_MS, loginUnlessClosed, oneAtATime, pollLogins } from '../../web/src/settings/model.ts';
+import { LOGIN_POLL_EVERY_MS, LOGIN_POLL_LIMIT_MS, oneAtATime, pollLogins } from '../../web/src/settings/model.ts';
 
 test('oneAtATime drops a second call while the first runs (double click)', async () => {
   let calls = 0;
@@ -22,33 +22,6 @@ test('oneAtATime drops a second call while the first runs (double click)', async
   await assert.rejects(failing());
   await assert.rejects(failing());
   assert.equal(calls, 3);
-});
-
-test('loginUnlessClosed: a login that returns after the dialog closed is cancelled (#228 review)', async () => {
-  const calls: string[] = [];
-  let closed = false;
-  let release!: () => void;
-  const login = async (id: string) => {
-    calls.push(`login ${id}`);
-    await new Promise<void>((r) => (release = r));
-    return { ok: true, connected: false };
-  };
-  const cancel = async (id: string) => void calls.push(`cancel ${id}`);
-  const p = loginUnlessClosed('claude', login, cancel, () => closed);
-  closed = true; // Esc while the login request is still in flight
-  release();
-  assert.deepEqual(await p, { ok: true, connected: false });
-  assert.deepEqual(calls, ['login claude', 'cancel claude']);
-});
-
-test('loginUnlessClosed: no cancel while open, or when the login already connected', async () => {
-  const calls: string[] = [];
-  const cancel = async (id: string) => void calls.push(`cancel ${id}`);
-  await loginUnlessClosed('claude', async () => ({ connected: false }), cancel, () => false);
-  await loginUnlessClosed('claude', async () => ({ connected: true }), cancel, () => true);
-  assert.deepEqual(calls, []);
-  // A failing cancel does not turn into an error for the closed dialog.
-  await loginUnlessClosed('claude', async () => ({ connected: false }), async () => Promise.reject(new Error('x')), () => true);
 });
 
 function fakeClock() {

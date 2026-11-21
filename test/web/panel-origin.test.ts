@@ -3,7 +3,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { trackProps, trackTone } from '../../web/src/home/trackTone.ts';
 import { AGENT_STATUS } from '../../shared/dispatch/agent-status.ts';
-import { closeAgentLive, liveTrail, openAgentLive, resetLiveStore } from '../../web/src/live/store.ts';
 import { TRAIL, offscreen, originOf, teamTrail } from '../../web/src/live/origin.ts';
 
 test('trackTone: one tone per activity, from both label sources', () => {
@@ -45,19 +44,6 @@ test('trackProps: classes and css vars; the sweep ends past the right edge', () 
   assert.equal(v['--track-width'], '18%');
   assert.ok(parseFloat(v['--track-end'] as string) * 18 >= 10000);
   assert.equal(trackProps(trackTone(null, 'waiting')).className, 'session-track is-wait');
-});
-
-test('the live panel keeps the path it was opened with, and drops it on close', () => {
-  resetLiveStore();
-  openAgentLive('s1', { trigger: null, trail: TRAIL.sessions });
-  assert.deepEqual(liveTrail(), ['대시보드', '실행 중인 세션']);
-  openAgentLive('s2', { trigger: null, from: 'sheet', trail: teamTrail(925) });
-  assert.deepEqual(liveTrail(), ['대시보드', '진행 중인 이슈', '#925']);
-  closeAgentLive();
-  assert.deepEqual(liveTrail(), []);
-  openAgentLive('s3', { trigger: null });
-  assert.deepEqual(liveTrail(), [], 'no path given: none shown');
-  resetLiveStore();
 });
 
 test('origin helpers: the marked card around a trigger, and when it needs a scroll', () => {

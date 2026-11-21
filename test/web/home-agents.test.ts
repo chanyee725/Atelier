@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agentMeta, agentStateLabel, agentsIn, isBusy, isEditingDiagram, roleBadge, needsLook, fileStem, holdersByFile, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
+import { agentMeta, agentStateLabel, agentsIn, isBusy, isEditingDiagram, roleBadge, needsLook, fileStem, parseAgents, safeColor, type AgentPresence } from '../../web/src/home/agents.ts';
 
 const a = (sid: string, x: Partial<AgentPresence> = {}): AgentPresence => ({ sid, name: sid, role: 'impl', model: null, status: 'waiting', state: 'resting', project: null, file: null, at: 0, ...x });
 
@@ -33,12 +33,6 @@ test('agentsIn: fixed team order (lead, then its teammates), never moved by acti
   // Other activity times and another busy session: same order.
   assert.deepEqual(agentsIn(list('impl2', (sid) => sid.length * 1000), '').map((x) => x.sid), want);
   assert.deepEqual(agentsIn(list('lead1', (sid) => -sid.charCodeAt(0)), '').map((x) => x.sid), want);
-});
-
-test('holdersByFile groups agents by the file they hold', () => {
-  const m = holdersByFile([a('A', { file: 'f' }), a('B', { file: 'f' }), a('C')]);
-  assert.deepEqual(m.get('f')?.map((x) => x.sid), ['A', 'B']);
-  assert.equal(m.size, 1);
 });
 
 test('meta, colours and parsing', () => {
