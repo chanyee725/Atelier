@@ -173,6 +173,29 @@ test('two 시작하기 at once start one run; a failed hand-off to the lead move
   }
 });
 
+test('two plans sharing a feature folder: 시작하기 leaves the folder in 기획 and the other plan untouched', { timeout: 60_000 }, async () => {
+  const t = await start();
+  try {
+    const { call, d, lead, ws } = t;
+    const a = (await plan(t, { title: '공유' })).body;
+    assert.equal(a.path, '기획/공유/계획.dpx.json');
+    const lead2 = (await call('POST', '/api/sessions', { items: [{ role: 'lead', task: 'plan' }], worktree: false, folder: 'App' })).body.sessions[0];
+    await until(() => ['idle', 'done'].includes(d.hub.get(lead2.id).status), 10_000);
+    const b = (await call('POST', '/api/pipeline/plan', { lead: lead2.id, title: '공유', goal: 'x', steps: STEPS })).body;
+    assert.equal(b.path, '기획/공유/계획-2.dpx.json');
+    const r = await go(t, a);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.path, a.path);
+    assert.ok(existsSync(join(ws, a.path)) && existsSync(join(ws, b.path)) && !existsSync(join(ws, 'App', '공유')));
+    assert.equal(d.store.data.pipelines[a.path].state, 'running');
+    assert.equal(d.store.data.pipelines[b.path].state, 'plan');
+    assert.equal(d.store.data.pipelines[b.path].lead, lead2.id);
+    assert.match(told(d, lead.id), /같은 기능 폴더에 다른 계획\(계획-2\.dpx\.json\)이 있어 폴더를 옮기지 않고/);
+  } finally {
+    await t.stop();
+  }
+});
+
 test('write_plan keeps titles short: a default from the goal is cut at 20 characters, a long title gets a warning', { timeout: 60_000 }, async () => {
   const t = await start();
   try {

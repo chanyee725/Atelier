@@ -18,14 +18,18 @@ export function createStart(c) {
   /**
    * A draft in 기획/<feature>/ moves to <area>/<feature>/ when its run starts (#1045), with its diagrams and
    * sub-documents. A feature folder of that name already in the area: <feature>-2, -3, …. The store's move event
-   * carries the plan's entry, its draft, run records, history and sessions along (index.js). Returns the move done,
-   * or why the plan stayed in 기획 ({ from, to } | { stayed }).
+   * carries the plan's entry, its draft, run records, history and sessions along (index.js). A feature folder another
+   * plan shares does not move. Returns the move done, or why the plan stayed in 기획 ({ from, to } | { stayed }).
    */
   async function moveToArea(path, entry) {
     const from = draftFeatureFolder(path);
     if (!from) return null;
     const area = typeof entry.area === 'string' && entry.area && entry.area !== DRAFT_FOLDER ? entry.area : null;
     if (!area) return { stayed: '영역을 정할 수 없어 기획 폴더에 그대로 뒀다' };
+    // Another plan shares this feature folder (freePath's 계획-2 and so on): moving the folder would take that plan
+    // along, from under its own run. The folder stays; the lead can move this plan by hand.
+    const other = Object.keys(entries() ?? {}).find((p) => p !== path && p.startsWith(`${from}/`));
+    if (other) return { stayed: `같은 기능 폴더에 다른 계획(${other.slice(from.length + 1)})이 있어 폴더를 옮기지 않고 기획 폴더에 그대로 뒀다` };
     const name = from.slice(DRAFT_FOLDER.length + 1);
     for (let i = 1; i < 20; i++) {
       try {
