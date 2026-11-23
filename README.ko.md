@@ -69,23 +69,15 @@ codex plugin add atelier@atelier
 
 그다음 프로젝트에서 "아틀리에 켜줘"라고 말하거나 `atelier-setup` 스킬을 써요. 자세한 내용: [plugin/README.md](plugin/README.md)
 
-## 🧩 스킬 15개
+## 🧩 스킬 7개
 
 | 스킬 | 하는 일 | 이렇게 말해요 |
 |---|---|---|
 | `atelier-setup` | 프로젝트에서 서버 켜기·끄기, Claude·Codex·Gemini 연결 | "아틀리에 켜줘" |
 | `atelier-update` | 최신 GitHub 릴리스로 업데이트하고 서버 다시 켜기 | "아틀리에 업데이트" |
-| `atelier-doc` | 문서를 단계별로 써서 화면에 바로 보이게 | "분석 문서 써줘" |
-| `atelier-diagram` | 코드 위치가 붙은 흐름·구조 다이어그램 | "코드 흐름 정리해줘" |
-| `atelier-canvas` | 캔버스에 상자·화살표·글자로 자유롭게 그리기 | "화이트보드처럼 그려줘" |
-| `atelier-files` | 문서 목록, 이름 바꾸기, 옮기기, 버전 되돌리기, 휴지통 | "예전 버전으로 돌려줘" |
-| `atelier-organize` | 코드 구조대로 문서 폴더 정리 | "폴더 정리해줘" |
-| `atelier-plan` | 문서 + 단계 다이어그램으로 계획 쓰기 | "계획 세워줘" |
-| `atelier-run` | 계획 실행 시작·멈춤·이어가기, 실행 기록 읽기 | "실행 멈춰" |
 | `atelier-team` | 이슈 하나에 리드·구현자·리뷰어 팀 꾸리기 | "팀 꾸려서 진행해" |
 | `atelier-quickfix` | 1~3개 파일을 한 세션으로 빠르게 고치기 | "문구만 고쳐줘" |
 | `atelier-session` | 세션 하나 띄우기, 메시지·중단·권한 응답 | "세션 하나 띄워줘" |
-| `atelier-questions` | 문서 안에서 묻고 답하기 | "사용자한테 물어봐" |
 | `atelier-status` | 세션 상태, 남은 시간, 막힘, 사용량 한도 | "지금 뭐 하고 있어?" |
 | `atelier-settings` | 비용·토큰, 한도 가드, 역할별 모델 | "역할별 모델 바꿔줘" |
 
@@ -131,7 +123,7 @@ Server > Robot: command [color: orange]
 server/   127.0.0.1 서버: 작업 폴더 API, 계획 실행, 에이전트 세션(server/dispatch)
 web/      React 앱: 문서(TipTap), 캔버스(Excalidraw), 세션 보드
 shared/   다이어그램 코드 파서와 렌더러(서버·웹 공용)
-plugin/   Claude Code · Codex 플러그인: 스킬 15개와 훅
+plugin/   Claude Code · Codex 플러그인: 스킬 7개와 훅
 scripts/  아이콘·글꼴 빌드, 패키징, 데모 녹화(record-demo.mjs)
 test/     node:test 테스트, 가짜 CLI, 헤드리스 e2e
 ```

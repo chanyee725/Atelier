@@ -1,6 +1,6 @@
 ---
 name: atelier-setup
-description: Start Atelier (local docs, diagrams and agent teams) in a project, connect Claude, Codex or Gemini to it, check it runs, and stop or restart its server. Use when the user says "아틀리에 켜줘", "Atelier 시작", "Claude 연결", "서버 재시작", or another Atelier skill needs a running server.
+description: Start Atelier (local agent sessions, teams and chat) in a project, connect Claude, Codex or Gemini to it, check it runs, and stop or restart its server. Use when the user says "아틀리에 켜줘", "Atelier 시작", "Claude 연결", "서버 재시작", or another Atelier skill needs a running server.
 ---
 
 # Atelier setup

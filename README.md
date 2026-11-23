@@ -69,23 +69,15 @@ codex plugin add atelier@atelier
 
 Then say "Atelier 켜줘" (or run the `atelier-setup` skill) in a project. Details: [plugin/README.md](plugin/README.md).
 
-## 🧩 15 skills
+## 🧩 7 skills
 
 | Skill | What it does | Say |
 |---|---|---|
 | `atelier-setup` | Start or stop the server for a project; connect Claude, Codex, Gemini | "start Atelier" |
 | `atelier-update` | Update to the latest GitHub release and restart servers | "update Atelier" |
-| `atelier-doc` | Write a document step by step, live on screen | "write an analysis doc" |
-| `atelier-diagram` | Flow and architecture diagrams with code references | "map this code flow" |
-| `atelier-canvas` | Free drawing on the canvas: boxes, arrows, text | "sketch it like a whiteboard" |
-| `atelier-files` | List, rename, move, restore versions, trash | "restore the old version" |
-| `atelier-organize` | Sort documents into folders that follow the code | "organize the folders" |
-| `atelier-plan` | A plan as a document plus a step diagram | "make a plan" |
-| `atelier-run` | Start, stop and resume a plan; read run records | "stop the run" |
 | `atelier-team` | A lead, implementers and reviewers for one issue | "run this as a team" |
 | `atelier-quickfix` | A 1–3 file change in one session | "just fix the copy" |
 | `atelier-session` | One session: start, message, interrupt, permissions | "start one session" |
-| `atelier-questions` | Questions and answers inside documents | "ask the user" |
 | `atelier-status` | Sessions, ETAs, stuck flags, usage limits | "what's everyone doing?" |
 | `atelier-settings` | Cost and tokens, limit guard, model per role | "change the model per role" |
 
@@ -131,7 +123,7 @@ Groups (`Name { ... }`), edges (`>`, `<`, `<>`, `-`, `--`, `-->`), labels and at
 server/   127.0.0.1 server: workspace API, plan runs, agent sessions (server/dispatch)
 web/      React app: documents (TipTap), canvas (Excalidraw), session board
 shared/   diagram-code parser and renderer, shared by server and web
-plugin/   Claude Code and Codex plugin: 15 skills and hooks
+plugin/   Claude Code and Codex plugin: 7 skills and hooks
 scripts/  icon and font builds, packaging, demo recording (record-demo.mjs)
 test/     node:test tests, fake agent CLIs, headless e2e
 ```
