@@ -170,3 +170,11 @@ function lastAnswerText(entries: readonly EntryLike[] | undefined): string | und
 export function answerQuestions(s: { ask?: string | null }, entries: readonly EntryLike[] | undefined): QuestionItem[] | null {
   return questionsOf(lastAnswerText(entries)) ?? questionsOf(s.ask);
 }
+
+/**
+ * React key of the Codex/Gemini question card (#1052 follow-up): one per request, i.e. per finished turn, so a
+ * question set asked again in a later turn gets a fresh card (its `sent` guard reset) even with the same text.
+ */
+export function questionSetKey(s: { turns: number }, items: readonly QuestionItem[]): string {
+  return `${s.turns}\n${items.map(q => q.question).join('\n')}`;
+}

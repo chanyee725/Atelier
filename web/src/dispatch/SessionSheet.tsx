@@ -13,7 +13,7 @@ import { cn } from '../lib/utils';
 import { DiffView } from './DiffView';
 import { ModelTag, StatusBadge } from './parts';
 import { fmtK, fmtUsd, pct, permLabel, stateOf } from './lib/format.ts';
-import { answerQuestion, answerQuestions, answersMessage, answerValue, type QuestionAnswer, type QuestionItem } from './lib/question.ts';
+import { answerQuestion, answerQuestions, answersMessage, answerValue, questionSetKey, type QuestionAnswer, type QuestionItem } from './lib/question.ts';
 import { askUserQuestionItems, isQuestionTool } from '../activity/sessionRequests.ts';
 import { QuestionTabsCard } from './QuestionTabsCard';
 import { awaitsAnswer, turn } from './lib/turn.ts';
@@ -207,7 +207,7 @@ export function AnswerCard({ s, onPick, report }: { s: Session; onPick: (text: s
   const set = answerQuestions(s, entries);
   if (set) {
     const submit = (answers: QuestionAnswer[]) => report(api('POST', `/api/sessions/${sid}/message`, { text: answersMessage(set, answers) }));
-    return <QuestionTabsCard key={set.map(q => q.question).join('\n')} items={set} onSubmit={submit} />;
+    return <QuestionTabsCard key={questionSetKey(s, set)} items={set} onSubmit={submit} />;
   }
   const q = answerQuestion(s, entries);
   return (
