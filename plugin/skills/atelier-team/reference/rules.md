@@ -21,10 +21,11 @@ Team rules (the project's CLAUDE.md / AGENTS.md wins where it differs):
 - Privacy: keep `.env`, secrets, tokens, keys, emails and real names out of code, logs, docs and reports.
 - Teammates: your final answer reaches the lead by itself; use `message_lead` mid-turn. End a turn with a result (branch, head, check output, what is left), committed (`WIP:` for unfinished work).
 - Reports: short, action first, at most 5 items per list.
+- Documents: when one part changes, fix every other place stating the same fact in the same turn, and search the whole document for the changed key words before saving.
 
 Lead only:
 
-- Plan and assign; implement nothing yourself. Pick the lane first. When the task names the cause, create the implementer at once.
+- Plan and assign; edit no code and no documents yourself. Documents are written and changed only by a `docs` session: hand it the user's answers and requests, and create one when none runs. Pick the lane first. When the task names the cause, create the implementer at once.
 - Split work so two sessions never edit the same files. Take ETAs from past runs of similar size.
 - Every `set_task` that changes `stage` also sets `eta_minutes` (minutes left). Without it the server guesses from finished tasks' time in that stage and the dashboard marks it 예상.
 - One task per implementer; start a fresh one for the next task. Finished teammates are removed automatically after their report.

@@ -5,7 +5,7 @@ description: Write or edit an Atelier document (.dpx.json) through the workspace
 
 # Atelier doc
 
-Documents are `.dpx.json` files in the workspace (`<project>/.atelier`). Write them only in Atelier through the workspace API, so they show live; never as local files. The API is in `docs/workspace-api.md` in the Atelier repo. Every non-GET request needs `x-drawing: 1`; a session started by Atelier also sends `x-drawing-session: $DRAWING_SESSION`.
+Documents are `.dpx.json` files in the workspace (`<project>/.atelier`). Write them only in Atelier through the workspace API, so they show live; never as local files. In a team only the `docs` session edits documents; a lead manages sessions and hands it the user's answers and requests. The API is in `docs/workspace-api.md` in the Atelier repo. Every non-GET request needs `x-drawing: 1`; a session started by Atelier also sends `x-drawing-session: $DRAWING_SESSION`.
 
 ## Steps
 
@@ -13,7 +13,8 @@ Documents are `.dpx.json` files in the workspace (`<project>/.atelier`). Write t
    Keep the title (and the file name) short: about 12 characters, at most 20, a noun phrase; details go in the first line of the body.
    Done when: the user has the URL and `GET /api/file?path=<file>` returns a `revision`.
 2. Write in small passes. Read the whole file, change `document` (and `blocks` when a diagram goes in), and `PUT /api/file?path=<file>` the whole JSON back with its `revision`. One section per PUT, so the reader sees it grow. A 409 means someone saved first: read again and redo the change.
-   Done when: each PUT returns the new `revision`.
+   When one part changes, fix every other place that states the same fact in the same turn (top status line, current structure, step plan, tables, diagrams, 끝난 것 and 남은 것, 관련 코드), and search the whole document for the changed key words (a dropped format name) before saving. A part that still describes the old state is marked "지금(이전 전)".
+   Done when: each PUT returns the new `revision`, and the search finds no place that still says the old fact.
 3. Keep the style (Atelier repo `docs/design/writing-style.md`). Korean 해요체, short sentences.
    - Top of the document: 상태 and 결정 in one line, then 다음: the one thing the reader does now.
    - Each section opens with what the reader can do or check. One idea per paragraph; a side issue goes last as "따로: …".

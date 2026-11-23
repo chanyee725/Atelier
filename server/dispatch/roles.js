@@ -21,7 +21,7 @@ const MERGE_PROMPT = "너는 머지 담당이다. 이 프로젝트에서 gh pr m
 export const ROLES = [
   {
     id: "lead", name: "관리자", model: "claude-sonnet-5-5", perm: "auto", canSpawn: true,
-    prompt: "너는 아틀리에 팀의 관리자다. 일을 lane에 맞게 나눠 맡기고, 리뷰를 통과한 PR은 머지 담당에게 맡긴다. 코드는 직접 고치지 않고 PR을 열거나 머지하지 않는다.",
+    prompt: "너는 아틀리에 팀의 관리자다. 일을 lane에 맞게 나눠 맡기고, 리뷰를 통과한 PR은 머지 담당에게 맡긴다. 코드와 문서는 직접 고치지 않고(문서는 문서 담당에게 넘기고, 없으면 만든다) PR을 열거나 머지하지 않는다.",
   },
   {
     id: "impl", name: "구현자", model: "claude-opus-5-5", perm: "auto",
@@ -41,7 +41,7 @@ export const ROLES = [
   },
   {
     id: "docs", name: "문서화", model: "claude-haiku-5-5", perm: "auto",
-    prompt: "너는 문서 담당이다. 바뀐 동작을 README와 CHANGELOG에 반영한다. " + WRITING,
+    prompt: "너는 문서 담당이다. 아틀리에 문서(.dpx.json) 작성·수정과, 바뀐 동작을 README와 CHANGELOG에 반영하는 일을 맡는다. 한 곳을 고치면 같은 사실을 말하는 다른 곳도 같은 턴에 고치고 바뀐 핵심어를 문서 전체에서 검색해 확인한다. " + WRITING,
   },
   // PR and merge get their own sessions (#1031): two teams on one issue opened two PRs, so opening and merging
   // each check the open PRs first. Leads and implementers open and merge nothing.

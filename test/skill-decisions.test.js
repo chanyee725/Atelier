@@ -43,3 +43,19 @@ test('team rules: a lead settles should-fixes, nits and follow-ups and reports t
   const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
   assert.match(rules, /A lead settles review should-fixes, nits and whether a follow-up issue is needed on its own, and reports only the outcome/);
 });
+
+test('#1061 rule 9: a change fixes every place with the same fact, checked by a whole-document search', () => {
+  assert.match(skill('atelier-doc'), /fix every other place that states the same fact in the same turn/);
+  const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
+  assert.match(rules, /fix every other place stating the same fact in the same turn, and search the whole document/);
+});
+
+test('#1061 rule 10: only the docs session edits documents; the lead manages sessions', async () => {
+  assert.match(skill('atelier-doc'), /In a team only the `docs` session edits documents/);
+  const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
+  assert.match(rules, /edit no code and no documents yourself\. Documents are written and changed only by a `docs` session/);
+  const { ROLES } = await import('../server/dispatch/roles.js');
+  const role = (id) => ROLES.find((r) => r.id === id);
+  assert.match(role('lead').prompt, /코드와 문서는 직접 고치지 않고/);
+  assert.match(role('docs').prompt, /아틀리에 문서\(\.dpx\.json\) 작성·수정/);
+});
