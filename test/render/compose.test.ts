@@ -156,6 +156,30 @@ async function dragKeepsOthers(code: string): Promise<void> {
   }
 }
 
+test('compose: dropping a node of a shared trunk keeps the shape of its lines (#1066)', async () => {
+  // A drop reroutes only the moved node's lines, without the trunk pass: they stay Z lines close to where
+  // they were, and every other line (the other member of the trunk too) is untouched.
+  const { d, base } = await setup(sample('flowchart-cross-groups'), 'flowchart');
+  const plain = composeGraph(d, base);
+  const rel = (s: Scene, e: SceneEdge) => e.points.map((p) => ({ x: Math.round(p.x - s.origin!.x), y: Math.round(p.y - s.origin!.y) }));
+  for (const id of ['학습', '카메라 영상 모듈', '로컬 LeRobot 데이터셋']) {
+    const r = base.rects.get(id)!;
+    const scene = composeGraph(d, base, layoutOf({ [id]: { cx: r.x + r.w / 2 + 6, cy: r.y + r.h / 2 + 4, parent: base.parent.get(id) ?? '' } }));
+    for (const e of edges(scene)) {
+      const was = rel(plain, edges(plain).find((x) => x.id === e.id)!);
+      const now = rel(scene, e);
+      if (e.from !== id && e.to !== id) {
+        assert.deepEqual(now, was, `${e.from}>${e.to} kept its line while ${id} moved`);
+        continue;
+      }
+      assert.ok(now.length <= Math.max(was.length, 4), `${e.from}>${e.to} got no more bends (${was.length} > ${now.length} points)`);
+      const span = (pts: Point[], k: 'x' | 'y') => Math.max(...pts.map((p) => p[k])) - Math.min(...pts.map((p) => p[k]));
+      for (const k of ['x', 'y'] as const) assert.ok(Math.abs(span(now, k) - span(was, k)) <= 16, `${e.from}>${e.to} covers the same stretch (${k})`);
+      if (now.length === was.length) now.forEach((p, i) => assert.ok(Math.abs(p.x - was[i]!.x) + Math.abs(p.y - was[i]!.y) <= 64, `${e.from}>${e.to} point ${i} stayed near`));
+    }
+  }
+});
+
 test('compose: routes for a layout do not depend on the layouts composed before it (#733)', async () => {
   const { d, base } = await setup(P2P, 'flowchart');
   const at = (id: string, dx: number, dy: number): BlockLayout => {

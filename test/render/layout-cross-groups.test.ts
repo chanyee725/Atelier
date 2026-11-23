@@ -96,6 +96,18 @@ test('cross-group flow (#1066): no reverse loop, no wire bundle, labels on their
     assert.ok(distToRoute(c, e.points) <= 4, `label "${text}" sits ${distToRoute(c, e.points).toFixed(0)} px off its line`);
   }
 
+  // The two labels of the fan into 서버 sit on their own branches (the last stretch into the target), not
+  // one above the other on the shared trunk.
+  for (const text of ['저장 직후', '완성본만 업로드']) {
+    const t = scene.items.find((it): it is SceneText => it.kind === 'text' && !!it.plate && it.lines.join(' ') === text)!;
+    const e = edges.find((x) => x.from === LABELS[text]![0] && x.to === LABELS[text]![1])!;
+    const [a, b] = e.points.slice(-2) as [P, P];
+    const cy = t.y + (t.lines.length * t.lineHeight) / 2;
+    assert.ok(Math.abs(a.y - b.y) < 0.5 && Math.abs(cy - b.y) < 1, `"${text}" is on its branch`);
+    // The arrowhead keeps its room between the plate and the node.
+    assert.ok(t.x > a.x && b.x - t.x >= 14, `"${text}" leaves the arrowhead visible`);
+  }
+
   // Groups stay apart and every node sits in its own group's box.
   const groups = groupsOf(scene);
   for (let i = 0; i < groups.length; i++) {
@@ -148,4 +160,13 @@ test('cross-group bands (#1066): a `down` flow puts the groups side by side, flo
     for (let i = 1; i < e.points.length; i++) assert.ok(e.points[i - 1]!.y - e.points[i]!.y <= 24, `${e.from} > ${e.to} runs up`);
   }
   assert.equal(layoutMetrics(scene).throughNodes, 0);
+});
+
+test('labels (#1066): a line too short for its label keeps the label beside it, not over the whole line', async () => {
+  const { scene } = await renderDiagram(fixture('bpmn-order-flow'));
+  const e = edgesOf(scene).find((x) => x.from === 'Open website' && x.to === 'Place order')!;
+  const t = scene.items.find((it): it is SceneText => it.kind === 'text' && !!it.plate && it.lines.join(' ') === 'Browse')!;
+  const cy = t.y + (t.lines.length * t.lineHeight) / 2;
+  assert.equal(e.points.length, 2);
+  assert.ok(Math.abs(cy - e.points[0]!.y) >= t.lineHeight / 2, 'the plate does not sit on the 56 px line');
 });

@@ -22,6 +22,7 @@ import { crossGroupBands, definitionOrder, flipped, freeChildren, rootLayers } f
 import { placeBands, rankFlow } from './layout-lanes.ts';
 import type { BandRoot } from './layout-lanes.ts';
 import { routeAcross, routeElbow } from './layout-graph-route.ts';
+import { BRANCH_LABEL_WIDTH, BRANCH_ROOM, TRUNK_GAP } from './route-trunks.ts';
 
 const ELK_DIRECTION = { down: 'DOWN', up: 'UP', left: 'LEFT', right: 'RIGHT' } as const;
 const EDGE_LABEL_SIZE = 12;
@@ -44,7 +45,10 @@ const ROUTE_ROOM = 12;
 /** Measure the diagram and run ELK. Async and slow; cache the result per AST (and per `options`). */
 export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {}): Promise<GraphBase> {
   const bands = crossGroupBands(d, definitionOrder(d));
-  if (bands) return placedBase(d, (sizes) => placeCrossGroups(d, bands, sizes));
+  if (bands) {
+    const branches = fanBranches(d, bands);
+    return placedBase(d, (sizes) => placeCrossGroups(d, bands, sizes), (e) => (branches.has(e.id) ? BRANCH_LABEL_WIDTH : EDGE_LABEL_WIDTH));
+  }
   await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
@@ -410,6 +414,32 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
 /** Space a labelled edge needs beside its label plate, at each end, where it jogs between two slots. */
 const LABEL_ROOM = 16;
 
+/** Widest an edge label gets before it wraps. */
+const EDGE_LABEL_WIDTH = 140;
+
+/** The flow of a banded picture: edges along the flow, each node's band, and which edges fan into another band. */
+function bandFlow(d: GraphDiagram, roots: readonly BandRoot[]) {
+  const order = definitionOrder(d);
+  const flow = d.edges.map((e) => (flipped(e, order) ? { from: e.to, to: e.from } : e));
+  const band = new Map(roots.flatMap((r, i) => r.bands.flatMap((b, j) => b.nodes.map((id) => [id, `${i}:${j}`] as const))));
+  // A fan into another band (one node feeding several nodes there) does take a slot: the trunk drops
+  // across the bands and branches sideways into the stacked targets.
+  const fan = new Map<string, Set<string>>();
+  for (const e of flow) {
+    if (e.from === e.to || band.get(e.from) === band.get(e.to)) continue;
+    const key = `${e.from}>${band.get(e.to)}`;
+    fan.set(key, (fan.get(key) ?? new Set()).add(e.to));
+  }
+  const fanned = (from: string, to: string): boolean => band.get(from) !== band.get(to) && (fan.get(`${from}>${band.get(to)}`)?.size ?? 0) > 1;
+  return { order, flow, band, fanned };
+}
+
+/** Labelled edges that are a branch of a fan into another band: their label sits on the short branch. */
+function fanBranches(d: GraphDiagram, roots: readonly BandRoot[]): Set<string> {
+  const { order, fanned } = bandFlow(d, roots);
+  return new Set(d.edges.filter((e) => e.label && (flipped(e, order) ? fanned(e.to, e.from) : fanned(e.from, e.to))).map((e) => e.id));
+}
+
 /**
  * A flowchart whose flow goes back and forth between groups (#1066): groups as bands in source order, nodes
  * in flow slots, so every edge runs with the flow.
@@ -422,17 +452,8 @@ const LABEL_ROOM = 16;
 function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: PlacedSizes): Map<string, Rect> {
   const order = definitionOrder(d);
   const ids = [...order.keys()].filter((id) => sizes.nodes.has(id));
-  const flow = d.edges.map((e) => (flipped(e, order) ? { from: e.to, to: e.from } : e));
-  const band = new Map(roots.flatMap((r, i) => r.bands.flatMap((b, j) => b.nodes.map((id) => [id, `${i}:${j}`] as const))));
-  // A fan into another band (one node feeding several nodes there) does take a slot: the trunk drops
-  // across the bands and branches sideways into the stacked targets.
-  const fan = new Map<string, Set<string>>();
-  for (const e of flow) {
-    if (e.from === e.to || band.get(e.from) === band.get(e.to)) continue;
-    const key = `${e.from}>${band.get(e.to)}`;
-    fan.set(key, (fan.get(key) ?? new Set()).add(e.to));
-  }
-  const step = (from: string, to: string): number => (band.get(from) === band.get(to) || (fan.get(`${from}>${band.get(to)}`)?.size ?? 0) > 1 ? 1 : 0);
+  const { flow, band, fanned } = bandFlow(d, roots);
+  const step = (from: string, to: string): number => (band.get(from) === band.get(to) || fanned(from, to) ? 1 : 0);
   // Slots in flow order, one node per band and slot (a band is one row of nodes, as Eraser draws a layer):
   // a node goes right after what feeds it, in the first slot its band still has free.
   const topo = rankFlow(ids, flow, [], true);
@@ -484,11 +505,15 @@ function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: Pl
     if (!e.label) continue;
     const [a, b] = flipped(e, order) ? [e.to, e.from] : [e.from, e.to];
     const r = rank.get(a);
-    // Only a label between two neighbours of one band needs the room; a longer or cross-band line has it.
-    if (r === undefined || rank.get(b) !== r + 1 || band.get(a) !== band.get(b)) continue;
+    // Only a label between two neighbours of one band, or on a fan's branch into another band, needs the
+    // room; a longer or straight cross-band line has it.
+    const branch = fanned(a, b);
+    if (r === undefined || rank.get(b) !== r + 1 || (band.get(a) !== band.get(b) && !branch)) continue;
     const style = styleFor(d, e.attrs, e.span.line);
-    const l = measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140);
-    const need = (across ? l.h + 4 : Math.ceil(l.w + PLATE_PAD * 2)) + 2 * LABEL_ROOM;
+    const l = measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, branch ? BRANCH_LABEL_WIDTH : EDGE_LABEL_WIDTH);
+    const plate = across ? l.h + 4 : Math.ceil(l.w + PLATE_PAD * 2);
+    // The branch starts where the trunk splits and carries the plate, a stub and the arrowhead.
+    const need = branch ? TRUNK_GAP + plate + BRANCH_ROOM : plate + 2 * LABEL_ROOM;
     room.set(r, Math.max(room.get(r) ?? 0, need));
   }
   // eraser-diagrams spacing: 12 between stacked list items, 24 between sibling groups, 16 inside a group.
@@ -514,7 +539,7 @@ export interface PlacedSizes {
  * `graphBase` (box nodes in one group share a size), the caller's rects, then elbow routes between them
  * straightened by the corridor router. Deterministic: no ELK run.
  */
-export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) => Map<string, Rect>): Promise<GraphBase> {
+export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) => Map<string, Rect>, labelWidth: (e: GraphEdge) => number = () => EDGE_LABEL_WIDTH): Promise<GraphBase> {
   await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
@@ -548,7 +573,7 @@ export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) =>
     return {
       edge: e,
       style,
-      ...(e.label ? { label: measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140) } : {}),
+      ...(e.label ? { label: measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, labelWidth(e)) } : {}),
       points,
       forcedElbow: e.from === e.to || (pairCount.get(key) ?? 0) > 1,
       pairIndex,

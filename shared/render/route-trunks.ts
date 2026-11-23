@@ -11,7 +11,13 @@ export const TRUNK_GAP = 24;
 /** A trunk keeps this far from every node it passes. */
 const CLEARANCE = 3;
 /** Room a label needs at each end of the stretch it sits on. */
-const LABEL_END = 6;
+export const LABEL_END = 6;
+/** Line a plate leaves visible before the far node on a fan's branch: the arrowhead and a bit of its shaft. */
+const ARROW_ROOM = 14;
+/** Room a branch needs besides its label plate. */
+export const BRANCH_ROOM = LABEL_END + ARROW_ROOM;
+/** A label on a fan's branch wraps to this text width, so the branch stays short (#1066). */
+export const BRANCH_LABEL_WIDTH = 64;
 
 export interface TrunkEdge {
   id: string;
@@ -158,13 +164,22 @@ export function shareTrunks(routes: Map<string, RoutedEdge>, edges: readonly Tru
   return own;
 }
 
+/** Where a plate sits on a fan's branch (from the trunk to the far node): mid-way, but leaving the arrowhead its room. */
+function onBranch([a, b]: [Point, Point], l: { w: number; h: number }): Point {
+  const flat = horizontal(a, b);
+  const half = (flat ? l.w : l.h) / 2;
+  const d = Math.abs(flat ? b.x - a.x : b.y - a.y);
+  const t = Math.round(Math.max(LABEL_END + half, Math.min(d / 2, d - ARROW_ROOM - half)));
+  const s = Math.sign(flat ? b.x - a.x : b.y - a.y);
+  return flat ? { x: a.x + s * t, y: a.y } : { x: a.x, y: a.y + s * t };
+}
+
 const overlap = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /**
- * Put every label in the middle of the longest stretch of its line (spec §1.7), for a trunk member the
- * longest stretch that is its own. A spot is taken only when the plate fits on the stretch and stays clear
- * of nodes, other labels and other lines; else the label keeps the router's place when that is still on its
- * line, and falls back to the middle of the longest stretch.
+ * Put every label in the middle of the longest stretch of its line (spec §1.7), for a trunk member on its
+ * branch or else its own part of the trunk, so two labels of one fan never share the trunk. A spot is taken
+ * only when the plate fits on the stretch and stays clear of nodes, other labels and other lines.
  */
 export function settleLabels(routes: Map<string, RoutedEdge>, edges: readonly TrunkEdge[], nodes: ReadonlyMap<string, Rect>, own: ReadonlyMap<string, [Point, Point][]>): void {
   const plate = (c: Point, l: { w: number; h: number }): Rect => ({ x: c.x - l.w / 2, y: c.y - l.h / 2, w: l.w, h: l.h });
@@ -191,11 +206,14 @@ export function settleLabels(routes: Map<string, RoutedEdge>, edges: readonly Tr
       }
       return true;
     };
-    const fits = (s: [Point, Point]): boolean => len(s) >= (horizontal(s[0], s[1]) ? l.w : l.h) + 2 * LABEL_END;
+    const fits = (s: [Point, Point]): boolean => len(s) >= (horizontal(s[0], s[1]) ? l.w : l.h) + (mine && s === mine[0] && mine.length > 1 ? BRANCH_ROOM : 2 * LABEL_END);
     const mid = ([a, b]: [Point, Point]): Point => ({ x: Math.round((a.x + b.x) / 2), y: Math.round((a.y + b.y) / 2) });
     const byLength = [...segs].sort((a, b) => len(b) - len(a));
-    const spot = byLength.filter(fits).map(mid).find(clear);
-    const next = spot ?? (onRoute(r.label!, r.points) ? r.label! : byLength[0] ? mid(byLength[0]) : r.label!);
+    // A trunk member: the branch into its far node first (no other line shares it), then its part of the trunk.
+    const spot = (mine ? segs : byLength).filter(fits).map((seg) => (mine && seg === mine[0] && mine.length > 1 ? onBranch(seg, l) : mid(seg))).find(clear);
+    // Nothing fits. A line the trunks left alone keeps the router's place (beside a line too short to carry
+    // the plate, which would hide it whole); a joined line moved, so its label goes back onto it.
+    const next = spot ?? (!mine || onRoute(r.label!, r.points) ? r.label! : byLength[0] ? mid(byLength[0]) : r.label!);
     routes.set(e.id, { ...r, label: next });
     placed.set(e.id, plate(next, l));
   }
