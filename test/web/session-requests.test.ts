@@ -2,7 +2,7 @@
 // sessions waiting for a person — newest first, each with the session's provider and where a click goes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sessionRequests } from '../../web/src/activity/sessionRequests.ts';
+import { askUserQuestionItems, isQuestionTool, sessionRequests } from '../../web/src/activity/sessionRequests.ts';
 import type { PermissionAsk } from '../../web/src/activity/approvals.ts';
 import type { WaitingPlan } from '../../web/src/activity/plans.ts';
 
@@ -45,4 +45,23 @@ test('scoped to a project: prompts of other sessions and plans of other folders 
 test('sessions unknown yet: prompts still show, without a provider mark', () => {
   const list = sessionRequests([plan({ lead: null })], [ask()], null);
   assert.deepEqual(list.map((r) => [r.kind, r.session, r.provider]), [['permission', 'Otto', null], ['plan', null, null]]);
+});
+
+// #1052: AskUserQuestion's prompt becomes the same tabbed questions as the "질문 N/M" text.
+test('askUserQuestionItems: questions, options, multiSelect and header from the tool input', () => {
+  const items = askUserQuestionItems({
+    questions: [
+      { question: '어느 쪽으로 할까요?', header: '방향', multiSelect: false, options: [{ label: 'A안 (추천)', description: '빠름' }, { label: 'B안' }] },
+      { question: '켤 기능을 골라 주세요', multiSelect: true, options: [{ label: '자동 저장' }, { label: '버전 기록' }] },
+      { question: '', options: [] },
+    ],
+  });
+  assert.deepEqual(items, [
+    { question: '어느 쪽으로 할까요?', header: '방향', multiSelect: false, options: [{ label: 'A안 (추천)', reason: '빠름', recommended: true }, { label: 'B안' }] },
+    { question: '켤 기능을 골라 주세요', multiSelect: true, options: [{ label: '자동 저장' }, { label: '버전 기록' }] },
+  ]);
+  assert.equal(askUserQuestionItems({}), null);
+  assert.equal(askUserQuestionItems(null), null);
+  assert.equal(isQuestionTool('AskUserQuestion'), true);
+  assert.equal(isQuestionTool('Bash'), false);
 });
