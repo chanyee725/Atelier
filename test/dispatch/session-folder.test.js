@@ -4,14 +4,12 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../../server/app.js';
 import * as workspace from '../../server/workspace/index.js';
-import * as runs from '../../server/runs/index.js';
 import * as dispatch from '../../server/dispatch/index.js';
-import * as pipeline from '../../server/pipeline/index.js';
 import { Hub } from '../../server/dispatch/hub.js';
 import { deriveFolder, topFolder } from '../../server/dispatch/session-folder.js';
 import { fakeCliBin, fakeSpawner, until } from '../fixtures/fake-cli/index.mjs';
@@ -43,9 +41,7 @@ async function start() {
   };
   const moduleList = [
     { name: 'workspace', setup: workspace.setup },
-    { name: 'runs', setup: runs.setup },
     { name: 'dispatch', setup: (ctx) => dispatch.setup(ctx, deps) },
-    { name: 'pipeline', setup: pipeline.setup },
   ];
   const pub = mkdtempSync(join(tmpdir(), 'drawing-e505c-pub-'));
   dirs.push(pub);
@@ -62,7 +58,6 @@ async function start() {
   return { app, call, d: app.ctx.modules.dispatch, ws, stop: () => app.close() };
 }
 
-const STEP = [{ id: 'api', title: '서버 API', role: 'impl', model: 'claude-haiku-5-5' }];
 const mk = (call, body) => call('POST', '/api/sessions', { worktree: false, ...body });
 const settled = (d, id) => until(() => ['idle', 'done'].includes(d.hub.get(id).status), 10_000);
 
@@ -101,102 +96,6 @@ test('a session made by another session inherits its folder unless it names one'
     assert.equal(other.body.sessions[0].folder, 'beta');
     // The MCP tool passes `folder` through.
     assert.match(readFileSync(new URL('../../server/dispatch/mcp.js', import.meta.url), 'utf8'), /folder: \{ type: "string"/);
-  } finally { await t.stop(); }
-});
-
-test('lead plans: no path goes into the lead project folder; 시작하기 gives lead and step sessions the plan folder', { timeout: 60_000 }, async () => {
-  const t = await start();
-  try {
-    const { call, d, ws } = t;
-    const lead = (await mk(call, { items: [{ role: 'lead', task: 'plan' }], folder: 'alpha' })).body.sessions[0];
-    await settled(d, lead.id);
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, title: '로그인 개편', goal: '매직 링크', steps: STEP });
-    assert.equal(w.status, 200, JSON.stringify(w.body));
-    // Drafted in 기획 (#1045) with the lead's folder as its area; the lead keeps its folder.
-    assert.equal(w.body.path, '기획/로그인-개편/계획.dpx.json');
-    assert.equal(w.body.area, 'alpha');
-    assert.ok(readdirSync(join(ws, '기획', '로그인-개편')).length);
-    assert.equal(d.hub.get(lead.id).folder, 'alpha');
-    // A lead without an area names one (#782); on 시작하기 the plan moves there and the area becomes its folder.
-    const free = (await mk(call, { items: [{ role: 'lead', task: 'plan' }] })).body.sessions[0];
-    await settled(d, free.id);
-    const w2 = await call('POST', '/api/pipeline/plan', { lead: free.id, area: 'gamma', feature: '다른', title: '다른 계획', goal: 'x', steps: STEP });
-    assert.equal(w2.body.path, '기획/다른/계획.dpx.json');
-    assert.notEqual(d.hub.get(free.id).folder, '기획');
-    const go2 = await call('POST', '/api/pipeline/start', { path: w2.body.path, revision: w2.body.revision });
-    assert.equal(go2.status, 200, JSON.stringify(go2.body));
-    assert.equal(go2.body.path, 'gamma/다른/계획.dpx.json');
-    assert.equal(d.hub.get(free.id).folder, 'gamma');
-    // A plan a lead puts into beta/ makes beta its folder; the start hands it to the team.
-    const free2 = (await mk(call, { items: [{ role: 'lead', task: 'plan' }] })).body.sessions[0];
-    await settled(d, free2.id);
-    const w3 = await call('POST', '/api/pipeline/plan', { lead: free2.id, path: 'beta/p.dpx.json', title: 'beta 계획', goal: 'x', steps: STEP });
-    assert.equal(w3.status, 200, JSON.stringify(w3.body));
-    assert.equal(d.hub.get(free2.id).folder, 'beta');
-    const go = await call('POST', '/api/pipeline/start', { path: w3.body.path, revision: w3.body.revision });
-    assert.equal(go.status, 200, JSON.stringify(go.body));
-    await settled(d, free2.id);
-    const made = await mk(call, { items: [{ role: 'impl', task: 'api' }], parent: free2.id });
-    assert.equal(made.status, 200, JSON.stringify(made.body));
-    const mate = made.body.sessions[0];
-    assert.equal(mate.folder, 'beta');
-  } finally { await t.stop(); }
-});
-
-test('시작하기 moves only the lead, live team members and folderless ones; finished sessions keep their folder', { timeout: 60_000 }, async () => {
-  const t = await start();
-  try {
-    const { call, d } = t;
-    const lead = (await mk(call, { items: [{ role: 'lead', task: 'plan' }], folder: 'alpha' })).body.sessions[0];
-    await settled(d, lead.id);
-    const old = (await mk(call, { items: [{ role: 'impl', task: 'a' }], parent: lead.id })).body.sessions[0];
-    const live = (await mk(call, { items: [{ role: 'impl', task: 'b' }], parent: lead.id })).body.sessions[0];
-    const bare = (await mk(call, { items: [{ role: 'impl', task: 'c' }], parent: lead.id })).body.sessions[0];
-    await settled(d, old.id); await settled(d, live.id); await settled(d, bare.id);
-    d.hub.touch(d.hub.get(old.id), { status: 'done' });
-    d.hub.touch(d.hub.get(bare.id), { status: 'done', folder: null });
-    const bad = (await mk(call, { items: [{ role: 'impl', task: 'd' }], parent: lead.id })).body.sessions[0];
-    const grand = (await mk(call, { items: [{ role: 'impl', task: 'e' }], parent: live.id })).body.sessions[0];
-    // An unfinished grandchild under a finished child still moves; a session outside the lead's tree keeps its folder.
-    const deep = (await mk(call, { items: [{ role: 'impl', task: 'f' }], parent: old.id })).body.sessions[0];
-    const other = (await mk(call, { items: [{ role: 'lead', task: 'g' }], folder: 'alpha' })).body.sessions[0];
-    await settled(d, bad.id); await settled(d, grand.id); await settled(d, deep.id); await settled(d, other.id);
-    d.hub.touch(d.hub.get(bad.id), { status: 'error' });
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'beta/p.dpx.json', title: 'beta 계획', goal: 'x', steps: STEP });
-    assert.equal(w.status, 200, JSON.stringify(w.body));
-    const go = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
-    assert.equal(go.status, 200, JSON.stringify(go.body));
-    assert.equal(d.hub.get(lead.id).folder, 'beta');
-    assert.equal(d.hub.get(live.id).folder, 'beta');
-    assert.equal(d.hub.get(bare.id).folder, 'beta');
-    assert.equal(d.hub.get(old.id).folder, 'alpha');
-    assert.equal(d.hub.get(grand.id).folder, 'beta', 'grandchildren move too');
-    assert.equal(d.hub.get(bad.id).folder, 'beta', 'error is not finished');
-    assert.equal(d.hub.get(deep.id).folder, 'beta', 'an unfinished grandchild under a done child moves');
-    assert.equal(d.hub.get(other.id).folder, 'alpha', 'outside the lead tree');
-  } finally { await t.stop(); }
-});
-
-test('renaming or moving a top folder moves its sessions along (#487)', { timeout: 60_000 }, async () => {
-  const t = await start();
-  try {
-    const { call, d } = t;
-    const a = (await mk(call, { items: [{ role: 'lead', task: 'a' }], folder: 'alpha' })).body.sessions[0];
-    const b = (await mk(call, { items: [{ role: 'lead', task: 'b' }], folder: 'beta' })).body.sessions[0];
-    await settled(d, a.id); await settled(d, b.id);
-    const ren = await call('POST', '/api/move', { from: 'alpha', to: 'gamma', type: 'folder' });
-    assert.equal(ren.status, 200, JSON.stringify(ren.body));
-    await until(() => d.hub.get(a.id).folder === 'gamma', 5_000);
-    assert.equal(d.hub.get(b.id).folder, 'beta');
-    // Moved into another top folder: it belongs to that project now.
-    const mv = await call('POST', '/api/move', { from: 'gamma', to: 'beta/gamma', type: 'folder' });
-    assert.equal(mv.status, 200, JSON.stringify(mv.body));
-    await until(() => d.hub.get(a.id).folder === 'beta', 5_000);
-    // A subfolder move leaves the project alone.
-    const sub = await call('POST', '/api/move', { from: 'beta/gamma', to: 'gamma2', type: 'folder' });
-    assert.equal(sub.status, 200, JSON.stringify(sub.body));
-    await new Promise((r) => setTimeout(r, 200));
-    assert.equal(d.hub.get(a.id).folder, 'beta');
   } finally { await t.stop(); }
 });
 
@@ -243,50 +142,5 @@ test('GET /api/usage?folder: cost and tokens of that project only', { timeout: 6
     assert.equal((await call('GET', '/api/usage?folder=beta')).body.cost, 4);
     assert.equal((await call('GET', '/api/usage?folder=..%2Fx')).status, 400);
     assert.ok(Array.isArray((await call('GET', '/api/usage')).body.days)); // global shape unchanged
-  } finally { await t.stop(); }
-});
-
-test('GET /api/runs/list?folder: run metadata of files under that folder, newest first, capped at 50', { timeout: 60_000 }, async () => {
-  const t = await start();
-  try {
-    const { call, d, ws } = t;
-    const lead = (await mk(call, { items: [{ role: 'lead', task: 'plan' }], folder: 'alpha' })).body.sessions[0];
-    await settled(d, lead.id);
-    const w = await call('POST', '/api/pipeline/plan', { lead: lead.id, path: 'alpha/p.dpx.json', title: 'a', goal: 'x', steps: STEP });
-    const go = await call('POST', '/api/pipeline/start', { path: w.body.path, revision: w.body.revision });
-    assert.equal(go.status, 200, JSON.stringify(go.body));
-    const lead2 = (await mk(call, { items: [{ role: 'lead', task: 'plan' }], folder: 'beta' })).body.sessions[0];
-    await settled(d, lead2.id);
-    const w2 = await call('POST', '/api/pipeline/plan', { lead: lead2.id, path: 'beta/q.dpx.json', title: 'b', goal: 'x', steps: STEP });
-    await call('POST', '/api/pipeline/start', { path: w2.body.path, revision: w2.body.revision });
-
-    const a = await call('GET', '/api/runs/list?folder=alpha');
-    assert.equal(a.status, 200);
-    assert.equal(a.body.folder, 'alpha');
-    assert.equal(a.body.runs.length, 1);
-    assert.equal(a.body.runs[0].file, 'alpha/p.dpx.json');
-    assert.equal(a.body.runs[0].id, go.body.runId);
-    // Metadata only: summary fields, no steps or transcripts.
-    assert.deepEqual(Object.keys(a.body.runs[0]).sort(), ['endedAt', 'file', 'id', 'pause', 'startedAt', 'state', 'totals']);
-    assert.equal((await call('GET', '/api/runs/list?folder=beta')).body.runs[0].file, 'beta/q.dpx.json');
-
-    // Cap and order: copy the record under many ids.
-    const dir = join(ws, '.drawing', 'runs', 'alpha', 'p.dpx.json');
-    const src = join(dir, `${go.body.runId}.json`);
-    await d.hub.get(lead.id) && await t.app.ctx.modules.runs.recorder.endRun(go.body.runId, 'done');
-    await until(() => readdirSync(dir).length, 5000);
-    for (let i = 0; i < 55; i++) {
-      const id = `${String(1700000000000 + i)}-abcdef`;
-      const rec = { ...JSON.parse(readFileSync(src, 'utf8')), id, startedAt: 1700000000000 + i };
-      writeFileSync(join(dir, `${id}.json`), JSON.stringify(rec));
-    }
-    const capped = (await call('GET', '/api/runs/list?folder=alpha')).body.runs;
-    assert.equal(capped.length, 50);
-    assert.ok(capped.every((r, i) => i === 0 || capped[i - 1].startedAt >= r.startedAt));
-    assert.equal(capped[0].id, go.body.runId); // the real run is newest
-
-    assert.equal((await call('GET', '/api/runs/list')).status, 400);
-    assert.equal((await call('GET', '/api/runs/list?folder=..')).status, 400);
-    assert.equal((await call('GET', '/api/runs/list?folder=nope')).status, 404);
   } finally { await t.stop(); }
 });

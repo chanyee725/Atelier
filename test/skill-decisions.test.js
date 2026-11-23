@@ -29,5 +29,5 @@ test('#1061 rule 10: only the docs session edits documents; the lead manages ses
   const { ROLES } = await import('../server/dispatch/roles.js');
   const role = (id) => ROLES.find((r) => r.id === id);
   assert.match(role('lead').prompt, /코드와 문서는 직접 고치지 않고/);
-  assert.match(role('docs').prompt, /아틀리에 문서\(\.dpx\.json\) 작성·수정/);
+  assert.match(role("docs").prompt, /README와 CHANGELOG/);
 });

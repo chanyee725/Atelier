@@ -11,7 +11,6 @@ import * as workspace from '../../server/workspace/index.js';
 import * as dispatch from '../../server/dispatch/index.js';
 import * as userDefaults from '../../server/user-defaults.js';
 import { issueAccounts, issueOfBranch, Ledger } from '../../server/dispatch/ledger.js';
-import { pickSession } from '../../server/runs/record.js';
 import { accountLabelOf, accountsSummary, checkAccountLabel, cleanAccountLabels } from '../../shared/dispatch/accounts.ts';
 import { fakeCliBin, fakeSpawner, until } from '../fixtures/fake-cli/index.mjs';
 
@@ -110,12 +109,6 @@ test('Ledger: snapshot label kept, issues from item and branch, leads included, 
   assert.equal(store.data.ledger.E.accountLabel, null);
   l.trim(2);
   assert.deepEqual(Object.keys(store.data.ledger).sort(), ['E', 'X']);
-});
-
-test('pickSession keeps role, accountLabel, issue and times; refuses email-shaped labels', () => {
-  const p = pickSession({ sid: 's', role: 'impl', accountLabel: 'Claude · Max', issue: 747, startedAt: 1, endedAt: 2, last: 'secret answer' });
-  assert.deepEqual(p, { sid: 's', role: 'impl', accountLabel: 'Claude · Max', issue: 747, startedAt: 1, endedAt: 2 });
-  for (const bad of ['a@b.co', 'me﹫corp', '010-1234-5678']) assert.equal(pickSession({ sid: 's', accountLabel: bad }).accountLabel, undefined, bad);
 });
 
 const posted = [];

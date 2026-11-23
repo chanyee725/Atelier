@@ -33,19 +33,6 @@ export function laneItems(items, lane, mode) {
   return items.map(it => ({ ...it, lane, ...(lane === "quickfix" && !it.mode && !mode && { mode: "quickfix" }) }));
 }
 
-/**
- * write_plan arguments under a lane. Quickfix is one step that starts at once (no plan gate) in the
- * quickfix mode; more than one step is refused. `lane` itself is not part of the plan file.
- */
-export function lanePlanArgs({ lane, ...args }) {
-  lane = checkLane(lane);
-  if (lane !== "quickfix") return args;
-  const steps = Array.isArray(args.steps) ? args.steps : [];
-  if (steps.length !== 1) throw bad("quickfix 계획은 단계 하나예요. 더 크면 lane: normal로 쓰세요");
-  if (!QUICKFIX_ROLES.has(steps[0]?.role) || (steps[0].n ?? 1) !== 1) throw bad("quickfix 단계는 구현자·디자이너·문서화 중 하나, 세션 하나예요. 리뷰가 필요하면 lane: normal로 쓰세요");
-  return { ...args, autostart: true, steps: [{ mode: "quickfix", ...steps[0] }] };
-}
-
 /** How many past runs per lane are kept for ETA hints. */
 export const RUN_TIMES_MAX = 60;
 

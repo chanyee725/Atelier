@@ -99,7 +99,7 @@ test('workspaces: picking a folder adds it to drawing.json and switches the serv
     async ({ ws, home, call }) => {
       const other = join(home, 'code', 'app');
       await mkdir(other, { recursive: true });
-      assert.equal((await call('POST', '/api/file', { path: 'a' })).status, 201);
+      await mkdir(join(ws, 'a'));
 
       const before = await call('GET', '/api/workspaces');
       assert.deepEqual(before.body.folders.map((f) => [f.path, f.current]), [[ws, true]]);
@@ -108,10 +108,8 @@ test('workspaces: picking a folder adds it to drawing.json and switches the serv
       assert.equal(r.status, 200);
       assert.equal(r.body.current.path, other);
       assert.equal((await call('GET', '/api/info')).body.workspace, 'app');
-      // The new folder has its own documents and .drawing/ data.
-      assert.deepEqual((await call('GET', '/api/tree')).body.tree, []);
-      assert.equal((await call('POST', '/api/file', { path: 'b' })).status, 201);
-      assert.ok((await readdir(other)).includes('b.dpx.json'));
+      // The new folder has its own project folders.
+      assert.deepEqual((await call('GET', '/api/workspace/projects')).body.projects, []);
 
       // Metadata only: `~/…` path and folder name; both folders listed, the last one opened remembered.
       const saved = JSON.parse(await readFile(join(home, '.atelier', 'drawing.json'), 'utf8'));
@@ -121,8 +119,8 @@ test('workspaces: picking a folder adds it to drawing.json and switches the serv
       // Back to the first folder: its documents are still there, the other folder's are not.
       const back = await call('POST', '/api/workspaces/open', { path: ws });
       assert.equal(back.status, 200);
-      const names = (await call('GET', '/api/tree')).body.tree.map((n) => n.name);
-      assert.deepEqual(names, ['a.dpx.json']);
+      const names = (await call('GET', '/api/workspace/projects')).body.projects.map((n) => n.name);
+      assert.deepEqual(names, ['a']);
       assert.equal(JSON.parse(await readFile(join(home, '.atelier', 'drawing.json'), 'utf8')).lastWorkspace, ws);
 
       // Removing takes it off the list only; the open folder cannot be removed.
@@ -130,7 +128,7 @@ test('workspaces: picking a folder adds it to drawing.json and switches the serv
       const del = await call('DELETE', `/api/workspaces?path=${encodeURIComponent(other)}`);
       assert.equal(del.status, 200);
       assert.deepEqual(del.body.folders.map((f) => f.path), [ws]);
-      assert.ok((await readdir(other)).includes('b.dpx.json'));
+      assert.ok((await readdir(other).catch(() => null)) !== null, 'the folder itself stays');
     },
     { defaults: true },
   );
@@ -175,47 +173,6 @@ test('workspaces: no switch while an agent session is running, none in project m
       assert.equal((await call('GET', '/api/workspaces')).body.switchable, false);
     },
     { projectMode: true },
-  );
-});
-
-test('workspaces: no switch while a pipeline plan is running, even with every session idle', async () => {
-  const plan = (alive) => ({
-    name: 'dispatch',
-    setup: () => ({
-      hub: { sessions: [{ id: 'L', status: 'idle' }], alive: (id) => alive && id === 'L' },
-      store: { data: { pipelines: { 'plan.dpx.json': { state: 'running', lead: 'L' } } } },
-    }),
-  });
-  const doc = JSON.stringify({ v: 1, revision: 1, blocks: [] });
-  await withApp(
-    async ({ ws, home, call }) => {
-      await writeFile(join(ws, 'plan.dpx.json'), doc);
-      await mkdir(join(home, 'p'));
-      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
-      assert.deepEqual([r.status, r.body.code], [409, 'pipeline_running']);
-      assert.ok(!r.body.error.includes(home), 'no paths in error messages');
-      assert.equal((await call('GET', '/api/workspaces')).body.current.path, ws);
-    },
-    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(true)] },
-  );
-  // #775: a plan whose document is gone (trashed) does not block, even with its lead alive.
-  await withApp(
-    async ({ home, call }) => {
-      await mkdir(join(home, 'p'));
-      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
-      assert.equal(r.status, 200, JSON.stringify(r.body));
-    },
-    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(true)] },
-  );
-  // #775: after a restart the lead has no process: a stale `running` entry does not block either.
-  await withApp(
-    async ({ ws, home, call }) => {
-      await writeFile(join(ws, 'plan.dpx.json'), doc);
-      await mkdir(join(home, 'p'));
-      const r = await call('POST', '/api/workspaces', { path: join(home, 'p') });
-      assert.equal(r.status, 200, JSON.stringify(r.body));
-    },
-    { moduleList: [...modules.filter((m) => m.name !== 'dispatch'), plan(false)] },
   );
 });
 

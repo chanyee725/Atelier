@@ -1,6 +1,6 @@
 import { spawnCli } from "./cli.js";
 import { redact } from "./redact.js";
-import { CHILD_PROMPT, DRAWING_WRITE_NOTE, SPAWN_PROMPT, WRITING } from "./roles.js";
+import { CHILD_PROMPT, SPAWN_PROMPT, WRITING } from "./roles.js";
 import { replyStyle } from "./style.js";
 import { effectiveRoles } from "./settings.js";
 import { isQuotaError } from "./limits.js";
@@ -39,7 +39,7 @@ export class HubRunners {
     const prompt = s.prompt ?? effectiveRoles(this.roles, this.store, this.models).find(r => r.id === s.role)?.prompt;
     // Docs mode (#856): every role writes in the documents style (i-have-adhd rules, #737), not only 문서화.
     const writing = s.mode === "docs" && !prompt?.includes(WRITING) ? WRITING : "";
-    return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where + DRAWING_WRITE_NOTE, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
+    return [prompt, writing, (s.canSpawn ? SPAWN_PROMPT : CHILD_PROMPT) + where, this.team().replyStyle ? replyStyle() : ""].filter(Boolean).join("\n\n");
   }
 
   /** @this {import("./hub-util.js").HubThis} */
