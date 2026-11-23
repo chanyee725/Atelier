@@ -202,6 +202,9 @@ export function gridTicks(now: number, windowMs: number, width: number, stepMs: 
 /** How often the card polls /api/timeline and recounts 최근 업데이트 while the page is visible (#944). */
 export const REFRESH_MS = 5_000;
 
+/** Whether the card polls: only while it is unfolded (#1048) and the page is visible (#944). */
+export const timelinePolls = (folded: boolean, hidden: boolean): boolean => !folded && !hidden;
+
 /** 최근 업데이트 text for an update `ms` ago: 방금 under 5s, then whole seconds, then whole minutes. */
 export function agoLabel(ms: number): string {
   const sec = Math.floor(Math.max(0, ms) / 1000);
