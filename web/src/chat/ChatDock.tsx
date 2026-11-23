@@ -9,6 +9,8 @@
 // #968 s2: the CLI in the app. One partner (the main session); images, the "/" menu, Esc or 정지 stops a turn, 새 대화
 // (/clear) saves and ends the helper, 대화 저장 writes the masked record (POST /api/chats) and tells the sidebar,
 // 크게 보기 widens the window. openChatSession (index.ts) reopens a saved conversation through a window event.
+// #1057: a document's 관리자와 대화 button (askAboutDoc) opens the dock on the document's lead with the document pinned
+// (or on the helper, with an offer to assign a lead, when it has none); the first message names the document's path.
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { MessageCircle } from 'lucide-react';
@@ -16,10 +18,12 @@ import { api, connect, getState, loadTranscript, useDispatch } from '../dispatch
 import type { Session } from '../../../shared/dispatch/types.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
-import { badgeText, mainTarget, helperBody, HELPER_OFFLINE, helperOffline, isAlive, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
+import { badgeText, mainTarget, PARTNER_KEY, helperBody, HELPER_OFFLINE, helperOffline, isAlive, replies, sendOnce, sessionGone, unread } from './lib/chatDock.ts';
 import { answeredAsk, issueAskText, runStart, startGate, useAskRequest, type AskRequest, type StartState } from './lib/askIssue.ts';
 import { issueTask, newLeadBody, type TeamPick } from '../home/issueStart.ts';
 import { IssueStartBar } from './IssueAsk';
+import { DocCard } from './DocAsk';
+import { docAskText, useDocRequest, withDocPath, type DocRequest } from './lib/askDoc.ts';
 import { chatRecord, imagesBody, isClear, isCliSessionId, withPrior, worthSaving, type Attachment, type SavedMessage } from './lib/chatInput.ts';
 import { HISTORY_CHANGED, OPEN_CHAT_SESSION, type ChatSummary } from '../shell/chatHistory';
 import './chat-dock.css';
@@ -52,19 +56,27 @@ export function ChatDock({ folder }: { folder: string | null }) {
   const gate = useRef(startGate()).current;
   const handled = useRef(0);
   const asked = useAskRequest();
+  // #1057: the document pinned at the top, its lead (the partner while alive), and the ask whose path already went out.
+  const [doc, setDoc] = useState<DocRequest | null>(null);
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const docSent = useRef(0);
+  const handledDoc = useRef(0);
+  const docAsked = useDocRequest();
   const ref = useRef<HTMLDialogElement>(null);
   const fab = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
   // The store is fed only once the dock is used (opened or a conversation started), not on every page.
-  const active = open || helperId !== null;
+  const active = open || helperId !== null || partnerId !== null;
   useEffect(() => (active ? connect() : undefined), [active]);
   const unavailable = useDispatch(st => st.unavailable);
   const sessions = useDispatch(st => st.sessions);
   const providers = useDispatch(st => st.providers);
-  const target = useMemo(() => mainTarget(sessions, helperId), [sessions, helperId]);
+  const target = useMemo(() => mainTarget(sessions, helperId, partnerId), [sessions, helperId, partnerId]);
   const sid = target.id;
   const s: Session | undefined = sid ? sessions.find(x => x.id === sid) : undefined;
+  // Talking to a document's lead: its transcript is the team's work, so it is not saved as a chat or ended by 새 대화.
+  const onPartner = target.key === PARTNER_KEY;
   const entries = useDispatch(st => (sid ? st.transcripts[sid] : undefined));
   // Claude not connected: say so before the first send instead of failing on it.
   const offline = helperOffline(target, providers);
@@ -105,7 +117,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
   }, [opened]);
 
   /** Sends `text` (and `images`) to session `to`, or makes the helper with it when `to` is null. Returns whether it went out. */
-  const deliver = async (text: string, to: string | null, images: Attachment[] = []) => {
+  const deliver = async (text: string, to: string | null, images: Attachment[] = [], restore = text) => {
     let ok = false;
     const ran = await sendOnce(sending, async () => {
       setBusy(true);
@@ -128,7 +140,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
         }
         ok = true;
       } catch (e) {
-        setDraft(text);
+        setDraft(restore);
         setAttachments(() => images);
         setError((e as Error).message);
         // A helper that is gone (removed elsewhere) is made again on the next send; a passing error keeps it.
@@ -138,7 +150,7 @@ export function ChatDock({ folder }: { folder: string | null }) {
       }
     });
     // Another send in flight: keep the text in the box instead of dropping it.
-    if (!ran) setDraft(text);
+    if (!ran) setDraft(restore);
     return ok;
   };
 
@@ -147,7 +159,10 @@ export function ChatDock({ folder }: { folder: string | null }) {
     if (offline) return;
     if (isClear(text)) return void newChat();
     if (!text && !attachments.length) return;
-    await deliver(text, sid, attachments);
+    // The first message after a document is pinned names its path, so the partner knows which document (#1057).
+    const pinned = doc && docSent.current !== doc.seq ? doc : null;
+    const out = pinned ? withDocPath(text, pinned.path) : text;
+    if ((await deliver(out, sid, attachments, text)) && pinned) docSent.current = pinned.seq;
   };
 
   /** Esc or 정지: interrupts the running turn (the CLI's Esc). */
@@ -174,12 +189,23 @@ export function ChatDock({ folder }: { folder: string | null }) {
 
   /** 새 대화 (/clear): saves what is there, ends the helper (its CLI process), and the next message makes a new one. */
   const newChat = async () => {
+    // A document's lead keeps working: 새 대화 only leaves it and goes back to the helper.
+    if (onPartner) {
+      setPartnerId(null);
+      setDoc(null);
+      setDraft('');
+      setAttachments(() => []);
+      setError(null);
+      return;
+    }
     if (worthSaving(entries) && !(await save(true))) return;
     const old = helperId;
     setHelperId(null);
     setSavedId(null);
     setResume(null);
     setPrior(null);
+    setDoc(null);
+    setPartnerId(null);
     setDraft('');
     setAttachments(() => []);
     setError(null);
@@ -191,6 +217,8 @@ export function ChatDock({ folder }: { folder: string | null }) {
     if (!isCliSessionId(cliSessionId)) return;
     setOpened(true);
     setOpen(true);
+    setDoc(null);
+    setPartnerId(null);
     setError(null);
     setDraft('');
     setAttachments(() => []);
@@ -226,6 +254,8 @@ export function ChatDock({ folder }: { folder: string | null }) {
   useEffect(() => {
     if (!asked || asked.seq === handled.current) return;
     handled.current = asked.seq;
+    setDoc(null);
+    setPartnerId(null);
     setPin(asked);
     gate.pin(asked.seq);
     setStart({ state: 'idle' });
@@ -238,6 +268,38 @@ export function ChatDock({ folder }: { folder: string | null }) {
     setDraft(issueAskText(asked.issue.number));
     // Runs once per request (seq); the other values are read as they are at that moment.
   }, [asked]);
+
+  // A document's 관리자와 대화: open on its lead (the helper when it has none), pin the card, prefill the first message.
+  useEffect(() => {
+    if (!docAsked || docAsked.seq === handledDoc.current) return;
+    handledDoc.current = docAsked.seq;
+    setPin(null);
+    setDoc(docAsked);
+    setPartnerId(docAsked.lead?.id ?? null);
+    setError(null);
+    setOpened(true);
+    setOpen(true);
+    // Like an issue ask, opening never calls the model: the message waits in the box for the person to send.
+    setDraft(docAskText(docAsked.path, !!docAsked.lead));
+  }, [docAsked]);
+
+  /** Assigns a live lead to the pinned document and moves the talk to it. */
+  const assignLead = async (leadId: string) => {
+    if (!doc) return;
+    try {
+      const r = await api<{ lead: DocRequest['lead'] }>('POST', `/api/file/lead?path=${encodeURIComponent(doc.path)}`, { lead: leadId });
+      const next = { ...doc, lead: r.lead };
+      setDoc(next);
+      setPartnerId(r.lead?.id ?? null);
+      // The prefilled helper message no longer fits; an edited draft is kept.
+      if (draft === docAskText(doc.path, false)) setDraft(docAskText(doc.path, true));
+      // The new partner has not heard of the document yet.
+      docSent.current = 0;
+      toast.success(`${r.lead?.name ?? '관리자'}에게 배정했어요`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const startIssue = (team: TeamPick, leadId: string) => {
     if (!pin) return;
@@ -285,7 +347,8 @@ export function ChatDock({ folder }: { folder: string | null }) {
           if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
             e.preventDefault();
             // Like the CLI: Esc stops a running turn first; with nothing running it closes the window.
-            if (thinking && s) stop();
+            // A document's lead may be mid-way through its team's work: Esc only closes; 정지 still stops it.
+            if (thinking && s && !onPartner) stop();
             else close();
           }
         }}
@@ -311,12 +374,13 @@ export function ChatDock({ folder }: { folder: string | null }) {
               onStop={stop}
               onNew={() => void newChat()}
               onSave={() => void save()}
-              canSave={worthSaving(entries)}
+              canSave={!onPartner && worthSaving(entries)}
               expanded={expanded}
               onExpand={() => setExpanded(v => !v)}
               prior={s ? null : prior}
               onClose={close}
               issue={pin?.issue ?? null}
+              doc={doc ? <DocCard key={doc.seq} doc={doc} sessions={sessions} exclude={helperId} onAssign={assignLead} /> : undefined}
               after={showBar ? focusInput => (
                 <IssueStartBar
                   key={pin!.seq}

@@ -12,6 +12,7 @@ import { SidebarInset, SidebarProvider } from './components/ui/sidebar';
 import { ActivityAlerts } from './activity/ActivityAlerts';
 import { AgentLiveHost } from './live/AgentLivePanel';
 import { ChatDock } from './chat/ChatDock';
+import { DocLeadButton } from './chat/DocLeadButton';
 import { toastAction, toastResult } from './activity/actionToast';
 import { Toaster } from './components/ui/sonner';
 import type { EntryKind } from './activity/appEvents';
@@ -717,6 +718,7 @@ export function App() {
             setPaletteOpen(true);
           }}
             onToggleNav={narrow ? () => setNavOpen((o) => !o) : undefined}
+            leadChat={hasFile && path ? <DocLeadButton path={path} title={title} open={openCount} narrow={narrow} /> : undefined}
             exportMenu={
               <ExportMenu
                 narrow={narrow}

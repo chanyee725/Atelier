@@ -14,11 +14,16 @@ export const HELPER_KEY = 'helper';
 const ENDED = new Set(['done', 'error']);
 export const isAlive = (s: Pick<Session, 'status'>) => !ENDED.has(s.status);
 
+export const PARTNER_KEY = 'partner';
+
 /**
  * The one partner (#968): this project's main session, the 도우미. Its session while it is alive; a helper that ended
  * shows as not-made-yet, so the next message makes a new one. There is no partner list.
+ * #1057: `partnerId` (a document's lead) takes the talk while it is alive; once it ends the helper comes back.
  */
-export function mainTarget(sessions: Session[], helperId: string | null): ChatTarget {
+export function mainTarget(sessions: Session[], helperId: string | null, partnerId: string | null = null): ChatTarget {
+  const partner = partnerId ? sessions.find(s => s.id === partnerId) : undefined;
+  if (partner && isAlive(partner)) return { key: PARTNER_KEY, id: partner.id, label: partner.name };
   // A helper just made may not be in the list yet: keep its id, so a second send does not make another one.
   const found = helperId ? sessions.find(s => s.id === helperId) : undefined;
   const id = !helperId ? null : !found ? helperId : isAlive(found) ? found.id : null;
