@@ -12,9 +12,16 @@ export interface FlowEdge {
 /**
  * Rank of every id along the flow. Back edges (closing a cycle, found depth-first from `starts`, then from
  * the ids with no incoming edge, then the rest in source order) are ignored. `sequential` gives one slot per
- * id in topological order; otherwise the rank is the longest path from a source.
+ * id in topological order; otherwise the rank is the longest path from a source, where an edge is `step`
+ * slots long (1 by default; 0 lets both ends share a slot).
  */
-export function rankFlow(ids: readonly string[], edges: readonly FlowEdge[], starts: readonly string[] = [], sequential = false): Map<string, number> {
+export function rankFlow(
+  ids: readonly string[],
+  edges: readonly FlowEdge[],
+  starts: readonly string[] = [],
+  sequential = false,
+  step: (from: string, to: string) => number = () => 1,
+): Map<string, number> {
   const out = new Map<string, string[]>(ids.map((id) => [id, []]));
   for (const e of edges) if (e.from !== e.to) out.get(e.from)?.push(e.to);
   const state = new Map<string, 1 | 2>();
@@ -56,7 +63,7 @@ export function rankFlow(ids: readonly string[], edges: readonly FlowEdge[], sta
     return rank;
   }
   for (const id of topo) rank.set(id, rank.get(id) ?? 0);
-  for (const id of topo) for (const to of forward.get(id)!) rank.set(to, Math.max(rank.get(to) ?? 0, rank.get(id)! + 1));
+  for (const id of topo) for (const to of forward.get(id)!) rank.set(to, Math.max(rank.get(to) ?? 0, rank.get(id)! + step(id, to)));
   return rank;
 }
 

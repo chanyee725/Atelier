@@ -412,42 +412,92 @@ const LABEL_ROOM = 16;
 
 /**
  * A flowchart whose flow goes back and forth between groups (#1066): groups as bands in source order, nodes
- * in flow slots (longest path from a source), so every edge runs with the flow. A slot that a labelled edge
- * leaves gets a gap wide enough for the label beside the jog (spec §1.5: a labelled layer gap is wider).
+ * in flow slots, so every edge runs with the flow.
+ *
+ * An edge inside a band takes one slot; an edge to another band takes none, so its ends share a slot and the
+ * line runs straight across the bands (spec §1.7: straight lines first). That keeps the picture as wide as
+ * the longest run inside one band, not as the whole chain. A slot that a labelled edge leaves along the
+ * flow gets a gap wide enough for the label (spec §1.5: a labelled layer gap is wider).
  */
 function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: PlacedSizes): Map<string, Rect> {
   const order = definitionOrder(d);
   const ids = [...order.keys()].filter((id) => sizes.nodes.has(id));
   const flow = d.edges.map((e) => (flipped(e, order) ? { from: e.to, to: e.from } : e));
-  const rank = rankFlow(ids, flow);
-  // A source sits right before its nearest target (as ELK's network-simplex layering pulls it), so its
-  // edge does not run along the whole flow past other nodes' edges. A target in another band takes the
-  // source in its own slot: the edge drops straight across the bands (spec §1.7: straight lines first).
   const band = new Map(roots.flatMap((r, i) => r.bands.flatMap((b, j) => b.nodes.map((id) => [id, `${i}:${j}`] as const))));
-  const incoming = new Set(flow.filter((e) => e.from !== e.to).map((e) => e.to));
-  for (const id of ids) {
-    if (incoming.has(id)) continue;
-    const next = flow.filter((e) => e.from === id && e.to !== id).map((e) => (rank.get(e.to) ?? 0) - (band.get(e.to) === band.get(id) ? 1 : 0));
-    if (next.length > 0) rank.set(id, Math.max(rank.get(id) ?? 0, Math.min(...next)));
+  // A fan into another band (one node feeding several nodes there) does take a slot: the trunk drops
+  // across the bands and branches sideways into the stacked targets.
+  const fan = new Map<string, Set<string>>();
+  for (const e of flow) {
+    if (e.from === e.to || band.get(e.from) === band.get(e.to)) continue;
+    const key = `${e.from}>${band.get(e.to)}`;
+    fan.set(key, (fan.get(key) ?? new Set()).add(e.to));
   }
+  const step = (from: string, to: string): number => (band.get(from) === band.get(to) || (fan.get(`${from}>${band.get(to)}`)?.size ?? 0) > 1 ? 1 : 0);
+  // Slots in flow order, one node per band and slot (a band is one row of nodes, as Eraser draws a layer):
+  // a node goes right after what feeds it, in the first slot its band still has free.
+  const topo = rankFlow(ids, flow, [], true);
+  const forward = flow.filter((e) => e.from !== e.to && topo.get(e.from)! < topo.get(e.to)!);
+  const feeds = new Set(forward.map((e) => e.to));
+  const fed = new Set(forward.map((e) => e.from));
+  const rank = new Map<string, number>();
+  const taken = new Map<string, string[]>();
+  const near = (id: string): string[] => forward.filter((e) => (e.from === id || e.to === id) && step(e.from, e.to) === 1).map((e) => (e.from === id ? `<${e.to}` : `>${e.from}`));
+  // Two nodes of a band may share a slot (stacked, as a list) when the same node feeds both or both feed
+  // the same node, a slot away: a fan stays together instead of one branch running past the other.
+  const fits = (id: string, key: string): boolean => {
+    const there = taken.get(key);
+    if (!there) return true;
+    const mine = new Set(near(id));
+    return there.every((o) => near(o).some((n) => mine.has(n)));
+  };
+  const put = (id: string, want: number, dir: 1 | -1): void => {
+    let r = want;
+    while (!fits(id, `${band.get(id)}@${r}`)) r += dir;
+    const key = `${band.get(id)}@${r}`;
+    taken.set(key, [...(taken.get(key) ?? []), id]);
+    rank.set(id, r);
+  };
+  const byFlow = [...ids].sort((x, y) => topo.get(x)! - topo.get(y)!);
+  for (const id of byFlow) {
+    if (!feeds.has(id)) continue;
+    // A source that is not placed yet counts as slot 0, which keeps its slot free before this node.
+    const from = forward.filter((e) => e.to === id).map((e) => (rank.get(e.from) ?? 0) + step(e.from, id));
+    put(id, Math.max(0, ...from), 1);
+  }
+  // A source sits right before its nearest target, so its edge does not run along the whole flow past
+  // other nodes' edges; a node with no edge takes the first free slot of its band.
+  for (const id of byFlow) {
+    if (feeds.has(id) || !fed.has(id)) continue;
+    put(id, Math.min(...forward.filter((e) => e.from === id).map((e) => rank.get(e.to)! - step(id, e.to))), -1);
+  }
+  const first = Math.min(0, ...rank.values());
+  taken.clear();
+  for (const [id, r] of rank) {
+    rank.set(id, r - first);
+    const key = `${band.get(id)}@${r - first}`;
+    taken.set(key, [...(taken.get(key) ?? []), id]);
+  }
+  for (const id of byFlow) if (!rank.has(id)) put(id, 0, 1);
   const across = d.direction === 'down';
   const room = new Map<number, number>();
   for (const e of d.edges) {
     if (!e.label) continue;
     const [a, b] = flipped(e, order) ? [e.to, e.from] : [e.from, e.to];
     const r = rank.get(a);
-    if (r === undefined || (rank.get(b) ?? r) <= r) continue;
+    // Only a label between two neighbours of one band needs the room; a longer or cross-band line has it.
+    if (r === undefined || rank.get(b) !== r + 1 || band.get(a) !== band.get(b)) continue;
     const style = styleFor(d, e.attrs, e.span.line);
     const l = measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140);
     const need = (across ? l.h + 4 : Math.ceil(l.w + PLATE_PAD * 2)) + 2 * LABEL_ROOM;
     room.set(r, Math.max(room.get(r) ?? 0, need));
   }
+  // eraser-diagrams spacing: 12 between stacked list items, 24 between sibling groups, 16 inside a group.
   return placeBands(roots, rank, across, sizes, {
     flowGap: SPACING.layer,
-    stackGap: 24,
-    lanePad: { side: 24, end: GROUP_PAD.bottom + 2 },
+    stackGap: 12,
+    lanePad: { side: GROUP_PAD.side, end: GROUP_PAD.bottom },
     poolPad: { side: 0, end: 0 },
-    bandGap: 32,
+    bandGap: 24,
     bareHead: 0,
     gapAfter: (r) => room.get(r) ?? 0,
   });

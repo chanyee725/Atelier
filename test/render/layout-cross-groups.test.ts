@@ -107,6 +107,14 @@ test('cross-group flow (#1066): no reverse loop, no wire bundle, labels on their
     }
   }
   assert.equal(nodesOf(scene).length, 19);
+
+  // No wider than the ELK picture this replaces (1722 px): a cross-band edge takes no slot, so the bands
+  // are as long as the longest run inside one band, and the groups are equal-width bands 24 apart.
+  assert.ok(scene.width <= 1722, `width ${scene.width}`);
+  assert.equal(new Set(groups.map((g) => g.w)).size, 1, 'bands share one width');
+  const tops = groups.map((g) => g.y).sort((a, b) => a - b);
+  const byTop = [...groups].sort((a, b) => a.y - b.y);
+  for (let i = 1; i < byTop.length; i++) assert.equal(tops[i]! - (byTop[i - 1]!.y + byTop[i - 1]!.h), 24, 'gap between bands');
 });
 
 test('cross-group flow (#1066): groups keep source order across the flow, the first declared on top', async () => {
