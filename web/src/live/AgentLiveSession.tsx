@@ -36,7 +36,7 @@ export default function AgentLiveSession({ sid, tab }: { sid: string; tab: Sessi
       {error && <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">{error}</Alert>}
       {tab === 'chat' ? (
         <>
-          <AnswerCard s={s} onPick={pick} />
+          <AnswerCard s={s} onPick={pick} report={report} />
           <div className="agent-live-session-scroll"><Chat s={s} report={report} /></div>
           <Composer s={s} text={draft} setText={setDraft} inputRef={input} report={report} />
         </>

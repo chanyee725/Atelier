@@ -5,6 +5,7 @@
 import type { Session } from '../../../shared/dispatch/types.ts';
 import type { PermissionAsk } from './approvals.ts';
 import { planTitle, type WaitingPlan } from './plans.ts';
+import type { QuestionItem, QuestionOption } from '../dispatch/lib/question.ts';
 
 export type RequestKind = 'plan' | 'permission' | 'question' | 'waiting';
 
@@ -35,6 +36,40 @@ type SessionLike = Pick<Session, 'id' | 'name' | 'provider' | 'pending'> & Parti
 
 /** Tools whose prompt is a question to the person, not a permission to run something. */
 const QUESTION_TOOLS = new Set(['AskUserQuestion', 'ask_user', 'askUserQuestion']);
+
+export const isQuestionTool = (tool: string): boolean => QUESTION_TOOLS.has(tool);
+
+const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * AskUserQuestion's input (`{ questions: [{ question, header, options: [{ label, description }], multiSelect }] }`)
+ * as the tabbed card's questions (#1052), or null when it has none. "(추천)"/"(Recommended)" in a label marks it.
+ */
+export function askUserQuestionItems(input: unknown): QuestionItem[] | null {
+  const qs = (input as { questions?: unknown } | null)?.questions;
+  if (!Array.isArray(qs)) return null;
+  const items: QuestionItem[] = [];
+  for (const q of qs) {
+    const question = str((q as { question?: unknown })?.question);
+    if (!question) continue;
+    const options: QuestionOption[] = [];
+    for (const o of Array.isArray(q.options) ? q.options : []) {
+      const raw = typeof o === 'string' ? o.trim() : str(o?.label);
+      if (!raw) continue;
+      const recommended = /[(（]\s*(추천|recommended)\s*[)）]/i.test(raw);
+      const opt: QuestionOption = { label: raw };
+      const reason = typeof o === 'string' ? '' : str(o?.description);
+      if (reason) opt.reason = reason;
+      if (recommended) opt.recommended = true;
+      options.push(opt);
+    }
+    const item: QuestionItem = { question, options, multiSelect: q.multiSelect === true };
+    const header = str(q.header);
+    if (header) item.header = header;
+    items.push(item);
+  }
+  return items.length ? items : null;
+}
 
 const one = (s: string, max = 120) => {
   const t = s.replace(/\s+/g, ' ').trim();

@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import path from "node:path";
 import { runCli, spawnCli } from "./cli.js";
 import { redact } from "./redact.js";
+import { permissionResponse } from "./permission-response.js";
 import { branchStatus, dropWorktree, integrationBranch, prepareWorkdir, verifyMerged } from "./git.js";
 import { defaultEta, enterStage } from "./tasks.js";
 import { AUTO_CLOSE_STAGES, closeEvidence } from "./task-close.js";
@@ -965,13 +966,12 @@ export class Hub extends EventEmitter {
     (r.leadNotes ||= []).push(text);
   }
 
-  respondPermission(id, requestId, behavior, always = false) {
+  /** `answers`: AskUserQuestion's { "<question>": "<answer>" } (#1052); ignored for other tools. */
+  respondPermission(id, requestId, behavior, always = false, answers = null) {
     const s = this.get(id), r = this.live.get(id);
     const req = r?.perms.get(requestId);
     if (!s || !req || !r.proc) throw new Error("대기 중인 권한 요청이 없어요");
-    const response = behavior === "allow"
-      ? { behavior: "allow", updatedInput: req.input, ...(always && req.suggestions?.length ? { updatedPermissions: req.suggestions } : {}) }
-      : { behavior: "deny", message: "사용자가 Dispatch에서 거부했어요" };
+    const response = permissionResponse(req, behavior, { always, answers });
     r.proc.stdin.write(JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } }) + "\n");
     r.perms.delete(requestId);
     this.push(s, { kind: "system", text: `${req.tool} ${behavior === "allow" ? (always ? "항상 허용" : "허용") : "거부"}` });
