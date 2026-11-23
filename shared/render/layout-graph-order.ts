@@ -134,7 +134,7 @@ export function freeChildren(edges: readonly GraphEdge[], parent: ReadonlyMap<st
  * Anything else returns undefined and keeps the ELK layout.
  */
 export function crossGroupBands(d: GraphDiagram, order: ReadonlyMap<string, number>): BandRoot[] | undefined {
-  if (d.type !== 'flowchart' || (d.direction !== 'right' && d.direction !== 'down')) return undefined;
+  if ((d.type !== 'flowchart' && d.type !== 'cloud-architecture') || (d.direction !== 'right' && d.direction !== 'down')) return undefined;
   const top = new Map<string, string>();
   const isDivider = (c: GraphChild): boolean => c.kind === 'node' && String(c.attrs.shape ?? '') === 'divider';
   for (const c of d.children) {

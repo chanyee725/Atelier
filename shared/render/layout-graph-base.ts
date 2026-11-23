@@ -499,7 +499,11 @@ function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: Pl
     taken.set(key, [...(taken.get(key) ?? []), id]);
   }
   for (const id of byFlow) if (!rank.has(id)) put(id, 0, 1);
-  const across = d.direction === 'down';
+  // Bands lie across the flow (lanes). When most edges go from group to group the groups are tiers of the
+  // flow instead (an architecture's layers): they stack along it, and a tier's nodes sit side by side.
+  const cross = flow.filter((e) => band.get(e.from) !== band.get(e.to)).length;
+  const tiers = cross >= 2 * (flow.length - cross);
+  const across = (d.direction === 'down') !== tiers;
   const room = new Map<number, number>();
   for (const e of d.edges) {
     if (!e.label) continue;
