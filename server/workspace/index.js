@@ -5,6 +5,7 @@ import { listProjects } from './projects.js';
 import { listLocalFolders } from './local-folders.js';
 import { cleanSessionLabel, projectOf, sessionIdOf } from '../cursor/presence.js';
 import { addQuestion, answerQuestion } from './discussion-ops.js';
+import { docLead, leadOf, recordDocLead } from './doc-lead.js';
 import { OUTSIDE, USER } from '../../shared/dispatch/discussions.ts';
 // The PR/CI switch lives with the Dispatch PR tracker (it reads the same settings.json), so the route reuses it.
 import { readPrTracking, setPrTracking } from '../dispatch/pr-status.js';
@@ -119,6 +120,19 @@ export async function setup(ctx) {
       return false; // e.g. a running Codex turn or the usage guard; the answer stays readable in the document
     }
   };
+  // The document's lead (#1057): the Dispatch state holds `docLeads` and the plans' leads; off without Dispatch.
+  const dstore = () => ctx.modules.dispatch?.store ?? hub()?.store ?? null;
+  const hubView = () => {
+    const h = hub();
+    return h ? { get: (id) => h.get(id), sessions: h.sessions ?? [] } : null;
+  };
+  /** A write that names its session (x-drawing-session) makes that session's lead the document's lead. */
+  const noteWriter = (path, from) => {
+    const view = from.sid ? hubView() : null;
+    const st = view ? dstore() : null;
+    const lead = st?.data ? leadOf(from.sid, view) : null;
+    if (lead && recordDocLead(st.data, path, lead.id, 'write', Date.now(), view)) st.save?.();
+  };
   const announce = (r, from) => {
     ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
     changed(r.path, { sid: from.sid, writer: from.writer });
@@ -165,6 +179,7 @@ export async function setup(ctx) {
         // itself ignores the echo (it only reloads a strictly newer revision).
         ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
         changed(r.path, { app: from.app, sid: from.sid, writer: from.writer });
+        noteWriter(r.path, from);
         return r;
       }),
       route('POST', '/api/file', async (_p, b, _sp, from) => {
@@ -172,6 +187,7 @@ export async function setup(ctx) {
         // The store knows its own writes, so the watcher stays quiet: tell the open tabs the tree grew.
         ctx.hub.broadcast('workspace', { kind: 'tree', path: r.path });
         changed(r.path, { app: from.app, sid: from.sid, writer: from.writer });
+        noteWriter(r.path, from);
         return r;
       }, 201),
       // Step-level plan edit (agents): re-read under the store lock, then announced like an outside change so an
@@ -180,6 +196,7 @@ export async function setup(ctx) {
         const r = await store.patchPlan(need(p, 'path'), b);
         ctx.hub.broadcast('workspace', { kind: 'change', path: r.path, revision: r.revision });
         changed(r.path, { sid: from.sid, writer: from.writer });
+        noteWriter(r.path, from);
         return r;
       }),
       // In-document questions (#738). An agent asks (its session name and id are stored, from x-drawing-session); the
@@ -200,6 +217,27 @@ export async function setup(ctx) {
         const r = await store.patchDiscussions(need(p, 'path'), (d) => answerQuestion(d, b, answeredBy));
         announce(r, from);
         return { ...r, delivered: deliverAnswer(r.path, r.item) };
+      }),
+      // The document's lead (#1057) for the 관리자와 대화 button: { lead: {id, name, modelLabel} | null, source }.
+      route('GET', '/api/file/lead', async (p) => {
+        const f = await store.readFile(need(p, 'path'));
+        const view = hubView();
+        if (!view) return { path: f.path, lead: null, source: null };
+        const data = dstore()?.data ?? {};
+        const planLead = data.pipelines?.[f.path]?.lead ?? null;
+        return { path: f.path, ...docLead({ path: f.path, docLeads: data.docLeads, planLead, discussions: f.discussions }, view) };
+      }),
+      // The person assigns a live lead to the document from the chat dock (body: { lead: <session id> }).
+      route('POST', '/api/file/lead', async (p, b) => {
+        const f = await store.readFile(need(p, 'path'));
+        const view = hubView();
+        const st = dstore();
+        if (!view || !st?.data) throw new StoreError(409, 'Dispatch가 꺼져 있어요');
+        const s = typeof b?.lead === 'string' ? view.get(b.lead) : null;
+        const lead = s ? leadOf(s.id, view) : null;
+        if (!lead || lead.id !== s.id) throw new StoreError(400, '살아 있는 관리자 세션만 배정할 수 있어요');
+        if (recordDocLead(st.data, f.path, lead.id, 'assign', Date.now(), view)) st.save?.();
+        return { path: f.path, lead: { id: lead.id, name: lead.name, modelLabel: lead.modelLabel ?? null }, source: 'assign' };
       }),
       // Open question counts per document and per project (top folder) for the sidebar badges.
       route('GET', '/api/discussions/open', async () => {
