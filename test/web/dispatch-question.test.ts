@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NO_QUESTION, answerQuestion, answerQuestions, answerValue, answersMessage, questionOf, questionsOf } from '../../web/src/dispatch/lib/question.ts';
+import { NO_QUESTION, answerQuestion, answerQuestions, answerValue, answersMessage, questionOf, questionSetKey, questionsOf } from '../../web/src/dispatch/lib/question.ts';
 
 test('no question in an answer that asks nothing', () => {
   assert.equal(questionOf(''), null);
@@ -103,4 +103,11 @@ test('answerQuestions: the transcript first, then the server ask', () => {
   assert.equal(answerQuestions({ ask: null }, [{ kind: 'assistant', text: SET }])?.length, 3);
   assert.equal(answerQuestions({ ask: '질문 1/1: 진행할까요?\n1. 네\n2. 아니요' }, undefined)?.length, 1);
   assert.equal(answerQuestions({ ask: null }, [{ kind: 'assistant', text: SET }, { kind: 'user', text: '답' }]), null);
+});
+
+test('questionSetKey: a new request (turn) gets a new key even when the questions repeat', () => {
+  const set = questionsOf('질문 1/2: 어떤 이름으로 할까요?\n질문 2/2: 어디에 둘까요?')!;
+  assert.ok(set);
+  assert.equal(questionSetKey({ turns: 3 }, set), questionSetKey({ turns: 3 }, set));
+  assert.notEqual(questionSetKey({ turns: 3 }, set), questionSetKey({ turns: 4 }, set));
 });
