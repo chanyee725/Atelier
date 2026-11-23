@@ -11,7 +11,7 @@ description: Run and steer single Atelier agent sessions — start one Claude, C
 
 1. Look first. `api.sh GET /api/state` → `sessions` (`id`, `name`, `role`, `provider`, `model`, `perm`, `status`, `state`, `pending`), `roles`, `models`, `providers`.
    Done when: you know the session id you act on, or that a new one is needed.
-2. Start a session (only when asked). `api.sh POST /api/sessions '{"worktree":true,"items":[{"role":"impl","task":"<one task>"}]}'`. Item fields: `role` (required, one of `roles`), `n`, `model`, `effort`, `perm` (`manual` · `acceptEdits` · `auto` · `plan`), `prompt`, `task`. The provider must show `connected: true` in `providers`; a refusal names why (limit guard, provider).
+2. Start a session (only when asked). `api.sh POST /api/sessions '{"worktree":true,"items":[{"role":"impl","task":"<one task>"}]}'`. Item fields: `role` (required, one of `roles`), `n`, `model`, `effort`, `perm` (`manual` · `acceptEdits` · `auto` · `plan`), `prompt`, `task`. Leave out `perm`: the role default is `auto`. Use `manual` only when the user asks for it. The provider must show `connected: true` in `providers`; a refusal names why (limit guard, provider).
    Done when: the reply lists the new session with `status` `starting` or `running`.
 3. Steer it.
    - Message: `POST /api/sessions/<id>/message '{"text":"..."}'` (Codex only while `idle`).
@@ -30,3 +30,8 @@ description: Run and steer single Atelier agent sessions — start one Claude, C
 - Act on sessions the user named or that you started; ask before killing or removing someone else's.
 - `kill` and `remove` cannot be undone; `remove` keeps the branch.
 - The live board of every session is `atelier-status`.
+
+## Handing a project to a lead (main session)
+
+- Once a project is handed to a lead, the main session writes no documents, diagrams or analysis for it. A new request goes to that lead with `POST /api/sessions/<id>/message`; the main session only asks the user and relays the answers to the lead.
+- Every handoff message names the exact server URL (port and project name) and the guides `docs/workspace-api.md` and `docs/agent-diagrams.md`, so the lead never searches widely (`find /`).
