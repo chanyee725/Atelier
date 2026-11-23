@@ -244,7 +244,7 @@ export function routeTable(d) {
     ["POST", /^\/api\/sessions\/([\w-]+)\/parent$/, async ([id], b) => { hub.setParent(id, b.parent ? String(b.parent) : null); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/perm$/, async ([id], b) => { hub.setPerm(id, String(b.perm || "")); return { ok: true }; }],
     ["POST", /^\/api\/sessions\/([\w-]+)\/permission$/, async ([id], b) => {
-      hub.respondPermission(id, b.requestId, b.behavior === "allow" ? "allow" : "deny", !!b.always);
+      hub.respondPermission(id, b.requestId, b.behavior === "allow" ? "allow" : "deny", !!b.always, b.answers ?? null);
       return { ok: true };
     }],
     // Already logged in on this machine → just connect; otherwise run the CLI's browser login first.
