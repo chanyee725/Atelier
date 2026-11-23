@@ -113,6 +113,29 @@ test("a message refused while a Codex teammate runs leaves the timer armed (#635
   assert.equal(store.data.sessions.K, undefined, "removed on schedule: the message never went out");
 });
 
+test("a reply refused while a Codex lead runs is recorded once, with the notice, when it goes out (#1054)", async () => {
+  const { hub, store, lead, finish } = makeHub({ autoRemoveGraceSec: 30 });
+  finish();
+  hub.touch(lead, { status: "idle" });
+  mock.timers.tick(30_000);
+  await flush();
+  assert.equal(store.data.sessions.K, undefined, "the notice waits for the lead's next message");
+  // The lead is a Codex session whose turn is still running.
+  lead.provider = "openai";
+  hub.runBlock = () => null;
+  hub.touch(lead, { status: "running" });
+  hub.start = () => {}; // no CLI: the message counts as delivered
+  const base = hub.transcript("L").filter(e => e.kind === "user").length; // the teammate's report
+  const users = () => hub.transcript("L").filter(e => e.kind === "user").slice(base);
+  assert.throws(() => hub.send("L", "가짜 답변"), /Codex는 응답이 끝난 뒤에/);
+  assert.equal(users().length, 0, "a refused reply is not recorded");
+  hub.rt("L").proc = null;
+  hub.touch(lead, { status: "idle" });
+  hub.send("L", "가짜 답변");
+  assert.equal(users().length, 1, "one reply, one message");
+  assert.match(users()[0].text, /^가짜 답변\n\n\[Dispatch\] Pax\(구현자\) 세션을 정리했어요/);
+});
+
 test("send() stops the timer once the message is delivered (#635)", () => {
   const { hub, finish } = makeHub();
   finish();

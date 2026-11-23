@@ -695,17 +695,18 @@ export class Hub extends EventEmitter {
     const pend = s.longPending;
     if (pend) text = `${text}\n\n${pend}`;
     const sent = () => { if (pend && s.longPending === pend) s.longPending = null; };
+    const rotating = this.shouldRotate(s);
+    // Refused before anything is recorded (#1054): a refused message used to stay in the transcript, and the
+    // retry recorded it again with the lead's notices, so one reply showed twice.
+    if (!rotating && r.proc && (s.provider === "openai" || s.provider === "gemini"))
+      throw new Error(`${s.provider === "openai" ? "Codex" : "Gemini"}는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요`);
     // Images (#968) go to the CLI only; the transcript keeps a count, never the bytes.
     this.push(s, { kind: "user", text: images?.length ? [text, `[이미지 ${images.length}장]`].filter(Boolean).join("\n") : text });
-    if (this.shouldRotate(s)) { sent(); return this.rotate(s, text, images); }
+    if (rotating) { sent(); return this.rotate(s, text, images); }
     if (s.provider === "claude" && r.proc) {
       r.proc.stdin.write(JSON.stringify({ type: "user", message: { role: "user", content: userContent(text, images) } }) + "\n");
       sent();
       this.touch(s, { status: "running" });
-    } else if (s.provider === "openai" && r.proc) {
-      throw new Error("Codex는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
-    } else if (s.provider === "gemini" && r.proc) {
-      throw new Error("Gemini는 응답이 끝난 뒤에 다음 메시지를 보낼 수 있어요");
     } else {
       this.start(s, text, images);
     }
