@@ -102,115 +102,23 @@ test('parseActivityLog: malformed events are dropped, newest ACTIVITY_MAX kept',
 
 // ---- server module ----
 
-async function moduleRig(workspaceDir, { now } = {}) {
-  const sent = [];
-  const held = new Set();
-  const hub = Object.assign(new EventEmitter(), { get: (id) => sessions[id] ?? null });
-  const ctx = {
-    workspaceDir,
-    hub: { broadcast: (event, data) => sent.push({ event, data }) },
-    modules: {
-      workspace: { store: { readFile: async (rel) => (rel === 'a.dpx.json' ? { title: '  저장 설계 ' } : Promise.reject(new Error('no'))) } },
-      cursor: { onHeld: (fn) => (held.add(fn), () => held.delete(fn)) },
-      dispatch: { hub },
-    },
-  };
-  const m = await setup(ctx, { now, writeDelayMs: 1 });
-  const route = (method, path) => m.routes.find((r) => r.method === method && r.path === path).handler;
-  const call = async (method, path, body) => {
-    const req = new EventEmitter();
-    req.setEncoding = () => {};
-    const res = { status: 0, body: '', writeHead(s) { this.status = s; }, end(b) { this.body = b; } };
-    const p = route(method, path)(req, res);
-    if (body !== undefined) req.emit('data', body);
-    req.emit('end');
-    await p;
-    return { status: res.status, json: JSON.parse(res.body) };
-  };
-  const report = (e) => { for (const fn of held) fn(e); };
-  return { m, sent, hub, held, call, report };
-}
-
-test('activity module: events get ids and titles, go out over SSE and are stored under .drawing/', async (t) => {
+test('activity module: GET /api/activity answers the stored log; a damaged file starts empty', async (t) => {
   const dir = await mkdtemp(join(tmpdir(), 'activity-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  const clock = 5000;
-  const r = await moduleRig(dir, { now: () => clock });
-  r.report({ sid: 's1', file: 'a.dpx.json', section: '개요' });
-  r.report({ sid: 's1', file: 'a.dpx.json', section: '설계' });
-  r.report({ sid: 's1', file: 'b.dpx.json' });
-  await r.m.settled();
-  const evs = r.sent.filter((s) => s.event === 'activity').map((s) => s.data);
-  assert.deepEqual(evs.map((e) => e.kind), ['start', 'progress', 'finish', 'start']);
-  assert.equal(evs[0].title, '저장 설계');
-  assert.equal('title' in evs[3], false, 'an unreadable file has no title');
-  assert.equal(new Set(evs.map((e) => e.id)).size, 4);
-  const got = await r.call('GET', '/api/activity');
-  assert.equal(got.json.events.length, 4);
-  assert.equal('readAt' in got.json, false);
-  assert.equal(r.m.routes.some((x) => x.path === '/api/activity/read'), false, 'no read-mark route');
-
-  await r.m.close();
-  const disk = JSON.parse(await readFile(join(dir, '.drawing', 'activity.json'), 'utf8'));
-  assert.equal(disk.version, 1);
-  assert.equal('readAt' in disk, false);
-  assert.deepEqual(disk.events.map((e) => e.kind), ['start', 'progress', 'finish', 'start']);
-  // Metadata only: no transcript or tool text fields.
-  for (const e of disk.events) for (const k of Object.keys(e)) assert.ok(['id', 'at', 'kind', 'sid', 'name', 'role', 'provider', 'color', 'file', 'title', 'section'].includes(k), k);
-
-  // A new start reads the stored log back.
-  const again = await moduleRig(dir, { now: () => clock });
-  const back = await again.call('GET', '/api/activity');
-  assert.equal(back.json.events.length, 4);
-  await again.m.close();
-});
-
-test('activity module: a damaged file starts empty; a hub failure adds an error event; close stops listening', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'activity-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  await mkdir(join(dir, '.drawing'));
-  await writeFile(join(dir, '.drawing', 'activity.json'), '{broken');
-  const r = await moduleRig(dir);
-  assert.deepEqual((await r.call('GET', '/api/activity')).json, { events: [] });
-  r.report({ sid: 's2', file: 'a.dpx.json' });
-  r.hub.emit('session', { id: 's2', state: 'failed' });
-  await r.m.settled();
-  assert.deepEqual(r.sent.map((s) => s.data.kind), ['start', 'error']);
-  await r.m.close();
-  assert.equal(r.held.size, 0);
-  assert.equal(r.hub.listenerCount('session'), 0);
-});
-
-test('activity module: a throwing broadcast does not stop later events, and close still resolves', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'activity-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const r = await moduleRig(dir);
-  const sent = r.sent;
-  let fail = true;
-  const push = sent.push.bind(sent);
-  sent.push = (x) => {
-    if (fail) {
-      fail = false;
-      throw new Error('broadcast failed');
-    }
-    return push(x);
+  const ev = { id: '1-1', at: 1, kind: 'start', sid: 's', name: 'a', role: 'impl', file: 'x.dpx.json' };
+  await mkdir(join(dir, '.drawing'), { recursive: true });
+  await writeFile(join(dir, '.drawing', 'activity.json'), JSON.stringify({ version: 1, events: [ev] }));
+  const call = async (m) => {
+    let body = '';
+    await m.routes[0].handler({}, { writeHead() {}, end: (b) => (body = b) });
+    return JSON.parse(body);
   };
-  r.report({ sid: 's3', file: 'a.dpx.json' });
-  r.report({ sid: 's3', file: 'b.dpx.json' });
-  await r.m.settled();
-  assert.deepEqual(sent.map((s) => s.data.kind), ['finish', 'start']);
-  const got = await r.call('GET', '/api/activity');
-  assert.equal(got.json.events.length, 3, 'the event whose broadcast threw is still stored');
-  await r.m.close();
-});
-
-test('sectionAt: the nearest non-empty heading at or above the block, clipped', async () => {
-  const { sectionAt } = await import('../server/cursor/model.js');
-  const blocks = [{ type: 'paragraph', text: 'x' }, { type: 'heading', text: ' 1.  개요 ' }, { type: 'paragraph', text: 'y' }, { type: 'heading', text: '' }, { type: 'paragraph', text: 'z' }];
-  assert.equal(sectionAt(blocks, 0), null);
-  assert.equal(sectionAt(blocks, 2), '1. 개요');
-  assert.equal(sectionAt(blocks, 4), '1. 개요');
-  assert.equal(sectionAt(blocks, 99), '1. 개요');
-  assert.equal(sectionAt(blocks, -1), null);
-  assert.equal(sectionAt([{ type: 'heading', text: '가'.repeat(80) }], 0).length, 60);
+  const ctx = (d) => ({ workspaceDir: d, modules: {}, hub: { broadcast() {} } });
+  const m = await setup(ctx(dir));
+  assert.equal((await call(m)).events.length, 1);
+  await m.close();
+  await writeFile(join(dir, '.drawing', 'activity.json'), '{nope');
+  const bad = await setup(ctx(dir));
+  assert.deepEqual((await call(bad)).events, []);
+  await bad.close();
 });

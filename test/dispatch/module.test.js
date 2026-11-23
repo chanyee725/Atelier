@@ -116,7 +116,7 @@ test('dispatch module: state, one SSE stream with a first snapshot, task events,
     assert.ok(events.find((e) => e.event === 'tasks').data.some((t) => t.title === 'first step'));
 
     // Drawing's own routes still answer next to Dispatch's.
-    assert.equal((await fetch(`${base}/api/tree`)).status, 200);
+    assert.equal((await fetch(`${base}/api/workspace/projects`)).status, 200);
     assert.equal(calls.providerStatus, 0, 'no provider status check before connect');
     assert.equal(calls.codexModels, 0);
   } finally {
@@ -175,9 +175,7 @@ test('a failing dispatch call answers { error } and leaves drawing routes workin
     app.ctx.modules.dispatch.hub.timeline = () => { throw new Error('boom'); };
     assert.equal((await fetch(`${base}/api/timeline`)).status, 400);
 
-    const put = await fetch(`${base}/api/file`, { method: 'POST', headers: W, body: JSON.stringify({ path: 'a.dpx.json' }) });
-    assert.equal(put.status, 201);
-    assert.equal((await fetch(`${base}/api/file?path=a.dpx.json`)).status, 200);
+    assert.equal((await fetch(`${base}/api/workspace/projects`)).status, 200);
   } finally {
     await stop();
     rmSync(root, { recursive: true, force: true });
@@ -223,7 +221,7 @@ test('outside a git project the dispatch module is off and drawing still works',
     assert.equal(app.ctx.modules.dispatch.hub, undefined);
     assert.equal((await (await fetch(`${base}/api/dispatch`)).json()).reason, 'not-git');
     assert.equal((await fetch(`${base}/api/state`)).status, 404);
-    assert.equal((await fetch(`${base}/api/tree`)).status, 200);
+    assert.equal((await fetch(`${base}/api/workspace/projects`)).status, 200);
     assert.equal(existsSync(join(dir, '.atelier')), false);
   } finally {
     await stop();

@@ -357,7 +357,7 @@ test('real server: a second server on the same workspace refuses; a second works
     assert.equal(status.port, a.port);
     assert.match(status.message, /다른 Drawing 서버/);
     assert.equal((await fetch(`${c.base}/api/state`)).status, 404);
-    assert.equal((await fetch(`${c.base}/api/tree`)).status, 200, 'drawing still works');
+    assert.equal((await fetch(`${c.base}/api/workspace/projects`)).status, 200, 'drawing still works');
     const extra = c.output().split('\n').filter((l) => !l.startsWith('Atelier: '));
     assert.ok(!extra.some((l) => l.includes(root)), 'no project path in the log besides the workspace line');
 

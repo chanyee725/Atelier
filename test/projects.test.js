@@ -1,350 +1,44 @@
+// Workspace projects: top-level sub-folder names only (no files, hidden entries, symlinks or reserved names).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApp } from '../server/app.js';
-import { modules } from '../server/modules.js';
-import { newFile } from '../server/workspace/model.js';
-import { nestDocs, readProjectMeta } from '../server/workspace/projects.js';
+import { listProjects, readProjectMeta, topFolderNames } from '../server/workspace/projects.js';
+import * as workspace from '../server/workspace/index.js';
 
-// Scratch workspace only (never a real project); the dispatch module stays off outside a git repo.
-async function withApp(fn) {
-  const ws = await mkdtemp(join(tmpdir(), 'draw-proj-'));
-  const outside = await mkdtemp(join(tmpdir(), 'draw-proj-out-'));
-  const app = await createApp({ workspaceDir: ws }, { publicDir: ws, moduleList: modules });
-  await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
-  const base = `http://127.0.0.1:${app.server.address().port}`;
-  const call = async (method, path, body, headers = {}) => {
-    const res = await fetch(base + path, {
-      method,
-      headers: { 'x-drawing': '1', ...headers, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return { status: res.status, body: await res.json() };
-  };
-  try {
-    await fn({ ws, outside, call });
-  } finally {
-    await app.close();
-    await rm(ws, { recursive: true, force: true });
-    await rm(outside, { recursive: true, force: true });
-  }
+async function scratch(t) {
+  const dir = await mkdtemp(join(tmpdir(), 'projects-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await mkdir(join(dir, 'beta'));
+  await mkdir(join(dir, 'alpha'));
+  await mkdir(join(dir, '.drawing'));
+  await mkdir(join(dir, 'worktrees'));
+  await writeFile(join(dir, 'loose.dpx.json'), '{}');
+  await symlink(join(dir, 'alpha'), join(dir, 'link'));
+  return dir;
 }
 
-const shape = (nodes) => nodes.map((n) => [n.type, n.name, n.count, shape(n.children)]);
-
-test('projects: top-level folders are projects, same-named folders hold sub-docs, root files are loose', async () => {
-  await withApp(async ({ ws, call }) => {
-    for (const p of ['Alpha/로그인 로직', 'Alpha/로그인 로직/토큰 갱신', 'Alpha/로그인 로직/토큰 갱신/만료', 'Alpha/데이터 수집', 'Alpha/묶음/메모', 'Beta/one', 'loose', 'Alpha2/x']) {
-      assert.equal((await call('POST', '/api/file', { path: p, title: p.split('/').pop() })).status, 201);
-    }
-    await mkdir(join(ws, 'Empty'));
-    await writeFile(join(ws, 'Beta', '.project.json'), JSON.stringify({ name: '  베타 프로젝트 ', icon: 'B', description: '설명', owner: 'dropped', extra: 1 }));
-
-    const r = await call('GET', '/api/workspace/projects');
-    assert.equal(r.status, 200);
-    const { projects, loose } = r.body;
-    // Sorted by display name; meta name wins over the folder name.
-    assert.deepEqual(projects.map((p) => [p.path, p.name, p.icon, p.description, p.count]), [
-      ['Alpha', 'Alpha', null, '', 5],
-      ['Alpha2', 'Alpha2', null, '', 1],
-      ['Empty', 'Empty', null, '', 0],
-      ['Beta', '베타 프로젝트', 'B', '설명', 1],
-    ]);
-    assert.equal('owner' in projects[3], false);
-    const alpha = projects[0];
-    assert.deepEqual(shape(alpha.docs), [
-      ['doc', '데이터 수집', 0, []],
-      ['doc', '로그인 로직', 2, [['doc', '토큰 갱신', 1, [['doc', '만료', 0, []]]]]],
-      ['group', '묶음', 1, [['doc', '메모', 0, []]]],
-    ]);
-    const login = alpha.docs[1];
-    assert.equal(login.path, 'Alpha/로그인 로직.dpx.json');
-    assert.equal(login.title, '로그인 로직');
-    assert.equal(login.revision, 1);
-    assert.equal(alpha.docs[2].path, 'Alpha/묶음');
-    for (const d of [login, login.children[0], alpha.docs[2]]) {
-      assert.ok(!Number.isNaN(Date.parse(d.created)) && !Number.isNaN(Date.parse(d.modified)), d.name);
-      assert.ok(Date.parse(d.created) <= Date.parse(d.modified));
-      assert.equal('latest' in d, false);
-    }
-    assert.ok(Date.parse(alpha.modified) >= Date.parse(login.modified));
-    assert.deepEqual(shape(loose), [['doc', 'loose', 0, []]]);
-    assert.equal(loose[0].path, 'loose.dpx.json');
-  });
+test('topFolderNames: sorted folder names; files, hidden, symlinks and reserved names left out', async (t) => {
+  const dir = await scratch(t);
+  assert.deepEqual(await topFolderNames(dir), ['alpha', 'beta', 'worktrees']);
+  assert.deepEqual(await topFolderNames(dir, ['worktrees']), ['alpha', 'beta']);
+  assert.deepEqual(await topFolderNames(join(dir, 'nope')), []);
 });
 
-test('projects: created survives saves, modified follows the save', async () => {
-  await withApp(async ({ call }) => {
-    await call('POST', '/api/file', { path: 'P/doc' });
-    const before = (await call('GET', '/api/workspace/projects')).body.projects[0].docs[0];
-    await new Promise((r) => setTimeout(r, 30));
-    const f = (await call('GET', '/api/file?path=P%2Fdoc')).body;
-    assert.equal((await call('PUT', '/api/file?path=P%2Fdoc', { ...f, title: 'changed' })).status, 200);
-    const after = (await call('GET', '/api/workspace/projects')).body.projects[0].docs[0];
-    assert.equal(after.title, 'changed');
-    assert.ok(Date.parse(after.created) <= Date.parse(before.created) + 5, `${after.created} vs ${before.created}`);
-    assert.ok(Date.parse(after.modified) > Date.parse(before.modified));
-  });
+test('listProjects: meta name, icon and description; no documents', async (t) => {
+  const dir = await scratch(t);
+  await writeFile(join(dir, 'beta', '.project.json'), JSON.stringify({ name: ' 베타 ', icon: '🧪', extra: 1 }));
+  const { projects, loose } = await listProjects(dir, ['worktrees']);
+  assert.deepEqual(loose, []);
+  assert.deepEqual(projects.map((p) => [p.path, p.name, p.icon, p.count, p.docs.length]), [['alpha', 'alpha', null, 0, 0], ['beta', '베타', '🧪', 0, 0]]);
+  assert.deepEqual(await readProjectMeta(join(dir, 'alpha')), {});
 });
 
-test('projects: bad, oversized or symlinked .project.json is ignored; hidden and symlinked folders never show', async () => {
-  await withApp(async ({ ws, outside, call }) => {
-    for (const d of ['Bad', 'Big', 'Link', 'Arr']) await mkdir(join(ws, d));
-    await writeFile(join(ws, 'Bad', '.project.json'), '{not json');
-    await writeFile(join(ws, 'Big', '.project.json'), JSON.stringify({ name: 'x'.repeat(20000) }));
-    await writeFile(join(ws, 'Arr', '.project.json'), JSON.stringify(['name']));
-    await writeFile(join(outside, 'meta.json'), JSON.stringify({ name: 'outside' }));
-    await symlink(join(outside, 'meta.json'), join(ws, 'Link', '.project.json'));
-    await mkdir(join(ws, '.hidden'));
-    await writeFile(join(ws, '.hidden', 'a.dpx.json'), JSON.stringify(newFile()));
-    await symlink(outside, join(ws, 'Escape'));
-    const { projects } = (await call('GET', '/api/workspace/projects')).body;
-    assert.deepEqual(projects.map((p) => [p.path, p.name]), [['Arr', 'Arr'], ['Bad', 'Bad'], ['Big', 'Big'], ['Link', 'Link']]);
-  });
-});
-
-test('readProjectMeta: a FIFO or a folder named .project.json is ignored without hanging', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'drawing-meta-'));
-  try {
-    await mkdir(join(dir, 'Dir', '.project.json'), { recursive: true });
-    assert.deepEqual(await readProjectMeta(join(dir, 'Dir')), {});
-    await mkdir(join(dir, 'Fifo'));
-    const made = spawnSync('mkfifo', [join(dir, 'Fifo', '.project.json')]);
-    if (made.status === 0) assert.deepEqual(await readProjectMeta(join(dir, 'Fifo')), {});
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('projects: long meta values are capped', async () => {
-  await withApp(async ({ ws, call }) => {
-    await mkdir(join(ws, 'P'));
-    await writeFile(join(ws, 'P', '.project.json'), JSON.stringify({ name: '가'.repeat(300), icon: '🙂'.repeat(40), description: 7 }));
-    const [p] = (await call('GET', '/api/workspace/projects')).body.projects;
-    assert.equal([...p.name].length, 100);
-    assert.equal([...p.icon].length, 16);
-    assert.equal(p.description, '');
-  });
-});
-
-test('projects: area -> feature -> document, the layout write_plan uses (#782)', async () => {
-  await withApp(async ({ call }) => {
-    for (const p of ['Server/단일-폴더-저장/계획', 'Server/단일-폴더-저장/계획-2', 'Server/단일-폴더-저장/메모', 'Web/사이드바/계획']) {
-      assert.equal((await call('POST', '/api/file', { path: p, title: p.split('/').pop() })).status, 201);
-    }
-    const { projects, loose } = (await call('GET', '/api/workspace/projects')).body;
-    assert.deepEqual(loose, []);
-    assert.deepEqual(projects.map((a) => [a.path, a.count, shape(a.docs)]), [
-      ['Server', 3, [['group', '단일-폴더-저장', 3, [['doc', '계획', 0, []], ['doc', '계획-2', 0, []], ['doc', '메모', 0, []]]]]],
-      ['Web', 1, [['group', '사이드바', 1, [['doc', '계획', 0, []]]]]],
-    ]);
-  });
-});
-
-test('nestDocs: a folder without its document is a group; a document without a folder has no children', async () => {
-  const f = (path, mtime) => ({ type: 'file', name: path.split('/').pop() + '.dpx.json', path: path + '.dpx.json', title: '', revision: 1, mtime, created: mtime });
-  const nodes = [
-    { type: 'folder', name: 'G', path: 'G', children: [f('G/a', '2026-01-02T00:00:00.000Z'), f('G/b', '2026-01-05T00:00:00.000Z')] },
-    f('z', '2026-01-01T00:00:00.000Z'),
-  ];
-  const out = await nestDocs(nodes, async (x) => Date.parse(x.created));
-  assert.deepEqual(shape(out), [['group', 'G', 2, [['doc', 'a', 0, []], ['doc', 'b', 0, []]]], ['doc', 'z', 0, []]]);
-  assert.equal(out[0].created, '2026-01-02T00:00:00.000Z');
-  assert.equal(out[0].modified, '2026-01-05T00:00:00.000Z');
-});
-
-test('projects: created follows the file through move, delete and restore', async () => {
-  await withApp(async ({ call }) => {
-    await call('POST', '/api/file', { path: 'P/doc' });
-    const first = (await call('GET', '/api/workspace/projects')).body.projects[0].docs[0].created;
-    await new Promise((r) => setTimeout(r, 30));
-    assert.equal((await call('POST', '/api/move', { from: 'P/doc', to: 'Q/moved' })).status, 200);
-    const projectQ = async () => (await call('GET', '/api/workspace/projects')).body.projects.find((p) => p.path === 'Q');
-    let q = await projectQ();
-    assert.equal(q.docs[0].created, first);
-    assert.equal((await call('DELETE', '/api/file?path=Q%2Fmoved')).status, 200);
-    const [item] = (await call('GET', '/api/trash')).body.items;
-    assert.equal((await call('POST', '/api/trash/restore', { id: item.id })).status, 200);
-    q = await projectQ();
-    assert.equal(q.docs[0].created, first);
-    // The mark is not a version.
-    assert.deepEqual((await call('GET', '/api/history?path=Q%2Fmoved')).body.versions, []);
-  });
-});
-
-test('move with subdocs: a document and its sub-documents folder move together', async () => {
-  await withApp(async ({ ws, outside, call }) => {
-    for (const p of ['A/로그인', 'A/로그인/토큰', 'A/로그인/토큰/만료', 'A/solo', 'B/keep', 'B/clash', 'B/clash/x']) assert.equal((await call('POST', '/api/file', { path: p })).status, 201);
-    const docsOf = async (name) => (await call('GET', '/api/workspace/projects')).body.projects.find((p) => p.path === name)?.docs ?? [];
-
-    let r = await call('POST', '/api/move', { from: 'A/로그인.dpx.json', to: 'B/로그인.dpx.json', type: 'file', withSubdocs: true });
-    assert.equal(r.status, 200);
-    assert.equal(r.body.path, 'B/로그인.dpx.json');
-    assert.deepEqual(shape(await docsOf('B')).find((d) => d[1] === '로그인'), ['doc', '로그인', 2, [['doc', '토큰', 1, [['doc', '만료', 0, []]]]]]);
-    assert.deepEqual(shape(await docsOf('A')), [['doc', 'solo', 0, []]]);
-
-    // A document without sub-documents moves alone.
-    assert.equal((await call('POST', '/api/move', { from: 'A/solo.dpx.json', to: 'B/solo.dpx.json', type: 'file', withSubdocs: true })).status, 200);
-
-    // Into its own sub-documents: refused, nothing moves.
-    r = await call('POST', '/api/move', { from: 'B/로그인.dpx.json', to: 'B/로그인/토큰/로그인.dpx.json', type: 'file', withSubdocs: true });
-    assert.equal(r.status, 400);
-    assert.equal(shape(await docsOf('B')).find((d) => d[1] === '로그인')[2], 2);
-
-    // The sub-documents folder name is taken at the target: refused before the file moves.
-    await mkdir(join(ws, 'A', 'clash'));
-    r = await call('POST', '/api/move', { from: 'B/clash.dpx.json', to: 'A/clash.dpx.json', type: 'file', withSubdocs: true });
-    assert.equal(r.status, 409);
-    assert.equal(shape(await docsOf('B')).find((d) => d[1] === 'clash')[2], 1);
-
-    // Outside the workspace: refused.
-    for (const to of ['../escape.dpx.json', `${outside}/x.dpx.json`]) {
-      r = await call('POST', '/api/move', { from: 'B/로그인.dpx.json', to, type: 'file', withSubdocs: true });
-      assert.equal(r.status, 400, to);
-    }
-    await symlink(outside, join(ws, 'link'));
-    r = await call('POST', '/api/move', { from: 'B/로그인.dpx.json', to: 'link/로그인.dpx.json', type: 'file', withSubdocs: true });
-    assert.ok(r.status >= 400, `symlink target status ${r.status}`);
-    assert.equal(shape(await docsOf('B')).find((d) => d[1] === '로그인')[2], 2);
-
-    // withSubdocs only goes with a file move.
-    assert.equal((await call('POST', '/api/move', { from: 'B', to: 'C', type: 'folder', withSubdocs: true })).status, 400);
-  });
-});
-
-test('delete with subdocs: a document and its sub-documents folder go to the trash together', async () => {
-  await withApp(async ({ ws, call }) => {
-    for (const p of ['A/plan', 'A/plan/step', 'A/plan/step/deep', 'A/solo', 'A/keep']) assert.equal((await call('POST', '/api/file', { path: p })).status, 201);
-    await mkdir(join(ws, 'A', 'empty'));
-    assert.equal((await call('POST', '/api/file', { path: 'A/empty' })).status, 201);
-    const docsOf = async () => shape((await call('GET', '/api/workspace/projects')).body.projects.find((p) => p.path === 'A')?.docs ?? []);
-
-    assert.equal((await call('DELETE', '/api/file?path=A%2Fplan.dpx.json&withSubdocs=1')).status, 200);
-    // Without withSubdocs only the file goes (the old behaviour): A/solo has no folder anyway.
-    assert.equal((await call('DELETE', '/api/file?path=A%2Fsolo.dpx.json')).status, 200);
-    // An empty sub-documents folder goes too, so it does not stay behind as a group.
-    assert.equal((await call('DELETE', '/api/file?path=A%2Fempty.dpx.json&withSubdocs=1')).status, 200);
-    assert.deepEqual(await docsOf(), [['doc', 'keep', 0, []]]);
-    const trashed = (await call('GET', '/api/trash')).body.items.map((i) => i.path).sort();
-    assert.deepEqual(trashed, ['A/empty.dpx.json', 'A/plan.dpx.json', 'A/plan/step.dpx.json', 'A/plan/step/deep.dpx.json', 'A/solo.dpx.json']);
-    // Each one restores on its own.
-    const step = (await call('GET', '/api/trash')).body.items.find((i) => i.path === 'A/plan/step.dpx.json');
-    assert.equal((await call('POST', '/api/trash/restore', { id: step.id })).status, 200);
-    assert.equal((await call('GET', '/api/file?path=A%2Fplan%2Fstep.dpx.json')).status, 200);
-  });
-});
-
-test('delete with subdocs: files other than documents under X/ are never lost', async () => {
-  await withApp(async ({ ws, call }) => {
-    for (const p of ['A/plan', 'A/plan/step', 'A/plan/sub/deep', 'A/plan/only/doc']) assert.equal((await call('POST', '/api/file', { path: p })).status, 201);
-    await writeFile(join(ws, 'A', 'plan', 'notes.md'), 'keep me\n');
-    await writeFile(join(ws, 'A', 'plan', 'sub', '.hidden'), 'keep me too\n');
-
-    assert.equal((await call('DELETE', '/api/file?path=A%2Fplan.dpx.json&withSubdocs=1')).status, 200);
-    const trashed = (await call('GET', '/api/trash')).body.items.map((i) => i.path).sort();
-    assert.deepEqual(trashed, ['A/plan.dpx.json', 'A/plan/only/doc.dpx.json', 'A/plan/step.dpx.json', 'A/plan/sub/deep.dpx.json']);
-    // The documents are gone; the other files stay with the folders that hold them; emptied folders go.
-    const { readdir: ls, readFile: read } = await import('node:fs/promises');
-    assert.equal(await read(join(ws, 'A', 'plan', 'notes.md'), 'utf8'), 'keep me\n');
-    assert.equal(await read(join(ws, 'A', 'plan', 'sub', '.hidden'), 'utf8'), 'keep me too\n');
-    assert.deepEqual((await ls(join(ws, 'A', 'plan'))).sort(), ['notes.md', 'sub']);
-    assert.deepEqual(await ls(join(ws, 'A', 'plan', 'sub')), ['.hidden']);
-  });
-});
-
-test('rename with subdocs: one request, no orphaned sub-documents, no unrelated group taken over', async () => {
-  await withApp(async ({ ws, call }) => {
-    for (const p of ['A/login', 'A/login/token', 'A/solo', 'A/new/memo', 'A/other']) assert.equal((await call('POST', '/api/file', { path: p })).status, 201);
-    await mkdir(join(ws, 'A', 'empty'));
-    assert.equal((await call('POST', '/api/file', { path: 'A/empty' })).status, 201);
-    const docsOf = async () => shape((await call('GET', '/api/workspace/projects')).body.projects.find((p) => p.path === 'A')?.docs ?? []);
-    const before = await docsOf();
-    const rename = (from, to) => call('POST', '/api/move', { from: `A/${from}.dpx.json`, to: `A/${to}.dpx.json`, type: 'file', withSubdocs: true });
-
-    // login (with sub-documents) onto the name of the unrelated group A/new: refused, nothing moves or is orphaned.
-    assert.equal((await rename('login', 'new')).status, 409);
-    // solo (no sub-documents) onto the same name: refused too, so it never takes the group over as its sub-documents.
-    assert.equal((await rename('solo', 'new')).status, 409);
-    assert.deepEqual(await docsOf(), before);
-
-    // A free name: the document and its sub-documents arrive together; an empty X/ is renamed along.
-    assert.equal((await rename('login', 'signin')).status, 200);
-    assert.equal((await rename('empty', 'vacant')).status, 200);
-    const after = await docsOf();
-    assert.deepEqual(after.find((d) => d[1] === 'signin'), ['doc', 'signin', 1, [['doc', 'token', 0, []]]]);
-    assert.ok(!after.some((d) => d[1] === 'login' || d[1] === 'empty'), 'nothing left under the old names');
-    assert.deepEqual(after.find((d) => d[1] === 'new'), ['group', 'new', 1, [['doc', 'memo', 0, []]]], 'the unrelated group is untouched');
-    const { stat: st } = await import('node:fs/promises');
-    assert.ok((await st(join(ws, 'A', 'vacant'))).isDirectory());
-  });
-});
-
-test('nestDocs: a group is dated by its newest grandchild and no node leaks `latest`', async () => {
-  const f = (path, mtime) => ({ type: 'file', name: path.split('/').pop() + '.dpx.json', path: path + '.dpx.json', title: '', revision: 1, mtime, created: mtime });
-  const nodes = [
-    {
-      type: 'folder',
-      name: 'G',
-      path: 'G',
-      children: [f('G/a', '2026-01-02T00:00:00.000Z'), { type: 'folder', name: 'a', path: 'G/a', children: [f('G/a/c', '2026-02-09T00:00:00.000Z')] }],
-    },
-    { type: 'folder', name: 'H', path: 'H', children: [{ type: 'folder', name: 'I', path: 'H/I', children: [f('H/I/x', '2026-03-01T00:00:00.000Z')] }] },
-  ];
-  const out = await nestDocs(nodes, async (x) => Date.parse(x.created));
-  assert.equal(out[0].modified, '2026-02-09T00:00:00.000Z');
-  assert.equal(out[1].modified, '2026-03-01T00:00:00.000Z');
-  assert.ok(!JSON.stringify(out).includes('latest'));
-});
-
-const mk = (path, mtime) => ({ type: 'file', name: path.split('/').pop() + '.dpx.json', path: path + '.dpx.json', title: '', revision: 1, mtime, created: mtime });
-const folder = (path, children) => ({ type: 'folder', name: path.split('/').pop(), path, children });
-const born = async (x) => Date.parse(x.created);
-
-test('nestDocs: doc -> doc -> doc, the group above is dated by the deepest document', async () => {
-  const nodes = [folder('G', [mk('G/a', '2026-01-01T00:00:00.000Z'), folder('G/a', [mk('G/a/b', '2026-01-02T00:00:00.000Z'), folder('G/a/b', [mk('G/a/b/c', '2026-05-05T00:00:00.000Z')])])])];
-  const out = await nestDocs(nodes, born);
-  assert.equal(out[0].modified, '2026-05-05T00:00:00.000Z');
-  assert.equal(out[0].children[0].modified, '2026-01-01T00:00:00.000Z');
-  assert.ok(!JSON.stringify(out).includes('latest'));
-});
-
-test('nestDocs: doc -> group -> doc, the outer group is dated by the document below the inner group', async () => {
-  const nodes = [folder('G', [mk('G/a', '2026-01-01T00:00:00.000Z'), folder('G/a', [folder('G/a/Z', [mk('G/a/Z/z', '2026-06-06T00:00:00.000Z')])])])];
-  const out = await nestDocs(nodes, born);
-  assert.equal(out[0].modified, '2026-06-06T00:00:00.000Z');
-  assert.ok(!JSON.stringify(out).includes('latest'));
-});
-
-test('readProjectMeta: a FIFO .project.json returns {} without waiting for a writer', async (t) => {
-  const dir = await mkdtemp(join(tmpdir(), 'draw-fifo-'));
-  try {
-    try {
-      execFileSync('mkfifo', [join(dir, '.project.json')]);
-    } catch {
-      return t.skip('mkfifo is not available');
-    }
-    const r = await Promise.race([readProjectMeta(dir), new Promise((res) => setTimeout(() => res('hung'), 2000))]);
-    assert.deepEqual(r, {});
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('projects: a document with open questions carries their count (#738 sidebar badge)', async () => {
-  await withApp(async ({ call }) => {
-    for (const p of ['P/asked', 'P/quiet']) assert.equal((await call('POST', '/api/file', { path: p, title: p })).status, 201);
-    // Asking needs a writer label (no session runs here, so it is stored as "outside").
-    const who = { 'x-drawing-session': 'tester' };
-    const ask = (question) => call('POST', '/api/file/discussions?path=P/asked', { anchor: { kind: 'block', block: 'doc' }, question }, who);
-    assert.equal((await ask('하나')).status, 201);
-    const second = await ask('둘');
-    assert.equal(second.status, 201);
-    const docs = async () => (await call('GET', '/api/workspace/projects')).body.projects[0].docs;
-    assert.deepEqual((await docs()).map((d) => [d.name, d.questions]), [['asked', 2], ['quiet', undefined]]);
-    assert.equal((await call('POST', '/api/file/discussions/answer?path=P/asked', { id: second.body.item.id, text: '네' })).status, 200);
-    assert.equal((await docs())[0].questions, 1);
-  });
+test('workspace module: topFolders() and project mode reserving worktrees', async (t) => {
+  const dir = await scratch(t);
+  const m = await workspace.setup({ workspaceDir: dir, projectMode: true, modules: {} });
+  assert.deepEqual(await m.topFolders(), ['alpha', 'beta']);
+  const plain = await workspace.setup({ workspaceDir: dir, projectMode: false, modules: {} });
+  assert.deepEqual(await plain.topFolders(), ['alpha', 'beta', 'worktrees']);
 });
