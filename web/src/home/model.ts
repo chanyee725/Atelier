@@ -1,105 +1,10 @@
-// Pure data helpers for the dashboard and project home (no React).
-import type { ProjectDoc, ProjectInfo, RecentFile } from '../api';
+// Pure helpers shared by the board's cards (no React).
 import { whenLabel } from '../lib/when.ts';
-
-export type Placed = { doc: ProjectDoc; project: ProjectInfo | null; /** Title of the document (or bundle) right above, if any. */ parent: string | null };
-
-/** Every real document (bundles skipped), depth first, with the project and parent it sits in. */
-export function allDocs(projects: ProjectInfo[], unfiled: ProjectDoc[]): Placed[] {
-  const walk = (docs: ProjectDoc[], project: ProjectInfo | null, parent: string | null): Placed[] =>
-    docs.flatMap((d) => [...(d.bundle ? [] : [{ doc: d, project, parent }]), ...walk(d.children, project, d.title)]);
-  return [...projects.flatMap((p) => walk(p.docs, p, null)), ...walk(unfiled, null, null)];
-}
-
-/** The whole project this server belongs to (#778) as one ProjectInfo: its top folders become groups next to the
- *  loose documents. Its path is '' (the workspace root), which the dashboard reads as "every session and agent". */
-export function wholeProject(data: { projects: ProjectInfo[]; unfiled: ProjectDoc[] }, name: string): ProjectInfo {
-  const folders: ProjectDoc[] = data.projects.map((p) => ({ path: p.path, name: p.name, title: p.name, bundle: true, createdAt: p.createdAt, modifiedAt: p.modifiedAt, children: p.docs }));
-  const docs = [...folders, ...data.unfiled];
-  return {
-    id: '',
-    path: '',
-    name,
-    icon: [...name][0] ?? '',
-    description: '',
-    docCount: allDocs(data.projects, data.unfiled).length,
-    createdAt: 0,
-    modifiedAt: Math.max(0, ...docs.map((d) => d.modifiedAt)),
-    docs,
-  };
-}
-
-/** One plan document in the 파이프라인 tab: its feature folder (the folders between the area and the file) and state. */
-export type PlanRow = { path: string; title: string; feature: string | null; state: NonNullable<ProjectDoc['plan']>; modifiedAt: number };
-/** Plans of one area (a top folder; null = the workspace root). */
-export type PlanArea = { area: string | null; name: string; plans: PlanRow[] };
-
-/**
- * Every plan document grouped by area (#782): areas in the order given (the view sorts them by name), root plans
- * last as 최상위; inside an area, newest edit first. Areas without plans are left out.
- */
-export function plansByArea(projects: ProjectInfo[], unfiled: ProjectDoc[]): PlanArea[] {
-  const rows = (docs: ProjectDoc[], area: string | null): PlanRow[] => {
-    const out: PlanRow[] = [];
-    const walk = (list: ProjectDoc[]) => {
-      for (const d of list) {
-        if (d.plan && !d.bundle) {
-          const dir = d.path.includes('/') ? d.path.slice(0, d.path.lastIndexOf('/')) : '';
-          const feature = area === null ? dir : dir === area ? '' : dir.slice(area.length + 1);
-          out.push({ path: d.path, title: d.title, feature: feature || null, state: d.plan, modifiedAt: d.modifiedAt });
-        }
-        walk(d.children);
-      }
-    };
-    walk(docs);
-    return out.sort((a, b) => b.modifiedAt - a.modifiedAt);
-  };
-  const areas: PlanArea[] = projects.map((p) => ({ area: p.path, name: p.name, plans: rows(p.docs, p.path) }));
-  areas.push({ area: null, name: '최상위', plans: rows(unfiled, null) });
-  return areas.filter((a) => a.plans.length > 0);
-}
-
-/** Where a file sits, for the 위치 column: "프로젝트 / 상위 문서", or 최상위 for a file right in the workspace root. */
-export const locationOf = (p: { project: string | null; parent: string | null }) => [p.project, p.parent].filter(Boolean).join(' / ') || '최상위';
-
-/** Docs whose title contains the query (case-insensitive); an empty query keeps everything. */
-export const matchesQuery = (title: string, query: string) => !query.trim() || title.toLowerCase().includes(query.trim().toLowerCase());
-
-/** Keeps a doc if it or any sub-doc matches; a matching parent keeps its whole subtree. */
-export function filterDocs(docs: ProjectDoc[], query: string): ProjectDoc[] {
-  if (!query.trim()) return docs;
-  return docs.flatMap((d) => {
-    if (matchesQuery(d.title, query)) return [d];
-    const kids = filterDocs(d.children, query);
-    return kids.length ? [{ ...d, children: kids }] : [];
-  });
-}
 
 /** The app's time label (lib/when.ts); "-" when there is no time. */
 export function relativeTime(ms: number, now = Date.now()): string {
   return ms ? whenLabel(ms, now) : '-';
 }
-
-/** Folder to create new files in, from a project id (null = workspace root). */
-export const folderPrefix = (project: string | null) => (project ? `${project}/` : '');
-
-/** Time of the last plain `G` keydown; `G` then `P` within a second opens the project menu (the dashboard's `P` skips then). */
-export const chord = { g: 0 };
-export const CHORD_MS = 1000;
-
-/** Spec: rows are 41px tall, sub-docs indent 24px per level. */
-export const ROW_HEIGHT = 41;
-
-/** Every document as a flat row, newest edit first (the 전체 tab; 고친 때 is the default sort). */
-export function flatFiles(projects: ProjectInfo[], unfiled: ProjectDoc[]): RecentFile[] {
-  return allDocs(projects, unfiled)
-    .map(({ doc, project, parent }) => ({ path: doc.path, title: doc.title, project: project?.name ?? null, parent, createdAt: doc.createdAt, modifiedAt: doc.modifiedAt }))
-    .sort((a, b) => b.modifiedAt - a.modifiedAt);
-}
-
-/** Files with a run going now that sit in `project` (its folder or any sub-folder). */
-export const runningIn = (project: Pick<ProjectInfo, 'path'>, running: ReadonlySet<string>) =>
-  [...running].filter((f) => f.startsWith(`${project.path}/`)).length;
 
 type VisibilityDoc = { visibilityState: string; addEventListener: (t: 'visibilitychange', fn: () => void) => void; removeEventListener: (t: 'visibilitychange', fn: () => void) => void };
 type Timers = { setInterval: (fn: () => void, ms: number) => unknown; clearInterval: (t: unknown) => void };

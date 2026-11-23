@@ -1,53 +1,5 @@
-// Client for the E1 workspace API (docs/workspace-api.md).
-// Node position overrides for a block (docs/design/block-drag-edit.md §2.1). Keys of `items` are node or empty-group names.
-import type { BlockLayout } from '../../shared/render/block-layout.ts';
-import type { BlockCode } from '../../shared/render/block-code.ts';
-// Newest file format this web build understands; a 422 on a file above it means a newer app wrote it.
-export const FILE_FORMAT_VERSION = 6;
-// Pipeline steps (format v4). The web only carries it through saves for now; docs/workspace-api.md "Pipeline `plan`".
-export type { Plan } from '../../shared/dispatch/plan.ts';
+// Client for the server's API: project info, provider connections, limits, settings and user defaults.
 import type { UsageDay } from '../../shared/dispatch/types.ts';
-import type { Plan } from '../../shared/dispatch/plan.ts';
-import type { Discussion, Discussions } from '../../shared/dispatch/discussions.ts';
-export type { Discussion } from '../../shared/dispatch/discussions.ts';
-export type Block = { id: string; type: string; code: string; x: number; y: number; w: number; h: number; layout?: BlockLayout; codeRefs?: BlockCode; frameId?: string };
-export type DpxFile = {
-  version: number;
-  title: string;
-  document: unknown;
-  canvas: unknown;
-  blocks: Block[];
-  /** Present only in pipeline files. Saves send it back unchanged. */
-  plan?: Plan;
-  /** In-document questions (format v6, #738). Saves never send it: it changes only through the discussions API. */
-  discussions?: Discussions;
-  revision: number;
-};
-export type TreeNode =
-  | { type: 'folder'; name: string; path: string; children: TreeNode[] }
-  | { type: 'file'; name: string; path: string; title: string; revision: number | null; mtime?: string; created?: string; pipeline?: PipelineMark; questions?: number };
-/** Tree mark of a pipeline file: draft (`plan`), a run in progress, the newest run stopped or failed (`paused`), or done. */
-export type PipelineMark = { state: 'plan' | 'running' | 'paused' | 'done' };
-
-/** Projects view (GET /api/workspace/projects, docs/workspace-api.md). Times are ISO strings. */
-export type DocNode = {
-  type: 'doc' | 'group';
-  path: string;
-  name: string;
-  title?: string;
-  revision?: number | null;
-  /** Set on a pipeline file (E18). */
-  pipeline?: PipelineMark;
-  /** Open in-document questions (#738); absent when none. */
-  questions?: number;
-  created: string | null;
-  modified: string | null;
-  /** Documents below this one. */
-  count: number;
-  children: DocNode[];
-};
-export type Project = { path: string; name: string; icon: string | null; description: string; created: string | null; modified: string | null; count: number; docs: DocNode[] };
-export type ProjectsView = { projects: Project[]; loose: DocNode[] };
 
 /** Model connection summary for the sidebar (Dispatch routes; GET only, nothing here starts a CLI). */
 export type DispatchStatus = { enabled: boolean; reason?: string; message?: string };
@@ -82,11 +34,6 @@ export type ProviderLimits = {
 export type ProviderInfo = { installed?: boolean | null; connected?: boolean; busy?: boolean; url?: string | null; error?: string | null };
 export type DispatchSettings = { guard: { enabled: boolean; five: number; seven: number; fable?: number; /** Codex thresholds (#676). */ openai?: { five?: number; seven?: number } }; team: { ctxHandoff?: number; handoffMTokens?: number } & Record<string, unknown> };
 
-export type VersionLabel = 'draft' | 'approved' | 'done';
-export type HistoryEntry = { id: string; /** ms since epoch */ time: number; bytes: number; /** Pipeline milestones this version stands for (E28). */ labels?: VersionLabel[] };
-export type TrashItem = { id: string; path: string; /** ms since epoch */ deletedAt: number; /** Deleted outside the app: restoring brings back the newest saved snapshot. */ fromSnapshot?: boolean };
-export type HistoryVersion = DpxFile & { id: string; time: number };
-
 /** GET /api/user-defaults (docs/design/user-defaults.md). Metadata only. */
 export type UserDefaultsValues = {
   theme?: 'system' | 'light' | 'dark';
@@ -114,13 +61,11 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: string, url: string, body?: unknown, keepalive = false): Promise<T> {
+async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
-    keepalive,
     // Every non-GET /api request needs x-drawing: 1 (server/app.js); a cross-site page can't send it.
     headers: {
-      // x-drawing-client: this page's own saves, so the server shows no outside-writer cursor for them (E520).
       ...(method === 'GET' ? {} : { 'x-drawing': '1', 'x-drawing-client': 'app' }),
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
@@ -131,24 +76,9 @@ async function call<T>(method: string, url: string, body?: unknown, keepalive = 
   return data as T;
 }
 
-/** A window of lines from a git-tracked file (GET /api/code, docs/workspace-api.md "Code window"). */
-export type CodeWindow = { path: string; start: number; end: number; total: number; lines: string[]; language: string; truncated?: boolean };
-
-const q = (p: string) => `?path=${encodeURIComponent(p)}`;
-
-/** GET /api/workspaces: paths are absolute; `missing` = the folder is gone from disk. */
-export type WorkspaceFolders = {
-  current: { path: string; name: string } | null;
-  folders: { path: string; name: string; current: boolean; missing: boolean }[];
-  switchable: boolean;
-  error: string | null;
-};
-
 export const api = {
   /** `project`: the git project's folder name when the server sends it (#773); else the workspace folder's name. */
   info: () => call<{ workspace: string; mode?: 'drawing' | 'project'; project?: string | null }>('GET', '/api/info'),
-  tree: () => call<{ tree: TreeNode[] }>('GET', '/api/tree').then((r) => r.tree),
-  projects: () => call<ProjectsView>('GET', '/api/workspace/projects'),
   dispatch: () => call<DispatchStatus>('GET', '/api/dispatch'),
   providers: () => call<{ providers: Record<string, ProviderState> }>('GET', '/api/state').then((r) => r.providers ?? {}),
   limits: () => call<ProviderLimits>('GET', '/api/limits'),
@@ -175,97 +105,19 @@ export const api = {
   setUserDefaults: (patch: UserDefaultsPatch) => call<UserDefaultsStatus>('POST', '/api/user-defaults', patch),
   prTracking: () => call<{ on: boolean }>('GET', '/api/workspace/pr-tracking'),
   setPrTracking: (on: boolean) => call<{ on: boolean }>('POST', '/api/workspace/pr-tracking', { on }),
-  /** Read only; `start`/`end` are 1-based and inclusive. */
-  code: (path: string, start: number, end: number, signal?: AbortSignal) =>
-    fetch(`/api/code${q(path)}&start=${start}&end=${end}`, { signal }).then(async (res) => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new ApiError(res.status, data.error ?? `HTTP ${res.status}`);
-      return data as CodeWindow;
-    }),
-  readFile: (path: string) => call<DpxFile>('GET', `/api/file${q(path)}`),
-  /** `content`: starting document, canvas, blocks and plan (a template); defaults to an empty file. */
-  createFile: (path: string, title: string, content?: Partial<Pick<DpxFile, 'document' | 'canvas' | 'blocks' | 'plan'>>) =>
-    call<DpxFile>('POST', '/api/file', { ...content, path, title }),
-  saveFile: (path: string, f: Pick<DpxFile, 'revision' | 'title' | 'document' | 'canvas' | 'blocks' | 'plan'>, keepalive = false) =>
-    call<DpxFile>('PUT', `/api/file${q(path)}`, f, keepalive),
-  /** `withSubdocs`: the document's sub-documents folder (`X/` next to `X.dpx.json`) goes to the trash with it. */
-  removeFile: (path: string, withSubdocs = false) => call<unknown>('DELETE', `/api/file${q(path)}${withSubdocs ? '&withSubdocs=1' : ''}`),
-  /** The workspace folders this server can switch between (E554); the open one has `current`. */
-  workspaces: () => call<WorkspaceFolders>('GET', '/api/workspaces'),
-  removeFolder: (path: string) => call<unknown>('DELETE', `/api/folder${q(path)}`),
-  history: (path: string) => call<{ versions: HistoryEntry[] }>('GET', `/api/history${q(path)}`).then((r) => r.versions),
-  historyVersion: (path: string, id: string) => call<HistoryVersion>('GET', `/api/history/version${q(path)}&id=${encodeURIComponent(id)}`),
-  /** Keep the file as it is on disk now as a version (before a restore). */
-  /** Answer an open question (#738): a picked choice or typed text. `delivered`: the asking session got it now. */
-  answerQuestion: (path: string, id: string, answer: { choice: number } | { text: string }) =>
-    call<{ path: string; revision: number; item: Discussion; delivered: boolean }>('POST', `/api/file/discussions/answer${q(path)}`, { id, ...answer }),
-  historySnapshot: (path: string) => call<{ id: string | null }>('POST', `/api/history${q(path)}`, {}),
-  trash: () => call<{ items: TrashItem[] }>('GET', '/api/trash').then((r) => r.items),
-  restoreTrash: (id: string) => call<{ path: string }>('POST', '/api/trash/restore', { id }),
-  /** `withSubdocs`: a document's sub-documents folder (`X/` next to `X.dpx.json`) moves along (type 'file' only). */
-  move: (from: string, to: string, type: 'file' | 'folder', withSubdocs = false) =>
-    call<unknown>('POST', '/api/move', withSubdocs ? { from, to, type, withSubdocs } : { from, to, type }),
 };
 
-// Project view: GET /api/workspace/projects (docs/workspace-api.md "Projects view"), mapped to the shapes the screens use.
-type DocNodeDto = { type: 'doc' | 'group'; path: string; name: string; title?: string; created: string | null; modified: string | null; pipeline?: PipelineMark; children: DocNodeDto[] };
-type ProjectDto = { path: string; name: string; icon: string | null; description: string; created: string | null; modified: string | null; count: number; docs: DocNodeDto[] };
-export type ProjectDoc = {
-  path: string;
-  name: string;
-  title: string;
-  /** A folder without a same-named file: a parent without a document of its own. */
-  bundle: boolean;
-  /** ms since epoch (0 = unknown) */
-  createdAt: number;
-  modifiedAt: number;
-  /** A plan document's state (계획 · 실행 중 · 멈춤 · 완료); absent for other documents. */
-  plan?: PipelineMark['state'];
-  children: ProjectDoc[];
-};
+// Project folders: GET /api/workspace/projects, reduced to what the sidebar and the board's scope use.
+type ProjectDto = { path: string; name: string };
 export type ProjectInfo = {
   /** The project folder's path (its unique id). */
   id: string;
   path: string;
   name: string;
-  icon: string;
-  description: string;
-  docCount: number;
-  createdAt: number;
-  modifiedAt: number;
-  docs: ProjectDoc[];
 };
-export type ProjectsResponse = { projects: ProjectInfo[]; unfiled: ProjectDoc[] };
-export type RecentFile = { path: string; title: string; project: string | null; parent: string | null; createdAt: number; modifiedAt: number };
-const time = (s: string | null) => (s ? Date.parse(s) || 0 : 0);
-const toDoc = (n: DocNodeDto): ProjectDoc => ({
-  path: n.path,
-  name: n.name,
-  title: n.title || n.name,
-  bundle: n.type === 'group',
-  createdAt: time(n.created),
-  modifiedAt: time(n.modified),
-  ...(n.pipeline ? { plan: n.pipeline.state } : {}),
-  children: n.children.map(toDoc),
-});
 export const projectsApi = {
-  /** Files with a run going now (GET /api/runs/active). */
-  running: () => call<{ files: string[] }>('GET', '/api/runs/active').then((r) => r.files),
   projects: () =>
-    call<{ projects: ProjectDto[]; loose: DocNodeDto[] }>('GET', '/api/workspace/projects').then(
-      (r): ProjectsResponse => ({
-        projects: r.projects.map((p) => ({
-          id: p.path,
-          path: p.path,
-          name: p.name,
-          icon: p.icon ?? [...p.name][0] ?? '',
-          description: p.description,
-          docCount: p.count,
-          createdAt: time(p.created),
-          modifiedAt: time(p.modified),
-          docs: p.docs.map(toDoc),
-        })),
-        unfiled: r.loose.map(toDoc),
-      }),
-    ),
+    call<{ projects: ProjectDto[] }>('GET', '/api/workspace/projects').then((r) => ({
+      projects: (Array.isArray(r.projects) ? r.projects : []).map((p): ProjectInfo => ({ id: p.path, path: p.path, name: p.name })),
+    })),
 };
