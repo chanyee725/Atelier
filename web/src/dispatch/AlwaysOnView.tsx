@@ -2,7 +2,7 @@
 // auto-scroll and no motion. Esc or the close button goes back to the board; a tile opens its session sheet.
 import { useLayoutEffect } from 'react';
 import { X } from 'lucide-react';
-import { roleColor } from '../run/overlayModel';
+import { roleColor } from './lib/roles';
 import { AttentionGroup, useAttention } from './AttentionStrip';
 import { isOpen, stateOf } from './lib/format.ts';
 import { alwaysOnOrder } from './lib/usage.ts';

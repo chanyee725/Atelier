@@ -12,7 +12,6 @@ import { useWaitingPlans } from '../activity/waitingPlans';
 import { useNow } from '../dispatch/AttentionStrip';
 import { ProviderIcon } from '../ProviderIcon';
 import { providerIcon } from '../providerIcons';
-import { requestPlanConfirm } from '../run/planConfirmRequest';
 import { Card, CardList, CardRow, EmptyState } from './dash';
 import { relativeTime } from './model';
 
@@ -31,11 +30,8 @@ export function SessionRequestsCard({ sessions, folder, onOpen, onSession }: Pro
   const now = useNow();
   const list = useMemo(() => sessionRequests(plans, asks, Array.isArray(sessions) ? sessions : null, folder), [plans, asks, sessions, folder]);
   const go = (r: SessionRequest) => {
-    if ('plan' in r.target) {
-      // The plan's own strip opens its confirm once the document is loaded (same as 확인하기).
-      requestPlanConfirm(r.target.plan);
-      onOpen(r.target.plan);
-    } else onSession?.(r.target.session);
+    if ('plan' in r.target) onOpen(r.target.plan);
+    else onSession?.(r.target.session);
   };
   return (
     // As tall as its rows up to 20rem, then the rows scroll inside: the tabbed card below keeps the rest of the column.
