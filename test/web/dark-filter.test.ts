@@ -108,7 +108,7 @@ test('#202: the node shadow stays visible on the dark canvas and in a dark expor
   const shadow = seen(preDarkFilterColor(t.shadow));
   assert.ok(contrast(shadow, canvas) >= 1.25, `shadow ${shadow} on canvas ${contrast(shadow, canvas).toFixed(2)}`);
   assert.ok(contrast(shadow, t.background) >= 1.2, `shadow ${shadow} on background ${contrast(shadow, t.background).toFixed(2)}`);
-  const b = { id: 'darkshadow1', type: 'flowchart', code: 'A\nB\nA > B\n', x: 0, y: 0, w: 0, h: 0 };
+  const b = { id: 'darkshadow1', type: 'flowchart', code: 'styleMode shadow\nA\nB\nA > B\n', x: 0, y: 0, w: 0, h: 0 };
   const pic = await renderBlock(b, 'dark-canvas');
   const fills = [...pic.svg.matchAll(/fill="(#[0-9a-f]{6})" stroke="none"/g)].map((m) => seen(m[1]!));
   assert.ok(fills.length >= 2, 'two shadows drawn');
