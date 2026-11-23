@@ -13,7 +13,9 @@ import { cn } from '../lib/utils';
 import { DiffView } from './DiffView';
 import { ModelTag, StatusBadge } from './parts';
 import { fmtK, fmtUsd, pct, permLabel, stateOf } from './lib/format.ts';
-import { answerQuestion } from './lib/question.ts';
+import { answerQuestion, answerQuestions, answersMessage, answerValue, type QuestionAnswer, type QuestionItem } from './lib/question.ts';
+import { askUserQuestionItems, isQuestionTool } from '../activity/sessionRequests.ts';
+import { QuestionTabsCard } from './QuestionTabsCard';
 import { awaitsAnswer, turn } from './lib/turn.ts';
 import { api, loadTranscript, useDispatch } from './store';
 import type { Entry, Pending, Session } from './types';
@@ -170,14 +172,43 @@ function PermissionCard({ s, p, report }: { s: Session; p: Pending; report: Repo
   );
 }
 
+/** Claude's open AskUserQuestion prompt with questions the card can show (#1052), if any. */
+function questionPrompt(s: Session): { p: Pending; items: QuestionItem[] } | null {
+  for (const p of s.pending) {
+    if (!isQuestionTool(p.tool)) continue;
+    const items = askUserQuestionItems(p.input);
+    if (items) return { p, items };
+  }
+  return null;
+}
+
 /**
  * "답할 것": the question the last turn ended with, from the transcript in this tab, else the server's `ask` (#886).
  * Never hidden while the session waits: without any question it says so instead of showing nothing.
  * A choice fills the message box so the person can check it before sending.
  */
-export function AnswerCard({ s, onPick }: { s: Session; onPick: (text: string) => void }) {
+export function AnswerCard({ s, onPick, report }: { s: Session; onPick: (text: string) => void; report: Report }) {
   const entries = useDispatch(st => st.transcripts[s.id]);
+  const sid = encodeURIComponent(s.id);
+  // Claude's AskUserQuestion: the answers go back as the permission response (#1052).
+  const asked = questionPrompt(s);
+  if (asked) {
+    const { p, items } = asked;
+    const submit = (answers: QuestionAnswer[]) => report(api('POST', `/api/sessions/${sid}/permission`, {
+      requestId: p.requestId,
+      behavior: 'allow',
+      answers: Object.fromEntries(items.map((q, i) => [q.question, answerValue(answers[i])])),
+    }));
+    const decline = () => void report(api('POST', `/api/sessions/${sid}/permission`, { requestId: p.requestId, behavior: 'deny' }));
+    return <QuestionTabsCard key={p.requestId} items={items} onSubmit={submit} onDecline={decline} />;
+  }
   if (!awaitsAnswer(s)) return null;
+  // Codex and Gemini: "질문 1/4: …" text; the answers go back as one message.
+  const set = answerQuestions(s, entries);
+  if (set) {
+    const submit = (answers: QuestionAnswer[]) => report(api('POST', `/api/sessions/${sid}/message`, { text: answersMessage(set, answers) }));
+    return <QuestionTabsCard key={set.map(q => q.question).join('\n')} items={set} onSubmit={submit} />;
+  }
   const q = answerQuestion(s, entries);
   return (
     <section aria-label="답할 것" className="mx-(--overlay-x) mt-3 rounded-xl border border-warn/60 bg-warn/5 p-3">
@@ -255,7 +286,7 @@ export function Chat({ s, report, thinking = true, after }: { s: Session; report
       {entries && groupTools(entries).map(g => (g.length === 1 && g[0]!.e.kind !== 'tool'
         ? <EntryView key={g[0]!.i} m={g[0]!.e} agent={agent} />
         : <ToolRun key={g[0]!.i} items={g} agent={agent} />))}
-      {s.pending.map(p => <PermissionCard key={p.requestId} s={s} p={p} report={report} />)}
+      {s.pending.filter(p => !(isQuestionTool(p.tool) && askUserQuestionItems(p.input))).map(p => <PermissionCard key={p.requestId} s={s} p={p} report={report} />)}
       {thinking && <ThinkingLine s={s} />}
       {after}
     </div>
@@ -435,7 +466,7 @@ export function SessionSheet({ id, onClose }: { id: string | null; onClose: () =
               </div>
             </SheetHeader>
             {error && <Alert variant="destructive">{error}</Alert>}
-            <AnswerCard s={s} onPick={pick} />
+            <AnswerCard s={s} onPick={pick} report={report} />
             <Tabs value={tab} onValueChange={setTab} className="min-h-0 flex-1 gap-0">
               <TabsList className="mx-(--overlay-x) mt-3">
                 <TabsTrigger value="chat">대화</TabsTrigger>
