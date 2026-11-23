@@ -6,6 +6,7 @@ Design: `docs/design/code-linked-nodes.md` (§1 data model, §4 agent side). API
 
 - **Label nodes by feature, in short Korean** (e.g. `로봇 데이터 녹화`, `LeRobot 형식 변환`). Never put file names, paths or class names in a label (`record.py` is wrong).
 - **Attach where the feature lives as code references**, not in the label: the DSL attribute `code: "path:start-end#symbol"`, and in block JSON `codeRefs.nodes` with `summary` and `note`.
+- **Declare groups in flow order and avoid a flow that goes back and forth between groups.** A flowchart whose edges go from one group to another and back is drawn with the groups as bands across the flow (#1066); one-way flow reads best.
 
 ## Reference format
 
@@ -29,6 +30,19 @@ LeRobot 형식 변환 [code: "convert/lerobot.py:10-80#to_lerobot; convert/schem
 학습 데이터 저장 [icon: database]
 
 로봇 데이터 녹화 > LeRobot 형식 변환 > 학습 데이터 저장
+```
+
+### Colour
+
+- **One colour per group, a different colour per role.** Put `color:` on the group (`서버 [color: blue] { ... }`); its nodes and nested groups take that colour. A node's own `color:` wins, and `color: none` keeps one node neutral.
+- Nodes outside any group stay neutral unless they are a hub or the one thing to notice; colour at most one or two of those.
+- Names: `gray`, `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`, `pink` and the other palette names in `shared/render/theme.ts`. Keep the default `colorMode` (`pastel`); use `bold` or `outline` only for the single standout.
+- Red means risk or a boundary (firewall, DMZ, error path), not decoration. Do not use more than five colours in one diagram.
+
+```
+서버 [icon: server, color: blue] { 녹화 명령 전달; 메타데이터 등록 }
+사용자 PC 앱 [icon: monitor, color: green] { 녹화 화면; 영상 인코딩 }
+녹화 명령 전달 > 녹화 화면
 ```
 
 DSL refs are merged with the block's `codeRefs.nodes` entry of the same node name. Block JSON wins on conflict; the DSL only adds refs that are not there yet. How Eraser treats the `code` attribute is not verified, so Atelier strips `code:` attributes when it exports the DSL (copy for Eraser).
@@ -112,3 +126,4 @@ Invalid `codeRefs` (bad path, `start > end`, too many refs) gets 400 with the re
 3. `summary` says what the feature does in one sentence; `note` says what that range does.
 4. Summaries and notes hold no secrets or personal data; renamed nodes have renamed keys.
 5. Paths exist in the repo and lines match the current file.
+6. Every group has a `color:`, and groups with different roles have different colours.

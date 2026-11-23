@@ -18,8 +18,12 @@ import { BAND_GAP, GRID_GAP, attachTail, bandColumns, gridColumns, packGrid, pla
 import type { Piece } from './layout-graph-pack.ts';
 import { GROUP_PAD, measureGroup, measureNode, runBand, unifySizes } from './layout-graph-measure.ts';
 import type { GroupGeom, NodeGeom } from './layout-graph-measure.ts';
-import { definitionOrder, flipped, freeChildren, rootLayers } from './layout-graph-order.ts';
+import { crossGroupBands, definitionOrder, flipped, freeChildren, rootLayers } from './layout-graph-order.ts';
+import { placeBands, rankFlow } from './layout-lanes.ts';
+import type { BandRoot } from './layout-lanes.ts';
 import { routeAcross, routeElbow } from './layout-graph-route.ts';
+import { ROUTE_GAP, routeAround } from './route-around.ts';
+import { BRANCH_LABEL_WIDTH, BRANCH_ROOM, TRUNK_GAP } from './route-trunks.ts';
 
 const ELK_DIRECTION = { down: 'DOWN', up: 'UP', left: 'LEFT', right: 'RIGHT' } as const;
 const EDGE_LABEL_SIZE = 12;
@@ -41,20 +45,27 @@ const ROUTE_ROOM = 12;
 
 /** Measure the diagram and run ELK. Async and slow; cache the result per AST (and per `options`). */
 export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {}): Promise<GraphBase> {
+  // A caller that asks for wrapped rows (`wrapGroups`) gets the ELK picture wrapped, not bands.
+  const bands = options.wrapGroups ? undefined : crossGroupBands(d, definitionOrder(d));
+  if (bands) {
+    const branches = fanBranches(d, bands);
+    return placedBase(d, (sizes) => placeCrossGroups(d, bands, sizes), (e) => (branches.has(e.id) ? BRANCH_LABEL_WIDTH : EDGE_LABEL_WIDTH));
+  }
   await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
   const parent = new Map<string, string | undefined>();
   const elkId = (id: string): string => `n:${id}`;
 
-  const measure = (child: GraphChild, parentId: string | undefined): void => {
+  const measure = (child: GraphChild, parentId: string | undefined, color?: string): void => {
     parent.set(child.id, parentId);
     if (child.kind === 'node') {
-      nodes.set(child.id, measureNode(d, child));
+      nodes.set(child.id, measureNode(d, child, color));
       return;
     }
-    groups.set(child.id, measureGroup(d, child));
-    for (const c of child.children) measure(c, child.id);
+    const geom = measureGroup(d, child, color);
+    groups.set(child.id, geom);
+    for (const c of child.children) measure(c, child.id, geom.style.paint.color);
   };
   for (const c of d.children) measure(c, undefined);
   const order = definitionOrder(d);
@@ -402,6 +413,128 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
   return { nodes, groups, parent, rects, edges: baseEdges };
 }
 
+/** Space a labelled edge needs beside its label plate, at each end, where it jogs between two slots. */
+const LABEL_ROOM = 16;
+
+/** Widest an edge label gets before it wraps. */
+const EDGE_LABEL_WIDTH = 140;
+
+/** The flow of a banded picture: edges along the flow, each node's band, and which edges fan into another band. */
+function bandFlow(d: GraphDiagram, roots: readonly BandRoot[]) {
+  const order = definitionOrder(d);
+  const flow = d.edges.map((e) => (flipped(e, order) ? { from: e.to, to: e.from } : e));
+  const band = new Map(roots.flatMap((r, i) => r.bands.flatMap((b, j) => b.nodes.map((id) => [id, `${i}:${j}`] as const))));
+  // A fan into another band (one node feeding several nodes there) does take a slot: the trunk drops
+  // across the bands and branches sideways into the stacked targets.
+  const fan = new Map<string, Set<string>>();
+  for (const e of flow) {
+    if (e.from === e.to || band.get(e.from) === band.get(e.to)) continue;
+    const key = `${e.from}>${band.get(e.to)}`;
+    fan.set(key, (fan.get(key) ?? new Set()).add(e.to));
+  }
+  const fanned = (from: string, to: string): boolean => band.get(from) !== band.get(to) && (fan.get(`${from}>${band.get(to)}`)?.size ?? 0) > 1;
+  return { order, flow, band, fanned };
+}
+
+/** Labelled edges that are a branch of a fan into another band: their label sits on the short branch. */
+function fanBranches(d: GraphDiagram, roots: readonly BandRoot[]): Set<string> {
+  const { order, fanned } = bandFlow(d, roots);
+  return new Set(d.edges.filter((e) => e.label && (flipped(e, order) ? fanned(e.to, e.from) : fanned(e.from, e.to))).map((e) => e.id));
+}
+
+/**
+ * A flowchart whose flow goes back and forth between groups (#1066): groups as bands in source order, nodes
+ * in flow slots, so every edge runs with the flow.
+ *
+ * An edge inside a band takes one slot; an edge to another band takes none, so its ends share a slot and the
+ * line runs straight across the bands (spec §1.7: straight lines first). That keeps the picture as wide as
+ * the longest run inside one band, not as the whole chain. A slot that a labelled edge leaves along the
+ * flow gets a gap wide enough for the label (spec §1.5: a labelled layer gap is wider).
+ */
+function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: PlacedSizes): Map<string, Rect> {
+  const order = definitionOrder(d);
+  const ids = [...order.keys()].filter((id) => sizes.nodes.has(id));
+  const { flow, band, fanned } = bandFlow(d, roots);
+  const step = (from: string, to: string): number => (band.get(from) === band.get(to) || fanned(from, to) ? 1 : 0);
+  // Slots in flow order, one node per band and slot (a band is one row of nodes, as Eraser draws a layer):
+  // a node goes right after what feeds it, in the first slot its band still has free.
+  const topo = rankFlow(ids, flow, [], true);
+  const forward = flow.filter((e) => e.from !== e.to && topo.get(e.from)! < topo.get(e.to)!);
+  const feeds = new Set(forward.map((e) => e.to));
+  const fed = new Set(forward.map((e) => e.from));
+  const rank = new Map<string, number>();
+  const taken = new Map<string, string[]>();
+  const near = (id: string): string[] => forward.filter((e) => (e.from === id || e.to === id) && step(e.from, e.to) === 1).map((e) => (e.from === id ? `<${e.to}` : `>${e.from}`));
+  // Two nodes of a band may share a slot (stacked, as a list) when the same node feeds both or both feed
+  // the same node, a slot away: a fan stays together instead of one branch running past the other.
+  const fits = (id: string, key: string): boolean => {
+    const there = taken.get(key);
+    if (!there) return true;
+    const mine = new Set(near(id));
+    return there.every((o) => near(o).some((n) => mine.has(n)));
+  };
+  const put = (id: string, want: number, dir: 1 | -1): void => {
+    let r = want;
+    while (!fits(id, `${band.get(id)}@${r}`)) r += dir;
+    const key = `${band.get(id)}@${r}`;
+    taken.set(key, [...(taken.get(key) ?? []), id]);
+    rank.set(id, r);
+  };
+  const byFlow = [...ids].sort((x, y) => topo.get(x)! - topo.get(y)!);
+  for (const id of byFlow) {
+    if (!feeds.has(id)) continue;
+    // A source that is not placed yet counts as slot 0, which keeps its slot free before this node.
+    const from = forward.filter((e) => e.to === id).map((e) => (rank.get(e.from) ?? 0) + step(e.from, id));
+    put(id, Math.max(0, ...from), 1);
+  }
+  // A source sits right before its nearest target, so its edge does not run along the whole flow past
+  // other nodes' edges; a node with no edge takes the first free slot of its band.
+  for (const id of byFlow) {
+    if (feeds.has(id) || !fed.has(id)) continue;
+    put(id, Math.min(...forward.filter((e) => e.from === id).map((e) => rank.get(e.to)! - step(id, e.to))), -1);
+  }
+  const first = Math.min(0, ...rank.values());
+  taken.clear();
+  for (const [id, r] of rank) {
+    rank.set(id, r - first);
+    const key = `${band.get(id)}@${r - first}`;
+    taken.set(key, [...(taken.get(key) ?? []), id]);
+  }
+  for (const id of byFlow) if (!rank.has(id)) put(id, 0, 1);
+  // Bands lie across the flow (lanes). When most edges go from group to group the groups are tiers of the
+  // flow instead (an architecture's layers): they stack along it, and a tier's nodes sit side by side.
+  const cross = flow.filter((e) => band.get(e.from) !== band.get(e.to)).length;
+  const tiers = cross >= 2 * (flow.length - cross);
+  const across = (d.direction === 'down') !== tiers;
+  const room = new Map<number, number>();
+  for (const e of d.edges) {
+    if (!e.label) continue;
+    const [a, b] = flipped(e, order) ? [e.to, e.from] : [e.from, e.to];
+    const r = rank.get(a);
+    // Only a label between two neighbours of one band, or on a fan's branch into another band, needs the
+    // room; a longer or straight cross-band line has it.
+    const branch = fanned(a, b);
+    if (r === undefined || rank.get(b) !== r + 1 || (band.get(a) !== band.get(b) && !branch)) continue;
+    const style = styleFor(d, e.attrs, e.span.line);
+    const l = measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, branch ? BRANCH_LABEL_WIDTH : EDGE_LABEL_WIDTH);
+    const plate = across ? l.h + 4 : Math.ceil(l.w + PLATE_PAD * 2);
+    // The branch starts where the trunk splits and carries the plate, a stub and the arrowhead.
+    const need = branch ? TRUNK_GAP + plate + BRANCH_ROOM : plate + 2 * LABEL_ROOM;
+    room.set(r, Math.max(room.get(r) ?? 0, need));
+  }
+  // eraser-diagrams spacing: 12 between stacked list items, 24 between sibling groups, 16 inside a group.
+  return placeBands(roots, rank, across, sizes, {
+    flowGap: SPACING.layer,
+    stackGap: 12,
+    // A tier leaves a track under its row for a line that passes a neighbour (ROUTE_GAP from node and border).
+    lanePad: { side: GROUP_PAD.side, end: tiers ? 2 * ROUTE_GAP : GROUP_PAD.bottom },
+    poolPad: { side: 0, end: 0 },
+    bandGap: 24,
+    bareHead: 0,
+    gapAfter: (r) => room.get(r) ?? 0,
+  });
+}
+
 /** Box sizes a caller-made layout places: measured nodes (flowchart sizes) and each group's header height. */
 export interface PlacedSizes {
   readonly nodes: ReadonlyMap<string, { readonly w: number; readonly h: number; readonly shape: ShapeKind }>;
@@ -413,19 +546,20 @@ export interface PlacedSizes {
  * `graphBase` (box nodes in one group share a size), the caller's rects, then elbow routes between them
  * straightened by the corridor router. Deterministic: no ELK run.
  */
-export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) => Map<string, Rect>): Promise<GraphBase> {
+export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) => Map<string, Rect>, labelWidth: (e: GraphEdge) => number = () => EDGE_LABEL_WIDTH): Promise<GraphBase> {
   await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
   const parent = new Map<string, string | undefined>();
-  const measure = (child: GraphChild, parentId: string | undefined): void => {
+  const measure = (child: GraphChild, parentId: string | undefined, color?: string): void => {
     parent.set(child.id, parentId);
     if (child.kind === 'node') {
-      nodes.set(child.id, measureNode(d, child));
+      nodes.set(child.id, measureNode(d, child, color));
       return;
     }
-    groups.set(child.id, measureGroup(d, child));
-    for (const c of child.children) measure(c, child.id);
+    const geom = measureGroup(d, child, color);
+    groups.set(child.id, geom);
+    for (const c of child.children) measure(c, child.id, geom.style.paint.color);
   };
   for (const c of d.children) measure(c, undefined);
   unifySizes(nodes.values(), parent, new Map(), new Set());
@@ -446,7 +580,7 @@ export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) =>
     return {
       edge: e,
       style,
-      ...(e.label ? { label: measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140) } : {}),
+      ...(e.label ? { label: measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, labelWidth(e)) } : {}),
       points,
       forcedElbow: e.from === e.to || (pairCount.get(key) ?? 0) > 1,
       pairIndex,
@@ -454,5 +588,31 @@ export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) =>
     };
   });
   routeEdges(rects, parent, baseEdges.map((be) => ({ from: be.edge.from, to: be.edge.to, points: be.points, keep: be.forcedElbow })));
+  aroundNodes(nodes, rects, baseEdges);
   return { nodes, groups, parent, rects, edges: baseEdges };
+}
+
+/**
+ * The route an edge falls back to when the corridor router has no clean line for it must not cut a node
+ * (#1066: a line that skips a slot of its band, or a band whose slot is taken): such an elbow is replaced
+ * by a route around the nodes, off the routes found before it.
+ */
+function aroundNodes(nodes: ReadonlyMap<string, NodeGeom>, rects: ReadonlyMap<string, Rect>, edges: readonly BaseEdge[]): void {
+  const boxes = [...nodes.keys()].map((id) => [id, rects.get(id)] as const).filter((x): x is readonly [string, Rect] => !!x[1]);
+  if (!boxes.length) return;
+  const cuts = (r: Rect, a: { x: number; y: number }, b: { x: number; y: number }): boolean =>
+    Math.max(a.x, b.x) > r.x + 1 && Math.min(a.x, b.x) < r.x + r.w - 1 && Math.max(a.y, b.y) > r.y + 1 && Math.min(a.y, b.y) < r.y + r.h - 1;
+  const all = boxes.map(([, r]) => r);
+  const x0 = Math.min(...all.map((r) => r.x)) - 2 * ROUTE_GAP;
+  const y0 = Math.min(...all.map((r) => r.y)) - 2 * ROUTE_GAP;
+  const bounds: Rect = { x: x0, y: y0, w: Math.max(...all.map((r) => r.x + r.w)) + 2 * ROUTE_GAP - x0, h: Math.max(...all.map((r) => r.y + r.h)) + 2 * ROUTE_GAP - y0 };
+  for (const be of edges) {
+    const { from, to } = be.edge;
+    if (from === to) continue;
+    const others = boxes.filter(([id]) => id !== from && id !== to).map(([, r]) => r);
+    if (!be.points.some((p, i) => i > 0 && others.some((r) => cuts(r, be.points[i - 1]!, p)))) continue;
+    const lines = edges.filter((o) => o !== be).map((o) => o.points);
+    const route = routeAround(rects.get(from)!, rects.get(to)!, others, [], bounds, lines) ?? routeAround(rects.get(from)!, rects.get(to)!, others, [], bounds);
+    if (route) be.points = route.map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
 }

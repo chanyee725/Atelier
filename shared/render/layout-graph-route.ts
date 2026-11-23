@@ -7,6 +7,7 @@ import { PLATE_PAD } from './text.ts';
 import { ROUTE_GAP, routeAround } from './route-around.ts';
 import { routeOrthogonal } from './route-eraser.ts';
 import type { PartialRoute, RoutedEdge, RouterBox } from './route-eraser.ts';
+import { settleLabels, shareTrunks } from './route-trunks.ts';
 import type { Point } from './scene.ts';
 import { isZero } from './layout-graph-common.ts';
 import type { BaseEdge, Delta, GraphBase, Rect } from './layout-graph-common.ts';
@@ -224,6 +225,10 @@ export function routeElbows(d: GraphDiagram, base: GraphBase, rects: ReadonlyMap
       const r = out.get(e.id);
       if (r && (!insideCommonGroup(base, rs, e.from, e.to, r.points) || !cleanRoute(base, dr, rs, e.from, e.to, r.points))) out.delete(e.id);
     }
+    // #1066: a fan shares one port and trunk, and labels sit mid-way on the longest stretch of their own line.
+    const nodeRects = new Map([...base.nodes.keys()].map((id) => [id, dr.get(id) ?? rs.get(id)] as const).filter((x): x is readonly [string, Rect] => !!x[1]));
+    // Not while a drag reroutes part of the picture: the kept lines stay exactly as they were.
+    if (!partial) settleLabels(out, list, nodeRects, shareTrunks(out, list, nodeRects));
     return out;
   };
 

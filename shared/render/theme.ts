@@ -46,9 +46,9 @@ export const THEMES: Record<Theme, ThemeColors> = {
     strongStroke: '#242424',
     fill: '#ffffff',
     groupFill: 'rgba(242,244,247,0.5)',
-    // Visible group border (#935): the lightest grey reaching 3:1 on the canvas (WCAG 1.4.11), not Eraser's
-    // near-invisible #eaecf0.
-    groupStroke: '#868f9e',
+    // Eraser's hairline group border (#1066, a user decision that replaces the 3:1 border of #935): the
+    // group reads by its tinted fill and its title, the border only finishes the edge.
+    groupStroke: '#eaecf0',
     groupText: '#475467',
     edge: '#667085',
     flowEdge: '#1c1c1c',

@@ -19,7 +19,8 @@ test('box card: an architecture node with an icon is a box with a 20px icon 20px
   const s = await scene('Web [icon: react]');
   const b = box(s, 'Web');
   assert.ok(b, 'draws a box');
-  assert.equal(b.shadow, true, 'shadow by default');
+  assert.equal(b.shadow, false, 'a node without a colour is plain by default (#1066)');
+  assert.equal(box(await scene('Web [icon: react, color: blue]'), 'Web')?.shadow, true, 'a coloured node keeps the shadow');
   const ic = icon(s, 'react');
   assert.equal(ic.size, 20);
   assert.equal(ic.x, b.x + 20);

@@ -46,11 +46,12 @@ function globalAt(d: DiagramBase, key: string, line: number): string | undefined
  * Element attrs win over global styles. Defaults follow the spec except `typeface`: we default to `clean`
  * (the hand-drawn face is bundled and embedded in the SVG; whether it should be the default is a product call).
  */
-export function styleFor(d: DiagramBase, attrs: Attrs, line: number): ElementStyle {
+export function styleFor(d: DiagramBase, attrs: Attrs, line: number, inheritedColor?: string): ElementStyle {
   const get = (key: string): string | undefined => attrs[key] ?? globalAt(d, key, line);
   return {
     paint: {
-      color: sanitizeColor(attrs.color),
+      // A group's colour reaches its children (#1066); any `color` on the child itself wins, also an unknown one such as `none`.
+      color: attrs.color !== undefined ? sanitizeColor(attrs.color) : inheritedColor,
       mode: pick<ColorMode>(get('colorMode'), ['pastel', 'bold', 'outline']) ?? 'pastel',
     },
     styleMode: pick<StyleMode>(get('styleMode'), ['shadow', 'plain', 'watercolor']) ?? 'shadow',

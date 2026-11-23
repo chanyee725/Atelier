@@ -62,6 +62,7 @@ test('routes fuzz: overlapping runs stay within budget', async () => {
   // (new 200 px jog overlaps). Lower the budget when a fix lands; raise it only with a reason.
   assert.ok(unrelated.length <= 4, `unrelated overlaps:\n${unrelated.join('\n')}`);
   // Budget, not a goal: lines that share a box may share a port and its first stretch, and dense graphs
-  // keep some ELK routes. 46 before #214, 33 after it. Raise only with a reason.
-  assert.ok(sharedLong <= 33, `shared-end runs over 30 px: ${sharedLong}`);
+  // keep some ELK routes. 46 before #214, 33 after it, 35 with #1066 (a fan now shares one trunk on purpose,
+  // spec §1.7, instead of running as parallel lines a few px apart). Raise only with a reason.
+  assert.ok(sharedLong <= 35, `shared-end runs over 30 px: ${sharedLong}`);
 });

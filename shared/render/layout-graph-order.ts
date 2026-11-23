@@ -2,6 +2,7 @@
 // root-level layers and which children are free of edges.
 
 import type { GraphChild, GraphDiagram, GraphEdge } from '../dsl/index.ts';
+import type { Band, BandRoot } from './layout-lanes.ts';
 
 /** Definition order of every node and group (pre-order over the source tree). */
 export function definitionOrder(d: GraphDiagram): Map<string, number> {
@@ -120,4 +121,64 @@ export function freeChildren(edges: readonly GraphEdge[], parent: ReadonlyMap<st
     for (const x of b) if (!a.includes(x)) crossed.add(x);
   }
   return (c) => (c.kind === 'node' ? !touched.has(c.id) : !crossed.has(c.id));
+}
+
+/**
+ * Bands for a flowchart whose flow goes back and forth between root groups (#1066): the flow between root
+ * items (an edge counts for the groups of its ends) has a cycle through at least two groups. ELK would keep
+ * each group as one block and send the flow back across the picture; instead every root group becomes a
+ * band across the flow (a row in a `right` flow, a column in a `down` one), in source order, and every node
+ * a slot along the flow. Root nodes outside the groups share one band with no box.
+ *
+ * Only flat diagrams: groups hold nodes only, no dividers, no edge to a group, `right` or `down`.
+ * Anything else returns undefined and keeps the ELK layout.
+ */
+export function crossGroupBands(d: GraphDiagram, order: ReadonlyMap<string, number>): BandRoot[] | undefined {
+  if ((d.type !== 'flowchart' && d.type !== 'cloud-architecture') || (d.direction !== 'right' && d.direction !== 'down')) return undefined;
+  const top = new Map<string, string>();
+  const isDivider = (c: GraphChild): boolean => c.kind === 'node' && String(c.attrs.shape ?? '') === 'divider';
+  for (const c of d.children) {
+    if (isDivider(c)) return undefined;
+    if (c.kind === 'node') top.set(c.id, c.id);
+    else for (const k of c.children) {
+      if (k.kind === 'group' || isDivider(k)) return undefined;
+      top.set(k.id, c.id);
+    }
+  }
+  const groups = new Set(d.children.filter((c) => c.kind === 'group').map((c) => c.id));
+  if (groups.size < 2) return undefined;
+  const links = new Map<string, Set<string>>();
+  for (const e of d.edges) {
+    if (groups.has(e.from) || groups.has(e.to)) return undefined;
+    const flip = flipped(e, order);
+    const a = top.get(flip ? e.to : e.from);
+    const b = top.get(flip ? e.from : e.to);
+    if (a === undefined || b === undefined || a === b) continue;
+    links.set(a, (links.get(a) ?? new Set()).add(b));
+  }
+  // A cycle through two groups: some group reaches another group that reaches it back.
+  const reach = (from: string): Set<string> => {
+    const seen = new Set<string>();
+    const stack = [from];
+    while (stack.length) {
+      for (const n of links.get(stack.pop()!) ?? []) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        stack.push(n);
+      }
+    }
+    return seen;
+  };
+  const reached = new Map([...groups].map((g) => [g, reach(g)]));
+  const backAndForth = [...groups].some((g) => [...reached.get(g)!].some((h) => h !== g && groups.has(h) && reached.get(h)!.has(g)));
+  if (!backAndForth) return undefined;
+
+  const roots: BandRoot[] = [];
+  let loose: Band | undefined;
+  for (const c of d.children) {
+    if (c.kind === 'group') roots.push({ bands: [{ id: c.id, nodes: c.children.map((k) => k.id) }] });
+    else if (loose) loose.nodes.push(c.id);
+    else roots.push({ bands: [(loose = { nodes: [c.id] })] });
+  }
+  return roots;
 }

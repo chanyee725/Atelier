@@ -567,3 +567,25 @@ test('sequence heads take one flowchart width bucket and at least 52 high; erd u
   for (const s of [15.66, 14.79, 13.05]) assert.ok(sizes.includes(s), `text size ${s} present (${sizes.join(',')})`);
   assert.match(erd.svg, /data-role="entity"[^>]*>(<rect[^>]*>)*?<rect[^>]*rx="5"[^>]*stroke-width="1.5"/);
 });
+
+test('a group hands its colour to the nodes and groups inside it; a child colour wins (#1066)', async () => {
+  const code = [
+    'A [color: blue] {',
+    '  plain',
+    '  own [color: red]',
+    '  off [color: none]',
+    '  Inner { deep }',
+    '}',
+    'outside',
+  ].join('\n');
+  const { scene } = await renderDiagram(code, { type: 'flowchart' });
+  const boxes = scene.items.filter((it): it is SceneBox => it.kind === 'box');
+  const colour = (id: string): string | undefined => boxes.find((b) => b.id === id)?.paint.color;
+  assert.equal(colour('A'), 'blue');
+  assert.equal(colour('plain'), 'blue');
+  assert.equal(colour('own'), 'red');
+  assert.equal(colour('off'), undefined, 'an unknown colour such as none keeps the node neutral');
+  assert.equal(colour('Inner'), 'blue');
+  assert.equal(colour('deep'), 'blue');
+  assert.equal(colour('outside'), undefined);
+});
