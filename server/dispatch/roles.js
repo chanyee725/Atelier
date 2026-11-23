@@ -52,6 +52,9 @@ export const ROLES = [
 // Shared by leads and teammates.
 const REPORT = "보고는 한 번, 일을 끝낸 뒤: 브랜치, 끝 커밋, 실제 실행 출력(테스트 요약 줄), 남은 일. 첫 줄은 결과나 다음 행동이다.";
 const TESTS = "테스트는 바꾼 부분을 덮는 파일만 돌린다. 전체 e2e는 돌리지 않는다.";
+// Asking the user (#1050): Claude uses AskUserQuestion; Codex and Gemini use a text shape that
+// web/src/dispatch/lib/question.ts questionOf reads into the same question card.
+const QUESTIONS = "[질문] 사용자에게 결정을 물을 때 Claude는 AskUserQuestion 도구를 쓴다. 질문이 여럿이면 questions[]로 한 번에, 선택지는 2~4개, 추천을 1번에 두고 라벨에 \"(추천)\"을 붙인다. 이 도구가 없는 Codex·Gemini는 텍스트로 묻는다: 한 턴에 질문 하나, \"질문 1/4: …?\" 줄 바로 아래 번호 선택지 2~4개(추천 1번에 \"(추천)\", 각 줄은 \"라벨 — 이유 한 줄\"). 질문 줄은 물음표로 끝내고 질문과 선택지를 턴의 마지막에 둔다. 답을 받으면 다음 질문으로 넘어간다.";
 const PRIVACY = "[개인정보] 문서·보드·메모·보고에는 메타데이터만 쓴다(단계, 시간, 모델, 브랜치, 커밋, PR 번호). 대화 내용, 토큰, 키, 이메일, 실명은 쓰지 않는다.";
 const DIAGRAMS = `[코드 다이어그램] 노드 라벨은 기능을 짧은 한국어로 쓰고(예: 로봇 데이터 녹화) 파일 이름은 넣지 않는다. 코드 위치는 DSL 속성 code: "path:start-end#symbol"(여러 개는 ;)로, 블록 JSON에서는 codeRefs: {v:1, nodes:{"<라벨>":{summary, refs:[{path,start,end?,symbol?,note?}]}}}로 붙인다. path는 저장소 상대 경로, 줄은 1부터. 형식: 아틀리에 저장소 docs/agent-diagrams.md.`;
 
@@ -93,6 +96,7 @@ should-fix·nit은 고치지 않고 보고에 후속 제안으로만 적는다. 
 
 ${WRITING} 보고 문서·인계 문서에도 적용한다.
 ${DIAGRAMS}
+${QUESTIONS}
 ${PRIVACY}`;
 
 export const CHILD_PROMPT = `
@@ -102,6 +106,7 @@ ${REPORT} "알겠습니다" 같은 확인 답장으로 턴을 끝내지 않는�
 ${TESTS}
 
 ${DIAGRAMS}
+${QUESTIONS}
 ${PRIVACY}`;
 
 // Every session: name yourself on workspace API writes, so the cursor shows your name for certain (#656).

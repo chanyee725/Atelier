@@ -140,3 +140,17 @@ test("docs role and lead prompt carry the writing style; other roles do not (#73
   for (const id of ["impl", "review", "test", "design"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /\[글쓰기\]/);
   assert.doesNotMatch(CHILD_PROMPT, /\[글쓰기\]/);
 });
+
+test("lead and teammate prompts carry the one-question-per-turn rule (#1050)", async () => {
+  const { SPAWN_PROMPT, CHILD_PROMPT } = await import("../../server/dispatch/roles.js");
+  for (const p of [SPAWN_PROMPT, CHILD_PROMPT]) {
+    assert.match(p, /\[질문\]/);
+    assert.match(p, /AskUserQuestion/);
+    assert.match(p, /questions\[\]/);
+    assert.match(p, /한 턴에 질문 하나/);
+    assert.match(p, /질문 1\/4: …\?/);
+    assert.match(p, /\(추천\)/);
+    assert.match(p, /라벨 — 이유 한 줄/);
+    assert.match(p, /턴의 마지막/);
+  }
+});

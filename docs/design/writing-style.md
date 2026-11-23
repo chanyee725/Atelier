@@ -15,6 +15,21 @@ The reader may skim, lose their place, or come back days later. Every rule below
 5. **Concrete estimates.** "15분", "파일 3개", "오후 반나절". Never "조금", "꽤".
 6. **Visible done / left.** End with two short lists: 끝난 것 (what now works, concretely) and 남은 것 (with owner or next action).
 
+## Asking the user (#1050)
+
+Ask one decision at a time, with the answer ready to click.
+
+1. **Claude: the AskUserQuestion tool.** Several questions go in one `questions[]` call. 2–4 choices, the recommended one first with "(추천)".
+2. **Codex and Gemini: one question per turn in text.** They have no such tool. The shape:
+
+```markdown
+질문 1/4: 저장 위치를 어디로 할까요?
+1. 프로젝트 폴더 (추천) — 다른 기기에서도 같이 보여요
+2. 홈 폴더 — 프로젝트와 따로 남아요
+```
+
+3. **End the turn with it.** The question line ends in `?` and sits with its choices at the very end of the turn. The app's question card reads it (`web/src/dispatch/lib/question.ts`): a click moves to the next question, the last one sends all answers. After an answer, ask the next question.
+
 Also: Korean 해요체 for prose, code and paths as they are, no opening or closing pleasantries, no restating what was just done.
 
 ## Shape of a document
