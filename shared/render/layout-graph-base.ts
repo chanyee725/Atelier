@@ -22,6 +22,7 @@ import { crossGroupBands, definitionOrder, flipped, freeChildren, rootLayers } f
 import { placeBands, rankFlow } from './layout-lanes.ts';
 import type { BandRoot } from './layout-lanes.ts';
 import { routeAcross, routeElbow } from './layout-graph-route.ts';
+import { ROUTE_GAP, routeAround } from './route-around.ts';
 import { BRANCH_LABEL_WIDTH, BRANCH_ROOM, TRUNK_GAP } from './route-trunks.ts';
 
 const ELK_DIRECTION = { down: 'DOWN', up: 'UP', left: 'LEFT', right: 'RIGHT' } as const;
@@ -44,7 +45,8 @@ const ROUTE_ROOM = 12;
 
 /** Measure the diagram and run ELK. Async and slow; cache the result per AST (and per `options`). */
 export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {}): Promise<GraphBase> {
-  const bands = crossGroupBands(d, definitionOrder(d));
+  // A caller that asks for wrapped rows (`wrapGroups`) gets the ELK picture wrapped, not bands.
+  const bands = options.wrapGroups ? undefined : crossGroupBands(d, definitionOrder(d));
   if (bands) {
     const branches = fanBranches(d, bands);
     return placedBase(d, (sizes) => placeCrossGroups(d, bands, sizes), (e) => (branches.has(e.id) ? BRANCH_LABEL_WIDTH : EDGE_LABEL_WIDTH));
@@ -524,7 +526,8 @@ function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: Pl
   return placeBands(roots, rank, across, sizes, {
     flowGap: SPACING.layer,
     stackGap: 12,
-    lanePad: { side: GROUP_PAD.side, end: GROUP_PAD.bottom },
+    // A tier leaves a track under its row for a line that passes a neighbour (ROUTE_GAP from node and border).
+    lanePad: { side: GROUP_PAD.side, end: tiers ? 2 * ROUTE_GAP : GROUP_PAD.bottom },
     poolPad: { side: 0, end: 0 },
     bandGap: 24,
     bareHead: 0,
@@ -585,5 +588,31 @@ export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) =>
     };
   });
   routeEdges(rects, parent, baseEdges.map((be) => ({ from: be.edge.from, to: be.edge.to, points: be.points, keep: be.forcedElbow })));
+  aroundNodes(nodes, rects, baseEdges);
   return { nodes, groups, parent, rects, edges: baseEdges };
+}
+
+/**
+ * The route an edge falls back to when the corridor router has no clean line for it must not cut a node
+ * (#1066: a line that skips a slot of its band, or a band whose slot is taken): such an elbow is replaced
+ * by a route around the nodes, off the routes found before it.
+ */
+function aroundNodes(nodes: ReadonlyMap<string, NodeGeom>, rects: ReadonlyMap<string, Rect>, edges: readonly BaseEdge[]): void {
+  const boxes = [...nodes.keys()].map((id) => [id, rects.get(id)] as const).filter((x): x is readonly [string, Rect] => !!x[1]);
+  if (!boxes.length) return;
+  const cuts = (r: Rect, a: { x: number; y: number }, b: { x: number; y: number }): boolean =>
+    Math.max(a.x, b.x) > r.x + 1 && Math.min(a.x, b.x) < r.x + r.w - 1 && Math.max(a.y, b.y) > r.y + 1 && Math.min(a.y, b.y) < r.y + r.h - 1;
+  const all = boxes.map(([, r]) => r);
+  const x0 = Math.min(...all.map((r) => r.x)) - 2 * ROUTE_GAP;
+  const y0 = Math.min(...all.map((r) => r.y)) - 2 * ROUTE_GAP;
+  const bounds: Rect = { x: x0, y: y0, w: Math.max(...all.map((r) => r.x + r.w)) + 2 * ROUTE_GAP - x0, h: Math.max(...all.map((r) => r.y + r.h)) + 2 * ROUTE_GAP - y0 };
+  for (const be of edges) {
+    const { from, to } = be.edge;
+    if (from === to) continue;
+    const others = boxes.filter(([id]) => id !== from && id !== to).map(([, r]) => r);
+    if (!be.points.some((p, i) => i > 0 && others.some((r) => cuts(r, be.points[i - 1]!, p)))) continue;
+    const lines = edges.filter((o) => o !== be).map((o) => o.points);
+    const route = routeAround(rects.get(from)!, rects.get(to)!, others, [], bounds, lines) ?? routeAround(rects.get(from)!, rects.get(to)!, others, [], bounds);
+    if (route) be.points = route.map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
 }

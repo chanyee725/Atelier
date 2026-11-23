@@ -170,3 +170,32 @@ test('labels (#1066): a line too short for its label keeps the label beside it, 
   assert.equal(e.points.length, 2);
   assert.ok(Math.abs(cy - e.points[0]!.y) >= t.lineHeight / 2, 'the plate does not sit on the 56 px line');
 });
+
+test('cross-group bands (#1066): a cloud-architecture whose edges mostly cross groups stacks the groups as tiers', async () => {
+  const code = [
+    'direction down',
+    'Enterprise {\n  ERP\n  Email\n  BI\n}',
+    'DMZ {\n  Mirror\n  Patch server\n  Remote access\n}',
+    'Plant {\n  MES\n  Historian\n  LIMS\n}',
+    'Line {\n  PLC\n  HMI\n  Sensors\n}',
+    'ERP > Mirror', 'BI < Mirror', 'Mirror < Historian', 'Patch server > MES', 'Remote access > HMI',
+    'MES > ERP', 'Historian < PLC', 'HMI > PLC', 'Sensors > PLC', 'LIMS > MES',
+  ].join('\n');
+  const { scene, diagnostics } = await renderDiagram(code, { type: 'cloud-architecture' });
+  assert.deepEqual(diagnostics, []);
+  const groups = groupsOf(scene);
+  // Equal-width tiers one under the other in source order, as Eraser draws an architecture's layers.
+  assert.equal(new Set(groups.map((g) => g.w)).size, 1);
+  assert.equal(new Set(groups.map((g) => g.x)).size, 1);
+  const ys = ['Enterprise', 'DMZ', 'Plant', 'Line'].map((id) => groups.find((g) => g.id === id)!.y);
+  assert.deepEqual([...ys].sort((a, b) => a - b), ys);
+  // A tier is one row of nodes.
+  for (const g of groups) assert.equal(new Set(nodesOf(scene).filter((n) => n.y > g.y && n.y < g.y + g.h).map((n) => n.y)).size, 1, g.id);
+  // HMI > PLC passes Sensors and MES > ERP passes the DMZ tier: around the nodes, not through them.
+  const m = layoutMetrics(scene);
+  assert.equal(m.throughNodes, 0);
+  assert.equal(m.overlaps, 0);
+  // Asked to wrap, the same code keeps the ELK picture (wrapGroups).
+  const wrapped = await renderDiagram(code, { type: 'cloud-architecture', wrapGroups: true });
+  assert.notEqual(new Set(groupsOf(wrapped.scene).map((g) => g.x)).size, 1);
+});
