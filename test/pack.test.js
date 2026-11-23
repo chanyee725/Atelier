@@ -16,7 +16,7 @@ function fakeRoot({ version = '1.2.3', withPublic = true, withStart = true } = {
   put('NOTICE.md');
   put('server/index.js');
   put('server/node_modules/dep/index.js');
-  put('shared/dispatch/plan.ts');
+  put('shared/dispatch/ask.ts');
   put('plugin/.claude-plugin/plugin.json', JSON.stringify({ name: 'atelier', version: '0.0.0' }));
   put('plugin/.codex-plugin/plugin.json', JSON.stringify({ name: 'atelier', version: '0.0.0', skills: './skills/' }));
   put('plugin/hooks/hooks.json', '{}');
@@ -42,7 +42,7 @@ test('pack: bundle holds server, shared, public, plugin and nothing else', () =>
     const file = packBundle({ root, out });
     assert.equal(file, join(out, 'drawing-1.2.3.tgz'));
     const names = list(file);
-    for (const want of ['server/index.js', 'shared/dispatch/plan.ts', 'public/index.html', 'plugin/hooks/hooks.json', 'plugin/skills/atelier-setup/SKILL.md', 'package.json', 'NOTICE.md']) {
+    for (const want of ['server/index.js', 'shared/dispatch/ask.ts', 'public/index.html', 'plugin/hooks/hooks.json', 'plugin/skills/atelier-setup/SKILL.md', 'package.json', 'NOTICE.md']) {
       assert.ok(names.includes(`drawing-1.2.3/${want}`), `missing ${want}`);
     }
     for (const bad of ['node_modules', '.env', 'test/', 'web/']) {
@@ -109,8 +109,7 @@ test('pack: shipped plugin has valid manifests, hooks.json and skills', () => {
   const codexMp = JSON.parse(readFileSync(join(dir, '.agents/plugins/marketplace.json'), 'utf8'));
   assert.deepEqual(codexMp.plugins.map((p) => [p.name, p.source.path]), [['atelier', './']]);
   assert.ok(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8')).hooks.PostToolUse);
-  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-organize', 'atelier-status', 'atelier-update',
-    'atelier-session', 'atelier-run', 'atelier-canvas', 'atelier-files', 'atelier-questions', 'atelier-settings'];
+  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-status', 'atelier-update', 'atelier-session', 'atelier-settings'];
   assert.deepEqual(readdirSync(join(dir, 'skills')).sort(), [...skills].sort());
   for (const s of skills) {
     const md = readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8');

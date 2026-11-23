@@ -12,7 +12,7 @@ import { Button } from '../components/ui/button';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
-import { projectsApi, type ProjectInfo } from '../api';
+import { useProjectList } from './useProjectList';
 import { boardHash, plainClick, type BoardExtra, type BoardTab } from '../projectNav';
 import { Card, DashColumn, DashGrid, EmptyState } from '../home/dash';
 import { OffNote, useDispatchStatus } from '../settings/DispatchOff';
@@ -41,34 +41,6 @@ import { useIssues, usePrTracking as usePrTrackingOn } from '../home/projectFeed
 import { issueTitles, taskSummary, type TaskSummary } from '../home/taskSummary';
 
 const SettingsDialog = lazy(() => import('../settings/SettingsDialog'));
-
-type ListState = 'loading' | 'ready' | 'failed';
-
-/** Projects of the workspace, with whether the first answer is in. A failed refresh keeps the last list. */
-function useProjectList(): [ProjectInfo[], ListState] {
-  const [list, setList] = useState<ProjectInfo[]>([]);
-  const [state, setState] = useState<ListState>('loading');
-  useEffect(() => {
-    let live = true;
-    const load = () =>
-      void projectsApi.projects().then(
-        (d) => {
-          if (live) {
-            setList(d.projects);
-            setState('ready');
-          }
-        },
-        () => live && setState((s) => (s === 'ready' ? s : 'failed')),
-      );
-    load();
-    const t = setInterval(load, 60_000);
-    return () => {
-      live = false;
-      clearInterval(t);
-    };
-  }, []);
-  return [list, state];
-}
 
 export type BoardProps = {
   tab: BoardTab;

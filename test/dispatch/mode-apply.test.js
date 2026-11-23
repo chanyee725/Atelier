@@ -11,9 +11,6 @@ import { SharedLimits } from "../../server/dispatch/limits.js";
 import { staticModels } from "../../server/dispatch/models.js";
 import { ROLES, WRITING } from "../../server/dispatch/roles.js";
 import { MODE_IDS, resolveProfile } from "../../server/dispatch/mode-profiles.js";
-import { pickSession } from "../../server/runs/record.js";
-import { PLAN_MODES, planProblem, resolvedStep } from "../../shared/dispatch/plan.ts";
-import { writePlanProblem } from "../../shared/dispatch/plan-write.ts";
 
 const dirs = [];
 after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -81,20 +78,12 @@ test("a plan step's own model, effort and perm win over the mode's profile", asy
   await assert.rejects(make(hub, [{ role: "impl", model: "gpt-a", perm: "acceptEdits" }]), e2 => e2.status === 400);
 });
 
-test("an unconnected provider falls back with a note on the session, in its transcript and in the run record", async () => {
+test("an unconnected provider falls back with a note on the session, and in its transcript", async () => {
   const { hub } = await makeHub(["claude"]);
   const [s] = await make(hub, [{ role: "impl" }], { mode: "research" });
   assert.equal(s.model, "claude-opus-5-5");
   assert.match(s.profileNote, /OpenAI Codex 연결 안 됨/);
   assert.ok(hub.transcript(s.id).some(m => m.kind === "system" && /^모드 프로필: /.test(m.text)));
-  const rec = pickSession({ sid: s.id, name: s.name, provider: s.provider, model: s.model, mode: s.mode, profileNote: s.profileNote, prompt: "secret" });
-  assert.equal(rec.mode, "research");
-  assert.equal(rec.profileNote, s.profileNote);
-  assert.equal("prompt" in rec, false);
-  assert.equal(pickSession({ profileNote: "x".repeat(250) }).profileNote.length, 200);
-  assert.equal(pickSession({ profileNote: "a\nb\u0007c" }).profileNote, "a b c");
-  assert.equal(pickSession({ profileNote: "mail a@b.co" }).profileNote, undefined);
-  assert.equal(pickSession({ profileNote: " " }).profileNote, undefined);
 });
 
 test("a user cell from drawing.json is used; an unknown mode is ignored", async () => {
@@ -108,18 +97,6 @@ test("a user cell from drawing.json is used; an unknown mode is ignored", async 
   await hub.store.flush();
   const disk = readFileSync(path.join(root, ".atelier", "state.json"), "utf8");
   assert.match(disk, /"mode": ?"docs"/);
-});
-
-test("plan steps carry a mode: shared list matches the server's, write_plan checks it, defaults pass it on", () => {
-  assert.deepEqual([...PLAN_MODES], MODE_IDS);
-  const base = { goal: "g", steps: [{ title: "a", role: "impl", mode: "research" }] };
-  assert.equal(writePlanProblem(base), null);
-  assert.match(writePlanProblem({ ...base, steps: [{ title: "a", role: "impl", mode: "party" }] }), /mode/);
-  const plan = { v: 1, block: "b", defaults: { mode: "docs" }, steps: [{ id: "s1", node: "s1", role: "docs" }] };
-  assert.equal(planProblem(plan), null);
-  assert.equal(resolvedStep(plan, plan.steps[0]).mode, "docs");
-  assert.match(planProblem({ ...plan, defaults: { mode: "party" } }), /defaults\.mode must be one of/);
-  assert.match(planProblem({ ...plan, steps: [{ id: "s1", node: "s1", role: "docs", mode: "party" }] }), /steps\[0\]\.mode must be one of/);
 });
 
 // The mode list lives in the tool schema only; the lead prompt no longer repeats it (#766 prompt audit).

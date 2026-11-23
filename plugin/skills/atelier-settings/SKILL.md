@@ -5,7 +5,7 @@ description: Read and change Atelier's settings and machine-wide numbers — cos
 
 # Atelier settings
 
-`<plugin-root>` is two levels above this file's folder. Calls go through `<plugin-root>/scripts/api.sh [-C <project-root>] METHOD PATH [BODY]`. Full fields: `../atelier-setup/reference/api.md` ("Providers and settings") and `docs/workspace-api.md` ("Workspace folders").
+`<plugin-root>` is two levels above this file's folder. Calls go through `<plugin-root>/scripts/api.sh [-C <project-root>] METHOD PATH [BODY]`. Full fields: `../atelier-setup/reference/api.md` ("Providers and settings").
 
 ## Read
 

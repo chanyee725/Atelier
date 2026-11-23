@@ -1,106 +1,30 @@
 // 작업 보기 (E673, #905): what the session is making right now, read-only, inside the agent live view.
-// - Writing a document: the held document (`agent.file`) drawn read-only, diagrams included; it reloads on the
-//   workspace `change` event of that file (the same event that reloads an open editor).
-// - Writing code: GET /api/sessions/:id/diff every few seconds while the panel is on screen and the tab is visible;
-//   the changed files with +/− counts, the newest one unfolded. A file link from 진행 (`reveal`, #905) switches to
-//   this view, unfolds that file and focuses its row; a file the session did not change has no diff to show.
+// GET /api/sessions/:id/diff every few seconds while the panel is on screen and the tab is visible: the changed files
+// with +/− counts, the newest one unfolded. A file link from 진행 (`reveal`, #905) switches to this view, unfolds that
+// file and focuses its row; a file the session did not change has no diff to show.
 // File contents stay in memory only; nothing is stored or logged.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, FileText } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { LiveFile } from '../../../shared/dispatch/live.ts';
-import { api, type DpxFile } from '../api';
-import { RenderedDoc } from '../doc/RenderedDoc';
-import type { WorkspaceEvent } from '../externalChange';
-import { events } from '../lib/events.ts';
 import { FOCUS_RING } from '../lib/focus';
 import { cn } from '../lib/utils';
 import type { FileDiff } from '../dispatch/lib/patch.ts';
-import { stem } from '../movePaths';
 import { middle } from './format';
-import { changedFiles, samePath, WORK_POLL_MS, workMode, type ChangedFile, type DiffAnswer } from './workView';
+import { changedFiles, samePath, WORK_POLL_MS, type ChangedFile, type DiffAnswer } from './workView';
 
 interface Props {
   sid: string;
-  /** `agent.file` and when it was last touched (presence). */
-  file: string | null;
-  fileAt: number | null;
   step?: string;
   statusLabel?: string;
   files: readonly LiveFile[];
   /** The panel is on screen (not hidden under a session sheet). */
   shown: boolean;
-  dark: boolean;
-  /** A code file a link asked to see: shows the code view with that file unfolded. */
+  /** A code file a link asked to see: shows that file unfolded. */
   reveal?: string | null;
-  onOpenFile: (path: string) => void;
 }
 
 export function AgentWorkView(p: Props) {
-  const mode = p.reveal ? 'code' : workMode(p.file, p.fileAt, p.files);
-  return mode === 'doc' && p.file ? (
-    <DocWork path={p.file} dark={p.dark} onOpenFile={p.onOpenFile} />
-  ) : (
-    <CodeWork sid={p.sid} files={p.files} shown={p.shown} step={p.step} statusLabel={p.statusLabel} reveal={p.reveal ?? null} />
-  );
-}
-
-function DocWork({ path, dark, onOpenFile }: { path: string; dark: boolean; onOpenFile: (path: string) => void }) {
-  const [doc, setDoc] = useState<DpxFile | null>(null);
-  const [state, setState] = useState<'loading' | 'ok' | 'failed' | 'gone'>('loading');
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    let live = true;
-    let seq = 0;
-    setDoc(null);
-    setState('loading');
-    const load = () => {
-      const mine = ++seq;
-      api.readFile(path).then(
-        (f) => {
-          if (!live || mine !== seq) return;
-          setDoc(f);
-          setState('ok');
-        },
-        () => live && mine === seq && setState((s) => (s === 'ok' ? s : 'failed')),
-      );
-    };
-    const off = events.subscribeJson<WorkspaceEvent>('workspace', (e) => {
-      if (e.kind === 'change' && stem(e.path) === stem(path)) load();
-      else if (e.kind === 'delete' && stem(e.path) === stem(path)) setState('gone');
-    });
-    load();
-    return () => {
-      live = false;
-      off();
-    };
-  }, [path, attempt]);
-
-  return (
-    <>
-      <section className="agent-work-doc-head">
-        <FileText aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="agent-live-target" title={path}>{middle(path, 40)}</span>
-        <button type="button" onClick={() => onOpenFile(path)} className={cn('agent-live-btn', FOCUS_RING)}>문서에서 열기</button>
-      </section>
-      <section className="agent-work-doc" aria-live="off">
-        {state === 'gone' ? (
-          <p className="agent-live-muted">문서가 지워졌거나 옮겨졌어요</p>
-        ) : state === 'failed' ? (
-          <>
-            <p className="agent-live-error">문서를 불러오지 못했어요</p>
-            <button type="button" onClick={() => setAttempt((n) => n + 1)} className={cn('agent-live-btn', FOCUS_RING)}>다시 시도</button>
-          </>
-        ) : !doc ? (
-          <p className="agent-live-muted">문서를 불러오는 중이에요…</p>
-        ) : (
-          <>
-            {doc.title && <h3 className="agent-work-title">{doc.title}</h3>}
-            <RenderedDoc v={doc} idPrefix={`work:${path}`} dark={dark} keep />
-          </>
-        )}
-      </section>
-    </>
-  );
+  return <CodeWork sid={p.sid} files={p.files} shown={p.shown} step={p.step} statusLabel={p.statusLabel} reveal={p.reveal ?? null} />;
 }
 
 /** Polls the session diff while `shown` and the tab is visible; the same patch does not re-render. */

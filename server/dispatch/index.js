@@ -254,7 +254,7 @@ export async function setup(ctx, deps = {}) {
   if (!claim.ok) return off(claim.reason, claim.port);
   let d;
   try {
-    const topFolders = async () => ((await ctx.modules.workspace?.store?.tree()) ?? []).filter(n => n.type === "folder").map(n => n.name);
+    const topFolders = async () => (await ctx.modules.workspace?.topFolders?.()) ?? [];
     d = await createDispatch({ root: found.root, layout: claim.layout, workspaceDir: ctx.workspaceDir, broadcast: ctx.hub.broadcast, port: () => ctx.port, deps: { topFolders, ...(ctx.modules.userDefaults?.defaults && { userDefaults: ctx.modules.userDefaults.defaults }), ...(ctx.spawnCli && { spawnCli: ctx.spawnCli }), ...deps } });
   } catch (e) {
     await claim.lock.release();

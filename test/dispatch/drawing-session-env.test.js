@@ -40,7 +40,7 @@ test("DRAWING_SESSION is the session id in the CLI env, and the prompt says to s
   assert.ok(call, "claude was spawned");
   assert.equal(call.env.DRAWING_SESSION, s.id);
   const system = call.args[call.args.indexOf("--append-system-prompt") + 1];
-  assert.match(system, /x-drawing-session: \$DRAWING_SESSION/);
+  assert.doesNotMatch(system, /x-drawing-session/); // no workspace writes left to credit
 });
 
 for (const [role, bin] of [["codex", "codex"], ["agy", "agy"]]) {

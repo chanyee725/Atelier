@@ -8,16 +8,14 @@ import {
   subjectOf,
 } from "../../../shared/dispatch/agent-activity.ts";
 
-/** Categories the user can turn off in 설정 > 일반 > 알림. */
+/** Toast categories. "agents" and "files" stay in the type for saved preferences, but documents are gone, so 설정 no longer lists them. */
 export type ToastCategory =
   "agents" | "files" | "sessions" | "models" | "runs" | "settings";
 
 export const TOAST_CATEGORIES: { id: ToastCategory; label: string }[] = [
-  { id: "agents", label: "에이전트 문서 작업" },
-  { id: "files", label: "파일 저장·만들기·지우기·옮기기" },
   { id: "sessions", label: "팀과 세션" },
   { id: "models", label: "모델 연결" },
-  { id: "runs", label: "파이프라인 실행과 PR" },
+  { id: "runs", label: "PR 변화" },
   { id: "settings", label: "설정 저장" },
 ];
 

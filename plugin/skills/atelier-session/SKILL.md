@@ -33,5 +33,5 @@ description: Run and steer single Atelier agent sessions — start one Claude, C
 
 ## Handing a project to a lead (main session)
 
-- Once a project is handed to a lead, the main session writes no documents, diagrams or analysis for it. A new request goes to that lead with `POST /api/sessions/<id>/message`; the main session only asks the user and relays the answers to the lead.
-- Every handoff message names the exact server URL (port and project name) and the guides `docs/workspace-api.md` and `docs/agent-diagrams.md`, so the lead never searches widely (`find /`).
+- Once a project is handed to a lead, the main session writes no code or analysis for it. A new request goes to that lead with `POST /api/sessions/<id>/message`; the main session only asks the user and relays the answers to the lead.
+- Every handoff message names the exact server URL (port and project name) and the API guide `plugin/skills/atelier-setup/reference/api.md`, so the lead never searches widely (`find /`).

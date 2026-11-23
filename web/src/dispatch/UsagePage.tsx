@@ -5,7 +5,7 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { cn } from '../lib/utils';
-import { roleColor } from '../run/overlayModel';
+import { roleColor } from './lib/roles';
 import { burnWarnText, fmtK, fmtRate, fmtUsd, pct, totalTok, until } from './lib/format.ts';
 import {
   WEEK, aggregate, burnNow, cacheRate, createUsageRefetcher, outliers, projectUsageFail, projectUsageOk, projectUsageShown, topSessions, totals,

@@ -1,4 +1,4 @@
-// shadcn/ui (MIT) new-york Command (cmdk), adapted: relative imports; the dialog wrapper lives in CommandPalette.
+// shadcn/ui (MIT) new-york Command (cmdk), adapted: relative imports.
 import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 import { SearchIcon } from 'lucide-react';

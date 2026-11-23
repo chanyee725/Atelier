@@ -10,7 +10,7 @@ import { SharedLimits } from "../../server/dispatch/limits.js";
 import { staticModels } from "../../server/dispatch/models.js";
 import { ROLES } from "../../server/dispatch/roles.js";
 import { resolveProfile } from "../../server/dispatch/mode-profiles.js";
-import { etaHint, lanePlanArgs, laneItems, recordRunTime } from "../../server/dispatch/lanes.js";
+import { etaHint, laneItems, recordRunTime } from "../../server/dispatch/lanes.js";
 
 const dirs = [];
 after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -43,16 +43,6 @@ test("laneItems: quickfix is exactly one impl, design or docs session", () => {
   for (const role of ["lead", "review", "test"]) assert.throws(() => laneItems([{ role }], "quickfix"), e => e.status === 400, role);
   assert.throws(() => laneItems([{ role: "impl", n: 2 }], "quickfix"), e => e.status === 400 && /세션 하나/.test(e.message));
   assert.throws(() => laneItems([{ role: "impl" }, { role: "docs" }], "quickfix"), e => e.status === 400 && /2개/.test(e.message));
-  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl", n: 2 }], lane: "quickfix" }), e => e.status === 400);
-  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "lead" }], lane: "quickfix" }), e => e.status === 400);
-});
-
-test("lanePlanArgs: quickfix is one step that autostarts in the quickfix mode; lane never reaches the plan", () => {
-  assert.deepEqual(lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl" }], lane: "normal" }), { goal: "g", steps: [{ title: "a", role: "impl" }] });
-  assert.deepEqual(lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl" }], lane: "quickfix" }),
-    { goal: "g", autostart: true, steps: [{ mode: "quickfix", title: "a", role: "impl" }] });
-  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "impl" }, { title: "b", role: "impl" }], lane: "quickfix" }), /단계 하나/);
-  assert.throws(() => lanePlanArgs({ goal: "g", steps: [{ title: "a", role: "review" }], lane: "quickfix" }), /세션 하나/);
 });
 
 test("create: a quickfix passes a waiting plan gate and runs Opus 5.5; normal is still gated", async () => {
@@ -88,8 +78,8 @@ test("run times: merged tasks feed a per-lane median; capped; none yet is null",
 });
 
 test("agent prompts call the tool Atelier, carry the lanes and the merge hand-off, and drop emphasis", async () => {
-  const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE } = await import("../../server/dispatch/roles.js");
-  const all = [SPAWN_PROMPT, CHILD_PROMPT, DRAWING_WRITE_NOTE, ...roles.map(r => r.prompt)].join("\n");
+  const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT } = await import("../../server/dispatch/roles.js");
+  const all = [SPAWN_PROMPT, CHILD_PROMPT, ...roles.map(r => r.prompt)].join("\n");
   assert.doesNotMatch(all, /Dispatch|Drawing|IMPORTANT|NEVER|반드시/);
   assert.match(SPAWN_PROMPT, /아틀리에\(Atelier\)/);
   for (const lane of ["quickfix", "normal", "risky"]) assert.match(SPAWN_PROMPT, new RegExp(`- ${lane}:`));
@@ -100,12 +90,8 @@ test("agent prompts call the tool Atelier, carry the lanes and the merge hand-of
   assert.match(SPAWN_PROMPT, /머지 담당\(merge\)/);
   assert.match(SPAWN_PROMPT, /normal·risky에서만 modern-web-guidance/);
   assert.doesNotMatch(SPAWN_PROMPT, /20분/);
-  // Areas (#782): no fixed list, taken from the project, reused; plans drafted in 기획 and moved on 시작하기 (#1045).
-  assert.match(SPAWN_PROMPT, /\[영역\]/);
-  assert.match(SPAWN_PROMPT, /기획\/<기능>\/계획\.dpx\.json/);
-  assert.match(SPAWN_PROMPT, /시작하기 때 <영역>\/<기능>\/으로 옮겨진다/);
-  assert.match(SPAWN_PROMPT, /고정 목록이 아니다/);
-  assert.match(SPAWN_PROMPT, /이미 있는 영역을 다시 쓴다/);
+  // Plans, documents and diagrams are gone: no plan tools or document areas in the prompts.
+  assert.doesNotMatch(all, /write_plan|note_step|\[영역\]|dpx\.json/);
   assert.doesNotMatch(all, /pipelines/);
   assert.match(SPAWN_PROMPT, /리뷰어는 늘 새 세션이고 작성자가 아니다/);
   for (const p of [SPAWN_PROMPT, CHILD_PROMPT]) {
@@ -128,20 +114,12 @@ test("implementer and designer prompts carry the UI library rules (#764)", async
   for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /Sonner/);
 });
 
-test("implementer and designer prompts, team rules and the diagram skill name Eraser.io as the design reference (#1066)", async () => {
+test("role prompts point at no removed Eraser reference docs (#1070)", async () => {
   const { ROLES: roles } = await import("../../server/dispatch/roles.js");
-  const { readFileSync } = await import("node:fs");
-  const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
-  const texts = [
-    ...["impl", "design"].map(id => roles.find(r => r.id === id).prompt),
-    read("plugin/skills/atelier-team/reference/rules.md"),
-    read("plugin/skills/atelier-diagram/SKILL.md"),
-  ];
-  for (const t of texts) {
-    assert.match(t, /Eraser\.io/);
-    for (const ref of ["02-diagram-as-code-ai.md", "04-visual-design.md", "09-examples/", "09-examples-style.md"]) assert.ok(t.includes(ref), ref);
+  for (const r of roles) {
+    assert.doesNotMatch(r.prompt, /\[Eraser 기준\]/);
+    assert.doesNotMatch(r.prompt, /docs\/research\/eraser/);
   }
-  for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /\[Eraser 기준\]/);
 });
 
 test("docs role and lead prompt carry the writing style; other roles do not (#737)", async () => {

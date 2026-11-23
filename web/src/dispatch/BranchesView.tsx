@@ -5,7 +5,7 @@
 import { useId, useMemo, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { roleColor } from '../run/overlayModel';
+import { roleColor } from './lib/roles';
 import { initials } from '../home/issueBoard';
 import { boardHash } from '../projectNav';
 import { ago, TONE_TEXT } from './lib/format.ts';

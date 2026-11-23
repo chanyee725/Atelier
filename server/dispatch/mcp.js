@@ -2,7 +2,7 @@
 // Minimal MCP stdio server that lets a lead session drive Atelier's session hub over its local HTTP API.
 // Spawned by Claude Code (--mcp-config), Codex (mcp_servers.dispatch) or agy with DISPATCH_URL / DISPATCH_PARENT.
 
-import { LANES, lanePlanArgs } from "./lanes.js";
+import { LANES } from "./lanes.js";
 
 // Only this machine's loopback: a DISPATCH_URL pointing anywhere else is refused, and there is no
 // default port to fall back to (the server passes its own URL when it starts a session).
@@ -172,57 +172,10 @@ const LEAD_TOOLS = [
     },
   },
   {
-    name: "write_plan",
-    description: "팀원을 만들기 전에 계획을 파일로 쓴다(문서 + 단계 다이어그램). 고칠 때는 path 없이 다시 부른다. 쓴 뒤 path와 \"검토 후 시작하기를 눌러 주세요\" 한 줄로 턴을 끝낸다. 승인 전에는 create_sessions가 거절된다. lane: \"quickfix\"는 단계 하나로 바로 시작한다.",
-    inputSchema: {
-      type: "object",
-      required: ["goal", "steps"],
-      properties: {
-        path: { type: "string", description: "워크스페이스 안 파일 경로. 생략하면 내 초안을 고치거나 기획/<feature>/계획.dpx.json으로 새로 만든다(시작하기 때 <area>/<feature>/로 옮겨진다)" },
-        area: { type: "string", description: "영역 폴더(워크스페이스 최상위 한 단계, 예: Web, Server). 프로젝트 구조를 보고 정하고 있는 영역을 다시 쓴다. 생략하면 단계 files가 가장 많은 영역, 그다음 내 영역" },
-        feature: { type: "string", description: "기능 폴더 이름(한 단계, 20자 이내). 생략하면 제목" },
-        title: { type: "string", description: "계획 제목: 12자 안팎, 최대 20자 명사구. 생략하면 goal 앞부분(20자)" },
-        goal: { type: "string", description: "목표 한두 문장" },
-        steps: {
-          type: "array",
-          items: {
-            type: "object",
-            required: ["title", "role"],
-            properties: {
-              id: { type: "string", description: "단계 id (영문·숫자·-·_). 생략하면 s1, s2…" },
-              title: { type: "string" },
-              role: { type: "string", description: "역할 id (list_roles 참고)" },
-              model: { type: "string", description: "모델 id (list_roles 참고). 생략하면 역할 기본값" },
-              effort: { type: "string" },
-              perm: { type: "string", enum: ["manual", "acceptEdits", "auto", "plan"] },
-              mode: MODE_PROP,
-              n: { type: "integer", minimum: 1, maximum: 4, description: "이 단계의 세션 수" },
-              after: { type: "array", items: { type: "string" }, description: "먼저 끝나야 하는 단계 id" },
-              files: { type: "array", items: { type: "string" }, description: "건드릴 파일. 두 단계가 같은 파일을 건드리지 않게 나눈다" },
-              done: { type: "string", description: "끝 조건 (예: auth.test 통과)" },
-              task: { type: "string", description: "팀원에게 줄 자세한 지시" },
-            },
-          },
-        },
-        risks: { type: "array", items: { type: "string" } },
-        asks: { type: "array", items: { type: "string" }, description: "쓰지 않아요. 질문은 POST /api/file/discussions로 올려요 (계획 문서에는 넣지 않아요)" },
-        autostart: { type: "boolean", description: "단계가 하나일 때만: 승인 없이 바로 시작" },
-        lane: LANE_PROP,
-      },
-    },
-    run: async args => api("POST", "/api/pipeline/plan", { ...lanePlanArgs(args), lead: PARENT }),
-  },
-  {
     name: "post_accounts",
     description: "이슈의 PR에 세션·모델·계정 요약(roles: …) 댓글 하나를 올린다. 다시 부르면 같은 댓글을 고친다. pr을 빼면 그 이슈의 PR을 찾아 쓴다.",
     inputSchema: { type: "object", required: ["issue"], properties: { issue: { type: "integer", description: "GitHub 이슈 번호" }, pr: { type: "integer", description: "PR 번호 (선택)" } } },
     run: async ({ issue, pr }) => api("POST", `/api/issues/${Number(issue)}/accounts/comment`, pr == null ? {} : { pr }),
-  },
-  {
-    name: "note_step",
-    description: "실행 중인 계획의 한 단계에 한 줄 메모(200자, 대화 내용 없이). 예: 리뷰 must-fix 1건 고쳐서 다시 올림",
-    inputSchema: { type: "object", required: ["step", "text"], properties: { step: { type: "string", description: "단계 id" }, text: { type: "string" } } },
-    run: async ({ step, text }) => api("POST", "/api/pipeline/note", { lead: PARENT, step, text }),
   },
   {
     name: "stop_session",
