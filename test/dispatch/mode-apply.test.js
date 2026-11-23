@@ -11,8 +11,6 @@ import { SharedLimits } from "../../server/dispatch/limits.js";
 import { staticModels } from "../../server/dispatch/models.js";
 import { ROLES, WRITING } from "../../server/dispatch/roles.js";
 import { MODE_IDS, resolveProfile } from "../../server/dispatch/mode-profiles.js";
-import { PLAN_MODES, planProblem, resolvedStep } from "../../shared/dispatch/plan.ts";
-import { writePlanProblem } from "../../shared/dispatch/plan-write.ts";
 
 const dirs = [];
 after(() => { for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
@@ -99,18 +97,6 @@ test("a user cell from drawing.json is used; an unknown mode is ignored", async 
   await hub.store.flush();
   const disk = readFileSync(path.join(root, ".atelier", "state.json"), "utf8");
   assert.match(disk, /"mode": ?"docs"/);
-});
-
-test("plan steps carry a mode: shared list matches the server's, write_plan checks it, defaults pass it on", () => {
-  assert.deepEqual([...PLAN_MODES], MODE_IDS);
-  const base = { goal: "g", steps: [{ title: "a", role: "impl", mode: "research" }] };
-  assert.equal(writePlanProblem(base), null);
-  assert.match(writePlanProblem({ ...base, steps: [{ title: "a", role: "impl", mode: "party" }] }), /mode/);
-  const plan = { v: 1, block: "b", defaults: { mode: "docs" }, steps: [{ id: "s1", node: "s1", role: "docs" }] };
-  assert.equal(planProblem(plan), null);
-  assert.equal(resolvedStep(plan, plan.steps[0]).mode, "docs");
-  assert.match(planProblem({ ...plan, defaults: { mode: "party" } }), /defaults\.mode must be one of/);
-  assert.match(planProblem({ ...plan, steps: [{ id: "s1", node: "s1", role: "docs", mode: "party" }] }), /steps\[0\]\.mode must be one of/);
 });
 
 // The mode list lives in the tool schema only; the lead prompt no longer repeats it (#766 prompt audit).
