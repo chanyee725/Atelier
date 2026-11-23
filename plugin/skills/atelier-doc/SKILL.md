@@ -19,9 +19,11 @@ Documents are `.dpx.json` files in the workspace (`<project>/atelier`). The API 
    - Each section opens with what the reader can do or check. One idea per paragraph; a side issue goes last as "따로: …".
    - Numbered steps for anything with more than one step, at most 5 items per list.
    - Concrete estimates ("15분", "파일 3개"), never "조금".
-   - End with 끝난 것 and 남은 것 lists. Analysis docs then end with a "관련 코드" section: real paths, functions and endpoints.
+   - End with 끝난 것 and 남은 것 lists. 남은 것 is work still to do, never questions for the user. Analysis docs then end with a "관련 코드" section: real paths, functions and endpoints.
    Done when: the first line of the document and of each section is an action or a finding, and 남은 것 is there.
-4. Check privacy. No transcripts, tokens, keys, emails or real names in the document.
+4. Ask decisions where they belong, not in a list. Never write a "확인 필요", "결정할 것" or "열린 질문" section at the end. A decision the user makes goes on the block, node or text it concerns as a document question (`atelier-questions`), or comes up in the document's chat (the user presses 관리자와 대화 at the top right; the first message names the document path). When the answer comes, write it into the body where it belongs in the same turn. An older document that still has such a list: delete each decided item, and the whole section once it is empty.
+   Done when: the document has no question list, and every answered decision reads as settled text in the body.
+5. Check privacy. No transcripts, tokens, keys, emails or real names in the document.
    Done when: you read the final text once for those.
 
 For a diagram inside the document use `atelier-diagram`.
