@@ -4,7 +4,7 @@
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, parse, resolve, sep } from 'node:path';
-import { StoreError } from './store.js';
+import { StoreError } from './errors.js';
 
 // A folder with more sub-folders than this is cut off (the list says so); keeps one response small.
 export const MAX_FOLDERS = 2000;

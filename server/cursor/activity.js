@@ -44,24 +44,14 @@ export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS
     if (!timer) timer = setTimeout(flush, writeDelayMs);
   };
 
-  // Titles are read from the file as each event is made; events go out in order (one chain).
-  const store = ctx.modules.workspace?.store;
-  const titleOf = async (rel) => {
-    try {
-      const f = await store?.readFile(rel);
-      return typeof f?.title === 'string' && f.title.trim() ? f.title.trim().slice(0, 80) : null;
-    } catch {
-      return null;
-    }
-  };
+  // Events go out in order (one chain).
   let seq = 0;
   let chain = Promise.resolve();
   const emit = (e) => {
     // One failing event (a throwing broadcast) must not reject the chain, or every later event would be lost.
     chain = chain
-      .then(async () => {
-        const title = await titleOf(e.file);
-        const ev = { id: `${e.at}-${++seq}`, ...e, ...(title ? { title } : {}) };
+      .then(() => {
+        const ev = { id: `${e.at}-${++seq}`, ...e };
         log.events.push(ev);
         if (log.events.length > ACTIVITY_MAX) log.events.splice(0, log.events.length - ACTIVITY_MAX);
         save();
@@ -71,10 +61,9 @@ export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS
     return chain;
   };
 
-  const cursor = ctx.modules.cursor;
-  const hub = cursor?.onHeld ? ctx.modules.dispatch?.hub ?? null : null;
+  // The documents whose edits started and finished stays are gone, so only past events and session state remain.
+  const hub = ctx.modules.dispatch?.hub ?? null;
   const activity = createActivityLog({ emit, session: (sid) => hub?.get?.(sid) ?? null, now });
-  const offHeld = cursor?.onHeld ? cursor.onHeld((e) => activity.held(e)) : () => {};
   const onSession = (s) => activity.sessionUpdate(s);
   hub?.on('session', onSession);
 
@@ -92,7 +81,6 @@ export async function setup(ctx, { now = Date.now, writeDelayMs = WRITE_DELAY_MS
       },
     ],
     async close() {
-      offHeld();
       hub?.off('session', onSession);
       await chain;
       if (timer) {
