@@ -29,11 +29,16 @@ for (const theme of ['light', 'dark'] as Theme[]) {
   });
 }
 
-// #935: a group without a colour shows its border at non-text contrast (3:1) on the canvas.
-for (const theme of ['light', 'dark'] as Theme[]) {
-  test(`neutral group border reads at 3:1 on the canvas (${theme})`, () => {
-    const p = resolvePaint({ mode: 'pastel' }, theme, true);
-    const r = ratio(p.stroke, THEMES[theme].background);
-    assert.ok(r >= 3, `${theme} group border ${p.stroke}: ${r.toFixed(2)}`);
-  });
-}
+// #935: a group without a colour shows its border at non-text contrast (3:1) on the dark canvas.
+test('neutral group border reads at 3:1 on the canvas (dark)', () => {
+  const p = resolvePaint({ mode: 'pastel' }, 'dark', true);
+  const r = ratio(p.stroke, THEMES.dark.background);
+  assert.ok(r >= 3, `dark group border ${p.stroke}: ${r.toFixed(2)}`);
+});
+
+// #1066 (user decision): the light theme takes Eraser's hairline group border instead; the group title
+// still reads at text contrast, so the group does not depend on the border.
+test('neutral group border is the Eraser hairline in light; the group title keeps 4.5:1', () => {
+  assert.equal(resolvePaint({ mode: 'pastel' }, 'light', true).stroke, '#eaecf0');
+  assert.ok(ratio(THEMES.light.groupText, THEMES.light.background) >= 4.5);
+});

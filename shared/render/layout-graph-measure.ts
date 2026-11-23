@@ -96,6 +96,9 @@ export function measureNode(d: GraphDiagram, node: GraphNode, inheritedColor?: s
 
 function measureNodeWith(d: GraphDiagram, node: GraphNode, icon: string | undefined, inheritedColor?: string): NodeGeom {
   const style = styleFor(d, node.attrs, node.span.line, inheritedColor);
+  // A node without a colour is drawn plain (light grey border, no shadow) unless the code asks for a
+  // style, as Eraser's neutral nodes are (#1066); coloured nodes keep the shadow.
+  if (!style.paint.color && (node.attrs.styleMode ?? d.styles.styleMode) === undefined) style.styleMode = 'plain';
   const size = fontSize(style);
   const shapeAttr = node.attrs.shape?.toLowerCase();
   if (shapeAttr === 'divider') {
