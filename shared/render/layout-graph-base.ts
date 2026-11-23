@@ -18,7 +18,9 @@ import { BAND_GAP, GRID_GAP, attachTail, bandColumns, gridColumns, packGrid, pla
 import type { Piece } from './layout-graph-pack.ts';
 import { GROUP_PAD, measureGroup, measureNode, runBand, unifySizes } from './layout-graph-measure.ts';
 import type { GroupGeom, NodeGeom } from './layout-graph-measure.ts';
-import { definitionOrder, flipped, freeChildren, rootLayers } from './layout-graph-order.ts';
+import { crossGroupBands, definitionOrder, flipped, freeChildren, rootLayers } from './layout-graph-order.ts';
+import { placeBands, rankFlow } from './layout-lanes.ts';
+import type { BandRoot } from './layout-lanes.ts';
 import { routeAcross, routeElbow } from './layout-graph-route.ts';
 
 const ELK_DIRECTION = { down: 'DOWN', up: 'UP', left: 'LEFT', right: 'RIGHT' } as const;
@@ -41,6 +43,8 @@ const ROUTE_ROOM = 12;
 
 /** Measure the diagram and run ELK. Async and slow; cache the result per AST (and per `options`). */
 export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {}): Promise<GraphBase> {
+  const bands = crossGroupBands(d, definitionOrder(d));
+  if (bands) return placedBase(d, (sizes) => placeCrossGroups(d, bands, sizes));
   await prepareIcons(d);
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
@@ -401,6 +405,52 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
   routeEdges(rects, parent, baseEdges.map((be) => ({ from: be.edge.from, to: be.edge.to, points: be.points, keep: be.forcedElbow })));
 
   return { nodes, groups, parent, rects, edges: baseEdges };
+}
+
+/** Space a labelled edge needs beside its label plate, at each end, where it jogs between two slots. */
+const LABEL_ROOM = 16;
+
+/**
+ * A flowchart whose flow goes back and forth between groups (#1066): groups as bands in source order, nodes
+ * in flow slots (longest path from a source), so every edge runs with the flow. A slot that a labelled edge
+ * leaves gets a gap wide enough for the label beside the jog (spec §1.5: a labelled layer gap is wider).
+ */
+function placeCrossGroups(d: GraphDiagram, roots: readonly BandRoot[], sizes: PlacedSizes): Map<string, Rect> {
+  const order = definitionOrder(d);
+  const ids = [...order.keys()].filter((id) => sizes.nodes.has(id));
+  const flow = d.edges.map((e) => (flipped(e, order) ? { from: e.to, to: e.from } : e));
+  const rank = rankFlow(ids, flow);
+  // A source sits right before its nearest target (as ELK's network-simplex layering pulls it), so its
+  // edge does not run along the whole flow past other nodes' edges. A target in another band takes the
+  // source in its own slot: the edge drops straight across the bands (spec §1.7: straight lines first).
+  const band = new Map(roots.flatMap((r, i) => r.bands.flatMap((b, j) => b.nodes.map((id) => [id, `${i}:${j}`] as const))));
+  const incoming = new Set(flow.filter((e) => e.from !== e.to).map((e) => e.to));
+  for (const id of ids) {
+    if (incoming.has(id)) continue;
+    const next = flow.filter((e) => e.from === id && e.to !== id).map((e) => (rank.get(e.to) ?? 0) - (band.get(e.to) === band.get(id) ? 1 : 0));
+    if (next.length > 0) rank.set(id, Math.max(rank.get(id) ?? 0, Math.min(...next)));
+  }
+  const across = d.direction === 'down';
+  const room = new Map<number, number>();
+  for (const e of d.edges) {
+    if (!e.label) continue;
+    const [a, b] = flipped(e, order) ? [e.to, e.from] : [e.from, e.to];
+    const r = rank.get(a);
+    if (r === undefined || (rank.get(b) ?? r) <= r) continue;
+    const style = styleFor(d, e.attrs, e.span.line);
+    const l = measureLabel(e.label, EDGE_LABEL_SIZE, style.typeface, style.wrap, 140);
+    const need = (across ? l.h + 4 : Math.ceil(l.w + PLATE_PAD * 2)) + 2 * LABEL_ROOM;
+    room.set(r, Math.max(room.get(r) ?? 0, need));
+  }
+  return placeBands(roots, rank, across, sizes, {
+    flowGap: SPACING.layer,
+    stackGap: 24,
+    lanePad: { side: 24, end: GROUP_PAD.bottom + 2 },
+    poolPad: { side: 0, end: 0 },
+    bandGap: 32,
+    bareHead: 0,
+    gapAfter: (r) => room.get(r) ?? 0,
+  });
 }
 
 /** Box sizes a caller-made layout places: measured nodes (flowchart sizes) and each group's header height. */
