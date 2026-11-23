@@ -42,6 +42,8 @@ type Props = {
   /** Project, documents and groups above the open document. */
   trail?: Crumb[];
   onCrumb?: (c: Crumb) => void;
+  /** 관리자와 대화 (#1057): talk to the document's lead in the chat dock. */
+  leadChat?: ReactNode;
   /** The export button and its menu. */
   exportMenu?: ReactNode;
   /** Opens the version history of the open file. */
@@ -53,7 +55,7 @@ type Props = {
 };
 
 /** The document screen's 52px header (design doc 6 §2.4, frame A). */
-export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onView, onTitle, narrow, onToggleNav, trail = [], onCrumb, exportMenu, onHistory, onSubDoc, onCommands }: Props) {
+export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onView, onTitle, narrow, onToggleNav, trail = [], onCrumb, leadChat, exportMenu, onHistory, onSubDoc, onCommands }: Props) {
   const save = saveState(status, statusAlert);
   return (
     <header className="flex h-(--h-bar) shrink-0 items-center gap-2 border-b px-2 md:pr-3 md:pl-5">
@@ -124,6 +126,7 @@ export function TopBar({ title, hasFile, status, statusAlert, view, canRun, onVi
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
+      {leadChat}
       {exportMenu}
       {/* Not modal, like the export menu: the header stays in the accessibility tree while it closes. */}
       <DropdownMenu modal={false}>

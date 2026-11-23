@@ -45,6 +45,8 @@ type Props = {
   prior: SavedMessage[] | null;
   /** The issue being talked about (#954), pinned at the top. */
   issue: AskedIssue | null;
+  /** The document being talked about with its lead (#1057), pinned at the top. */
+  doc?: ReactNode;
   /** Under the last entry; gets a function that puts the cursor in the message box (수정 요청). */
   after?: (focusInput: () => void) => ReactNode;
 };
@@ -81,6 +83,7 @@ export default function ChatPane(p: Props) {
         </div>
       </header>
       {issue && <IssueCard issue={issue} />}
+      {p.doc}
       {error && <Alert variant="destructive" className="rounded-none">{error}</Alert>}
       <div className="min-h-0 flex-1">
         {s ? (
@@ -89,7 +92,7 @@ export default function ChatPane(p: Props) {
           <ol className="chat-prior overlay-body-mid" aria-label="이전 대화">
             {prior.map((m, i) => (
               <li key={i} data-role={m.role}>
-                <span className="chat-prior-who">{m.role === 'user' ? '나' : '도우미'}</span>
+                <span className="chat-prior-who">{m.role === 'user' ? '나' : target.label}</span>
                 <p>{m.text || (m.tools?.length ? m.tools.map(t => t.name).join(', ') : '')}</p>
               </li>
             ))}
