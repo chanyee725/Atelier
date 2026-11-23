@@ -114,3 +114,30 @@ test('cross-group flow (#1066): groups keep source order across the flow, the fi
   const ys = ['서버', '사용자 PC 앱', '공통 녹화 패키지', 'Isaac Sim 서버 경로'].map((id) => groupsOf(scene).find((g) => g.id === id)!.y);
   assert.deepEqual([...ys].sort((a, b) => a - b), ys);
 });
+
+test('cross-group bands (#1066): only for a flow that goes back and forth between groups', async () => {
+  const { parse } = await import('../../shared/dsl/index.ts');
+  const { crossGroupBands, definitionOrder } = await import('../../shared/render/layout-graph-order.ts');
+  const bands = (code: string) => {
+    const { ast } = parse(code, 'flowchart');
+    assert.ok(ast.type === 'flowchart');
+    return crossGroupBands(ast, definitionOrder(ast));
+  };
+  const one = 'direction right\nA {\n  a1\n  a2\n}\nB {\n  b1\n}\n';
+  assert.equal(bands(`${one}a1 > b1\na2 > b1`), undefined, 'one way: ELK keeps the groups as blocks');
+  assert.deepEqual(bands(`${one}a1 > b1\nb1 > a2`), [{ bands: [{ id: 'A', nodes: ['a1', 'a2'] }] }, { bands: [{ id: 'B', nodes: ['b1'] }] }]);
+  assert.equal(bands(`${one.replace('right', 'left')}a1 > b1\nb1 > a2`), undefined, 'left keeps ELK');
+  assert.equal(bands(`${one}a1 > b1\nb1 > A`), undefined, 'an edge to a group keeps ELK');
+  assert.equal(bands(`direction right\nA {\n  a1\n  In {\n    i1\n  }\n}\nB {\n  b1\n}\na1 > b1\nb1 > i1`), undefined, 'nested groups keep ELK');
+});
+
+test('cross-group bands (#1066): a `down` flow puts the groups side by side, flow top to bottom', async () => {
+  const code = fixture('flowchart-cross-groups').replace('direction right', 'direction down');
+  const { scene } = await renderDiagram(code, { type: 'flowchart' });
+  const xs = ['서버', '사용자 PC 앱', '공통 녹화 패키지', 'Isaac Sim 서버 경로'].map((id) => groupsOf(scene).find((g) => g.id === id)!.x);
+  assert.deepEqual([...xs].sort((a, b) => a - b), xs);
+  for (const e of edgesOf(scene)) {
+    for (let i = 1; i < e.points.length; i++) assert.ok(e.points[i - 1]!.y - e.points[i]!.y <= 24, `${e.from} > ${e.to} runs up`);
+  }
+  assert.equal(layoutMetrics(scene).throughNodes, 0);
+});
