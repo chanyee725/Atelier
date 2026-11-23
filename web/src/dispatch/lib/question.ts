@@ -54,6 +54,90 @@ export function questionOf(text: string | null | undefined): Question | null {
   return { summary, options };
 }
 
+/** One choice of a question in the tabbed card (#1052). */
+export interface QuestionOption {
+  label: string;
+  /** The one-line reason after the label ("라벨 — 이유"), if any. */
+  reason?: string;
+  recommended?: boolean;
+}
+
+/** One question of a set shown as tabs 1/2/3/4: from AskUserQuestion's input or from "질문 N/M:" text. */
+export interface QuestionItem {
+  question: string;
+  /** Short tab caption (AskUserQuestion's `header`). */
+  header?: string;
+  options: QuestionOption[];
+  multiSelect: boolean;
+}
+
+/** "질문 2/4: 어느 쪽으로 할까요?" — group 1 is N, 2 is M, 3 the question. */
+const NUMBERED = /^(?:질문|question|q)\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*[:：.)]\s*(.+)$/i;
+const RECOMMENDED = /\s*[(（]\s*(?:추천|recommended)\s*[)）]\s*/i;
+const MULTI = /여러\s?개|복수\s?선택|모두\s?골라|다\s?골라|multiple|select all/i;
+const MAX_ITEMS = 8;
+
+/** "B안 (추천) — 빠름" → { label: 'B안', reason: '빠름', recommended: true }. */
+export function optionOf(item: string): QuestionOption {
+  let t = plain(item);
+  const recommended = RECOMMENDED.test(t);
+  if (recommended) t = t.replace(RECOMMENDED, ' ').replace(/\s+/g, ' ').trim();
+  const m = /^(.+?)(?:\s+[—–-]\s+|:\s+|：\s*)(.+)$/.exec(t);
+  const out: QuestionOption = { label: clip((m ? m[1]! : t).trim(), 80) };
+  if (m) out.reason = clip(m[2]!.trim(), 160);
+  if (recommended) out.recommended = true;
+  return out;
+}
+
+/**
+ * The numbered questions ("질문 1/4: …?" each followed by its 2–4 numbered choices) a text asks, in order, or null
+ * when it has none. A text with a single "질문 1/1:" is a set of one.
+ */
+export function questionsOf(text: string | null | undefined): QuestionItem[] | null {
+  if (!text) return null;
+  const lines = linesOf(text);
+  const found: { n: number; at: number; q: string }[] = [];
+  lines.forEach((l, i) => {
+    const m = NUMBERED.exec(plain(l));
+    if (m) found.push({ n: Number(m[1]), at: i, q: m[3]!.trim() });
+  });
+  if (!found.length) return null;
+  // A later "질문 1/…" starts a new set (a revised list): keep the last set only.
+  let first = 0;
+  for (let k = 1; k < found.length; k++) if (found[k]!.n <= found[k - 1]!.n) first = k;
+  const set = found.slice(first, first + MAX_ITEMS);
+  const items = set.map((f, k) => {
+    const end = k + 1 < set.length ? set[k + 1]!.at : lines.length;
+    const options: QuestionOption[] = [];
+    for (let i = f.at + 1; i < end; i++) {
+      const m = ITEM.exec(lines[i]!);
+      if (!m) { if (options.length) break; continue; }
+      const o = optionOf(m[1]!);
+      if (o.label && !options.some(x => x.label === o.label)) options.push(o);
+    }
+    return { question: clip(plain(f.q), 240), options: options.slice(0, MAX_OPTIONS), multiSelect: MULTI.test(f.q) };
+  });
+  return items;
+}
+
+/** One answer in the card: the picked labels plus the "직접 입력" text. */
+export interface QuestionAnswer {
+  picked: string[];
+  other: string;
+}
+
+/** The answer as one string ("A, B, 직접 쓴 말"), or "" when nothing is picked or typed. */
+export function answerValue(a: QuestionAnswer | undefined): string {
+  if (!a) return '';
+  return [...a.picked, a.other.trim()].filter(Boolean).join(', ');
+}
+
+/** All answers of a text question set as one message, one question per block. */
+export function answersMessage(items: readonly QuestionItem[], answers: readonly (QuestionAnswer | undefined)[]): string {
+  const m = items.length;
+  return items.map((q, i) => `질문 ${i + 1}/${m}: ${q.question}\n답: ${answerValue(answers[i]) || '(답 없음)'}`).join('\n\n');
+}
+
 /** Shown when a session waits for an answer but no question can be read (#886): never an empty card. */
 export const NO_QUESTION: Question = { summary: '질문 내용을 찾지 못했어요. 대화의 마지막 메시지를 보고 답해 주세요.', options: [] };
 
@@ -66,11 +150,23 @@ export function answerQuestion(
   s: { ask?: string | null },
   entries: readonly { kind: string; text: string }[] | undefined,
 ): Question {
-  let text: string | undefined;
+  const text = lastAnswerText(entries);
+  return questionOf(text) ?? questionOf(s.ask) ?? (s.ask ? { summary: clip(s.ask, 240), options: [] } : NO_QUESTION);
+}
+
+type EntryLike = { kind: string; text: string };
+
+/** The last assistant text of the current turn (nothing after the person's last message), if any. */
+function lastAnswerText(entries: readonly EntryLike[] | undefined): string | undefined {
   for (let i = (entries?.length ?? 0) - 1; i >= 0; i--) {
     const e = entries![i]!;
-    if (e.kind === 'user') break;
-    if (e.kind === 'assistant') { text = e.text; break; }
+    if (e.kind === 'user') return undefined;
+    if (e.kind === 'assistant') return e.text;
   }
-  return questionOf(text) ?? questionOf(s.ask) ?? (s.ask ? { summary: clip(s.ask, 240), options: [] } : NO_QUESTION);
+  return undefined;
+}
+
+/** The "답할 것" card's numbered question set (#1052), from the transcript, else the server's `ask`, else null. */
+export function answerQuestions(s: { ask?: string | null }, entries: readonly EntryLike[] | undefined): QuestionItem[] | null {
+  return questionsOf(lastAnswerText(entries)) ?? questionsOf(s.ask);
 }
