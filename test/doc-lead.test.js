@@ -113,3 +113,18 @@ test('a plan file names its lead from the pipeline entry', async () => {
     assert.deepEqual([r.body.lead.name, r.body.source], ['Sam', 'plan']);
   });
 });
+
+test('without agent sessions the answer says so, and the button hides', async () => {
+  const ws = await mkdtemp(join(tmpdir(), 'draw-doclead-'));
+  const app = await createApp({ workspaceDir: ws }, { publicDir: ws, moduleList: [{ name: 'workspace', setup: workspace.setup }] });
+  await new Promise((r) => app.server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${app.server.address().port}`;
+  try {
+    await fetch(`${base}/api/file`, { method: 'POST', headers: { 'x-drawing': '1', 'content-type': 'application/json' }, body: JSON.stringify({ path: 'A/b' }) });
+    const r = await (await fetch(base + U('A/b'))).json();
+    assert.deepEqual(r, { path: 'A/b.dpx.json', lead: null, source: null, dispatch: false });
+  } finally {
+    await app.close();
+    await rm(ws, { recursive: true, force: true });
+  }
+});

@@ -222,7 +222,7 @@ export async function setup(ctx) {
       route('GET', '/api/file/lead', async (p) => {
         const f = await store.readFile(need(p, 'path'));
         const view = hubView();
-        if (!view) return { path: f.path, lead: null, source: null };
+        if (!view) return { path: f.path, lead: null, source: null, dispatch: false };
         const data = dstore()?.data ?? {};
         const planLead = data.pipelines?.[f.path]?.lead ?? null;
         return { path: f.path, ...docLead({ path: f.path, docLeads: data.docLeads, planLead, discussions: f.discussions }, view) };
