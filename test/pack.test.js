@@ -109,8 +109,7 @@ test('pack: shipped plugin has valid manifests, hooks.json and skills', () => {
   const codexMp = JSON.parse(readFileSync(join(dir, '.agents/plugins/marketplace.json'), 'utf8'));
   assert.deepEqual(codexMp.plugins.map((p) => [p.name, p.source.path]), [['atelier', './']]);
   assert.ok(JSON.parse(readFileSync(join(dir, 'hooks/hooks.json'), 'utf8')).hooks.PostToolUse);
-  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-plan', 'atelier-doc', 'atelier-diagram', 'atelier-organize', 'atelier-status', 'atelier-update',
-    'atelier-session', 'atelier-run', 'atelier-canvas', 'atelier-files', 'atelier-questions', 'atelier-settings'];
+  const skills = ['atelier-setup', 'atelier-team', 'atelier-quickfix', 'atelier-status', 'atelier-update', 'atelier-session', 'atelier-settings'];
   assert.deepEqual(readdirSync(join(dir, 'skills')).sort(), [...skills].sort());
   for (const s of skills) {
     const md = readFileSync(join(dir, 'skills', s, 'SKILL.md'), 'utf8');
