@@ -47,14 +47,15 @@ export async function graphBase(d: GraphDiagram, options: GraphLayoutOptions = {
   const parent = new Map<string, string | undefined>();
   const elkId = (id: string): string => `n:${id}`;
 
-  const measure = (child: GraphChild, parentId: string | undefined): void => {
+  const measure = (child: GraphChild, parentId: string | undefined, color?: string): void => {
     parent.set(child.id, parentId);
     if (child.kind === 'node') {
-      nodes.set(child.id, measureNode(d, child));
+      nodes.set(child.id, measureNode(d, child, color));
       return;
     }
-    groups.set(child.id, measureGroup(d, child));
-    for (const c of child.children) measure(c, child.id);
+    const geom = measureGroup(d, child, color);
+    groups.set(child.id, geom);
+    for (const c of child.children) measure(c, child.id, geom.style.paint.color);
   };
   for (const c of d.children) measure(c, undefined);
   const order = definitionOrder(d);
@@ -418,14 +419,15 @@ export async function placedBase(d: GraphDiagram, place: (sizes: PlacedSizes) =>
   const nodes = new Map<string, NodeGeom>();
   const groups = new Map<string, GroupGeom>();
   const parent = new Map<string, string | undefined>();
-  const measure = (child: GraphChild, parentId: string | undefined): void => {
+  const measure = (child: GraphChild, parentId: string | undefined, color?: string): void => {
     parent.set(child.id, parentId);
     if (child.kind === 'node') {
-      nodes.set(child.id, measureNode(d, child));
+      nodes.set(child.id, measureNode(d, child, color));
       return;
     }
-    groups.set(child.id, measureGroup(d, child));
-    for (const c of child.children) measure(c, child.id);
+    const geom = measureGroup(d, child, color);
+    groups.set(child.id, geom);
+    for (const c of child.children) measure(c, child.id, geom.style.paint.color);
   };
   for (const c of d.children) measure(c, undefined);
   unifySizes(nodes.values(), parent, new Map(), new Set());

@@ -87,14 +87,15 @@ function measureSub(node: GraphNode, style: ElementStyle, maxWidth: number): Lab
 /** Height of the title plus the subtitle under it. */
 export const textHeight = (label: Label, sub: Label | undefined): number => label.h + (sub ? SUBTITLE_GAP + sub.h : 0);
 
-export function measureNode(d: GraphDiagram, node: GraphNode): NodeGeom {
+/** `inheritedColor`: the colour of the nearest coloured group around the node, used when the node has no `color`. */
+export function measureNode(d: GraphDiagram, node: GraphNode, inheritedColor?: string): NodeGeom {
   const icon = node.attrs.icon ?? nodeAutoIcon(d, node);
-  const geom = measureNodeWith(d, node, icon);
+  const geom = measureNodeWith(d, node, icon, inheritedColor);
   return geom.iconSize ? { ...geom, icon } : geom;
 }
 
-function measureNodeWith(d: GraphDiagram, node: GraphNode, icon: string | undefined): NodeGeom {
-  const style = styleFor(d, node.attrs, node.span.line);
+function measureNodeWith(d: GraphDiagram, node: GraphNode, icon: string | undefined, inheritedColor?: string): NodeGeom {
+  const style = styleFor(d, node.attrs, node.span.line, inheritedColor);
   const size = fontSize(style);
   const shapeAttr = node.attrs.shape?.toLowerCase();
   if (shapeAttr === 'divider') {
@@ -215,8 +216,8 @@ export function unifySizes(
     for (const g of list) g.h = h;
   }
 }
-export function measureGroup(d: GraphDiagram, group: GraphGroup): GroupGeom {
-  const style = styleFor(d, group.attrs, group.span.line);
+export function measureGroup(d: GraphDiagram, group: GraphGroup, inheritedColor?: string): GroupGeom {
+  const style = styleFor(d, group.attrs, group.span.line, inheritedColor);
   const size = fontSize(style);
   const label = measureLabel(group.label, size, style.typeface, false, Infinity, true);
   const iconSize = group.attrs.icon ? Math.round(size * 1.4) : 0;

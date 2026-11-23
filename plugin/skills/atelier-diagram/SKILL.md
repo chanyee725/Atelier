@@ -12,7 +12,8 @@ A diagram is a block in a `.dpx.json` file: `type` (`flowchart`, `sequence`, `cl
 1. Sketch the nodes. Label each by feature in short Korean (`로봇 데이터 녹화`), not by file or class name. Group with `[ ]` blocks when there are more than 7 nodes.
    Done when: no label holds a file name, path or class name.
 2. Write the DSL. Start with `title` (short: about 12 characters, at most 20; details go in the document's first line) and `direction right`, then nodes with `[icon: ...]`, then edges (`A > B`).
-   Done when: every edge names nodes that exist.
+   Give every group a `color:` (one colour per group, a different colour per role; nodes inside take it, a node's own `color:` wins). Loose nodes stay neutral except one hub. Red is for risk or a boundary only.
+   Done when: every edge names nodes that exist, and no two groups with different roles share a colour.
 3. Attach code. For code diagrams add `code: "path:start-end#symbol"` per node (flowchart and cloud-architecture), or block JSON `codeRefs: {v: 1, nodes: {"<label>": {summary, refs: [{path, start, end?, symbol?}]}}}` for summaries and notes.
    Done when: every node that maps to code has a ref with `path` and `start`, and the lines match the current file.
 4. Save. Read the file, change only the block, `PUT /api/file?path=<file>` the whole JSON with its `revision` and `x-drawing: 1`. A 400 names the bad field; fix it and save again.
