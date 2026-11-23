@@ -7,9 +7,11 @@ description: Draw a flow, architecture or code-analysis diagram in an Atelier do
 
 A diagram is a block in a `.dpx.json` file: `type` (`flowchart`, `sequence`, `cloud-architecture`, `entity-relationship`) and `code` (the DSL). Full guide: `docs/agent-diagrams.md` in the Atelier repo. Style and layout follow the MIT `eraser-diagrams` rules.
 
+Every design (diagram, canvas, document screen, UI) follows Eraser.io. References in the Atelier repo: `docs/research/eraser/02-diagram-as-code-ai.md`, `04-visual-design.md`, `09-examples/`, `09-examples-style.md`.
+
 ## Steps
 
-1. Sketch the nodes. Label each by feature in short Korean (`로봇 데이터 녹화`), not by file or class name. Group with `[ ]` blocks when there are more than 7 nodes.
+1. Sketch the nodes. Label each by feature in short Korean (`로봇 데이터 녹화`), not by file or class name. Group with `[ ]` blocks when there are more than 7 nodes. Declare groups in flow order and avoid a flow that goes back and forth between groups.
    Done when: no label holds a file name, path or class name.
 2. Write the DSL. Start with `title` (short: about 12 characters, at most 20; details go in the document's first line) and `direction right`, then nodes with `[icon: ...]`, then edges (`A > B`).
    Give every group a `color:` (one colour per group, a different colour per role; nodes inside take it, a node's own `color:` wins). Loose nodes stay neutral except one hub. Red is for risk or a boundary only.
