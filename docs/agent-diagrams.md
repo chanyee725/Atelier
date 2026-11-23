@@ -6,6 +6,7 @@ Design: `docs/design/code-linked-nodes.md` (§1 data model, §4 agent side). API
 
 - **Label nodes by feature, in short Korean** (e.g. `로봇 데이터 녹화`, `LeRobot 형식 변환`). Never put file names, paths or class names in a label (`record.py` is wrong).
 - **Attach where the feature lives as code references**, not in the label: the DSL attribute `code: "path:start-end#symbol"`, and in block JSON `codeRefs.nodes` with `summary` and `note`.
+- **Declare groups in flow order and avoid a flow that goes back and forth between groups.** A flowchart whose edges go from one group to another and back is drawn with the groups as bands across the flow (#1066); one-way flow reads best.
 
 ## Reference format
 

@@ -128,6 +128,22 @@ test("implementer and designer prompts carry the UI library rules (#764)", async
   for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /Sonner/);
 });
 
+test("implementer and designer prompts, team rules and the diagram skill name Eraser.io as the design reference (#1066)", async () => {
+  const { ROLES: roles } = await import("../../server/dispatch/roles.js");
+  const { readFileSync } = await import("node:fs");
+  const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), "utf8");
+  const texts = [
+    ...["impl", "design"].map(id => roles.find(r => r.id === id).prompt),
+    read("plugin/skills/atelier-team/reference/rules.md"),
+    read("plugin/skills/atelier-diagram/SKILL.md"),
+  ];
+  for (const t of texts) {
+    assert.match(t, /Eraser\.io/);
+    for (const ref of ["02-diagram-as-code-ai.md", "04-visual-design.md", "09-examples/", "09-examples-style.md"]) assert.ok(t.includes(ref), ref);
+  }
+  for (const id of ["lead", "review", "test", "docs"]) assert.doesNotMatch(roles.find(r => r.id === id).prompt, /\[Eraser 기준\]/);
+});
+
 test("docs role and lead prompt carry the writing style; other roles do not (#737)", async () => {
   const { ROLES: roles, SPAWN_PROMPT, CHILD_PROMPT } = await import("../../server/dispatch/roles.js");
   for (const p of [roles.find(r => r.id === "docs").prompt, SPAWN_PROMPT]) {
