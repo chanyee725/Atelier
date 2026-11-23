@@ -22,3 +22,40 @@ test('atelier-questions: an answer is written into the document and its list ite
 test('atelier-plan: no question list; an answer revises the plan', () => {
   assert.match(skill('atelier-plan'), /No "확인 필요" or "결정할 것" list[^.]*call `write_plan` again/);
 });
+
+// #1061: usage rules the user set, kept in the skills and team rules.
+test('atelier-doc: Atelier only, the project server URL first, 기획 folder, no suggestion wording', () => {
+  const s = skill('atelier-doc');
+  assert.match(s, /Write them only in Atelier through the workspace API, so they show live; never as local files/);
+  assert.match(s, /tell the user that server's URL before the first write/);
+  assert.match(s, /A plan document goes in `기획\/<feature>\/`/);
+  assert.match(s, /No "\(제안\)", "추천", "확인 필요" or "결정할 것", and no sentence that asks the user something/);
+});
+
+test('atelier-session: perm left to the auto default; handoff to a lead names URL and guides', () => {
+  const s = skill('atelier-session');
+  assert.match(s, /Leave out `perm`: the role default is `auto`/);
+  assert.match(s, /the main session writes no documents, diagrams or analysis for it/);
+  assert.match(s, /`docs\/workspace-api\.md` and `docs\/agent-diagrams\.md`/);
+});
+
+test('team rules: a lead settles should-fixes, nits and follow-ups and reports the outcome', () => {
+  const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
+  assert.match(rules, /A lead settles review should-fixes, nits and whether a follow-up issue is needed on its own, and reports only the outcome/);
+});
+
+test('#1061 rule 9: a change fixes every place with the same fact, checked by a whole-document search', () => {
+  assert.match(skill('atelier-doc'), /fix every other place that states the same fact in the same turn/);
+  const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
+  assert.match(rules, /fix every other place stating the same fact in the same turn, and search the whole document/);
+});
+
+test('#1061 rule 10: only the docs session edits documents; the lead manages sessions', async () => {
+  assert.match(skill('atelier-doc'), /In a team only the `docs` session edits documents/);
+  const rules = readFileSync(new URL('../plugin/skills/atelier-team/reference/rules.md', import.meta.url), 'utf8');
+  assert.match(rules, /edit no code and no documents yourself\. Documents are written and changed only by a `docs` session/);
+  const { ROLES } = await import('../server/dispatch/roles.js');
+  const role = (id) => ROLES.find((r) => r.id === id);
+  assert.match(role('lead').prompt, /코드와 문서는 직접 고치지 않고/);
+  assert.match(role('docs').prompt, /아틀리에 문서\(\.dpx\.json\) 작성·수정/);
+});

@@ -16,15 +16,16 @@ Team rules (the project's CLAUDE.md / AGENTS.md wins where it differs):
 - Run tests and builds in the foreground; browser checks run headless.
 - Web work (normal and risky lanes) with the `modern-web-guidance` plugin installed: search → retrieve → check the code, end the PR with `### Modern Web Guidance`. Generic queries only.
 - Pushing feature branches is part of the job. Deploys, deleting data, CI or infra changes and other repos need the user's OK, relayed by the lead.
-- Decide routine engineering yourself; ask the user (through the lead) only for product decisions. Build only what was asked.
+- Decide routine engineering yourself; ask the user (through the lead) only for product decisions. A lead settles review should-fixes, nits and whether a follow-up issue is needed on its own, and reports only the outcome; it asks the user only what the user alone can decide, such as product direction. Build only what was asked.
 - Asking the user: Claude uses the AskUserQuestion tool (several questions in one `questions[]` call, 2–4 choices, the recommended one first with "(추천)"). Codex and Gemini, which lack the tool, ask in text: one question per turn, a line `질문 1/4: …?` with 2–4 numbered choices right below it (recommended first with "(추천)", each `라벨 — 이유 한 줄`), the question line ending in `?` and the question with its choices at the very end of the turn. The app's question card reads this text form too (`web/src/dispatch/lib/question.ts`): a click moves to the next question and the last one sends all answers.
 - Privacy: keep `.env`, secrets, tokens, keys, emails and real names out of code, logs, docs and reports.
 - Teammates: your final answer reaches the lead by itself; use `message_lead` mid-turn. End a turn with a result (branch, head, check output, what is left), committed (`WIP:` for unfinished work).
 - Reports: short, action first, at most 5 items per list.
+- Documents: when one part changes, fix every other place stating the same fact in the same turn, and search the whole document for the changed key words before saving.
 
 Lead only:
 
-- Plan and assign; implement nothing yourself. Pick the lane first. When the task names the cause, create the implementer at once.
+- Plan and assign; edit no code and no documents yourself. Documents are written and changed only by a `docs` session: hand it the user's answers and requests, and create one when none runs. Pick the lane first. When the task names the cause, create the implementer at once.
 - Split work so two sessions never edit the same files. Take ETAs from past runs of similar size.
 - Every `set_task` that changes `stage` also sets `eta_minutes` (minutes left). Without it the server guesses from finished tasks' time in that stage and the dashboard marks it 예상.
 - One task per implementer; start a fresh one for the next task. Finished teammates are removed automatically after their report.
