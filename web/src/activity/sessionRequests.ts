@@ -1,28 +1,26 @@
-// 세션 요청 (#880): what agent sessions asked a person for, as one list for the dashboard card — plans waiting for
-// 시작하기, permission prompts, questions (a prompt for the CLI's AskUserQuestion tool) and sessions the server marks as
-// waiting for a person. Built from waitingPlans, permissionAsksStore and the sessions list (no new server API). Pure (no React or DOM), so it runs under `node --test`. Metadata only: session names,
-// provider ids, tool names, plan titles, times.
+// 세션 요청 (#880): what agent sessions asked a person for, as one list — permission prompts, questions (a prompt for
+// the CLI's AskUserQuestion tool) and sessions the server marks as waiting for a person. Built from the open permission prompts
+// and the sessions list (no new server API). Pure (no React or DOM), so it runs under `node --test`. Metadata only:
+// session names, provider ids, tool names, times.
 import type { Session } from '../../../shared/dispatch/types.ts';
-import type { PermissionAsk } from './approvals.ts';
-import { planTitle, type WaitingPlan } from './plans.ts';
+import type { PermissionAsk } from './permissionAsks.ts';
 import type { QuestionItem, QuestionOption } from '../dispatch/lib/question.ts';
 
-export type RequestKind = 'plan' | 'permission' | 'question' | 'waiting';
+export type RequestKind = 'permission' | 'question' | 'waiting';
 
 export const REQUEST_LABEL: Record<RequestKind, string> = {
-  plan: '계획 승인',
   permission: '권한 요청',
   question: '질문',
   waiting: '사람 기다림',
 };
 
-/** Where a click goes, where a click goes: a plan's 시작하기 confirm, or the session on the board. */
-export type RequestTarget = { plan: string } | { session: string };
+/** Where a click goes: the session on the board. */
+export type RequestTarget = { session: string };
 
 export interface SessionRequest {
   key: string;
   kind: RequestKind;
-  /** The session's own name; null for a plan whose lead is unknown. */
+  /** The session's own name. */
   session: string | null;
   provider: string | null;
   /** One line: what it asks for. */
@@ -78,25 +76,12 @@ const one = (s: string, max = 120) => {
 
 /**
  * Every open request, newest first. `sessions` (null while unknown) gives each row its provider mark and adds the
- * sessions waiting for a person that have no prompt open and no plan waiting; with a list, prompts of sessions not in
- * it (another project's) are left out. `folder` ('' = all) keeps the plans inside that project folder.
+ * sessions waiting for a person that have no prompt open; with a list, prompts of sessions not in it (another
+ * project's) are left out.
  */
-export function sessionRequests(plans: readonly WaitingPlan[], asks: readonly PermissionAsk[], sessions: readonly SessionLike[] | null, folder = ''): SessionRequest[] {
+export function sessionRequests(asks: readonly PermissionAsk[], sessions: readonly SessionLike[] | null): SessionRequest[] {
   const byId = new Map((sessions ?? []).map((s) => [s.id, s]));
-  const byName = new Map((sessions ?? []).map((s) => [s.name, s]));
   const out: SessionRequest[] = [];
-  const mine = folder ? plans.filter((p) => p.path.startsWith(`${folder}/`)) : plans;
-  for (const p of mine) {
-    out.push({
-      key: `plan:${p.path}`,
-      kind: 'plan',
-      session: p.lead,
-      provider: (p.lead && byName.get(p.lead)?.provider) || null,
-      text: `‘${one(planTitle(p), 60)}’ 계획을 승인해 주세요`,
-      at: p.since,
-      target: { plan: p.path },
-    });
-  }
   for (const a of asks) {
     if (sessions && !byId.has(a.sessionId)) continue;
     const question = QUESTION_TOOLS.has(a.tool);
@@ -110,10 +95,9 @@ export function sessionRequests(plans: readonly WaitingPlan[], asks: readonly Pe
       target: { session: a.sessionId },
     });
   }
-  const leads = new Set(mine.map((p) => p.lead).filter(Boolean));
   const asked = new Set(asks.map((a) => a.sessionId));
   for (const s of sessions ?? []) {
-    if (s.state !== 'waiting' || asked.has(s.id) || s.pending?.length || leads.has(s.name)) continue;
+    if (s.state !== 'waiting' || asked.has(s.id) || s.pending?.length) continue;
     out.push({
       key: `waiting:${s.id}`,
       kind: 'waiting',

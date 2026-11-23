@@ -10,10 +10,8 @@ import { alertsOn } from '../dispatch/lib/notify';
 import { alertRoute } from './activity';
 import { onNewActivity } from './store';
 
-/** onOpen: a document's path; onSession: a session id (where a browser notification's click goes). */
-export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) => void; onSession: (id: string) => void }) {
-  const open = useRef(onOpen);
-  open.current = onOpen;
+/** onSession: a session id (where a browser notification's click goes); other notifications only bring the tab forward. */
+export function ActivityAlerts({ onSession }: { onSession: (id: string) => void }) {
   const openSession = useRef(onSession);
   openSession.current = onSession;
 
@@ -25,7 +23,6 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
           const n = new Notification('에이전트 활동', { body: activitySentence(e), tag: `activity:${e.id}` });
           n.onclick = () => {
             window.focus();
-            open.current(e.file);
             n.close();
           };
         } catch {
@@ -36,7 +33,7 @@ export function ActivityAlerts({ onOpen, onSession }: { onOpen: (path: string) =
   );
   useEffect(() => {
     watchAppEvents();
-    const go = (target: ToastTarget) => ('file' in target ? open.current(target.file) : openSession.current(target.session));
+    const go = (target: ToastTarget) => ('session' in target ? openSession.current(target.session) : window.focus());
     setNotifyOpener((t) => t.target && go(t.target));
   }, []);
   return null;

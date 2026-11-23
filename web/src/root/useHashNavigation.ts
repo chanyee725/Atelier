@@ -1,48 +1,36 @@
 import { useEffect, type Dispatch, type SetStateAction } from 'react';
-import { parseHash } from '../doc/outline';
-import type { FileSession } from '../fileSession';
-import { parseBoardHash, type BoardExtra, type Section } from '../projectNav';
-import { setHashPath, undoLinkEntry } from './hashRoute';
+import { openChat } from '../chat';
+import { isChatHash, parseBoardHash, type BoardExtra, type Section } from '../projectNav';
+import { setBoardHash } from './hashRoute';
 
 type HashNavigation = {
-  session: FileSession;
-  open: (p: string) => Promise<boolean>;
-  jumpTo: (id: string | null) => void;
   setSection: Dispatch<SetStateAction<Section>>;
   setBoardExtra: (extra: BoardExtra) => void;
 };
 
-/** A heading link pasted into the address bar of this tab (only the hash changes, so the page does not reload). */
-export function useHashNavigation({ session, open, jumpTo, setSection, setBoardExtra }: HashNavigation) {
+/** Follows the address: `#board…` shows that board view, `#chat` opens the chat dock; anything else (an old `#file=`) is the board. */
+export function useHashNavigation({ setSection, setBoardExtra }: HashNavigation) {
   useEffect(() => {
-    const onHash = () => {
-      // Back/forward into or within the 세션 보드 (#731).
-      const board = parseBoardHash(window.location.hash);
+    const follow = (first: boolean) => {
+      const hash = window.location.hash;
+      const board = parseBoardHash(hash);
       if (board) {
         setSection({ kind: 'board', tab: board.tab, folder: board.folder });
-        if (board.extra) setBoardExtra(board.extra);
+        if (board.extra && !first) setBoardExtra(board.extra);
         return;
       }
-      const link = parseHash(window.location.hash);
-      if (!link) {
-        // Back from the board to an entry without a file: the dashboard.
-        setSection((s) => (s.kind === 'board' ? { kind: 'all' } : s));
-        return;
-      }
-      // Drop `&h=` (same file) or restore the open file's hash (cancelled or failed open), so the
-      // address bar always names the open file and following the same link again fires `hashchange`.
-      const current = session.getState().path;
-      if (link.path === current) {
-        setSection({ kind: 'doc' });
-        setHashPath(current);
-        return jumpTo(link.heading);
-      }
-      void open(link.path).then((ok) => {
-        if (ok) jumpTo(link.heading);
-        else undoLinkEntry(session.getState().path);
+      // `#chat` or anything else: the board's sessions under it; the address names the board so a reload does not reopen the dock.
+      const chat = isChatHash(hash);
+      setSection((s) => {
+        const b = first ? { kind: 'board' as const, tab: 'sessions' as const } : s;
+        if (hash) setBoardHash(b, true);
+        return b;
       });
+      if (chat) openChat();
     };
+    follow(true);
+    const onHash = () => follow(false);
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, [session, open, jumpTo]);
+  }, [setSection, setBoardExtra]);
 }

@@ -1,67 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { asTreeNode, boardHash, docPlace, legacyBoardHash, newFileDir, openPathsFor, paletteScope, parseBoardHash, percent, projectOf, shellKey, subFolderOf } from '../../web/src/projectNav.ts';
-import type { DocNode, ProjectsView } from '../../web/src/api.ts';
-
-const doc = (path: string, children: DocNode[] = []): DocNode => ({
-  type: 'doc',
-  path,
-  name: path.split('/').pop()!.replace('.dpx.json', ''),
-  title: 't',
-  revision: 1,
-  created: null,
-  modified: null,
-  count: children.length,
-  children,
-});
-const view: ProjectsView = {
-  projects: [
-    {
-      path: 'A',
-      name: 'Alpha',
-      icon: null,
-      description: '',
-      created: null,
-      modified: null,
-      count: 3,
-      docs: [doc('A/login.dpx.json', [doc('A/login/token.dpx.json', [doc('A/login/token/exp.dpx.json')])]), { ...doc('A/g'), type: 'group', children: [doc('A/g/m.dpx.json')] }],
-    },
-  ],
-  loose: [doc('x.dpx.json'), doc('y.dpx.json', [doc('y/z.dpx.json')])],
-};
-
-test('projectOf and openPathsFor find the project and the rows above a document', () => {
-  assert.equal(projectOf(view, 'A/login/token.dpx.json')?.path, 'A');
-  assert.equal(projectOf(view, 'x.dpx.json'), null);
-  assert.equal(projectOf(null, 'A/x.dpx.json'), null);
-  assert.deepEqual(openPathsFor(view, 'A/login/token/exp.dpx.json').sort(), ['A', 'A/login.dpx.json', 'A/login/token.dpx.json']);
-  assert.deepEqual(openPathsFor(view, 'A/g/m.dpx.json').sort(), ['A', 'A/g']);
-  assert.deepEqual(openPathsFor(view, 'x.dpx.json'), []);
-  // A loose document's sub-document unfolds its parent too (문서 lists loose files, #778).
-  assert.deepEqual(openPathsFor(view, 'y/z.dpx.json'), ['y.dpx.json']);
-});
-
-test('asTreeNode, subFolderOf and newFileDir', () => {
-  assert.deepEqual(asTreeNode(doc('A/login.dpx.json')), { type: 'file', name: 'login.dpx.json', path: 'A/login.dpx.json', title: 't', revision: 1 });
-  assert.deepEqual(asTreeNode(view.projects[0]), { type: 'folder', name: 'A', path: 'A', children: [] });
-  assert.equal(subFolderOf('A/login.dpx.json'), 'A/login');
-  assert.equal(newFileDir({ kind: 'project', path: 'A' }, view, null), 'A');
-  assert.equal(newFileDir({ kind: 'doc' }, view, 'A/login.dpx.json'), 'A');
-  assert.equal(newFileDir({ kind: 'doc' }, view, 'x.dpx.json'), '');
-  assert.equal(newFileDir({ kind: 'all' }, view, 'A/login.dpx.json'), '');
-});
-
+import { boardHash, isChatHash, legacyBoardHash, parseBoardHash, percent, shellKey } from '../../web/src/projectNav.ts';
 const key = (code: string, more: Record<string, unknown> = {}) =>
   shellKey({ code, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, isComposing: false, repeat: false, defaultPrevented: false, target: null, ...more });
 const inside = (match: boolean) => ({ closest: () => (match ? {} : null) }) as unknown as EventTarget;
 
-test('shellKey: A R B N outside fields, editors, the canvas and dialogs only', () => {
-  assert.deepEqual(['KeyA', 'KeyR', 'KeyB', 'KeyN', 'KeyS'].map((c) => key(c)), ['all', 'recent', 'archive', 'new', 'board']);
-  assert.equal(key('Comma'), null, ', no longer opens anything');
-  assert.equal(key('KeyX'), null);
-  for (const m of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey', 'isComposing', 'repeat', 'defaultPrevented']) assert.equal(key('KeyA', { [m]: true }), null, m);
-  assert.equal(key('KeyA', { target: inside(true) }), null);
-  assert.equal(key('KeyA', { target: inside(false) }), 'all');
+test('shellKey: S outside fields, editors and dialogs only', () => {
+  assert.equal(key('KeyS'), 'board');
+  for (const c of ['KeyA', 'KeyR', 'KeyB', 'KeyN', 'Comma', 'KeyX']) assert.equal(key(c), null, c);
+  for (const m of ['ctrlKey', 'metaKey', 'altKey', 'shiftKey', 'isComposing', 'repeat', 'defaultPrevented']) assert.equal(key('KeyS', { [m]: true }), null, m);
+  assert.equal(key('KeyS', { target: inside(true) }), null);
+  assert.equal(key('KeyS', { target: inside(false) }), 'board');
 });
 
 test('percent clamps and rounds', () => {
@@ -88,36 +37,6 @@ test('modelStatus: text next to every dot, yellow from 60%, red from 85%', async
   assert.deepEqual(modelStatus({ ...m, connected: false, busy: true }, true), { text: '연결 중', long: '연결하는 중', tone: 'off' });
 });
 
-test('paletteScope follows the screen: open file on the document, shown project on its home, none on the dashboard', () => {
-  // A file of A stays loaded while the user is on "홈": no stale A chip there.
-  assert.equal(paletteScope({ kind: 'all' }, view, 'A/login.dpx.json'), null);
-  assert.equal(paletteScope({ kind: 'recent' }, view, 'A/login.dpx.json'), null);
-  assert.deepEqual(paletteScope({ kind: 'doc' }, view, 'A/login.dpx.json'), { path: 'A', name: 'Alpha' });
-  assert.equal(paletteScope({ kind: 'doc' }, view, 'x.dpx.json'), null);
-  // A project home wins over the loaded file of another project.
-  assert.deepEqual(paletteScope({ kind: 'project', path: 'A' }, view, 'B/y.dpx.json'), { path: 'A', name: 'Alpha' });
-  assert.deepEqual(paletteScope({ kind: 'project', path: 'Z' }, null, null), { path: 'Z', name: 'Z' });
-});
-
-test('docPlace: the path above the open document and its sub-documents', () => {
-  const deep = docPlace(view, 'A/login/token/exp.dpx.json');
-  assert.deepEqual(deep.trail.map((c) => [c.kind, c.path]), [['project', 'A'], ['doc', 'A/login.dpx.json'], ['doc', 'A/login/token.dpx.json']]);
-  assert.equal(deep.trail[0].label, 'Alpha');
-  assert.equal(deep.node?.path, 'A/login/token/exp.dpx.json');
-  const parent = docPlace(view, 'A/login.dpx.json');
-  assert.deepEqual(parent.trail.map((c) => c.path), ['A']);
-  assert.deepEqual(parent.node?.children.map((c) => c.path), ['A/login/token.dpx.json']);
-  // A group (folder without its own document) is a step too, labelled by its folder name.
-  assert.deepEqual(docPlace(view, 'A/g/m.dpx.json').trail.map((c) => [c.kind, c.label]), [['project', 'Alpha'], ['group', 'g']]);
-  assert.deepEqual(docPlace(view, 'x.dpx.json'), { trail: [], node: view.loose[0] });
-  // Not in the view yet (just created): the project only, no node.
-  assert.deepEqual(docPlace(view, 'A/new.dpx.json'), { trail: [{ kind: 'project', path: 'A', label: 'Alpha' }], node: null });
-  // Opened right after it was made, without the suffix: still found.
-  assert.equal(docPlace(view, 'A/login/token').node?.path, 'A/login/token.dpx.json');
-  assert.deepEqual(docPlace(view, 'A/login/token').trail.map((c) => c.path), ['A', 'A/login.dpx.json']);
-  assert.deepEqual(docPlace(null, 'A/login.dpx.json'), { trail: [], node: null });
-});
-
 test('board hash: tabs, scope and the one-off extras read back', () => {
   assert.deepEqual(parseBoardHash('#board'), { kind: 'board', tab: 'sessions' });
   assert.deepEqual(parseBoardHash('#board=usage'), { kind: 'board', tab: 'usage' });
@@ -127,6 +46,8 @@ test('board hash: tabs, scope and the one-off extras read back', () => {
   assert.equal(parseBoardHash('#file=a.dpx.json'), null);
   assert.equal(parseBoardHash('#boards'), null);
   assert.equal(parseBoardHash(''), null);
+  assert.ok(isChatHash('#chat'));
+  assert.ok(!isChatHash('#chats') && !isChatHash('#board'));
   for (const h of ['#board', '#board=usage', '#board=timeline&folder=a%20b', '#board&folder=', '#board=settings']) assert.equal(boardHash(parseBoardHash(h)!), h);
 });
 

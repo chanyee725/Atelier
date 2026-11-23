@@ -35,14 +35,14 @@ type Tab = 'progress' | 'work' | SessionTab;
 const TABS: [Tab, string][] = [['progress', '진행'], ['work', '작업 보기'], ['chat', '대화'], ['diff', '변경사항'], ['info', '정보'], ['org', '조직도']];
 
 /** Mounted once in App.tsx. A SessionSheet opened elsewhere (세션 보드) still hides the panel while it is open. */
-export function AgentLiveHost({ onOpenFile, dark = false }: { onOpenFile: (path: string) => void; dark?: boolean }) {
+export function AgentLiveHost() {
   // Kept mounted for the 160ms slide-out after closing (#942).
   const { shown: sid, closing } = usePanelExit(useAgentLiveTarget());
   const sheetOpen = useSheetOpen();
-  return sid ? <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} closing={closing} dark={dark} onOpenFile={onOpenFile} /> : null;
+  return sid ? <AgentLivePanel key="live" sid={sid} hidden={sheetOpen} closing={closing} /> : null;
 }
 
-function AgentLivePanel({ sid, hidden, closing, dark, onOpenFile }: { sid: string; hidden: boolean; closing: boolean; dark: boolean; onOpenFile: (path: string) => void }) {
+function AgentLivePanel({ sid, hidden, closing }: { sid: string; hidden: boolean; closing: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const titleId = useId();
@@ -63,7 +63,8 @@ function AgentLivePanel({ sid, hidden, closing, dark, onOpenFile }: { sid: strin
     setReveal(null);
   }, [sid]);
   const openLink = (l: FileLink) => {
-    if (l.kind === 'doc') return onOpenFile(l.path);
+    // Documents are no longer opened in the app; only code files have a view here.
+    if (l.kind === 'doc') return;
     setReveal(l.path);
     setTab('work');
   };
@@ -174,15 +175,11 @@ function AgentLivePanel({ sid, hidden, closing, dark, onOpenFile }: { sid: strin
           <TabsContent value="work" className="agent-live-body">
             <AgentWorkView
               sid={sid}
-              file={presence?.file ?? null}
-              fileAt={presence?.at ?? null}
               step={presence?.step}
               statusLabel={presence?.statusLabel}
               files={live?.files ?? []}
               shown={!hidden}
-              dark={dark}
               reveal={reveal}
-              onOpenFile={onOpenFile}
             />
           </TabsContent>
           {(['chat', 'diff', 'info', 'org'] as const).map((v) => (

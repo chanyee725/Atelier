@@ -1,10 +1,8 @@
-// App shell navigation (design doc 6 §2.1, §5): which screen is shown, which sidebar rows are open, and the
-// one-letter shortcuts. Pure, so it is tested without a browser.
-import type { DocNode, Project, ProjectsView, TreeNode } from './api';
-import { baseName } from './movePaths.ts';
+// App shell navigation: which 세션 보드 view is shown (from the address) and the one-letter shortcut.
+// Pure, so it is tested without a browser.
 
-/** The main panel: a sidebar view, a project home, the 세션 보드 or the open document. 보관함 opens the trash dialog. */
-export type Section = { kind: 'all' } | { kind: 'recent' } | { kind: 'project'; path: string } | { kind: 'doc' } | BoardSection;
+/** The main panel: always the 세션 보드, on one of its tabs and scopes. */
+export type Section = BoardSection;
 
 /** 세션 보드 tabs (#731, docs/design/session-board-in-shell.md §1). */
 export type BoardTab = 'sessions' | 'branches' | 'timeline' | 'usage';
@@ -50,6 +48,9 @@ export function boardHash(r: { tab: BoardTab; folder?: string | null; extra?: Bo
   return `#board${view ? `=${view}` : ''}${folder}`;
 }
 
+/** True for the address that opens the chat dock (`#chat`). */
+export const isChatHash = (hash: string) => /^#?chat$/.test(hash);
+
 /** The board address for an old `/dispatch` hash (`#usage&folder=x`, `#folder=x`, `#tv`, `#settings`, `#timeline`). */
 export function legacyBoardHash(hash: string): string {
   const own = parseBoardHash(hash);
@@ -64,92 +65,15 @@ export function legacyBoardHash(hash: string): string {
   return boardHash(route);
 }
 
-/** Project that holds `path` (a file path), or null for loose files. */
-export function projectOf(view: ProjectsView | null, path: string | null): Project | null {
-  if (!view || !path) return null;
-  const top = path.split('/')[0];
-  return path.includes('/') ? (view.projects.find((p) => p.path === top) ?? null) : null;
-}
+export type ShellKey = 'board';
+const KEYS: Record<string, ShellKey> = { KeyS: 'board' };
 
-/** Rows to open so `path` is visible: its top folder (if any) and every document or group above it. */
-export function openPathsFor(view: ProjectsView | null, path: string | null): string[] {
-  if (!view || !path) return [];
-  const project = projectOf(view, path);
-  const out = project ? [project.path] : [];
-  const walk = (nodes: DocNode[]): boolean => {
-    for (const n of nodes) {
-      if (n.path === path) return true;
-      if (walk(n.children)) {
-        out.push(n.path);
-        return true;
-      }
-    }
-    return false;
-  };
-  walk(project ? project.docs : view.loose);
-  return out;
-}
-
-/** One step of the open document's path (design doc 6 §2.4): its project, then the documents or groups above it. */
-export type Crumb = { kind: 'project' | 'doc' | 'group'; path: string; label: string };
-
-const docLabel = (n: DocNode) => (n.type === 'doc' && n.title) || n.name.replace(/\.dpx\.json$/, '');
-
-/** The open document's node (its sub-documents) and the steps above it; node is null when the view does not have it yet. */
-export function docPlace(view: ProjectsView | null, path: string | null): { trail: Crumb[]; node: DocNode | null } {
-  if (!view || !path) return { trail: [], node: null };
-  // A file opened right after it was made has no suffix in its path; the view's paths always have one.
-  const want = subFolderOf(path);
-  const project = projectOf(view, path);
-  const trail: Crumb[] = project ? [{ kind: 'project', path: project.path, label: project.name }] : [];
-  const walk = (nodes: DocNode[]): DocNode | null => {
-    for (const n of nodes) {
-      if (n.type === 'doc' && subFolderOf(n.path) === want) return n;
-      trail.push({ kind: n.type, path: n.path, label: docLabel(n) });
-      const hit = walk(n.children);
-      if (hit) return hit;
-      trail.pop();
-    }
-    return null;
-  };
-  const node = walk(project ? project.docs : view.loose);
-  return { trail: node ? trail : project ? [trail[0]] : [], node };
-}
-
-/** The tree node the existing move / delete code works with. */
-export function asTreeNode(n: DocNode | Project): TreeNode {
-  if ('docs' in n || n.type === 'group') return { type: 'folder', name: baseName(n.path), path: n.path, children: [] };
-  return { type: 'file', name: baseName(n.path), path: n.path, title: n.title ?? '', revision: n.revision ?? null };
-}
-
-/** Folder that holds a document's sub-documents (`a/X.dpx.json` → `a/X`). */
-export const subFolderOf = (filePath: string) => filePath.replace(/\.dpx\.json$/, '');
-
-/** Project the command menu is scoped to (its chip, its files first): the open file's project on the
- * document screen, the shown project on a project home, none elsewhere. Never a stale earlier one. */
-export function paletteScope(section: Section, view: ProjectsView | null, openPath: string | null): { path: string; name: string } | null {
-  const project =
-    section.kind === 'doc' ? projectOf(view, openPath) : section.kind === 'project' ? (view?.projects.find((p) => p.path === section.path) ?? null) : null;
-  if (project) return { path: project.path, name: project.name };
-  return section.kind === 'project' ? { path: section.path, name: section.path } : null;
-}
-
-/** Folder new files go in: the project shown or the open file's project; '' = workspace root. */
-export function newFileDir(section: Section, view: ProjectsView | null, openPath: string | null): string {
-  if (section.kind === 'project') return section.path;
-  if (section.kind === 'doc') return projectOf(view, openPath)?.path ?? '';
-  return '';
-}
-
-export type ShellKey = 'all' | 'recent' | 'archive' | 'new' | 'board';
-const KEYS: Record<string, ShellKey> = { KeyA: 'all', KeyR: 'recent', KeyB: 'archive', KeyN: 'new', KeyS: 'board' };
-
-// Where one-letter keys belong to something else: text fields, the editors, the canvas (its tool keys) and dialogs.
-const OWNED = '.ProseMirror, input, textarea, select, .cm-editor, [contenteditable="true"], [contenteditable=""], .excalidraw, dialog, [role="dialog"], [role="menu"], [role="listbox"]';
+// Where one-letter keys belong to something else: text fields, editors and dialogs.
+const OWNED = 'input, textarea, select, .cm-editor, [contenteditable="true"], [contenteditable=""], dialog, [role="dialog"], [role="menu"], [role="listbox"]';
 
 type KeyLike = { code: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; isComposing: boolean; repeat: boolean; defaultPrevented: boolean; target: EventTarget | null };
 
-/** The shell action for a key press (A R B N S), or null when the key is not one or belongs to something else. */
+/** The shell action for a key press (S), or null when the key is not one or belongs to something else. */
 export function shellKey(e: KeyLike): ShellKey | null {
   if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.repeat || e.defaultPrevented) return null;
   const k = KEYS[e.code];
